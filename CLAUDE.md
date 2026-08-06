@@ -1,4 +1,4 @@
-<!-- GENERIERT aus der Werkbank. Quell-Commit: b90d1fb. Nicht von Hand editieren. -->
+<!-- GENERIERT aus der Werkbank. Quell-Commit: e165ec6. Nicht von Hand editieren. -->
 
 # Rolle
 
