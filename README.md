@@ -1,4 +1,4 @@
-# flowcode-harness-standalone
+# keel-harness-standalone
 
 Dies ist der **Standalone-Keel-Harness**: eine Claude-Code-Ausstattung — Wächter-Hooks,
 Dauer-Regeln, Befehle, Skills —, die eine Claude-Code-Session diszipliniert arbeiten lässt.
@@ -8,7 +8,7 @@ Kein Produkt, kein Framework. Ein Bausatz, der in einen Zielordner installiert w
 
 1. **Klonen:**
    ```
-   git clone https://github.com/leonpoesken/flowcode-harness-standalone.git
+   git clone https://github.com/leonpoesken/keel-harness-standalone.git
    ```
 2. **Claude Code IM geklonten Ordner öffnen** (nicht daneben, nicht darüber).
 3. Der ersten Session einfach schreiben:
@@ -20,7 +20,7 @@ Kein Produkt, kein Framework. Ein Bausatz, der in einen Zielordner installiert w
 
 ## Warnung — dieses Repo ist generiert
 
-Der Inhalt hier entsteht automatisch aus der Werkbank (Quell-Commit: `b90d1fb`).
+Der Inhalt hier entsteht automatisch aus der Werkbank (Quell-Commit: `e165ec6`).
 **Handänderungen an diesem Repo werden beim nächsten Generator-Lauf überschrieben.**
 Wer etwas ändern will, ändert es an der Quelle in der Werkbank — nicht hier.
 
