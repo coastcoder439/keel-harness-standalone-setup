@@ -1,0 +1,59 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/session-roles.js\"",
+            "timeout": 10,
+            "statusMessage": "Sitzungs-Rollen laden"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/uncommitted-warn.js\"",
+            "async": true,
+            "statusMessage": "Backup-Check (ungesicherte Arbeit)"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/danger-guard.js\"",
+            "timeout": 10,
+            "statusMessage": "danger-guard (zerstoerende Befehle)"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git *)",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/git-guard.js\"",
+            "timeout": 10,
+            "statusMessage": "git-guard (Ziel-Repo + Lock)"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git *)",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/commit-pathspec-guard.js\"",
+            "timeout": 10,
+            "statusMessage": "commit-pathspec-guard (geteilter Index)"
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node \"$CLAUDE_PROJECT_DIR/.claude/statusline.js\""
+  }
+}
