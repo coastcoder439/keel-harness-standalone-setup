@@ -1,0 +1,236 @@
+#!/usr/bin/env node
+// Abnahmetest des Harness-Bausatzes.
+//
+// Dieses Skript liegt im Bausatz-Repo unter pruefung/ und beweist:
+// Der Bausatz, in dem es liegt, installiert einen funktionierenden
+// Claude-Code-Harness in einen frischen, leeren Zielordner.
+//
+// Ablauf: Vorbedingung -> Temp-Ordner + git init -> Trockenlauf -> Echtlauf
+//         -> Bestands-Messungen -> optionaler Tiefen-Test -> Aufraeumen.
+//
+// Exitcode-Disziplin: Der Exitcode wird an GENAU EINER Stelle vergeben
+// (ganz unten, process.exitCode = rot > 0 ? 1 : 0). Kein Pruefzweig ruft
+// process.exit() auf. Frueh abgebrochene Laeufe setzen process.exitCode = 1
+// und returnen.
+//
+// Node >= 18, nur Bordmittel.
+
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
+import { fileURLToPath } from "node:url";
+import { spawnSync } from "node:child_process";
+
+const HIER = path.dirname(fileURLToPath(import.meta.url));
+const BAUSATZ = path.resolve(HIER, "..");
+
+// --- Ergebnis-Buchhaltung ---------------------------------------------------
+
+let gruen = 0;
+let rot = 0;
+
+/** Eine bestandene Pruefung protokollieren. */
+function ok(name) {
+  gruen += 1;
+  console.log(`GRUEN ${name}`);
+}
+
+/** Eine gescheiterte Pruefung protokollieren. */
+function fehler(name, grund) {
+  rot += 1;
+  console.log(`ROT   ${name}: ${grund}`);
+}
+
+/** Eine bewusst ausgelassene Pruefung protokollieren (zaehlt weder gruen noch rot). */
+function uebersprungen(name, grund) {
+  console.log(`--    ${name}: ${grund}`);
+}
+
+/**
+ * Eine Pruefung ausfuehren: die Funktion gibt null/undefined bei Erfolg
+ * zurueck oder einen Grund-String bei Misserfolg. Wirft sie, gilt der
+ * Wurf als Misserfolg — so kann keine Pruefung den Lauf abbrechen.
+ */
+function pruefe(name, fn) {
+  let grund;
+  try {
+    grund = fn();
+  } catch (e) {
+    grund = `Ausnahme: ${e && e.message ? e.message : String(e)}`;
+  }
+  if (grund) fehler(name, grund);
+  else ok(name);
+  return !grund;
+}
+
+// --- Hilfen -----------------------------------------------------------------
+
+const istDatei = (p) => fs.existsSync(p) && fs.statSync(p).isFile();
+const istOrdner = (p) => fs.existsSync(p) && fs.statSync(p).isDirectory();
+
+// --- Hauptlauf --------------------------------------------------------------
+
+const mitClaude = process.argv.includes("--mit-claude");
+let ziel = null;
+
+try {
+  // 1. Vorbedingung: der Bausatz muss vollstaendig genug sein, um zu starten.
+  const onboarding = path.join(BAUSATZ, "onboarding.mjs");
+  const paket = path.join(BAUSATZ, "PAKET.json");
+  const fehlend = [];
+  if (!istDatei(onboarding)) fehlend.push(onboarding);
+  if (!istDatei(paket)) fehlend.push(paket);
+
+  if (fehlend.length > 0) {
+    fehler(
+      "vorbedingung-bausatz",
+      `Bausatz unvollstaendig — es fehlt: ${fehlend.join(", ")}. ` +
+        `Dieses Skript muss in <bausatz>/pruefung/ liegen (gemessener Bausatz: ${BAUSATZ}).`,
+    );
+    console.log("");
+    console.log(`ERGEBNIS: ${gruen} gruen, ${rot} rot`);
+    // Kein process.exitCode hier — die Vergabe passiert am Dateiende (rot > 0).
+  } else {
+    ok("vorbedingung-bausatz");
+
+    // 2. Frischer Zielordner + git init.
+    ziel = fs.mkdtempSync(path.join(os.tmpdir(), "harness-abnahme-"));
+    const gitInit = spawnSync("git", ["init"], { cwd: ziel, encoding: "utf8" });
+    pruefe("git-init", () =>
+      gitInit.status === 0
+        ? null
+        : `git init Exitcode ${gitInit.status}: ${(gitInit.stderr || "").trim()}`,
+    );
+
+    /** onboarding.mjs im Zielordner ausfuehren. */
+    const laufe = (extra) =>
+      spawnSync("node", [onboarding, "--ziel", ziel, ...extra], {
+        cwd: BAUSATZ,
+        encoding: "utf8",
+      });
+
+    // 3. Trockenlauf — darf nichts kaputtmachen und muss 0 liefern.
+    const trocken = laufe(["--trocken"]);
+    pruefe("onboarding-trockenlauf", () => {
+      if (trocken.status === 0) return null;
+      return (
+        `Exitcode ${trocken.status}\n--- stdout ---\n${trocken.stdout || ""}` +
+        `\n--- stderr ---\n${trocken.stderr || ""}`
+      );
+    });
+
+    // 4. Echtlauf — installiert tatsaechlich.
+    const echt = laufe([]);
+    pruefe("onboarding-echtlauf", () => {
+      if (echt.status === 0) return null;
+      return (
+        `Exitcode ${echt.status}\n--- stdout ---\n${echt.stdout || ""}` +
+        `\n--- stderr ---\n${echt.stderr || ""}`
+      );
+    });
+
+    // 5. Bestands-Messungen im Zielordner.
+    const settingsPfad = path.join(ziel, ".claude", "settings.json");
+    let settingsRoh = null;
+
+    // 5a. settings.json vorhanden, gueltiges JSON, mit "hooks"-Schluessel.
+    pruefe("settings-json", () => {
+      if (!istDatei(settingsPfad)) return `${settingsPfad} fehlt`;
+      settingsRoh = fs.readFileSync(settingsPfad, "utf8");
+      let daten;
+      try {
+        daten = JSON.parse(settingsRoh);
+      } catch (e) {
+        settingsRoh = null;
+        return `kein gueltiges JSON: ${e.message}`;
+      }
+      if (!daten || typeof daten !== "object" || !("hooks" in daten)) {
+        return 'Schluessel "hooks" fehlt';
+      }
+      return null;
+    });
+
+    // 5b. Jeder in settings.json referenzierte Hook-Pfad zeigt auf eine echte Datei.
+    pruefe("hook-pfade", () => {
+      if (settingsRoh === null) return "settings.json nicht lesbar (siehe oben)";
+      const treffer = settingsRoh.match(/\.claude\/[A-Za-z0-9._/-]+\.js/g) || [];
+      const einmalig = [...new Set(treffer)];
+      if (einmalig.length === 0) return "keine Hook-Pfade in settings.json gefunden";
+      const kaputt = einmalig.filter((rel) => !istDatei(path.join(ziel, rel)));
+      return kaputt.length === 0
+        ? null
+        : `${kaputt.length} von ${einmalig.length} Pfaden zeigen ins Leere: ${kaputt.join(", ")}`;
+    });
+
+    // 5c. Dauer-Regeln: mindestens 4 .md-Dateien, keine mit Frontmatter.
+    pruefe("dauer-regeln", () => {
+      const regelOrdner = path.join(ziel, ".claude", "rules", "ecc", "common");
+      if (!istOrdner(regelOrdner)) return `${regelOrdner} fehlt`;
+      const mds = fs.readdirSync(regelOrdner).filter((n) => n.endsWith(".md"));
+      if (mds.length < 4) return `nur ${mds.length} .md-Dateien, mindestens 4 erwartet`;
+      const mitFrontmatter = mds.filter((n) =>
+        fs.readFileSync(path.join(regelOrdner, n), "utf8").startsWith("---"),
+      );
+      return mitFrontmatter.length === 0
+        ? null
+        : `Frontmatter in Dauer-Regeln: ${mitFrontmatter.join(", ")}`;
+    });
+
+    // 5d. Die beiden Pflicht-Befehle.
+    pruefe("befehle", () => {
+      const cmdOrdner = path.join(ziel, ".claude", "commands");
+      if (!istOrdner(cmdOrdner)) return `${cmdOrdner} fehlt`;
+      const fehlt = ["repo-status.md", "save-work.md"].filter(
+        (n) => !istDatei(path.join(cmdOrdner, n)),
+      );
+      return fehlt.length === 0 ? null : `fehlt: ${fehlt.join(", ")}`;
+    });
+
+    // 5e. Projekt-Anweisungsdatei.
+    pruefe("claude-md", () =>
+      istDatei(path.join(ziel, "CLAUDE.md")) ? null : "CLAUDE.md fehlt im Zielordner",
+    );
+
+    // 6. Optionaler Tiefen-Test: laedt Claude die Dauer-Regeln wirklich?
+    const claudeDa =
+      spawnSync("command", ["-v", "claude"], { shell: true, encoding: "utf8" }).status === 0;
+    if (!mitClaude) {
+      uebersprungen("claude-kontext", "uebersprungen (--mit-claude nicht gesetzt)");
+    } else if (!claudeDa) {
+      uebersprungen("claude-kontext", 'uebersprungen (Befehl "claude" nicht im PATH)');
+    } else {
+      const frage =
+        'Antworte NUR aus deinem Kontext, keine Tools: Ist eine Projektregel "Kein One-Shot" ' +
+        "in deinem Kontext? Format: ja/nein";
+      const lauf = spawnSync(
+        "claude",
+        ["-p", frage, "--model", "claude-haiku-4-5-20251001", "--max-turns", "1"],
+        { cwd: ziel, encoding: "utf8", timeout: 180000 },
+      );
+      pruefe("claude-kontext", () => {
+        if (lauf.error) return `Aufruf gescheitert: ${lauf.error.message}`;
+        const aus = (lauf.stdout || "").toLowerCase();
+        return aus.includes("ja")
+          ? null
+          : `Antwort enthaelt kein "ja" (Exitcode ${lauf.status}): ${(lauf.stdout || "").trim()}`;
+      });
+    }
+
+    console.log("");
+    console.log(`ERGEBNIS: ${gruen} gruen, ${rot} rot`);
+  }
+} finally {
+  // 7. Aufraeumen — auch wenn oben etwas geworfen hat.
+  if (ziel) {
+    try {
+      fs.rmSync(ziel, { recursive: true, force: true });
+    } catch {
+      /* Temp-Ordner bleibt liegen; kein Grund, den Abnahmetest zu faerben. */
+    }
+  }
+}
+
+// EINZIGE Stelle der Exitcode-Vergabe. Ueber ALLE Pfade erreichbar — auch der
+// fruehe Abbruch bei verletzter Vorbedingung laeuft hier durch, weil er die
+// Vorbedingung als rote Pruefung zaehlt (rot > 0 => 1).
+process.exitCode = rot > 0 ? 1 : 0;

@@ -1,0 +1,339 @@
+{
+  "schema": "harness.paket.v1",
+  "gebautAm": "2026-08-06T16:09:46.922Z",
+  "posten": 38,
+  "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser PAKET.json selbst",
+  "ersetzungen": 71,
+  "bewusstNichtEnthalten": [
+    {
+      "was": ".claude/pruefstand-warn.js",
+      "grund": "braucht zwei Pruefwerkzeuge, die ihrerseits den ECC-Fremd-Klon brauchen; ohne sie meldet der Stop-Hook bei jedem Lauf einen Stacktrace als Befund"
+    },
+    {
+      "was": "docs/workflows/*.js",
+      "grund": "Werkbank-eigene Pruefer; einer bricht ohne .ecc-src/ mit Exit 2 ab, der andere prueft eine Zusage, die nur in der Ursprungs-Werkbank gilt"
+    },
+    {
+      "was": ".claude/skills/skill-library/",
+      "grund": "Index von 245 Skills des ECC-Fremd-Klons; im Paket zeigt jeder Eintrag ins Leere"
+    },
+    {
+      "was": ".ecc-src/ und die Kopien daraus",
+      "grund": "Fremd-Klon (eigene Lizenz, 227 MB) — wird beim Onboarding selbst geholt, nicht mitgeliefert"
+    },
+    {
+      "was": "permissions / skillOverrides / enabledPlugins",
+      "grund": "rechner- und personenbezogen; ausgeliefert erteilten sie stillschweigend Rechte"
+    },
+    {
+      "was": "docs/08-sessions-rollen.md",
+      "grund": "Rollen der Ursprungs-Werkbank; fehlt die Datei, bleibt der Hook still — das ist das richtige Verhalten"
+    }
+  ],
+  "dateien": [
+    {
+      "datei": "harness/.claude/danger-guard.js",
+      "herkunft": ".claude/hooks/danger-guard.js",
+      "quellordner": "werkbank",
+      "gesaeubert": 1,
+      "bytes": 21855,
+      "sha256": "7db418e33c6cd309"
+    },
+    {
+      "datei": "harness/.claude/git-guard.js",
+      "herkunft": ".claude/hooks/git-guard.js",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 6179,
+      "sha256": "a614e51807c16579"
+    },
+    {
+      "datei": "harness/.claude/commit-pathspec-guard.js",
+      "herkunft": ".claude/hooks/commit-pathspec-guard.js",
+      "quellordner": "werkbank",
+      "gesaeubert": 1,
+      "bytes": 8586,
+      "sha256": "3dcd52a8e0815da1"
+    },
+    {
+      "datei": "harness/.claude/repo-status.js",
+      "herkunft": ".claude/repo-status.js",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 8863,
+      "sha256": "2fccb291b58a376c"
+    },
+    {
+      "datei": "harness/.claude/session-roles.js",
+      "herkunft": ".claude/hooks/session-roles.js",
+      "quellordner": "werkbank",
+      "gesaeubert": 3,
+      "bytes": 4557,
+      "sha256": "18b6324b9df5c489"
+    },
+    {
+      "datei": "harness/.claude/statusline.js",
+      "herkunft": ".claude/statusline.js",
+      "quellordner": "werkbank",
+      "gesaeubert": 3,
+      "bytes": 4670,
+      "sha256": "e0f07cbb833faa59"
+    },
+    {
+      "datei": "harness/.claude/uncommitted-warn.js",
+      "herkunft": ".claude/hooks/uncommitted-warn.js",
+      "quellordner": "werkbank",
+      "gesaeubert": 3,
+      "bytes": 4920,
+      "sha256": "f176607a121967ea"
+    },
+    {
+      "datei": "harness/.claude/commands/repo-status.md",
+      "herkunft": ".claude/commands/repo-status.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 415,
+      "sha256": "5f9776d3a26b179c"
+    },
+    {
+      "datei": "harness/.claude/commands/save-work.md",
+      "herkunft": ".claude/commands/save-work.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 1,
+      "bytes": 1142,
+      "sha256": "a3e25e41926ece6f"
+    },
+    {
+      "datei": "harness/.claude/commands/session-map.md",
+      "herkunft": ".claude/commands/session-map.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 994,
+      "sha256": "4c2f791102b5788d"
+    },
+    {
+      "datei": "harness/.claude/commands/tell-session.md",
+      "herkunft": ".claude/commands/tell-session.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 2,
+      "bytes": 3205,
+      "sha256": "8297c0f9b01ef3ce"
+    },
+    {
+      "datei": "harness/.claude/rules/ecc/common/kein-oneshot.md",
+      "herkunft": ".claude/rules/ecc/common/kein-oneshot.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 13,
+      "bytes": 4624,
+      "sha256": "815d6c53ac41213a"
+    },
+    {
+      "datei": "harness/.claude/rules/ecc/common/vollstaendigkeit.md",
+      "herkunft": ".claude/rules/ecc/common/vollstaendigkeit.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 2,
+      "bytes": 5024,
+      "sha256": "113ef60905148a25"
+    },
+    {
+      "datei": "harness/.claude/rules/ecc/common/werkzeuge.md",
+      "herkunft": ".claude/rules/ecc/common/werkzeuge.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 1,
+      "bytes": 1929,
+      "sha256": "92dd1c1e1b149afc"
+    },
+    {
+      "datei": "harness/.claude/rules/ecc/common/ausgabeform.md",
+      "herkunft": ".claude/rules/ecc/common/ausgabeform.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 3,
+      "bytes": 747,
+      "sha256": "799023d07a1217fc"
+    },
+    {
+      "datei": "harness/.claude/skills/domain-modeling/SKILL.md",
+      "herkunft": ".claude/skills/domain-modeling/SKILL.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 2,
+      "bytes": 3950,
+      "sha256": "4d3c6df5c9ea6c2d"
+    },
+    {
+      "datei": "harness/.claude/skills/domain-modeling/ADR-FORMAT.md",
+      "herkunft": ".claude/skills/domain-modeling/ADR-FORMAT.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 2766,
+      "sha256": "f1f36cd3f8d3b647"
+    },
+    {
+      "datei": "harness/.claude/skills/domain-modeling/CONTEXT-FORMAT.md",
+      "herkunft": ".claude/skills/domain-modeling/CONTEXT-FORMAT.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 2299,
+      "sha256": "b8cc318f2a4285b5"
+    },
+    {
+      "datei": "harness/.claude/skills/i-have-adhd/SKILL.md",
+      "herkunft": ".claude/skills/i-have-adhd/SKILL.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 12867,
+      "sha256": "29e2848fcee49dba"
+    },
+    {
+      "datei": "harness/.claude/skills/resolving-merge-conflicts/SKILL.md",
+      "herkunft": ".claude/skills/resolving-merge-conflicts/SKILL.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 2,
+      "bytes": 1505,
+      "sha256": "6c87a4d5f3d276fd"
+    },
+    {
+      "datei": "lizenzen/LICENSE-mattpocock-skills.txt",
+      "herkunft": "user-projects/harness-lab/vendor/LICENSE-mattpocock-skills.txt",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 1068,
+      "sha256": "0e7ac423bf2c6e22"
+    },
+    {
+      "datei": "lizenzen/LICENSE-i-have-adhd.txt",
+      "herkunft": "user-projects/harness-lab/vendor/LICENSE-i-have-adhd.txt",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 1069,
+      "sha256": "8acbb618089b7384"
+    },
+    {
+      "datei": "zustand/zustand.js",
+      "herkunft": "zustand/zustand.js",
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 5123,
+      "sha256": "4a860dd868ca6476"
+    },
+    {
+      "datei": "zustand/einordnen.js",
+      "herkunft": "zustand/einordnen.js",
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 13899,
+      "sha256": "50a5312617c4c5a0"
+    },
+    {
+      "datei": "zustand/messen.js",
+      "herkunft": "zustand/messen.js",
+      "quellordner": "bausatz",
+      "gesaeubert": 2,
+      "bytes": 44430,
+      "sha256": "24166d55977a4ffa"
+    },
+    {
+      "datei": "zustand/regeln.js",
+      "herkunft": "zustand/regeln.js",
+      "quellordner": "bausatz",
+      "gesaeubert": 2,
+      "bytes": 13472,
+      "sha256": "2e2b4165806cd055"
+    },
+    {
+      "datei": "zustand/rendern.js",
+      "herkunft": "zustand/rendern.js",
+      "quellordner": "bausatz",
+      "gesaeubert": 2,
+      "bytes": 58362,
+      "sha256": "5dfe09973af52d29"
+    },
+    {
+      "datei": "zustand/README.md",
+      "herkunft": "zustand/README.md",
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 4160,
+      "sha256": "febc480c57561956"
+    },
+    {
+      "datei": "oberflaeche/befuellen.mjs",
+      "herkunft": "oberflaeche/befuellen.mjs",
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 5791,
+      "sha256": "e35bf316f4152eeb"
+    },
+    {
+      "datei": "oberflaeche/dist/index.html",
+      "herkunft": "oberflaeche/dist/index.html",
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 258067,
+      "sha256": "50275a48f6c3bdac"
+    },
+    {
+      "datei": "beileger/10-nachbau-anleitung.md",
+      "herkunft": "docs/10-nachbau-anleitung.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 11,
+      "bytes": 203461,
+      "sha256": "5617dc363fb951ce"
+    },
+    {
+      "datei": "beileger/11-vollstaendigkeitspruefung.md",
+      "herkunft": "docs/11-vollstaendigkeitspruefung.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 2,
+      "bytes": 25170,
+      "sha256": "54dbda5e832f058d"
+    },
+    {
+      "datei": "beileger/12-werkzeug-beschaffung.md",
+      "herkunft": "docs/12-werkzeug-beschaffung.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 1,
+      "bytes": 4588,
+      "sha256": "4d46a1352313cf46"
+    },
+    {
+      "datei": "onboarding.mjs",
+      "herkunft": "onboarding.mjs",
+      "quellordner": "installer",
+      "gesaeubert": 0,
+      "bytes": 72827,
+      "sha256": "bcb4eab4a8e0f88a"
+    },
+    {
+      "datei": "LIESMICH.md",
+      "herkunft": "README.md",
+      "quellordner": "installer",
+      "gesaeubert": 0,
+      "bytes": 5790,
+      "sha256": "9db016e56aa4ae85"
+    },
+    {
+      "datei": "vorlagen/settings.json",
+      "herkunft": "erzeugt von paketieren.mjs",
+      "quellordner": "erzeugt",
+      "gesaeubert": 0,
+      "bytes": 1574,
+      "sha256": "69e86e39936ecfb0"
+    },
+    {
+      "datei": "vorlagen/gitignore-block.txt",
+      "herkunft": "erzeugt von paketieren.mjs",
+      "quellordner": "erzeugt",
+      "gesaeubert": 0,
+      "bytes": 1669,
+      "sha256": "132d183aca6853b4"
+    },
+    {
+      "datei": "vorlagen/CLAUDE.md",
+      "herkunft": "erzeugt von paketieren.mjs",
+      "quellordner": "erzeugt",
+      "gesaeubert": 0,
+      "bytes": 3748,
+      "sha256": "fa5b7c25174dc3ae"
+    }
+  ]
+}
