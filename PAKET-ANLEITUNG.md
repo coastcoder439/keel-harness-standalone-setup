@@ -92,9 +92,9 @@ Push. Alle Befehle mit `-C <HARNESS>`, damit sie unabhängig vom aktuellen
 Verzeichnis im richtigen Repo landen:
 
 ```
-git -C <HARNESS> init
+git -C <HARNESS> init -b main
 git -C <HARNESS> add .claude .gitignore CLAUDE.md zustand oberflaeche docs lizenzen
-git -C <HARNESS> commit -m "harness: eingerichtet"
+git -C <HARNESS> commit -m "harness: installiert"
 ```
 
 (`git init` nur, falls `<HARNESS>` noch kein Repo ist.) Remote-Repo unter deinem
@@ -112,7 +112,12 @@ dieser Regeln.
 
 1. Claude Code neu starten.
 2. Eine Sitzung mit `<HARNESS>` als Arbeitsverzeichnis öffnen.
-3. `/repo-status` aufrufen. Meldet er alle Repos als synchron, greift die
+3. Dort beginnt das **Onboarding von selbst**: Die installierte `CLAUDE.md` trägt
+   einen Abschnitt 0, der den Agenten anweist, die `[?]`-Stellen mit dir
+   auszufüllen und die Punkte durchzugehen, die nur du entscheiden kannst
+   (GitHub-Remote, Schreibziele des Wächters). Du wirst gefragt, du tippst nichts
+   von dir aus.
+4. Danach `/repo-status` aufrufen. Meldet er alle Repos als synchron, greift die
    Verdrahtung.
 
 `<PAKET>` wird ab jetzt nicht mehr gebraucht. Behalten oder löschen — beides ist
