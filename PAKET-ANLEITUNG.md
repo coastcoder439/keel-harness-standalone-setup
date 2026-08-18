@@ -24,11 +24,8 @@ Die Befehle unten geben **immer beide Pfade** an — auch `--paket <PAKET>`, obw
 Installer seinen Ordner selbst finden könnte. Zwei ausgeschriebene Pfade lesen auf
 jedem System gleich und lassen keinen Spielraum, wo etwas landet.
 
-> **Windows-Hinweis (Paketstand 2026-08-06):** Dort ist `--paket` derzeit nicht nur
-> Konvention, sondern Pflicht — `onboarding.mjs` findet auf Windows seinen eigenen Ordner
-> nicht (Zeile 53, `URL.pathname` statt `fileURLToPath`). Ohne den Schalter bricht der
-> Aufruf mit Rückgabewert 2 ab: `ABBRUCH: Paket nicht gefunden (gesucht: … /C:/Users/…)`.
-> Dieser Absatz entfällt nach der Korrektur in der Werkbank; die Befehle bleiben, wie sie sind.
+(Bis 18.08.2026 war `--paket` auf Windows sogar Pflicht — der Installer fand seinen
+eigenen Ordner nicht. Das ist behoben; der Schalter bleibt als Konvention.)
 
 ---
 
@@ -112,11 +109,11 @@ dieser Regeln.
 
 1. Claude Code neu starten.
 2. Eine Sitzung mit `<HARNESS>` als Arbeitsverzeichnis öffnen.
-3. Dort beginnt das **Onboarding von selbst**: Die installierte `CLAUDE.md` trägt
-   einen Abschnitt 0, der den Agenten anweist, die `[?]`-Stellen mit dir
-   auszufüllen und die Punkte durchzugehen, die nur du entscheiden kannst
-   (GitHub-Remote, Schreibziele des Wächters). Du wirst gefragt, du tippst nichts
-   von dir aus.
+3. Dort beginnt das **Onboarding von selbst**: Der Hook `onboarding-start.js`
+   startet `/onboarding`, solange die `CLAUDE.md` noch `[?]` enthält. Der Agent
+   füllt die Stellen mit dir aus und geht die Punkte durch, die nur du entscheiden
+   kannst (GitHub-Remote, Schreibziele des Wächters). Du wirst gefragt, du tippst
+   nichts von dir aus.
 4. Danach `/repo-status` aufrufen. Meldet er alle Repos als synchron, greift die
    Verdrahtung.
 
@@ -147,10 +144,10 @@ austauschen, ohne die Messung anzufassen.
 
 | Teil | Was es tut |
 |---|---|
-| **7 Wächter** | blocken zerstörende Befehle · sagen das Ziel-Repo an · erzwingen die Commit-Form · warnen vor ungesicherter Arbeit · Statusleiste |
-| **4 Befehle** | `/repo-status` `/save-work` `/session-map` `/tell-session` |
+| **8 Wächter** | blocken zerstörende Befehle · sagen das Ziel-Repo an · erzwingen die Commit-Form · warnen vor ungesicherter Arbeit · Statusleiste · starten das Onboarding, solange es offen ist |
+| **5 Befehle** | `/repo-status` `/save-work` `/session-map` `/tell-session` `/onboarding` (einmalig) |
 | **4 Dauer-Regeln** | laden bei jedem Sitzungsstart: erst prüfen dann antworten · Vollständigkeit · Werkzeugwahl · Antwortform |
-| **Skills** | Domänenmodell, Merge-Konflikte — übernommen unter MIT, Lizenzen liegen bei. *(Offen in der Werkbank: der Skill `i-have-adhd` liegt im Paket und wird von Regel und Start-Hook vorausgesetzt, aber vom Installer nicht kopiert — siehe `00-MODELL-UND-AENDERUNGEN.md`.)* |
+| **3 Skills** | Domänenmodell, Merge-Konflikte, Antwortform (`i-have-adhd`) — übernommen unter MIT, Lizenzen liegen bei |
 | **`CLAUDE.md`** | die Vorlage mit `[?]`-Platzhaltern — nur, wenn im Ziel noch keine liegt |
 | **Zustandsseite** | misst Bestand, Sicherung, Prüfer, Rollen — und zeigt sie |
 | **Beileger** | die Nachbau-Anleitung und die zwei Langfassungen, auf die die Regeln verweisen |
@@ -169,7 +166,7 @@ abgeschaltet — das ist schlechter als gar keiner.
 | `ABWEICHEND` | Deine Fassung bleibt stehen, die neue liegt als `.neu` daneben. Vergleichen, dann entscheiden. |
 | `ACHTUNG … kein git-Repo` | Nichts ist gesichert. Schritt 4 nachholen. |
 | `ACHTUNG … werden von git ignoriert` | Die `.gitignore` verdeckt Eigenbauten. Der Harness-Block muss **nach** einer breiteren Regel stehen. |
-| `ABBRUCH: Paket nicht gefunden` mit Suchpfad `/C:/…` (Windows) | `--paket <PAKET>` fehlt — siehe Windows-Hinweis oben. |
+| `ABBRUCH: Paket nicht gefunden` | `--paket <PAKET>` zeigt nicht auf den Ordner mit `PAKET.json`. Pfad prüfen. |
 | Rückgabewert `1` | Eingerichtet, aber etwas braucht Aufmerksamkeit — die Punkte stehen am Ende der Ausgabe. |
 | Rückgabewert `2` | **Abbruch — es ist nicht eingerichtet.** Die Meldung nennt den Grund in einer Zeile Klartext (Schreibrechte, kein Platz, Ziel unbrauchbar) und dahinter den Stand: `N von M Posten`. |
 | `2` mit `N > 0` | Der Ordner ist **halb** eingerichtet. Ursache beheben, dann **denselben** Befehl erneut — er ergänzt nur das Fehlende. Nicht ignorieren: beim nächsten Lauf sieht ein halbes Ziel wie ein gewachsener Bestand aus. |

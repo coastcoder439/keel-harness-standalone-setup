@@ -48,9 +48,13 @@
 
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
-const HIER = path.dirname(decodeURIComponent(new URL(import.meta.url).pathname));
+// fileURLToPath statt URL.pathname: pathname liefert auf Windows "/C:/…", und daraus
+// wird "C:\C:\…" — das Paket wurde nie gefunden, --paket war dort Pflicht.
+// [Gemessen 18.08.2026, Windows 11, Node 24: RC 2 "Paket nicht gefunden" ohne --paket.]
+const HIER = path.dirname(fileURLToPath(import.meta.url));
 
 // =============================================================================
 // 0 — FEHLERFAELLE: ein Absturz ist kein Ergebnis
@@ -145,11 +149,12 @@ const WAECHTER = [
   "commit-pathspec-guard.js",
   "repo-status.js",
   "session-roles.js",
+  "onboarding-start.js", // SessionStart: startet /onboarding, solange CLAUDE.md [?] enthaelt
   "statusline.js",
   "uncommitted-warn.js",
 ];
 
-const BEFEHLE = ["repo-status.md", "save-work.md", "session-map.md", "tell-session.md"];
+const BEFEHLE = ["repo-status.md", "save-work.md", "session-map.md", "tell-session.md", "onboarding.md"];
 
 // Diese vier laden bei JEDEM Sitzungsstart. Sie kosten dauerhaft Kontext und
 // sind genau deshalb bewusst kurz gehalten.
@@ -158,6 +163,9 @@ const REGELN = ["kein-oneshot.md", "vollstaendigkeit.md", "werkzeuge.md", "ausga
 const SKILLS = [
   ["domain-modeling", ["SKILL.md", "ADR-FORMAT.md", "CONTEXT-FORMAT.md"]],
   ["resolving-merge-conflicts", ["SKILL.md"]],
+  // Bis 18.08.2026 fehlte dieser Eintrag: die Dauer-Regel ausgabeform.md und der
+  // Start-Hook session-roles.js verwiesen auf einen Skill, den der Installer nie kopierte.
+  ["i-have-adhd", ["SKILL.md"]],
 ];
 
 const ZUSTAND = ["zustand.js", "messen.js", "einordnen.js", "regeln.js", "rendern.js", "README.md"];

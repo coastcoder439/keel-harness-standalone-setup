@@ -124,3 +124,24 @@ kein Schritt mehr — nur eine stille Vorpruefung des Agenten.
 
 Fuer die Werkbank zusaetzlich: `vorlagen/CLAUDE.md` Abschnitt 0 in den Generator uebernehmen;
 `pruefung/frisch-geklont.mjs` prueft weiterhin nur `CLAUDE.md` im Ziel (Zeile 191) — passt.
+
+## 6. Korrektur zu Abschnitt 5 (gleicher Tag): Onboarding-Prozedur raus aus der CLAUDE.md
+
+Einwand des Auftraggebers, geprueft und bestaetigt: eine einmalige Prozedur gehoert nicht in
+eine Datei, die in jeder Sitzung als Wahrheit ueber den Workspace laedt — dasselbe Argument,
+mit dem die Paket-CLAUDE.md gestrichen wurde. Umgesetzt:
+
+- `harness/.claude/commands/onboarding.md` — die Prozedur als Befehl `/onboarding`.
+- `harness/.claude/onboarding-start.js` — SessionStart-Hook: schickt `/onboarding` als erste
+  Nachricht, NUR bei Anlass `startup` und NUR solange `CLAUDE.md` `[?]` enthaelt. Sonst still.
+  Getestet: startup+[?] → feuert; resume → still; startup ohne [?] → still.
+- `vorlagen/CLAUDE.md` — Abschnitt 0 entfernt; nur ein Satz im Kopf verweist auf `/onboarding`.
+- `vorlagen/settings.json` — Hook verdrahtet (SessionStart, nach session-roles.js).
+- `vorlagen/gitignore-block.txt` — `onboarding.md` und `i-have-adhd/` freigeschaltet.
+- `onboarding.mjs` — Hook und Befehl in WAECHTER/BEFEHLE (Posten 35 → 38); Zeile 53
+  `fileURLToPath` (Windows-Fix, `--paket` nicht mehr Pflicht); Skill `i-have-adhd` wird
+  jetzt installiert (war von ausgabeform.md und session-roles.js vorausgesetzt).
+- `pruefung/frisch-geklont.mjs`: vorher auf Windows 7 rot (Zeile-53-Bug), jetzt 9 gruen / 0 rot.
+
+Fuer die Werkbank: alle sechs Punkte in den Generator uebernehmen; PAKET.json neu bauen
+(Stueckliste zaehlt noch 38 alte Posten mit alten Pruefsummen).

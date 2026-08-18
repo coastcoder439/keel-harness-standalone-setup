@@ -5,39 +5,8 @@
 > lieber eine offene Markierung als eine geratene Angabe.
 >
 > Angelegt von der Harness-Installation. Die Abschnitte 1-3 gehoeren dir, Abschnitt 4-5
-> beschreiben, was tatsaechlich installiert ist.
-
-## 0. Onboarding — solange hier `[?]` steht, ist es offen
-
-**An den Agenten:** Stehen in dieser Datei noch `[?]`-Stellen, ist das Onboarding nicht
-gemacht. Dann fuehrst du es **jetzt, in dieser Sitzung**, bevor du irgendetwas anderes
-tust. Der Mensch tippt nichts von sich aus — du fragst, er antwortet, du traegst ein.
-
-1. Sag dem Menschen in einem Satz, dass der Harness installiert ist und du jetzt die
-   offenen Angaben mit ihm ausfuellst.
-2. Frage nacheinander, eine Frage pro Nachricht, und trag jede Antwort sofort ein:
-   - Wozu dient dieser Workspace? (ein Satz)
-   - Wer arbeitet daran, mit welchen Rollen?
-   - Welche Sprache soll hier gelten? (Vorgabe: Deutsch)
-   - Wie heisst das Repo dieses Workspace? Gibt es schon Projekt-Repos unter `user-projects/`?
-   - Was ist noch offen und muss entschieden werden?
-   Will der Mensch etwas nicht beantworten, bleibt dort `[?]` stehen. Nie raten.
-3. Geh dann die Punkte durch, die nur der Mensch entscheiden kann — je einen kurzen
-   Absatz mit Handlung und Wirkung, dann seine Entscheidung abwarten:
-   - **Sicherung:** Hat dieser Ordner ein GitHub-Remote? Wenn nein: Remote anlegen und
-     pushen ist seine Handlung (`gh auth login`, Repo anlegen). Bis dahin liegt alles nur
-     auf einer Platte.
-   - **Schreibziele des Waechters:** `.claude/danger-guard.js`, Funktion `erlaubteWurzeln()`
-     — schreibt er regelmaessig ausserhalb dieses Ordners, muss der Pfad dort hinein.
-   - **`settings.json` versionieren:** Vorgabe ja; sie enthaelt nur `$CLAUDE_PROJECT_DIR`.
-   - **Sitzungs-Rollen:** `docs/08-sessions-rollen.md` nur anlegen, wenn mehrere
-     Sitzungen parallel laufen.
-   - **Eigene Regeln:** Abschnitt 6 unten — erst fuellen, wenn ein eigener Fall da ist.
-4. Committe die ausgefuellte Datei: `git commit -m "harness: onboarding" -- CLAUDE.md`.
-5. Loesche diesen Abschnitt 0 aus der Datei und committe erneut. Ab jetzt ist der Harness
-   in Betrieb; `/repo-status` zeigt den Stand.
-
-Bricht der Mensch ab, bleibt Abschnitt 0 stehen — die naechste Sitzung nimmt es wieder auf.
+> beschreiben, was tatsaechlich installiert ist. Solange hier `[?]` steht, startet
+> jede neue Sitzung von selbst `/onboarding` und fuellt die Stellen mit dir aus.
 
 ## 1. Was das hier ist
 
@@ -76,10 +45,11 @@ lassen: der geht verloren.
 | `commit-pathspec-guard.js` | vor jedem git-Befehl | erzwingt `git commit -- <pfad>` im Workspace-Repo |
 | `uncommitted-warn.js` | am Sitzungsende | warnt bei ungesicherter Arbeit (nur Hinweis, blockiert nie) |
 | `session-roles.js` | bei Sitzungsstart | laedt die Rollen aus `docs/08-sessions-rollen.md`, falls vorhanden |
+| `onboarding-start.js` | bei Sitzungsstart | startet `/onboarding`, solange diese Datei `[?]` enthaelt — danach still |
 | `statusline.js` | dauerhaft | Repo · Branch · Sicherungsstand in der Statusleiste |
 | `repo-status.js` | auf Aufruf (`/repo-status`) | lokales Git vs. GitHub vs. Sync, rekursiv |
 
-**Befehle:** `/repo-status` · `/save-work` · `/session-map` · `/tell-session`
+**Befehle:** `/repo-status` · `/save-work` · `/session-map` · `/tell-session` · `/onboarding` (einmalig)
 
 **Zustandsseite:** `node zustand/zustand.js --json --daten zustand.json` misst,
 `node oberflaeche/befuellen.mjs oberflaeche/dist/index.html zustand.json zustand.html`

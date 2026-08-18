@@ -17,10 +17,12 @@
 !.claude/commands/save-work.md
 !.claude/commands/session-map.md
 !.claude/commands/tell-session.md
+!.claude/commands/onboarding.md
 !.claude/skills/
 .claude/skills/*
 !.claude/skills/domain-modeling/
 !.claude/skills/resolving-merge-conflicts/
+!.claude/skills/i-have-adhd/
 !.claude/rules/
 .claude/rules/*
 !.claude/rules/ecc/
