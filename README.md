@@ -79,8 +79,10 @@ Grenzen: Du schreibst nur in `<HARNESS>` und `<ARBEIT>`. Du fragst keine Secrets
 
 ## Für den Agenten: Onboarding (Phase 2)
 
-Steht in der installierten `<HARNESS>/CLAUDE.md`, Abschnitt 0. Er lädt beim Start jeder
-Session in `<HARNESS>` von selbst und führt dich, solange dort `[?]` steht.
+Läuft von selbst. Der installierte SessionStart-Hook `.claude/onboarding-start.js` schickt
+beim Start einer Session in `<HARNESS>` den Befehl `/onboarding`, solange die `CLAUDE.md`
+dort noch `[?]` enthält. Die Prozedur steht in `.claude/commands/onboarding.md`; die
+`CLAUDE.md` selbst bleibt reine Beschreibung des Workspace.
 
 ---
 
@@ -90,9 +92,9 @@ Der Inhalt hier entsteht automatisch aus der Werkbank (Quell-Commit: `e165ec6`).
 **Handänderungen an diesem Repo werden beim nächsten Generator-Lauf überschrieben.**
 Wer etwas ändern will, ändert es an der Quelle in der Werkbank — nicht hier.
 
-> **Ausnahme, 2026-08-18:** README, PAKET-ANLEITUNG und `vorlagen/CLAUDE.md` (Abschnitt 0)
-> wurden von Hand auf den Zwei-Phasen-Ablauf umgestellt; die Paket-`CLAUDE.md` ist
-> entfallen. Begründung und Änderungsliste für die Werkbank:
+> **Ausnahme, 2026-08-18:** README, PAKET-ANLEITUNG, `vorlagen/` und der Installer wurden
+> von Hand auf den Zwei-Phasen-Ablauf umgestellt (neu: `/onboarding` + `onboarding-start.js`);
+> die Paket-`CLAUDE.md` ist entfallen. Begründung und Änderungsliste für die Werkbank:
 > `AENDERUNGEN-ANLEITUNG-2026-08-18.md`. Bis die Werkbank nachgezogen ist, überschreibt
 > der Generator diese Änderungen.
 
@@ -106,8 +108,8 @@ Wer etwas ändern will, ändert es an der Quelle in der Werkbank — nicht hier.
 
 | Teil | Zweck |
 |---|---|
-| `harness/` | Die Nutzlast: `.claude` mit Wächter-Hooks, Dauer-Regeln, Befehlen (`/repo-status`, `/save-work`, `/session-map`, `/tell-session`), Skills |
-| `vorlagen/` | `CLAUDE.md` (mit Onboarding-Abschnitt), `settings.json` und der `.gitignore`-Block, die ins Ziel geschrieben werden |
+| `harness/` | Die Nutzlast: `.claude` mit Wächter-Hooks, Dauer-Regeln, Befehlen (`/repo-status`, `/save-work`, `/session-map`, `/tell-session`, `/onboarding`), Skills |
+| `vorlagen/` | `CLAUDE.md`, `settings.json` und der `.gitignore`-Block, die ins Ziel geschrieben werden |
 | `zustand/`, `oberflaeche/` | Zustandsseite: Messung und gebaute Hülle |
 | `beileger/`, `lizenzen/` | Langfassungen, auf die die Regeln verweisen; Lizenzen der übernommenen Skills |
 | `onboarding.mjs` | Installiert die Nutzlast nach `<HARNESS>` (fragt selbst nichts ab, löscht nichts) |
