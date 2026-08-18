@@ -100,3 +100,27 @@ Alternativ `ONBOARDING-FUER-CLAUDE.md` einer Sitzung vorlegen, die **in `<HARNES
 Neustart-Punkt (kann nur der Mensch). Echtlauf RC 1 (einzig „kein git-Repo", erwartet), `[7] angelegt`,
 `git ls-files` = 35 Nutzlast-Dateien, keine Paketreste, 8 × `[?]` in `CLAUDE.md`, zweiter Lauf 0 neu / RC 0.
 Nebenbei: `git init` legt `master` an — falls `main` gewünscht, in Schritt 4 `git -C <HARNESS> init -b main`.
+
+---
+
+## 5. Zweiter Stand (2026-08-18, spaeter am Tag): Zwei Phasen, der Mensch tippt nur Link und Ordnername
+
+Der Stand oben (Satz mit zwei Pfaden tippen) war noch zu viel. Beschlossen mit dem Auftraggeber:
+
+**Phase 1 — Installation** (Agent bekommt den GitHub-Link, liest die README): fragt Name und Ort
+des Harness-Ordners, legt ihn ggf. an, klont das Repo selbst in einen Arbeitsordner ausserhalb,
+prueft still (Trockenlauf nur intern, Rueckfrage nur bei Auffaelligkeit), installiert, committet,
+loescht den Arbeitsordner, sagt: „Neu starten, Session im Harness-Ordner oeffnen."
+→ steht in `README.md`, Abschnitt „Fuer den Agenten: Installation".
+
+**Phase 2 — Onboarding** (erste Session im Harness-Ordner): die installierte `CLAUDE.md` traegt
+Abschnitt 0 — solange `[?]` drinsteht, fuehrt der Agent das Onboarding von selbst: fragt Zweck,
+Beteiligte, Sprache, Repos, offene Punkte; geht Remote/Push, Waechter-Schreibziele,
+settings.json, Sitzungs-Rollen, eigene Regeln durch; committet; loescht Abschnitt 0.
+→ steht in `vorlagen/CLAUDE.md`, Abschnitt 0.
+
+Entfallen: `ONBOARDING-FUER-CLAUDE.md` (Zwischenstand). Der Trockenlauf ist fuer den Menschen
+kein Schritt mehr — nur eine stille Vorpruefung des Agenten.
+
+Fuer die Werkbank zusaetzlich: `vorlagen/CLAUDE.md` Abschnitt 0 in den Generator uebernehmen;
+`pruefung/frisch-geklont.mjs` prueft weiterhin nur `CLAUDE.md` im Ziel (Zeile 191) — passt.
