@@ -6,13 +6,36 @@ Zustandsseite, die dir zeigt, was installiert ist und ob es gesund ist.
 **Gebraucht wird:** Node (18 oder neuer) und Git. Sonst nichts — kein npm, keine
 Toolchain, kein Bauschritt.
 
+## Bevor du anfängst: zwei Pfade
+
+Alle Befehle unten nennen zwei Pfade ausdrücklich. Setz sie einmal fest, dann ist es
+egal, in welchem Verzeichnis du gerade stehst.
+
+| Platzhalter | Bedeutung | Windows (Beispiel) | macOS / Linux (Beispiel) |
+|---|---|---|---|
+| `<PAKET>` | dieser Bausatz, so wie du ihn geklont oder entpackt hast | `C:\Users\du\Downloads\keel-harness-standalone` | `~/Downloads/keel-harness-standalone` |
+| `<HARNESS>` | dein Workspace — neu und leer oder ein bestehendes Projekt | `C:\Users\du\WORKSPACES\mein-workspace` | `~/workspaces/mein-workspace` |
+
+Regel: **`<PAKET>` liegt nicht in `<HARNESS>`, und `<HARNESS>` nicht in `<PAKET>`.**
+Der Bausatz ist ein Werkzeug. Er wird von außen auf den Harness-Ordner angewendet
+und ist danach entbehrlich.
+
+Die Befehle unten geben **immer beide Pfade** an — auch `--paket <PAKET>`, obwohl der
+Installer seinen Ordner selbst finden könnte. Zwei ausgeschriebene Pfade lesen auf
+jedem System gleich und lassen keinen Spielraum, wo etwas landet.
+
+> **Windows-Hinweis (Paketstand 2026-08-06):** Dort ist `--paket` derzeit nicht nur
+> Konvention, sondern Pflicht — `onboarding.mjs` findet auf Windows seinen eigenen Ordner
+> nicht (Zeile 53, `URL.pathname` statt `fileURLToPath`). Ohne den Schalter bricht der
+> Aufruf mit Rückgabewert 2 ab: `ABBRUCH: Paket nicht gefunden (gesucht: … /C:/Users/…)`.
+> Dieser Absatz entfällt nach der Korrektur in der Werkbank; die Befehle bleiben, wie sie sind.
+
 ---
 
 ## 1. Nachsehen, was drin ist
 
-```bash
-cd <paket-ordner>
-node -e "const p=require('./PAKET.json');console.log(p.posten+' Posten, gebaut '+p.gebautAm)"
+```
+node -e "const p=require('<PAKET>/PAKET.json');console.log(p.posten+' Posten, gebaut '+p.gebautAm)"
 ```
 
 `PAKET.json` ist die Stückliste: jede Datei mit Herkunft, Größe und Prüfsumme.
@@ -21,8 +44,14 @@ das ist kein Versehen und braucht kein Nachtragen.
 
 ## 2. Trocken laufen lassen
 
-```bash
-node onboarding.mjs --ziel /pfad/zu/deinem/workspace --trocken
+```
+node <PAKET>/onboarding.mjs --paket <PAKET> --ziel <HARNESS> --trocken
+```
+
+Windows, ausgeschrieben:
+
+```
+node C:\Users\du\Downloads\keel-harness-standalone\onboarding.mjs --paket C:\Users\du\Downloads\keel-harness-standalone --ziel C:\Users\du\WORKSPACES\mein-workspace --trocken
 ```
 
 Zeigt jeden Schritt und schreibt **nichts**. Lies die Ausgabe einmal durch. Sie
@@ -32,10 +61,15 @@ Jede Zeile steht dabei in der Möglichkeitsform — `wuerde anlegen`, `wuerde
 ersetzen`, `wuerde ergaenzen`. Der Trockenlauf meldet nie einen Vollzug: was er
 zeigt, ist noch nicht passiert, und keine Zeile behauptet etwas anderes.
 
+Achte auf Schritt **[7] CLAUDE.md**: In einem frischen `<HARNESS>` muss dort
+`wuerde anlegen` stehen. Steht dort `uebersprungen`, liegt schon eine `CLAUDE.md`
+im Ziel — bei einem bestehenden Projekt ist das richtig so (deine Datei bleibt),
+bei einem neuen Ordner ist etwas falsch gelaufen.
+
 ## 3. Einrichten
 
-```bash
-node onboarding.mjs --ziel /pfad/zu/deinem/workspace
+```
+node <PAKET>/onboarding.mjs --paket <PAKET> --ziel <HARNESS>
 ```
 
 Der Lauf ist wiederholbar. Eine Datei, die schon da ist und abweicht, wird
@@ -46,19 +80,25 @@ Am Ende steht eine Liste **„Was jetzt beim Menschen liegt"**. Die ist kein
 Anhang, sondern der Teil, den ein Programm nicht übernehmen darf: GitHub-Konto,
 erstes Push, Schreibziele der Wächter, eigene Regeln.
 
+Danach: `<HARNESS>/CLAUDE.md` öffnen und die **`[?]`-Platzhalter** ausfüllen —
+Zweck, Beteiligte, Repo-Namen. Lieber eine offene Markierung stehen lassen als
+raten; die Datei lädt in jeder Sitzung und wird als Wahrheit gelesen.
+
 ## 4. Sichern — sichtbar ist nicht gesichert
 
 Das Onboarding setzt die `.gitignore` so, dass Git die Eigenbauten **sehen**
 darf. Aufgenommen werden sie durch `git add`, gesichert erst durch Commit und
-Push:
+Push. Alle Befehle mit `-C <HARNESS>`, damit sie unabhängig vom aktuellen
+Verzeichnis im richtigen Repo landen:
 
-```bash
-cd /pfad/zu/deinem/workspace
-git init                       # falls noch kein Repo
-git add .claude .gitignore CLAUDE.md zustand oberflaeche docs
-git commit -m "harness: eingerichtet"
-# Remote-Repo unter deinem Konto anlegen und pushen — das machst du selbst
 ```
+git -C <HARNESS> init
+git -C <HARNESS> add .claude .gitignore CLAUDE.md zustand oberflaeche docs lizenzen
+git -C <HARNESS> commit -m "harness: eingerichtet"
+```
+
+(`git init` nur, falls `<HARNESS>` noch kein Repo ist.) Remote-Repo unter deinem
+Konto anlegen und pushen — das machst du selbst.
 
 Bis hierhin liegt alles nur auf einer Platte. Genau dagegen ist dieser Harness
 gebaut.
@@ -67,27 +107,30 @@ gebaut.
 
 **Der wichtigste Schritt, und der am leichtesten übersehene.** Alles, was hier
 eingerichtet wurde — Wächter, Regeln, Statusleiste —, lädt nur beim **Start**
-einer Sitzung. Die Sitzung, in der du das Onboarding ausgeführt hast, kennt
-keine dieser Regeln.
+einer Sitzung im Harness-Ordner. Eine Sitzung, die schon lief, kennt keine
+dieser Regeln.
 
 1. Claude Code neu starten.
-2. Eine Sitzung mit deinem Workspace als Arbeitsverzeichnis öffnen.
+2. Eine Sitzung mit `<HARNESS>` als Arbeitsverzeichnis öffnen.
 3. `/repo-status` aufrufen. Meldet er alle Repos als synchron, greift die
    Verdrahtung.
+
+`<PAKET>` wird ab jetzt nicht mehr gebraucht. Behalten oder löschen — beides ist
+in Ordnung; im Harness liegt nichts davon.
 
 ---
 
 ## Die Zustandsseite
 
-Sie wird am Ende des Onboardings erzeugt und liegt als `zustand.html` in deinem
-Workspace. Öffnen im Browser — eine einzelne Datei, keine Netzabfrage, per Mail
+Sie wird am Ende des Onboardings erzeugt und liegt als `zustand.html` in
+`<HARNESS>`. Öffnen im Browser — eine einzelne Datei, keine Netzabfrage, per Mail
 versendbar.
 
 Jederzeit neu messen:
 
-```bash
-node zustand/zustand.js --json --daten zustand.json
-node oberflaeche/befuellen.mjs oberflaeche/dist/index.html zustand.json zustand.html
+```
+node <HARNESS>/zustand/zustand.js --json --daten <HARNESS>/zustand.json
+node <HARNESS>/oberflaeche/befuellen.mjs <HARNESS>/oberflaeche/dist/index.html <HARNESS>/zustand.json <HARNESS>/zustand.html
 ```
 
 Zwei Läufe, weil **Messung und Anzeige getrennt sind**: `zustand.js` misst und
@@ -102,7 +145,8 @@ austauschen, ohne die Messung anzufassen.
 | **7 Wächter** | blocken zerstörende Befehle · sagen das Ziel-Repo an · erzwingen die Commit-Form · warnen vor ungesicherter Arbeit · Statusleiste |
 | **4 Befehle** | `/repo-status` `/save-work` `/session-map` `/tell-session` |
 | **4 Dauer-Regeln** | laden bei jedem Sitzungsstart: erst prüfen dann antworten · Vollständigkeit · Werkzeugwahl · Antwortform |
-| **3 Skills** | Domänenmodell, Merge-Konflikte, Antwortform (`i-have-adhd`) — übernommen unter MIT, Lizenzen liegen im Paket |
+| **Skills** | Domänenmodell, Merge-Konflikte — übernommen unter MIT, Lizenzen liegen bei. *(Offen in der Werkbank: der Skill `i-have-adhd` liegt im Paket und wird von Regel und Start-Hook vorausgesetzt, aber vom Installer nicht kopiert — siehe `00-MODELL-UND-AENDERUNGEN.md`.)* |
+| **`CLAUDE.md`** | die Vorlage mit `[?]`-Platzhaltern — nur, wenn im Ziel noch keine liegt |
 | **Zustandsseite** | misst Bestand, Sicherung, Prüfer, Rollen — und zeigt sie |
 | **Beileger** | die Nachbau-Anleitung und die zwei Langfassungen, auf die die Regeln verweisen |
 
@@ -116,9 +160,11 @@ abgeschaltet — das ist schlechter als gar keiner.
 
 | Meldung | Bedeutung |
 |---|---|
+| `[7] … uebersprungen` in einem **neuen** Ordner | Im Ziel lag schon eine `CLAUDE.md`. Häufigste Ursache: das Paket wurde in den Harness-Ordner kopiert. `<PAKET>` und `<HARNESS>` trennen, Ziel leeren, neu einrichten. |
 | `ABWEICHEND` | Deine Fassung bleibt stehen, die neue liegt als `.neu` daneben. Vergleichen, dann entscheiden. |
 | `ACHTUNG … kein git-Repo` | Nichts ist gesichert. Schritt 4 nachholen. |
 | `ACHTUNG … werden von git ignoriert` | Die `.gitignore` verdeckt Eigenbauten. Der Harness-Block muss **nach** einer breiteren Regel stehen. |
+| `ABBRUCH: Paket nicht gefunden` mit Suchpfad `/C:/…` (Windows) | `--paket <PAKET>` fehlt — siehe Windows-Hinweis oben. |
 | Rückgabewert `1` | Eingerichtet, aber etwas braucht Aufmerksamkeit — die Punkte stehen am Ende der Ausgabe. |
 | Rückgabewert `2` | **Abbruch — es ist nicht eingerichtet.** Die Meldung nennt den Grund in einer Zeile Klartext (Schreibrechte, kein Platz, Ziel unbrauchbar) und dahinter den Stand: `N von M Posten`. |
 | `2` mit `N > 0` | Der Ordner ist **halb** eingerichtet. Ursache beheben, dann **denselben** Befehl erneut — er ergänzt nur das Fehlende. Nicht ignorieren: beim nächsten Lauf sieht ein halbes Ziel wie ein gewachsener Bestand aus. |
