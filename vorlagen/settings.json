@@ -8,6 +8,12 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/session-roles.js\"",
             "timeout": 10,
             "statusMessage": "Sitzungs-Rollen laden"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/onboarding-start.js\"",
+            "timeout": 10,
+            "statusMessage": "Onboarding offen? (CLAUDE.md [?])"
           }
         ]
       }
