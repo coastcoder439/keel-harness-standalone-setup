@@ -1,18 +1,19 @@
 # CLAUDE.md — <WORKSPACE>
 
 > Diese Datei laedt in JEDER Sitzung, in diesem Ordner und in allen Unterordnern.
-> Was hier steht, wird als Wahrheit gelesen. Deshalb: **`[?]` heisst auszufuellen** —
-> lieber eine offene Markierung als eine geratene Angabe.
+> Was hier steht, wird als Wahrheit gelesen. Deshalb sind offene Pflichtangaben mit einer
+> **Ausfuell-Marke** gekennzeichnet: lieber die offene Marke als eine geratene Angabe.
+> (Ein blosses `[?]` ist dagegen ein spaeterer Platzhalter, kein Onboarding-Ausloeser.)
 >
 > Angelegt von der Harness-Installation. Die Abschnitte 1-3 gehoeren dir, Abschnitt 4-5
-> beschreiben, was tatsaechlich installiert ist. Solange hier `[?]` steht, startet
-> jede neue Sitzung von selbst `/onboarding` und fuellt die Stellen mit dir aus.
+> beschreiben, was tatsaechlich installiert ist. Solange eine Ausfuell-Pflichtmarke offen
+> steht, startet jede neue Sitzung von selbst `/onboarding` und fuellt sie mit dir aus.
 
 ## 1. Was das hier ist
 
-- **`[?]` Zweck dieses Workspace** — ein Satz, was hier gebaut wird.
-- **`[?]` Wer arbeitet daran** — Rollen und Zustaendigkeiten.
-- **`[?]` Projektsprache** — Vorgabe dieses Harness: Deutsch.
+- **`[AUSFUELLEN]` Zweck dieses Workspace** — ein Satz, was hier gebaut wird.
+- **`[AUSFUELLEN]` Wer arbeitet daran** — Rollen und Zustaendigkeiten.
+- **`[AUSFUELLEN]` Projektsprache** — Vorgabe dieses Harness: Deutsch.
 
 ## 2. Ebenen und Repo-Struktur
 
@@ -22,7 +23,7 @@ nicht ineinander.
 
 | Ebene | Ordner | Repo |
 |---|---|---|
-| Workspace | `.` (dieser Ordner) | `[?]` |
+| Workspace | `.` (dieser Ordner) | `[AUSFUELLEN]` |
 | Projekt | `user-projects/[?]` | `[?]` |
 
 **Reihenfolge bei einem neuen Projekt, nicht vertauschbar:** erst eigenes Repo
@@ -31,7 +32,7 @@ eintragen. Andersherum wird das Projekt unsichtbar und ungesichert zugleich.
 
 ## 3. Offene Punkte
 
-`[?]` — hier hinein, was noch entschieden werden muss. Nicht im Sitzungsverlauf
+`[AUSFUELLEN]` — hier hinein, was noch entschieden werden muss. Nicht im Sitzungsverlauf
 lassen: der geht verloren.
 
 ## 4. Was installiert ist (vom Onboarding gesetzt)
@@ -45,7 +46,7 @@ lassen: der geht verloren.
 | `commit-pathspec-guard.js` | vor jedem git-Befehl | erzwingt `git commit -- <pfad>` im Workspace-Repo |
 | `uncommitted-warn.js` | am Sitzungsende | warnt bei ungesicherter Arbeit (nur Hinweis, blockiert nie) |
 | `session-roles.js` | bei Sitzungsstart | laedt die Rollen aus `docs/08-sessions-rollen.md`, falls vorhanden |
-| `onboarding-start.js` | bei Sitzungsstart | startet `/onboarding`, solange diese Datei `[?]` enthaelt — danach still |
+| `onboarding-start.js` | bei Sitzungsstart | startet `/onboarding`, solange eine Ausfuell-Marke offen ist — danach still |
 | `statusline.js` | dauerhaft | Repo · Branch · Sicherungsstand in der Statusleiste |
 | `repo-status.js` | auf Aufruf (`/repo-status`) | lokales Git vs. GitHub vs. Sync, rekursiv |
 
@@ -72,6 +73,7 @@ austauschen, ohne die Messung anzufassen.
 
 ## 6. `[?]` Deine eigenen Regeln
 
-Die vier mitgelieferten Regeln tragen die Beweislage der Ursprungs-Werkbank.
-**Eine uebernommene Regel ohne eigenen Anlass wird nicht befolgt.** Wenn du hier
-eigene Faelle erlebst, schreib sie in die Regel hinein — mit Datum und Messwert.
+Die vier mitgelieferten Regeln **gelten und werden befolgt** — aber ihre Beweislage
+stammt aus der Ursprungs-Werkbank, ist also fremd. Verlass dich nicht auf geerbte
+Autoritaet: erlebst du hier eigene Faelle, schreib sie in die Regel hinein — mit
+Datum und Messwert, damit sie hier verankert ist.

@@ -2,9 +2,13 @@
 // SessionStart-Hook: startet das Onboarding von selbst -- genau so lange, wie es
 // noch aussteht. Der Mensch soll nach der Installation nichts tippen muessen.
 //
-// Woran "aussteht" gemessen wird: CLAUDE.md im Projektordner enthaelt noch "[?]".
-// Das ist dieselbe Markierung, die die Vorlage fuer "auszufuellen" benutzt --
-// keine zweite Wahrheit, keine Zustandsdatei, die vergessen werden kann.
+// Woran "aussteht" gemessen wird: CLAUDE.md enthaelt noch die Pflicht-Marke
+// "[AUSFUELLEN]". Frueher war das "[?]" -- verworfen 20.08.2026: dasselbe "[?]" steht
+// in der Vorlage AUCH in Erklaersaetzen und in dauerhaft offenen Platzhaltern
+// (Projekt-Zeile, Abschnitt 6), die NICHT zum Onboarding gehoeren -- der Hook wurde
+// damit nie still, obwohl alle Pflichtangaben standen. Eine eigene Marke nur fuer
+// Pflicht-Onboarding-Felder trennt "jetzt auszufuellen" von "spaeter" und "erwaehnt".
+// Weiter keine zweite Wahrheit: der Zustand kommt aus den Feldern selbst, nur praeziser.
 //
 // Warum ein eigener Hook und nicht ein Abschnitt in CLAUDE.md: CLAUDE.md laedt in
 // JEDER Sitzung und wird als Wahrheit ueber den Workspace gelesen. Eine einmalige
@@ -22,7 +26,7 @@ const path = require("path");
 
 const WURZEL = process.env.CLAUDE_PROJECT_DIR || path.resolve(__dirname, "..");
 const CLAUDE_MD = path.join(WURZEL, "CLAUDE.md");
-const MARKE = "[?]";
+const MARKE = "[AUSFUELLEN]";
 
 function anlass() {
   try {
@@ -49,7 +53,7 @@ process.stdout.write(
     hookSpecificOutput: {
       hookEventName: "SessionStart",
       additionalContext:
-        "Onboarding offen: CLAUDE.md enthaelt noch [?]-Stellen. Der Befehl /onboarding wurde " +
+        "Onboarding offen: CLAUDE.md enthaelt noch [AUSFUELLEN]-Pflichtstellen. Der Befehl /onboarding wurde " +
         "als erste Nachricht gesetzt -- ihn zuerst ausfuehren, bevor irgendetwas anderes.",
       initialUserMessage: "/onboarding",
     },

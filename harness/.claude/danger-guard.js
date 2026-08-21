@@ -31,6 +31,24 @@ const path = require("path");
 const os = require("os");
 
 const HOME = os.homedir();
+const IST_WIN = process.platform === "win32";
+
+// [Mac->Win-Fix 21.08.2026] Pfad-Vergleiche separatorneutral (\ und /) und unter
+// Windows case-insensitiv -- sonst scheitern sie an ~-expandierten Pfaden
+// (C:\Users\x/Desktop, gemischt) und an Gross/Kleinschreibung. Belegt: der
+// Schreibschutz war unter Windows fail-open (Selbsttest 10/14).
+function normPfad(p) {
+  if (!p) return p;
+  let n = String(p);
+  if (IST_WIN) n = n.split("\\").join("/").toLowerCase();
+  return n;
+}
+/** Liegt p unter der Wurzel w, oder IST es w? Separatorneutral. */
+function unter(p, w) {
+  const np = normPfad(p);
+  const nw = normPfad(w);
+  return np === nw || np.startsWith(nw.endsWith("/") ? nw : nw + "/");
+}
 
 /** Verzeichnisse, in die geschrieben werden darf. Alles andere unter $HOME ist tabu. */
 function erlaubteWurzeln() {
@@ -39,7 +57,10 @@ function erlaubteWurzeln() {
   // ~/.claude. Belegt: Codex nimmt unsere AGENTS.md per Tree-Walk auf (Testlauf gab
   // "Keel — Shipwright" zurueck, steht nirgends sonst). Wer den einen Ort erlaubt und
   // den anderen sperrt, sperrt die Haelfte des eigenen Harness aus.
-  const wurzeln = ["/tmp", "/private/tmp", "/var/folders", path.join(HOME, ".claude"), path.join(HOME, ".codex")];
+  // [Mac->Win-Fix 21.08.2026, U1] os.tmpdir() ist der echte Temp (Windows:
+  // C:\Users\...\AppData\Local\Temp); /private/tmp und /var/folders sind rein macOS.
+  const wurzeln = [os.tmpdir(), "/tmp", path.join(HOME, ".claude"), path.join(HOME, ".codex")];
+  if (process.platform === "darwin") wurzeln.push("/private/tmp", "/var/folders");
   if (process.env.CLAUDE_PROJECT_DIR) wurzeln.push(path.resolve(process.env.CLAUDE_PROJECT_DIR));
   return wurzeln;
 }
@@ -127,11 +148,11 @@ function gitUnterbefehl(segment) {
  */
 function allePfade(segment) {
   const treffer = [];
-  const re = /"((?:~|\/)[^"]*)"|'((?:~|\/)[^']*)'|(?<![\w"'=])((?:~|\/)[^\s;|&><)"']+)/g;
+  const re = /"((?:~|\/|[A-Za-z]:[\\/])[^"]*)"|'((?:~|\/|[A-Za-z]:[\\/])[^']*)'|(?<![\w"'=])((?:~|\/|[A-Za-z]:[\\/])[^\s;|&><)"']+)/g;
   let m;
   while ((m = re.exec(segment))) {
     const roh = m[1] || m[2] || m[3];
-    treffer.push(roh.replace(/^~(?=\/|$)/, HOME));
+    treffer.push(roh.replace(/^~(?=[\\/]|$)/, HOME));
   }
   return treffer;
 }
@@ -139,14 +160,14 @@ function allePfade(segment) {
 function fremdePfade(segment) {
   const wurzeln = erlaubteWurzeln();
   const treffer = [];
-  const re = /"((?:~|\/)[^"]*)"|'((?:~|\/)[^']*)'|(?<![\w"'=])((?:~|\/)[^\s;|&><)"']+)/g;
+  const re = /"((?:~|\/|[A-Za-z]:[\\/])[^"]*)"|'((?:~|\/|[A-Za-z]:[\\/])[^']*)'|(?<![\w"'=])((?:~|\/|[A-Za-z]:[\\/])[^\s;|&><)"']+)/g;
   let m;
   while ((m = re.exec(segment))) {
     const abFundstelle = segment.slice(m.index).replace(/^["']/, "");
-    const voll = abFundstelle.startsWith("~") ? HOME + abFundstelle.slice(1) : abFundstelle;
-    if (wurzeln.some((w) => voll === w || voll.startsWith(w + path.sep))) continue;
+    const voll = abFundstelle.replace(/^~(?=[\\/]|$)/, HOME);
+    if (wurzeln.some((w) => unter(voll, w))) continue;
     const roh = m[1] || m[2] || m[3];
-    treffer.push(roh.replace(/^~(?=\/|$)/, HOME));
+    treffer.push(roh.replace(/^~(?=[\\/]|$)/, HOME));
   }
   return treffer;
 }
@@ -218,7 +239,7 @@ const REGELN = [
     name: "Schreiben oder Loeschen ausserhalb des Arbeitsbereichs",
     gilt: (k, s) => SCHREIB_VERB.test(k) || UMLEITUNG.test(s),
     treffer: (s, k) => {
-      const unterHeimat = (p) => p.startsWith(HOME + path.sep) || p === HOME;
+      const unterHeimat = (p) => unter(p, HOME);
       // KOPIER-VERBEN: Nur das LETZTE Argument ist das Schreibziel -- `cp <fremd> <erlaubt>`
       // LIEST von fremd und SCHREIBT in den Arbeitsbereich, das ist harmlos. Der umgekehrte
       // Fall (`cp <erlaubt> ~/Desktop`) bleibt geblockt, denn dort ist das Ziel fremd.
@@ -231,17 +252,17 @@ const REGELN = [
         // (Die erste Fassung zaehlte absolute Pfade und liess dadurch
         //  `cp .claude/settings.local.json ~/Desktop/` durch -- genau den Vorfall,
         //  wegen dem diese Regel existiert. Beim Test aufgefallen, nicht im Betrieb.)
-        const m = s.match(/(?:"((?:~|\/)[^"]*)"|'((?:~|\/)[^']*)'|((?:~|\/)[^\s;|&><)"']+))\s*$/);
+        const m = s.match(/(?:"((?:~|\/|[A-Za-z]:[\\/])[^"]*)"|'((?:~|\/|[A-Za-z]:[\\/])[^']*)'|((?:~|\/|[A-Za-z]:[\\/])[^\s;|&><)"']+))\s*$/);
         if (!m) return false;
-        const ziel = (m[1] || m[2] || m[3]).replace(/^~(?=\/|$)/, HOME);
-        const erlaubt = erlaubteWurzeln().some((w) => ziel === w || ziel.startsWith(w + path.sep));
+        const ziel = (m[1] || m[2] || m[3]).replace(/^~(?=[\\/]|$)/, HOME);
+        const erlaubt = erlaubteWurzeln().some((w) => unter(ziel, w));
         return !erlaubt && unterHeimat(ziel);
       }
       // Uebrige Schreib-Verben (rm, touch, mkdir, tee, chmod …): jedes Argument zaehlt.
       if (SCHREIB_VERB.test(k)) return fremdePfade(s).some(unterHeimat);
       const ziel = umleitungsZiel(s);
-      if (!ziel || !ziel.startsWith("/")) return false;
-      return unterHeimat(ziel) && !erlaubteWurzeln().some((w) => ziel === w || ziel.startsWith(w + path.sep));
+      if (!ziel || !path.isAbsolute(ziel)) return false;
+      return unterHeimat(ziel) && !erlaubteWurzeln().some((w) => unter(ziel, w));
     },
     rat: `Geschrieben wird nur in Werkbank, user-projects, /tmp, ~/.claude und ~/.codex -- nicht sonstwo unter ${HOME}.`,
   },
