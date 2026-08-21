@@ -54,19 +54,24 @@ function zeilen() {
   return treffer.length ? treffer : null;
 }
 
+// [Bug-Fix 21.08.2026, Baustelle 2a] Rollen-Load und Antwortform-Skill-Load ENTKOPPELT.
+// Vorher stand hier `if (!rollen) process.exit(0)` -- im Solo-Betrieb (keine
+// docs/08-sessions-rollen.md) stieg der Hook damit aus, BEVOR der /i-have-adhd-Aufruf
+// kam; frische Sessions bekamen den Antwortform-Skill NIE. Jetzt: Rollen-Tabelle nur,
+// wenn vorhanden -- aber der Skill-Aufruf laeuft bei jedem "startup" unabhaengig davon.
 const rollen = zeilen();
-if (!rollen) process.exit(0);
-
-const text = [
-  "Sitzungs-Rollen dieses Workspace (aus docs/08-sessions-rollen.md, automatisch geladen).",
-  "Es arbeiten mehrere Sitzungen parallel im selben Ordner:",
-  ...rollen,
-  "",
-  "MELDE-REGEL: Aenderst oder findest du einen Fakt, auf dem eine ANDERE Rolle aufbaut",
-  "(Pfad, Repo-/Branch-Name, Datenbank, ein Beschluss), dann schick ihn ihr per /tell-session,",
-  "statt ihn nur zu notieren. Gehoert eine Aufgabe erkennbar einer anderen Rolle: dorthin",
-  "uebergeben, nicht selbst machen. Ueberblick: /session-map",
-].join("\n");
+const rollenText = rollen
+  ? [
+      "Sitzungs-Rollen dieses Workspace (aus docs/08-sessions-rollen.md, automatisch geladen).",
+      "Es arbeiten mehrere Sitzungen parallel im selben Ordner:",
+      ...rollen,
+      "",
+      "MELDE-REGEL: Aenderst oder findest du einen Fakt, auf dem eine ANDERE Rolle aufbaut",
+      "(Pfad, Repo-/Branch-Name, Datenbank, ein Beschluss), dann schick ihn ihr per /tell-session,",
+      "statt ihn nur zu notieren. Gehoert eine Aufgabe erkennbar einer anderen Rolle: dorthin",
+      "uebergeben, nicht selbst machen. Ueberblick: /session-map",
+    ].join("\n")
+  : null;
 
 // initialUserMessage wird wie eine ECHTE Nutzer-Nachricht verarbeitet, Slash-Befehle
 // eingeschlossen (offizielle Doku, Beispiel dort: "/read CLAUDE.md"). Damit laedt der
@@ -86,10 +91,11 @@ const text = [
 //
 // WARUM NICHT DEN SKILL-TEXT EINBLENDEN: der Aufruf kostet 14 Zeichen, der Volltext
 // 6.848 -- und nur der Aufruf hat das Gewicht einer Nutzer-Anweisung.
-const ausgabe = {
-  hookEventName: "SessionStart",
-  additionalContext: text,
-};
+const ausgabe = { hookEventName: "SessionStart" };
+if (rollenText) ausgabe.additionalContext = rollenText;
 if (anlass() === "startup") ausgabe.initialUserMessage = "/i-have-adhd";
+
+// Weder Rollen noch startup (z.B. resume/compact ohne docs/08) -> still bleiben.
+if (!ausgabe.additionalContext && !ausgabe.initialUserMessage) process.exit(0);
 
 process.stdout.write(JSON.stringify({ hookSpecificOutput: ausgabe }));
