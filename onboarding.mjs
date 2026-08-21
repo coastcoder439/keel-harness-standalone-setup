@@ -149,7 +149,7 @@ const WAECHTER = [
   "commit-pathspec-guard.js",
   "repo-status.js",
   "session-roles.js",
-  "onboarding-start.js", // SessionStart: startet /onboarding, solange CLAUDE.md [?] enthaelt
+  "onboarding-start.js", // SessionStart: startet /onboarding, solange CLAUDE.md [AUSFUELLEN] enthaelt
   "statusline.js",
   "uncommitted-warn.js",
 ];
@@ -176,6 +176,10 @@ const BEILEGER = [
   // Fehlen sie, fuehrt die Regel ins Leere und wird beim ersten Zweifel ignoriert.
   "11-vollstaendigkeitspruefung.md",
   "12-werkzeug-beschaffung.md",
+  // Ablage-Vorlage fuer den Onboarding-Schritt "Werkzeug-Landschaft" (Schritt 3):
+  // vier Rubriken CLI/MCP/API/Zugaenge. Wird nach docs/ kopiert, dort traegt der
+  // Onboarding-Befehl die erkannten Werkzeuge ein.
+  "werkzeug-landschaft.md",
 ];
 
 const LIZENZEN = ["LICENSE-mattpocock-skills.txt", "LICENSE-i-have-adhd.txt"];

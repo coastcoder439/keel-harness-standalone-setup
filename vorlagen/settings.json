@@ -13,7 +13,7 @@
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/onboarding-start.js\"",
             "timeout": 10,
-            "statusMessage": "Onboarding offen? (CLAUDE.md [?])"
+            "statusMessage": "Onboarding offen? (CLAUDE.md [AUSFUELLEN])"
           }
         ]
       }

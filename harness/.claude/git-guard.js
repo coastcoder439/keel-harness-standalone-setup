@@ -20,8 +20,20 @@ function sh(cmd, cwd) {
 }
 
 function laeuftGit() {
-  const ps = sh("ps -Ao command=") || "";
-  return ps.split("\n").some((z) => /(^|\/)git(\s|$)/.test(z.trim()));
+  // [Mac->Win-Fix 21.08.2026, U2] Prozessliste plattformabhaengig. 'ps -Ao' existiert
+  // unter Windows nicht (weder cmd.exe noch das MSYS-ps der Git-Bash kennen -A/-o) ->
+  // sh() gab null -> laeuftGit() lieferte IMMER false -> die 0-Byte-index.lock wurde
+  // auch geloescht, waehrend eine Parallel-Sitzung real ein git hielt (Index-Beschaedigung).
+  const roh =
+    process.platform === "win32"
+      ? sh('tasklist /FI "IMAGENAME eq git.exe" /NH')
+      : sh("ps -Ao command=");
+  // Fail-SAFE statt fail-open: laesst sich die Prozessliste nicht ermitteln (null),
+  // konservativ annehmen, dass git laeuft -> die Lock NICHT entfernen. Ein stehender
+  // Hinweis ist harmlos, eine zerschossene Index-Datei nicht.
+  if (roh == null) return true;
+  if (process.platform === "win32") return /(^|\s)git\.exe\b/i.test(roh);
+  return roh.split("\n").some((z) => /(^|\/)git(\s|$)/.test(z.trim()));
 }
 
 let eingabe = "";
