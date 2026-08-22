@@ -54,7 +54,7 @@ ihrer Quelle:
 
 | Bereich | Regel | Quelle |
 |---|---|---|
-| Bestand | Werkzeug-Rangfolge · die Dauer-Regeln | `.claude/rules/ecc/common/*.md` |
+| Bestand | Werkzeug-Rangfolge · die Dauer-Regeln | `.claude/rules/keel/*.md` |
 | Wächter | Werkzeugkanon | `docs/13-arbeitsweise-standard.md` §3 |
 | Sicherung / Prüfer | pathspec-Pflicht + Prüfkommando | `CLAUDE.md` §5 |
 | Betriebsbereitschaft | Effort-Stufen · Modellwahl je Aufgabentyp | `docs/13` §2a · `routing-policy.json` |

@@ -1,7 +1,7 @@
 # Werkzeug-Beschaffung: CLI vor MCP vor Browser
 
 > Wie ein Agent an eine Fähigkeit kommt, die er noch nicht hat. Operative Kurzfassung, die in
-> jeder Session lädt: [`.claude/rules/ecc/common/tools.md`](../.claude/rules/ecc/common/tools.md).
+> jeder Session lädt: [`.claude/rules/keel/tools.md`](../.claude/rules/keel/tools.md).
 >
 > Anlass [E, Auftraggeber 31.07.2026]: „grundsätzlich fehlt die Regel, nach bevorzugt CLIs zu suchen und
 > zu installieren (dann MCP), anstatt Tokens über Browsersteuerung zu verwenden."

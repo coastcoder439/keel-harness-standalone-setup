@@ -201,7 +201,7 @@ function renderHTML(m, regelDaten) {
     waechter: "Laufen bei jedem Werkzeugaufruf automatisch mit · verdrahtet in .claude/settings.json",
     befehle: "Mit Schrägstrich aufrufbar · .claude/commands/",
     faehigkeiten: "Laden auf Abruf, nicht dauerhaft · .claude/skills/",
-    regeln: "Laden in JEDER Session, ohne dass jemand sie aufruft · .claude/rules/ecc/common/",
+    regeln: "Laden in JEDER Session, ohne dass jemand sie aufruft · .claude/rules/keel/",
     werkzeuge: "CLIs, MCP-Server, APIs und Zugänge dieses Arbeitsplatzes · docs/tool-landscape.md",
     kontext: "Was jede Session mitliest und was es kostet · CLAUDE.md, Rules, Hook-Skripte",
     sicherung: "Liegt die Arbeit auch außerhalb dieses Rechners? · git je Repo unter user-projects/",
