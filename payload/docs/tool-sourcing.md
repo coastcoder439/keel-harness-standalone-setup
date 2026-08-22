@@ -1,4 +1,4 @@
-# 12 — Werkzeug-Beschaffung: CLI vor MCP vor Browser
+# Werkzeug-Beschaffung: CLI vor MCP vor Browser
 
 > Wie ein Agent an eine Fähigkeit kommt, die er noch nicht hat. Operative Kurzfassung, die in
 > jeder Session lädt: [`.claude/rules/ecc/common/tools.md`](../.claude/rules/ecc/common/tools.md).
@@ -84,4 +84,4 @@ Information, die eine Zeile Shell liefert.
 
 Fehlt eines, ist der erste Schritt die Installation — nicht der Umweg.
 
-→ Zurück: [docs/README.md](README.md) · Nachbau: [10-nachbau-anleitung.md](10-nachbau-anleitung.md)
+→ Nachbau: [rebuild-guide.md](rebuild-guide.md)

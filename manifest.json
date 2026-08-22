@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-22T19:29:43.351Z",
+  "gebautAm": "2026-08-22T19:30:42.226Z",
   "posten": 49,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -372,8 +372,8 @@
       "herkunft": "docs/11-vollstaendigkeitspruefung.md",
       "quellordner": "werkbank",
       "gesaeubert": 2,
-      "bytes": 25162,
-      "sha256": "1be5d7a2133fb0b4"
+      "bytes": 25155,
+      "sha256": "be1c4c0db4f83fa8"
     },
     {
       "datei": "payload/docs/rebuild-guide.md",
@@ -396,8 +396,8 @@
       "herkunft": "docs/12-werkzeug-beschaffung.md",
       "quellordner": "werkbank",
       "gesaeubert": 1,
-      "bytes": 4580,
-      "sha256": "cfe9ad0d004a2c21"
+      "bytes": 4519,
+      "sha256": "5ab34e0110e79ca7"
     },
     {
       "datei": "templates/CLAUDE.md",
