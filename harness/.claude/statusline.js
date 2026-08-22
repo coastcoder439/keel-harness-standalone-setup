@@ -17,7 +17,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const WORKSPACE = path.resolve(__dirname, '..'); // = <WORKSPACE>
+const WORKSPACE = path.resolve(__dirname, '..'); // = die Workspace-Wurzel
 const GIT_TIMEOUT_MS = 800;
 
 function readStdin() {

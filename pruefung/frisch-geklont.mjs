@@ -93,6 +93,29 @@ try {
   } else {
     ok("vorbedingung-bausatz");
 
+    // 1b. Anleitung und echte Dateien muessen denselben Stand haben.
+    //
+    // Dieser Bausatz beschreibt denselben Harness zweimal -- als echte Dateien und
+    // als Volltext-Zitate in der Nachbau-Anleitung. Laufen die auseinander, ist die
+    // Anleitung eine Falle: Am 21.08.2026 nannte sie den Projekt-Kontext-Check und
+    // die Dauer-Regel arbeitsweise.md, waehrend keine installierte Datei sie hatte.
+    // Deshalb laeuft der Abgleich HIER mit und nicht auf Zuruf -- eine gemerkte
+    // Pflicht haette genau das schon einmal nicht verhindert.
+    pruefe("anleitung-sync", () => {
+      const lauf = spawnSync("node", [path.join(BAUSATZ, "pruefung", "anleitung-sync.mjs")], {
+        cwd: BAUSATZ,
+        encoding: "utf8",
+      });
+      if (lauf.status === 0) return null;
+      const letzte = (lauf.stdout || "")
+        .split("\n")
+        .filter((z) => /DRIFT|FEHLT|ANKERLOS|FEHLER/.test(z))
+        .slice(0, 4)
+        .join(" | ");
+      return `Anleitung und echte Dateien weichen ab (Exitcode ${lauf.status}). ${letzte} ` +
+        `-- angleichen mit: node pruefung/anleitung-sync.mjs --nachziehen`;
+    });
+
     // 2. Frischer Zielordner + git init.
     ziel = fs.mkdtempSync(path.join(os.tmpdir(), "harness-abnahme-"));
     const gitInit = spawnSync("git", ["init"], { cwd: ziel, encoding: "utf8" });
