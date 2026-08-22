@@ -1,6 +1,6 @@
 # Werkzeuge — CLI vor MCP vor Browser
 
-> Quelle und Begründung (mit Messwerten): `docs/12-werkzeug-beschaffung.md` im Werkbank-Repo.
+> Quelle und Begründung (mit Messwerten): `docs/tool-sourcing.md` im Werkbank-Repo.
 > Diese Datei ist die operative Kurzfassung, die in jeder Session geladen wird.
 > Anlass: Browsersteuerung für Daten benutzt, für die eine CLI existiert.
 

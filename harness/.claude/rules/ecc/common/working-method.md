@@ -22,7 +22,7 @@ Push ist ausgenommen — sichern darf man immer.)
 **Abschluss-Messung 1: Coverage** — ist alles adressiert, nichts vergessen? Akteure ·
 Lebenszyklus (inkl. uebergeben/beenden/abbauen) · Governance · Versprechen · Belege ·
 Fehlerfall · Folgepflichten · Widerspruchsfreiheit. Die acht Fragen im Detail und die drei
-Gegenproben stehen in [`vollstaendigkeit.md`](vollstaendigkeit.md).
+Gegenproben stehen in [`completeness.md`](completeness.md).
 
 **Abschluss-Messung 2: Fulfillment** — ist das *Ziel* erfuellt, nicht nur Arbeit geleistet?
 Ausdruecklich als eigener Schritt: das Ergebnis gegen die Zieldefinition (Problem · Intent ·
@@ -40,5 +40,5 @@ getrennt — Coverage nie als Ersatz fuer Fulfillment ausgeben.
 - **Zahlen beim Schreiben messen, nicht erinnern** — und den Befehl, der die Zahl erzeugt
   hat, danebenschreiben.
 
-Verwandt: [`vollstaendigkeit.md`](vollstaendigkeit.md) (Coverage-Detail, Gegenproben) ·
-[`kein-oneshot.md`](kein-oneshot.md) (erst pruefen, dann formulieren).
+Verwandt: [`completeness.md`](completeness.md) (Coverage-Detail, Gegenproben) ·
+[`no-oneshot.md`](no-oneshot.md) (erst pruefen, dann formulieren).

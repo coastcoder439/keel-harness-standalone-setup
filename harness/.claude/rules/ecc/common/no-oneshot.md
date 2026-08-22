@@ -67,8 +67,8 @@ Wächter vorschlägt: diese vier zuerst entkräften.
 ## Sprachregeln
 
 - **„Ich erinnere mich" ist keine Quelle.** Entweder Beleg oder die Aussage entfällt.
-- **Zahlen und Widerspruchsprobe:** Sprachregel und G1 in `vollstaendigkeit.md` — dort das Zuhause.
+- **Zahlen und Widerspruchsprobe:** Sprachregel und G1 in `completeness.md` — dort das Zuhause.
 - **Wenn eine Prüfung nicht möglich ist:** das sagen, statt zu schätzen.
 
-Verwandt: [`docs/11-vollstaendigkeitspruefung.md`](../../../../docs/11-vollstaendigkeitspruefung.md) *(im Paket-Rohzustand: `beileger/11-vollstaendigkeitspruefung.md` — das Onboarding legt sie nach `docs/`)*
+Verwandt: [`docs/completeness-check.md`](../../../../docs/completeness-check.md) *(im Paket-Rohzustand: `beileger/completeness-check.md` — das Onboarding legt sie nach `docs/`)*
 · Fehlermuster F2 (gegen sich selbst geprüft, nie gegen die Quellen) und F6 (halbe Verifikation).

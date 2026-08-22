@@ -1,6 +1,6 @@
 # Vollständigkeit — wann etwas wirklich fertig ist
 
-> Quelle und Begründung (mit Beweislage): `docs/11-vollstaendigkeitspruefung.md` im
+> Quelle und Begründung (mit Beweislage): `docs/completeness-check.md` im
 > Werkbank-Repo. Diese Datei ist die operative Kurzfassung, die in jeder Session geladen wird.
 > Anlass: mehrfach „fertig" gemeldet, während hunderte Lücken offen waren.
 
