@@ -92,7 +92,7 @@ const DOC13 = "docs/13-arbeitsweise-standard.md";
 function effortStufen(wurzel) {
   const befehl = `$EDITOR ${DOC13}   # Abschnitt „2a · Modell- und Effort-Wahl“`;
   const zeilen = lesen(wurzel, DOC13);
-  if (!zeilen) return fehlt("effort", "Denkbudget je Aufgabenform", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Die hier geltende Arbeitsweise steht in .claude/rules/ecc/common/arbeitsweise.md.", befehl);
+  if (!zeilen) return fehlt("effort", "Denkbudget je Aufgabenform", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Die hier geltende Arbeitsweise steht in .claude/rules/ecc/common/working-method.md.", befehl);
 
   const t = tabelleZiehen(zeilen, ["Stufe", "Überspringen, wenn", "Aufsteigen, wenn"]);
   if (!t) {
@@ -242,10 +242,10 @@ function dauerRegeln(wurzel) {
 // REGEL 5 — Werkzeug-Rangfolge (CLI vor MCP vor Browser)
 // ---------------------------------------------------------------------------
 function werkzeugrang(wurzel) {
-  const kandidaten = [".claude/rules/ecc/common/werkzeuge.md", ".claude/rules/common/werkzeuge.md"];
+  const kandidaten = [".claude/rules/ecc/common/tools.md", ".claude/rules/common/tools.md"];
   const relPfad = kandidaten.find((k) => fs.existsSync(path.join(wurzel, k)));
   const befehl = `$EDITOR ${relPfad || kandidaten[0]}`;
-  if (!relPfad) return fehlt("werkzeugrang", "Werkzeug-Beschaffung", kandidaten[0], "werkzeuge.md nicht gefunden", befehl);
+  if (!relPfad) return fehlt("werkzeugrang", "Werkzeug-Beschaffung", kandidaten[0], "tools.md nicht gefunden", befehl);
 
   const zeilen = lesen(wurzel, relPfad);
   const rang = zeileZiehen(zeilen, /CLI\s*→\s*2\.\s*MCP\s*→\s*3\./);

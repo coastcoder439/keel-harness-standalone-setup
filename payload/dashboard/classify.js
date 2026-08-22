@@ -259,7 +259,7 @@ function kontrollprobe(wurzel) {
   const faelle = [
     {
       name: "eigene Dauer-Regel gilt als Eigenbau",
-      pfad: path.join(wurzel, ".claude", "rules", "ecc", "common", "vollstaendigkeit.md"),
+      pfad: path.join(wurzel, ".claude", "rules", "ecc", "common", "completeness.md"),
       erwartet: "eigenbau",
     },
     {

@@ -15,13 +15,13 @@ Messung eine andere Anzeige. Getauscht wird dann `rendern.js` — an `messen.js`
 ## Aufruf
 
 ```bash
-node zustand/zustand.js                     # HTML nach ./zustand.html
-node zustand/zustand.js --html <datei>      # HTML woandershin
-node zustand/zustand.js --json              # nur die Daten, nach stdout
-node zustand/zustand.js --daten <datei>     # die Daten in eine Datei
-node zustand/zustand.js --wurzel <pfad>     # eine andere Werkbank messen
-node zustand/zustand.js --mit-github        # GitHub-Abfragen zulassen (braucht Netz)
-node zustand/zustand.js --exit-code         # 0 = ok · 1 = Befund · 2 = nicht prüfbar
+node dashboard/index.js                     # HTML nach ./zustand.html
+node dashboard/index.js --html <datei>      # HTML woandershin
+node dashboard/index.js --json              # nur die Daten, nach stdout
+node dashboard/index.js --daten <datei>     # die Daten in eine Datei
+node dashboard/index.js --wurzel <pfad>     # eine andere Werkbank messen
+node dashboard/index.js --mit-github        # GitHub-Abfragen zulassen (braucht Netz)
+node dashboard/index.js --exit-code         # 0 = ok · 1 = Befund · 2 = nicht prüfbar
 ```
 
 Ohne `--wurzel` wird aufwärts der erste Ordner mit `.claude/` gesucht. Der
