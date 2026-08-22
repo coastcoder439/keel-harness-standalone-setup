@@ -1,8 +1,8 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-22T18:12:17.856Z",
-  "posten": 52,
-  "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser PAKET.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von pruefung/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
+  "gebautAm": "2026-08-22T19:20:52.761Z",
+  "posten": 49,
+  "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von pruefung/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
     {
@@ -64,239 +64,39 @@
       "sha256": "c5446e0a7c6e5f51"
     },
     {
-      "datei": "beileger/10-nachbau-anleitung.md",
-      "herkunft": "docs/10-nachbau-anleitung.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 11,
-      "bytes": 208450,
-      "sha256": "9862a4112180017d"
-    },
-    {
-      "datei": "beileger/11-vollstaendigkeitspruefung.md",
-      "herkunft": "docs/11-vollstaendigkeitspruefung.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 2,
-      "bytes": 25170,
-      "sha256": "54dbda5e832f058d"
-    },
-    {
-      "datei": "beileger/12-werkzeug-beschaffung.md",
-      "herkunft": "docs/12-werkzeug-beschaffung.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 1,
-      "bytes": 4588,
-      "sha256": "4d46a1352313cf46"
-    },
-    {
-      "datei": "beileger/werkzeug-landschaft.md",
+      "datei": "checks/anleitung-sync.mjs",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 1590,
-      "sha256": "02a18cf9f74517cf"
+      "bytes": 15388,
+      "sha256": "b6dc6e38477537b2"
     },
     {
-      "datei": "harness/.claude/commands/onboarding.md",
+      "datei": "checks/frisch-geklont.mjs",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 6069,
-      "sha256": "78fecd7587aa350e"
+      "bytes": 10837,
+      "sha256": "c6a352452ac96c36"
     },
     {
-      "datei": "harness/.claude/commands/repo-status.md",
-      "herkunft": ".claude/commands/repo-status.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 415,
-      "sha256": "5f9776d3a26b179c"
-    },
-    {
-      "datei": "harness/.claude/commands/save-work.md",
-      "herkunft": ".claude/commands/save-work.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 1,
-      "bytes": 1142,
-      "sha256": "a3e25e41926ece6f"
-    },
-    {
-      "datei": "harness/.claude/commands/session-map.md",
-      "herkunft": ".claude/commands/session-map.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 994,
-      "sha256": "4c2f791102b5788d"
-    },
-    {
-      "datei": "harness/.claude/commands/tell-session.md",
-      "herkunft": ".claude/commands/tell-session.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 2,
-      "bytes": 3205,
-      "sha256": "8297c0f9b01ef3ce"
-    },
-    {
-      "datei": "harness/.claude/commit-pathspec-guard.js",
-      "herkunft": ".claude/hooks/commit-pathspec-guard.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 1,
-      "bytes": 9097,
-      "sha256": "0b551f0f47e7f311"
-    },
-    {
-      "datei": "harness/.claude/danger-guard.js",
-      "herkunft": ".claude/hooks/danger-guard.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 1,
-      "bytes": 23151,
-      "sha256": "9385e5bbe8c779ba"
-    },
-    {
-      "datei": "harness/.claude/git-guard.js",
-      "herkunft": ".claude/hooks/git-guard.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 7475,
-      "sha256": "e1f8b3c99cf9a400"
-    },
-    {
-      "datei": "harness/.claude/onboarding-start.js",
+      "datei": "checks/paket-manifest.mjs",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 2647,
-      "sha256": "a92868c376a4ce19"
+      "bytes": 5341,
+      "sha256": "db9e6c18adeefbf2"
     },
     {
-      "datei": "harness/.claude/projekt-kontext.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
+      "datei": "install.mjs",
+      "herkunft": "onboarding.mjs",
+      "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 2354,
-      "sha256": "a0914188dc219991"
+      "bytes": 73341,
+      "sha256": "5475547446b38ac4"
     },
     {
-      "datei": "harness/.claude/repo-status.js",
-      "herkunft": ".claude/repo-status.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 8863,
-      "sha256": "2fccb291b58a376c"
-    },
-    {
-      "datei": "harness/.claude/rules/ecc/common/arbeitsweise.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 2423,
-      "sha256": "770c53ffa302d1a6"
-    },
-    {
-      "datei": "harness/.claude/rules/ecc/common/ausgabeform.md",
-      "herkunft": ".claude/rules/ecc/common/ausgabeform.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 3,
-      "bytes": 747,
-      "sha256": "799023d07a1217fc"
-    },
-    {
-      "datei": "harness/.claude/rules/ecc/common/kein-oneshot.md",
-      "herkunft": ".claude/rules/ecc/common/kein-oneshot.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 13,
-      "bytes": 4624,
-      "sha256": "815d6c53ac41213a"
-    },
-    {
-      "datei": "harness/.claude/rules/ecc/common/vollstaendigkeit.md",
-      "herkunft": ".claude/rules/ecc/common/vollstaendigkeit.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 2,
-      "bytes": 5024,
-      "sha256": "113ef60905148a25"
-    },
-    {
-      "datei": "harness/.claude/rules/ecc/common/werkzeuge.md",
-      "herkunft": ".claude/rules/ecc/common/werkzeuge.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 1,
-      "bytes": 1929,
-      "sha256": "92dd1c1e1b149afc"
-    },
-    {
-      "datei": "harness/.claude/session-roles.js",
-      "herkunft": ".claude/hooks/session-roles.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 3,
-      "bytes": 5207,
-      "sha256": "74619221459bcece"
-    },
-    {
-      "datei": "harness/.claude/sessionpost-guard.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 4944,
-      "sha256": "fdfc2c04af905eb4"
-    },
-    {
-      "datei": "harness/.claude/skills/domain-modeling/ADR-FORMAT.md",
-      "herkunft": ".claude/skills/domain-modeling/ADR-FORMAT.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 2766,
-      "sha256": "f1f36cd3f8d3b647"
-    },
-    {
-      "datei": "harness/.claude/skills/domain-modeling/CONTEXT-FORMAT.md",
-      "herkunft": ".claude/skills/domain-modeling/CONTEXT-FORMAT.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 2299,
-      "sha256": "b8cc318f2a4285b5"
-    },
-    {
-      "datei": "harness/.claude/skills/domain-modeling/SKILL.md",
-      "herkunft": ".claude/skills/domain-modeling/SKILL.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 2,
-      "bytes": 3950,
-      "sha256": "4d3c6df5c9ea6c2d"
-    },
-    {
-      "datei": "harness/.claude/skills/i-have-adhd/SKILL.md",
-      "herkunft": ".claude/skills/i-have-adhd/SKILL.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 12867,
-      "sha256": "29e2848fcee49dba"
-    },
-    {
-      "datei": "harness/.claude/skills/resolving-merge-conflicts/SKILL.md",
-      "herkunft": ".claude/skills/resolving-merge-conflicts/SKILL.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 2,
-      "bytes": 1505,
-      "sha256": "6c87a4d5f3d276fd"
-    },
-    {
-      "datei": "harness/.claude/statusline.js",
-      "herkunft": ".claude/statusline.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 3,
-      "bytes": 4679,
-      "sha256": "be78411805ff97f7"
-    },
-    {
-      "datei": "harness/.claude/uncommitted-warn.js",
-      "herkunft": ".claude/hooks/uncommitted-warn.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 3,
-      "bytes": 4920,
-      "sha256": "f176607a121967ea"
-    },
-    {
-      "datei": "lizenzen/LICENSE-i-have-adhd.txt",
+      "datei": "licenses/LICENSE-i-have-adhd.txt",
       "herkunft": "user-projects/harness-lab/vendor/LICENSE-i-have-adhd.txt",
       "quellordner": "werkbank",
       "gesaeubert": 0,
@@ -304,7 +104,7 @@
       "sha256": "8acbb618089b7384"
     },
     {
-      "datei": "lizenzen/LICENSE-mattpocock-skills.txt",
+      "datei": "licenses/LICENSE-mattpocock-skills.txt",
       "herkunft": "user-projects/harness-lab/vendor/LICENSE-mattpocock-skills.txt",
       "quellordner": "werkbank",
       "gesaeubert": 0,
@@ -312,87 +112,231 @@
       "sha256": "0e7ac423bf2c6e22"
     },
     {
-      "datei": "oberflaeche/befuellen.mjs",
-      "herkunft": "oberflaeche/befuellen.mjs",
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 5791,
-      "sha256": "e35bf316f4152eeb"
-    },
-    {
-      "datei": "oberflaeche/dist/index.html",
-      "herkunft": "oberflaeche/dist/index.html",
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 258067,
-      "sha256": "50275a48f6c3bdac"
-    },
-    {
-      "datei": "onboarding.mjs",
-      "herkunft": "onboarding.mjs",
-      "quellordner": "installer",
-      "gesaeubert": 0,
-      "bytes": 74166,
-      "sha256": "b73a0e17d36a0995"
-    },
-    {
-      "datei": "pruefung/anleitung-sync.mjs",
+      "datei": "payload/claude/commands/onboarding.md",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15089,
-      "sha256": "216ed089e7ee50a5"
+      "bytes": 6065,
+      "sha256": "e3b3cef8762dcfa5"
     },
     {
-      "datei": "pruefung/frisch-geklont.mjs",
+      "datei": "payload/claude/commands/repo-status.md",
+      "herkunft": ".claude/commands/repo-status.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 415,
+      "sha256": "5f9776d3a26b179c"
+    },
+    {
+      "datei": "payload/claude/commands/save-work.md",
+      "herkunft": ".claude/commands/save-work.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 1,
+      "bytes": 1142,
+      "sha256": "a3e25e41926ece6f"
+    },
+    {
+      "datei": "payload/claude/commands/session-map.md",
+      "herkunft": ".claude/commands/session-map.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 994,
+      "sha256": "4c2f791102b5788d"
+    },
+    {
+      "datei": "payload/claude/commands/tell-session.md",
+      "herkunft": ".claude/commands/tell-session.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 2,
+      "bytes": 3205,
+      "sha256": "8297c0f9b01ef3ce"
+    },
+    {
+      "datei": "payload/claude/commit-pathspec-guard.js",
+      "herkunft": ".claude/hooks/commit-pathspec-guard.js",
+      "quellordner": "werkbank",
+      "gesaeubert": 1,
+      "bytes": 9097,
+      "sha256": "0b551f0f47e7f311"
+    },
+    {
+      "datei": "payload/claude/danger-guard.js",
+      "herkunft": ".claude/hooks/danger-guard.js",
+      "quellordner": "werkbank",
+      "gesaeubert": 1,
+      "bytes": 23151,
+      "sha256": "9385e5bbe8c779ba"
+    },
+    {
+      "datei": "payload/claude/git-guard.js",
+      "herkunft": ".claude/hooks/git-guard.js",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 7475,
+      "sha256": "e1f8b3c99cf9a400"
+    },
+    {
+      "datei": "payload/claude/onboarding-start.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 10846,
-      "sha256": "ef43ce3922496d30"
+      "bytes": 2647,
+      "sha256": "a92868c376a4ce19"
     },
     {
-      "datei": "pruefung/paket-manifest.mjs",
+      "datei": "payload/claude/project-context.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 5317,
-      "sha256": "6a0ae187e3b1e0a0"
+      "bytes": 2348,
+      "sha256": "6875910ee1b98c30"
     },
     {
-      "datei": "vorlagen/CLAUDE.md",
-      "herkunft": "erzeugt von paketieren.mjs",
-      "quellordner": "erzeugt",
+      "datei": "payload/claude/repo-status.js",
+      "herkunft": ".claude/repo-status.js",
+      "quellordner": "werkbank",
       "gesaeubert": 0,
-      "bytes": 4230,
-      "sha256": "3be4a8e1a14cf660"
+      "bytes": 8863,
+      "sha256": "2fccb291b58a376c"
     },
     {
-      "datei": "vorlagen/gitignore-block.txt",
-      "herkunft": "erzeugt von paketieren.mjs",
-      "quellordner": "erzeugt",
+      "datei": "payload/claude/rules/ecc/common/completeness.md",
+      "herkunft": ".claude/rules/ecc/common/vollstaendigkeit.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 2,
+      "bytes": 5014,
+      "sha256": "ee7399b32ca1ffeb"
+    },
+    {
+      "datei": "payload/claude/rules/ecc/common/no-oneshot.md",
+      "herkunft": ".claude/rules/ecc/common/kein-oneshot.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 13,
+      "bytes": 4590,
+      "sha256": "ce9ef928cda1312e"
+    },
+    {
+      "datei": "payload/claude/rules/ecc/common/output-shape.md",
+      "herkunft": ".claude/rules/ecc/common/ausgabeform.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 3,
+      "bytes": 747,
+      "sha256": "799023d07a1217fc"
+    },
+    {
+      "datei": "payload/claude/rules/ecc/common/tools.md",
+      "herkunft": ".claude/rules/ecc/common/werkzeuge.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 1,
+      "bytes": 1919,
+      "sha256": "851cc0e441f360e9"
+    },
+    {
+      "datei": "payload/claude/rules/ecc/common/working-method.md",
+      "herkunft": null,
+      "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 1772,
-      "sha256": "c9ab1f08525fb30d"
+      "bytes": 2403,
+      "sha256": "83776d31df4c2233"
     },
     {
-      "datei": "vorlagen/settings.json",
-      "herkunft": "erzeugt von paketieren.mjs",
-      "quellordner": "erzeugt",
+      "datei": "payload/claude/session-roles.js",
+      "herkunft": ".claude/hooks/session-roles.js",
+      "quellordner": "werkbank",
+      "gesaeubert": 3,
+      "bytes": 5207,
+      "sha256": "74619221459bcece"
+    },
+    {
+      "datei": "payload/claude/sessionpost-guard.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 2402,
-      "sha256": "716cc9bd974b532a"
+      "bytes": 4943,
+      "sha256": "0971cdfd82f42b52"
     },
     {
-      "datei": "zustand/README.md",
+      "datei": "payload/claude/skills/domain-modeling/ADR-FORMAT.md",
+      "herkunft": ".claude/skills/domain-modeling/ADR-FORMAT.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 2766,
+      "sha256": "f1f36cd3f8d3b647"
+    },
+    {
+      "datei": "payload/claude/skills/domain-modeling/CONTEXT-FORMAT.md",
+      "herkunft": ".claude/skills/domain-modeling/CONTEXT-FORMAT.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 2299,
+      "sha256": "b8cc318f2a4285b5"
+    },
+    {
+      "datei": "payload/claude/skills/domain-modeling/SKILL.md",
+      "herkunft": ".claude/skills/domain-modeling/SKILL.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 2,
+      "bytes": 3950,
+      "sha256": "4d3c6df5c9ea6c2d"
+    },
+    {
+      "datei": "payload/claude/skills/i-have-adhd/SKILL.md",
+      "herkunft": ".claude/skills/i-have-adhd/SKILL.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 0,
+      "bytes": 12867,
+      "sha256": "29e2848fcee49dba"
+    },
+    {
+      "datei": "payload/claude/skills/resolving-merge-conflicts/SKILL.md",
+      "herkunft": ".claude/skills/resolving-merge-conflicts/SKILL.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 2,
+      "bytes": 1505,
+      "sha256": "6c87a4d5f3d276fd"
+    },
+    {
+      "datei": "payload/claude/statusline.js",
+      "herkunft": ".claude/statusline.js",
+      "quellordner": "werkbank",
+      "gesaeubert": 3,
+      "bytes": 4679,
+      "sha256": "be78411805ff97f7"
+    },
+    {
+      "datei": "payload/claude/uncommitted-warn.js",
+      "herkunft": ".claude/hooks/uncommitted-warn.js",
+      "quellordner": "werkbank",
+      "gesaeubert": 3,
+      "bytes": 4920,
+      "sha256": "f176607a121967ea"
+    },
+    {
+      "datei": "payload/dashboard/README.md",
       "herkunft": "zustand/README.md",
       "quellordner": "bausatz",
       "gesaeubert": 0,
       "bytes": 4160,
-      "sha256": "febc480c57561956"
+      "sha256": "6be2c753fa5e6a02"
     },
     {
-      "datei": "zustand/bordmittel.js",
+      "datei": "payload/dashboard/classify.js",
+      "herkunft": "zustand/einordnen.js",
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 13895,
+      "sha256": "b35eb49ce7da139b"
+    },
+    {
+      "datei": "payload/dashboard/index.js",
+      "herkunft": "zustand/zustand.js",
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 5357,
+      "sha256": "ac0c7c936aed6680"
+    },
+    {
+      "datei": "payload/dashboard/inventory.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
@@ -400,52 +344,84 @@
       "sha256": "df4c732fba0e7f38"
     },
     {
-      "datei": "zustand/einordnen.js",
-      "herkunft": "zustand/einordnen.js",
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 13899,
-      "sha256": "50a5312617c4c5a0"
-    },
-    {
-      "datei": "zustand/messen.js",
+      "datei": "payload/dashboard/measure.js",
       "herkunft": "zustand/messen.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 48478,
-      "sha256": "ded8ea5ee94ff9df"
+      "bytes": 48470,
+      "sha256": "382c8dfe9af6cfd4"
     },
     {
-      "datei": "zustand/regeln.js",
-      "herkunft": "zustand/regeln.js",
-      "quellordner": "bausatz",
-      "gesaeubert": 2,
-      "bytes": 14421,
-      "sha256": "71d3fa42267a484b"
-    },
-    {
-      "datei": "zustand/rendern-keel.js",
+      "datei": "payload/dashboard/render.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
       "bytes": 28622,
-      "sha256": "b1a586af6f4bea97"
+      "sha256": "2898decbbd396d2a"
     },
     {
-      "datei": "zustand/rendern.js",
-      "herkunft": "zustand/rendern.js",
+      "datei": "payload/dashboard/rules.js",
+      "herkunft": "zustand/regeln.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 58374,
-      "sha256": "49a6328e1e05284b"
+      "bytes": 14411,
+      "sha256": "f696676b1f962b49"
     },
     {
-      "datei": "zustand/zustand.js",
-      "herkunft": "zustand/zustand.js",
+      "datei": "payload/docs/completeness-check.md",
+      "herkunft": "docs/11-vollstaendigkeitspruefung.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 2,
+      "bytes": 25170,
+      "sha256": "54dbda5e832f058d"
+    },
+    {
+      "datei": "payload/docs/rebuild-guide.md",
+      "herkunft": "docs/10-nachbau-anleitung.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 11,
+      "bytes": 208450,
+      "sha256": "9862a4112180017d"
+    },
+    {
+      "datei": "payload/docs/tool-landscape.md",
+      "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 5363,
-      "sha256": "9ae4c394bd68fc0c"
+      "bytes": 1590,
+      "sha256": "02a18cf9f74517cf"
+    },
+    {
+      "datei": "payload/docs/tool-sourcing.md",
+      "herkunft": "docs/12-werkzeug-beschaffung.md",
+      "quellordner": "werkbank",
+      "gesaeubert": 1,
+      "bytes": 4588,
+      "sha256": "4d46a1352313cf46"
+    },
+    {
+      "datei": "templates/CLAUDE.md",
+      "herkunft": "erzeugt von paketieren.mjs",
+      "quellordner": "erzeugt",
+      "gesaeubert": 0,
+      "bytes": 4230,
+      "sha256": "3be4a8e1a14cf660"
+    },
+    {
+      "datei": "templates/gitignore-block.txt",
+      "herkunft": "erzeugt von paketieren.mjs",
+      "quellordner": "erzeugt",
+      "gesaeubert": 0,
+      "bytes": 1975,
+      "sha256": "acb0660e1859cb90"
+    },
+    {
+      "datei": "templates/settings.json",
+      "herkunft": "erzeugt von paketieren.mjs",
+      "quellordner": "erzeugt",
+      "gesaeubert": 0,
+      "bytes": 2402,
+      "sha256": "46a596a01662d7b8"
     }
   ]
 }

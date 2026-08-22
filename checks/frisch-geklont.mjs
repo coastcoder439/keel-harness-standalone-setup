@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Abnahmetest des Harness-Bausatzes.
 //
-// Dieses Skript liegt im Bausatz-Repo unter pruefung/ und beweist:
+// Dieses Skript liegt im Bausatz-Repo unter checks/ und beweist:
 // Der Bausatz, in dem es liegt, installiert einen funktionierenden
 // Claude-Code-Harness in einen frischen, leeren Zielordner.
 //
@@ -75,8 +75,8 @@ let ziel = null;
 
 try {
   // 1. Vorbedingung: der Bausatz muss vollstaendig genug sein, um zu starten.
-  const onboarding = path.join(BAUSATZ, "onboarding.mjs");
-  const paket = path.join(BAUSATZ, "PAKET.json");
+  const onboarding = path.join(BAUSATZ, "install.mjs");
+  const paket = path.join(BAUSATZ, "manifest.json");
   const fehlend = [];
   if (!istDatei(onboarding)) fehlend.push(onboarding);
   if (!istDatei(paket)) fehlend.push(paket);
@@ -85,7 +85,7 @@ try {
     fehler(
       "vorbedingung-bausatz",
       `Bausatz unvollstaendig — es fehlt: ${fehlend.join(", ")}. ` +
-        `Dieses Skript muss in <bausatz>/pruefung/ liegen (gemessener Bausatz: ${BAUSATZ}).`,
+        `Dieses Skript muss in <bausatz>/checks/ liegen (gemessener Bausatz: ${BAUSATZ}).`,
     );
     console.log("");
     console.log(`ERGEBNIS: ${gruen} gruen, ${rot} rot`);
@@ -102,7 +102,7 @@ try {
     // Deshalb laeuft der Abgleich HIER mit und nicht auf Zuruf -- eine gemerkte
     // Pflicht haette genau das schon einmal nicht verhindert.
     pruefe("anleitung-sync", () => {
-      const lauf = spawnSync("node", [path.join(BAUSATZ, "pruefung", "anleitung-sync.mjs")], {
+      const lauf = spawnSync("node", [path.join(BAUSATZ, "checks", "anleitung-sync.mjs")], {
         cwd: BAUSATZ,
         encoding: "utf8",
       });
@@ -113,17 +113,17 @@ try {
         .slice(0, 4)
         .join(" | ");
       return `Anleitung und echte Dateien weichen ab (Exitcode ${lauf.status}). ${letzte} ` +
-        `-- angleichen mit: node pruefung/anleitung-sync.mjs --nachziehen`;
+        `-- angleichen mit: node checks/anleitung-sync.mjs --nachziehen`;
     });
 
-    // 1c. PAKET.json muss den tatsaechlichen Paketinhalt abbilden.
+    // 1c. manifest.json muss den tatsaechlichen Paketinhalt abbilden.
     //
     // Das Manifest sagt, was der Bausatz ausliefert. Sein urspruenglicher Generator lag
     // AUSSERHALB dieses Bausatzes -- deshalb log es still mit, sobald hier eine Datei
     // dazukam: Stand 22.08.2026 waren 38 Posten gelistet, 50 vorhanden. Ein Verzeichnis,
     // das den Bestand falsch angibt, sieht aus wie eine Zusage und ist keine.
     pruefe("paket-manifest", () => {
-      const lauf = spawnSync("node", [path.join(BAUSATZ, "pruefung", "paket-manifest.mjs")], {
+      const lauf = spawnSync("node", [path.join(BAUSATZ, "checks", "paket-manifest.mjs")], {
         cwd: BAUSATZ,
         encoding: "utf8",
       });
@@ -133,8 +133,8 @@ try {
         .filter((z) => /NICHT GELISTET|NICHT MEHR DA|GEAENDERT|POSTEN|FEHLER/.test(z))
         .slice(0, 4)
         .join(" | ");
-      return `PAKET.json und Paketinhalt weichen ab (Exitcode ${lauf.status}). ${letzte} ` +
-        `-- angleichen mit: node pruefung/paket-manifest.mjs --nachziehen`;
+      return `manifest.json und Paketinhalt weichen ab (Exitcode ${lauf.status}). ${letzte} ` +
+        `-- angleichen mit: node checks/paket-manifest.mjs --nachziehen`;
     });
 
     // 2. Frischer Zielordner + git init.
@@ -146,7 +146,7 @@ try {
         : `git init Exitcode ${gitInit.status}: ${(gitInit.stderr || "").trim()}`,
     );
 
-    /** onboarding.mjs im Zielordner ausfuehren. */
+    /** install.mjs im Zielordner ausfuehren. */
     const laufe = (extra) =>
       spawnSync("node", [onboarding, "--ziel", ziel, ...extra], {
         cwd: BAUSATZ,
