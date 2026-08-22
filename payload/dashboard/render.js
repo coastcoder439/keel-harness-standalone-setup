@@ -1,4 +1,4 @@
-// Die Zustandsseite als Bedienpult -- im Aussehen von Keel Light.
+// Die Dashboard als Bedienpult -- im Aussehen von Keel Light.
 //
 // WAS DIESE DATEI IST
 // Sie bekommt die Messdaten und macht daraus EINE statische HTML-Datei: eigenes CSS,
@@ -37,20 +37,23 @@ const esc = (s) =>
 // Der flache Posten-Index -- die eine Liste, auf der alles arbeitet.
 // ---------------------------------------------------------------------------
 
+// Die Namen sind die des Harness selbst -- Hooks, Skills, Commands, Rules. Eine
+// eingedeutschte Erfindung ("Waechter", "Faehigkeiten") liest sich zwar wie Deutsch,
+// aber niemand erkennt daran, welcher Ordner gemeint ist.
 const BEREICHE = {
   zutun: "Zu tun",
-  kontext: "Sitzungs-Kontext",
-  werkzeuge: "Werkzeug-Landschaft",
-  faehigkeiten: "Fähigkeiten",
-  befehle: "Befehle",
-  agenten: "Agenten",
+  kontext: "Session-Kontext",
+  werkzeuge: "Tool-Landschaft",
+  faehigkeiten: "Skills",
+  befehle: "Commands",
+  agenten: "Agents",
   mcp: "MCP-Server",
-  hooks: "Hook-Ordner",
-  waechter: "Wächter",
-  regeln: "Dauer-Regeln",
-  sicherung: "Sicherung",
-  pruefer: "Prüfer",
-  verlauf: "Änderungen",
+  hooks: "Hook-Dateien (ECC-Format)",
+  waechter: "Hooks",
+  regeln: "Rules",
+  sicherung: "Backup",
+  pruefer: "Checks",
+  verlauf: "Commits",
 };
 
 function postenIndex(m, regeln) {
@@ -168,22 +171,24 @@ function renderHTML(m, regelDaten) {
   const zaehle = (id) => posten.filter((p) => p.bereich === id).length;
 
   // Erste Gruppe ohne Beschriftung -- so macht es das Vorbild.
+  // Gruppiert nach dem ECHTEN Ordnerbaum des Harness. Wer die Leiste liest, weiss
+  // sofort, welches Verzeichnis gemeint ist -- das ist der Zweck der Gruppen.
   const NAV = [
     { gruppe: null, punkte: [
       { id: "ueberblick", titel: "Überblick", symbol: "ueberblick" },
       { id: "zutun", titel: "Zu tun", symbol: "zutun", abzeichen: offen || null, ton: offen ? "warn" : null },
     ]},
-    { gruppe: "Bestand", punkte: [
-      { id: "werkzeuge", titel: "Werkzeug-Landschaft", symbol: "werkzeuge", abzeichen: zaehle("werkzeuge") || null },
-      { id: "faehigkeiten", titel: "Fähigkeiten", symbol: "faehigkeiten", abzeichen: zaehle("faehigkeiten") || null },
-      { id: "befehle", titel: "Befehle", symbol: "befehle", abzeichen: zaehle("befehle") || null },
-      { id: "kontext", titel: "Sitzungs-Kontext", symbol: "kontext", abzeichen: zaehle("kontext") || null },
+    { gruppe: ".claude/", punkte: [
+      { id: "waechter", titel: "Hooks", symbol: "waechter", abzeichen: zaehle("waechter") || null },
+      { id: "befehle", titel: "Commands", symbol: "befehle", abzeichen: zaehle("befehle") || null },
+      { id: "faehigkeiten", titel: "Skills", symbol: "faehigkeiten", abzeichen: zaehle("faehigkeiten") || null },
+      { id: "regeln", titel: "Rules", symbol: "regeln", abzeichen: zaehle("regeln") || null },
     ]},
-    { gruppe: "Betrieb", punkte: [
-      { id: "waechter", titel: "Wächter", symbol: "waechter", abzeichen: zaehle("waechter") || null },
-      { id: "regeln", titel: "Dauer-Regeln", symbol: "regeln", abzeichen: zaehle("regeln") || null },
-      { id: "sicherung", titel: "Sicherung", symbol: "sicherung", abzeichen: zaehle("sicherung") || null },
-      { id: "verlauf", titel: "Änderungen", symbol: "verlauf", abzeichen: zaehle("verlauf") || null },
+    { gruppe: "Workspace", punkte: [
+      { id: "werkzeuge", titel: "Tool-Landschaft", symbol: "werkzeuge", abzeichen: zaehle("werkzeuge") || null },
+      { id: "kontext", titel: "Session-Kontext", symbol: "kontext", abzeichen: zaehle("kontext") || null },
+      { id: "sicherung", titel: "Backup", symbol: "sicherung", abzeichen: zaehle("sicherung") || null },
+      { id: "verlauf", titel: "Commits", symbol: "verlauf", abzeichen: zaehle("verlauf") || null },
     ]},
     { gruppe: "Belege", punkte: [
       { id: "rohdaten", titel: "Rohdaten", symbol: "rohdaten" },
@@ -193,14 +198,14 @@ function renderHTML(m, regelDaten) {
   const UNTER = {
     ueberblick: "Was ist der Fall, braucht es mich, was tue ich dagegen.",
     zutun: "Was offen ist — mit Grund und passendem Befehl.",
-    werkzeuge: "Womit hier gearbeitet wird: Kommandozeilen-Programme, MCP-Server, Schnittstellen, Zugänge.",
-    faehigkeiten: "Was auf Zuruf bereitliegt.",
-    befehle: "Was mit Schrägstrich aufrufbar ist.",
-    kontext: "Was jede Sitzung mitliest — und was es kostet.",
-    waechter: "Prüfungen, die bei jedem Befehl von selbst mitlaufen.",
-    regeln: "Regeln, die in jeder Sitzung geladen werden.",
-    sicherung: "Wo Arbeit liegt und ob sie auch außerhalb dieses Rechners existiert.",
-    verlauf: "Die letzten Änderungen über alle Verzeichnisse hinweg.",
+    waechter: "Laufen bei jedem Werkzeugaufruf automatisch mit · verdrahtet in .claude/settings.json",
+    befehle: "Mit Schrägstrich aufrufbar · .claude/commands/",
+    faehigkeiten: "Laden auf Abruf, nicht dauerhaft · .claude/skills/",
+    regeln: "Laden in JEDER Session, ohne dass jemand sie aufruft · .claude/rules/ecc/common/",
+    werkzeuge: "CLIs, MCP-Server, APIs und Zugänge dieses Arbeitsplatzes · docs/tool-landscape.md",
+    kontext: "Was jede Session mitliest und was es kostet · CLAUDE.md, Rules, Hook-Skripte",
+    sicherung: "Liegt die Arbeit auch außerhalb dieses Rechners? · git je Repo unter user-projects/",
+    verlauf: "Die letzten Commits über alle Repos hinweg · git log",
     rohdaten: "Der gemessene Datensatz selbst — damit jede Zahl nachschlagbar ist.",
   };
 
@@ -238,7 +243,7 @@ function renderHTML(m, regelDaten) {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Harness-Zustand — ${esc(ordner)}</title>
+<title>Harness-Dashboard — ${esc(ordner)}</title>
 <style>
 /* Palette woertlich aus keel-theme.css (oklch, Blauton 205-238). */
 :root{
@@ -459,7 +464,7 @@ details.roh pre{margin:0;padding:0 13px 12px;font-family:var(--mono);font-size:1
 <aside>
   <div class="leiste-kopf">
     <span class="marke">H</span>
-    <span class="marke-text">Harness-Zustand</span>
+    <span class="marke-text">Harness-Dashboard</span>
     <button class="kopf-knopf" id="thema" title="Hell oder dunkel">
       ${SVG('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M5 5l1.5 1.5M17.5 17.5L19 19M2 12h2M20 12h2M5 19l1.5-1.5M17.5 6.5L19 5"/>')}
     </button>
@@ -467,7 +472,7 @@ details.roh pre{margin:0;padding:0 13px 12px;font-family:var(--mono);font-size:1
   <nav>${navHTML}</nav>
   <div class="leiste-fuss">
     Gemessen ${esc(gemessen)}<br>
-    <button class="kopierbar" data-kopie="node dashboard/index.js --html zustand.html"><code>node dashboard/index.js --html zustand.html</code></button>
+    <button class="kopierbar" data-kopie="node dashboard/index.js --html dashboard.html"><code>node dashboard/index.js --html dashboard.html</code></button>
   </div>
 </aside>
 
