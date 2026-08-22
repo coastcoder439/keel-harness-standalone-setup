@@ -133,7 +133,8 @@ function main() {
         `  Werkbank        : ${messung.wurzel}\n` +
         `  Gesamtstatus    : ${messung.gesamtstatus}\n` +
         `  Bereiche        : ${Object.entries(z).map(([k, v]) => `${v}× ${k}`).join(" · ")}\n` +
-        `  Regeln gezogen  : ${regelDaten.liste.length - regelDaten.unlesbar} von ${regelDaten.liste.length}` +
+        `  Regeln gelesen  : ${regelDaten.liste.length - regelDaten.unlesbar - (regelDaten.entfaellt || 0)} von ${regelDaten.liste.length}` +
+        (regelDaten.entfaellt ? ` (${regelDaten.entfaellt} gehoeren nicht zu diesem Harness)` : "") +
         (regelDaten.unlesbar ? ` (${regelDaten.unlesbar} nicht ziehbar — siehe Seite)` : "") +
         "\n" +
         (o.daten ? `  Daten           : ${o.daten}\n` : "")
