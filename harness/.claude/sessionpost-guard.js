@@ -7,11 +7,11 @@
 // Leon dazu: "sie reden wie Menschen miteinander, das braucht eine KI nicht."
 //
 // WARUM ALS HOOK UND NICHT ALS REGEL
-// Die Form stand seit dem 03.08. in ausgabeform.md (Zusatz B) und in
+// Die Form stand seit dem 03.08. in output-shape.md (Zusatz B) und in
 // commands/tell-session.md -- und aenderte nichts. Regeln sind KONTEXT, keine
 // Durchsetzung; die offizielle Doku sagt es woertlich: "To block an action
 // regardless of what Claude decides, use a PreToolUse hook instead."
-// Anders als kein-oneshot.md (die regelt AUSSAGEN und hat keinen Werkzeugaufruf,
+// Anders als no-oneshot.md (die regelt AUSSAGEN und hat keinen Werkzeugaufruf,
 // an dem ein Hook greifen koennte) ist das Senden einer Nachricht ein echter
 // Werkzeugaufruf -- also erzwingbar.
 //

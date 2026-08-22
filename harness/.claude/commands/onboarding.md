@@ -46,7 +46,7 @@ du traegst ein.
      `Get-ChildItem Env: | Select-Object -ExpandProperty Name | Select-String <name>`
      (PowerShell). Jeder gefundene oder vom Menschen genannte Zugang: eine Zeile in *Zugaenge*.
    - **Rangfolge nur als Vorzug, nicht als Abbruch:** CLI vor offiziellem MCP vor Community-MCP
-     vor Browser (`werkzeuge.md` -- dort die Begruendung) sagt, welchen Weg der Agent SPAETER
+     vor Browser (`tools.md` -- dort die Begruendung) sagt, welchen Weg der Agent SPAETER
      bevorzugt nutzt. Sie sagt NICHT, wann man beim Erheben aufhoert -- erhoben wird jede Rubrik.
    - **"Nicht gefunden" ist ein ehrliches Ergebnis, kein Raten.** Fehlt fuer ein genanntes
      Programm ueberall ein Werkzeug: nur VORMERKEN, nicht bauen. Eine CLI selbst zu erzeugen
