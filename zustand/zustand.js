@@ -27,7 +27,10 @@ const path = require("path");
 
 const { messen } = require("./messen");
 const { regeln } = require("./regeln");
-const { renderHTML } = require("./rendern");
+// Anzeige im Keel-Design (Seitenleiste, Bereiche, Details auf Klick).
+// Die alte einseitige Fassung liegt weiter als ./rendern -- die Messung kennt keine
+// Darstellung, deshalb laesst sich die Anzeige tauschen, ohne sie anzufassen.
+const { renderHTML } = require("./rendern-keel");
 
 function argumenteLesen(argv) {
   const a = argv.slice(2);
