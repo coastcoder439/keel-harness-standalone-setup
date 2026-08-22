@@ -1,4 +1,4 @@
-# 11 — Vollständigkeits-Prüfung: was „fertig" wirklich heißt
+# Vollständigkeits-Prüfung: was „fertig" wirklich heißt
 
 > **Status:** gilt ab sofort für jede Planungs- und Bau-Arbeit in dieser Werkbank.
 > **Anlass (Auftraggeber, 30.07.2026):** „Du sagst immer wieder, es ist fertig — aber es ist nicht
