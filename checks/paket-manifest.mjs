@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Haelt PAKET.json und den tatsaechlichen Paketinhalt auf EINEM Stand.
+// Haelt manifest.json und den tatsaechlichen Paketinhalt auf EINEM Stand.
 //
 // WARUM ES DAS GIBT
-// PAKET.json ist das Verzeichnis dieses Bausatzes: welche Dateien er ausliefert,
+// manifest.json ist das Verzeichnis dieses Bausatzes: welche Dateien er ausliefert,
 // wie gross sie sind, mit welcher Pruefsumme. Erzeugt wurde es urspruenglich von
 // einem Generator AUSSERHALB dieses Bausatzes -- der liegt hier nicht bei. Folge:
 // Sobald hier eine Datei dazukam, log das Manifest. Stand 22.08.2026 zaehlte es
@@ -19,7 +19,7 @@
 // (hier entstanden). Erfunden wird nichts.
 //
 // AUFRUF    node pruefung/paket-manifest.mjs              prueft  (0 = gleich, 1 = Abweichung)
-//           node pruefung/paket-manifest.mjs --nachziehen schreibt PAKET.json neu
+//           node pruefung/paket-manifest.mjs --nachziehen schreibt manifest.json neu
 //
 // Pruefsummen laufen ueber den auf LF vereinheitlichten Inhalt. Sonst haette
 // dieselbe Datei unter Windows und Linux verschiedene Hashes und das Manifest
@@ -32,7 +32,7 @@ import { fileURLToPath } from "node:url";
 
 const HIER = path.dirname(fileURLToPath(import.meta.url));
 const WURZEL = path.resolve(HIER, "..");
-const MANIFEST = path.join(WURZEL, "PAKET.json");
+const MANIFEST = path.join(WURZEL, "manifest.json");
 
 // Was nicht zum ausgelieferten Paket gehoert.
 const AUS = new Set([".git", "node_modules", ".DS_Store"]);
@@ -44,7 +44,7 @@ function dateienSammeln(ordner = WURZEL, rel = "") {
     const p = path.join(ordner, e.name);
     const r = rel ? `${rel}/${e.name}` : e.name;
     if (e.isDirectory()) raus.push(...dateienSammeln(p, r));
-    else if (r !== "PAKET.json") raus.push(r);
+    else if (r !== "manifest.json") raus.push(r);
   }
   return raus.sort();
 }
@@ -78,7 +78,7 @@ function bauen(alt) {
     gebautAm: new Date().toISOString(),
     posten: dateien.length,
     hinweisZurZaehlung:
-      "posten = alle Dateien im Paket ausser PAKET.json selbst (ohne .git und node_modules). " +
+      "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). " +
       "bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. " +
       "Erzeugt von pruefung/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
     ersetzungen: alt?.ersetzungen ?? 0,
@@ -92,12 +92,12 @@ const neu = bauen(alt);
 
 if (process.argv.includes("--nachziehen")) {
   fs.writeFileSync(MANIFEST, JSON.stringify(neu, null, 2) + "\n");
-  console.log(`PAKET.json neu geschrieben: ${neu.posten} Posten.`);
+  console.log(`manifest.json neu geschrieben: ${neu.posten} Posten.`);
   process.exit(0);
 }
 
 if (!alt) {
-  console.error("FEHLER: PAKET.json fehlt -- mit --nachziehen erzeugen.");
+  console.error("FEHLER: manifest.json fehlt -- mit --nachziehen erzeugen.");
   process.exit(1);
 }
 

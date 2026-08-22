@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// Prueft, ob die Volltext-Kopien in beileger/10-nachbau-anleitung.md noch mit den
+// Prueft, ob die Volltext-Kopien in payload/docs/rebuild-guide.md noch mit den
 // echten Dateien dieses Bausatzes uebereinstimmen.
 //
 // WARUM ES DAS GIBT
 // Dieser Bausatz beschreibt denselben Harness ZWEIMAL: einmal als echte Dateien
-// (harness/.claude/, vorlagen/), die der Installer kopiert, und einmal als
+// (payload/claude/, templates/), die der Installer kopiert, und einmal als
 // Volltext-Zitate in der Nachbau-Anleitung. Die Kopie ist gewollt: wer von Hand
 // nachbaut, hat die Dateien noch nicht -- ein blosser Verweis waere fuer ihn wertlos.
 //
@@ -34,7 +34,7 @@ import { fileURLToPath } from "node:url";
 
 const HIER = path.dirname(fileURLToPath(import.meta.url));
 const WURZEL = path.resolve(HIER, "..");
-const ANLEITUNG = path.join(WURZEL, "beileger", "10-nachbau-anleitung.md");
+const ANLEITUNG = path.join(WURZEL, "payload", "docs", "rebuild-guide.md");
 
 // Eine Ueberschrift oder Einleitungszeile nennt den Pfad in Backticks, kurz
 // darauf oeffnet der Codeblock. Mehr Naehe als ANKER_ABSTAND Zeilen waere
@@ -68,9 +68,12 @@ const AUSNAHMEN = new Map([
 // Die Anleitung stammt aus einem Harness mit .claude/hooks/-Unterordner; dieser
 // Bausatz legt die Waechter flach nach .claude/ und haelt settings.json als Vorlage.
 function abbilden(pfad) {
-  if (pfad === ".claude/settings.json") return path.join("vorlagen", "settings.json");
+  if (pfad === ".claude/settings.json") return path.join("templates", "settings.json");
   const ohneHooks = pfad.replace(/^\.claude\/hooks\//, ".claude/");
-  return path.join("harness", ohneHooks);
+  // Das Ziel heisst payload/claude/ OHNE Punkt. Wer nur "harness" ersetzt, erhaelt
+  // payload/claude/.claude/... und alle Kopien fallen in "FEHLT" -- die Meldung sagt
+  // dann "Anleitung zitiert eine Datei, die der Bausatz nicht hat" statt "Abbildung kaputt".
+  return path.join("payload", "claude", ohneHooks.replace(/^\.claude\//, ""));
 }
 
 function bloeckeLesen(text) {
