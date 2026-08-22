@@ -159,7 +159,7 @@ const BEFEHLE = ["repo-status.md", "save-work.md", "session-map.md", "tell-sessi
 
 // Diese vier laden bei JEDEM Sitzungsstart. Sie kosten dauerhaft Kontext und
 // sind genau deshalb bewusst kurz gehalten.
-const REGELN = ["kein-oneshot.md", "vollstaendigkeit.md", "werkzeuge.md", "ausgabeform.md"];
+const REGELN = ["kein-oneshot.md", "vollstaendigkeit.md", "werkzeuge.md", "ausgabeform.md", "arbeitsweise.md"];
 
 const SKILLS = [
   ["domain-modeling", ["SKILL.md", "ADR-FORMAT.md", "CONTEXT-FORMAT.md"]],
