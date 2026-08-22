@@ -20,7 +20,7 @@
 // das Auseinanderlaufen sogar. Verlangt ist, dass beide Staende gleich sind --
 // und das ist eine pruefbare Eigenschaft, keine Erinnerung.
 //
-// AUFRUF    node pruefung/anleitung-sync.mjs
+// AUFRUF    node checks/anleitung-sync.mjs
 // RUECKGABE 0 = deckungsgleich · 1 = Drift gefunden · 2 = Aufruffehler
 //
 // Herkunft: uebernommen aus dem Vorgaenger-Harness (docs/workflows/anleitung-drift.js),

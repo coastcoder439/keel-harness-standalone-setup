@@ -18,8 +18,8 @@
 // eingetragen ist, wird uebernommen; neue Dateien bekommen quellordner "bausatz"
 // (hier entstanden). Erfunden wird nichts.
 //
-// AUFRUF    node pruefung/paket-manifest.mjs              prueft  (0 = gleich, 1 = Abweichung)
-//           node pruefung/paket-manifest.mjs --nachziehen schreibt manifest.json neu
+// AUFRUF    node checks/paket-manifest.mjs              prueft  (0 = gleich, 1 = Abweichung)
+//           node checks/paket-manifest.mjs --nachziehen schreibt manifest.json neu
 //
 // Pruefsummen laufen ueber den auf LF vereinheitlichten Inhalt. Sonst haette
 // dieselbe Datei unter Windows und Linux verschiedene Hashes und das Manifest
@@ -80,7 +80,7 @@ function bauen(alt) {
     hinweisZurZaehlung:
       "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). " +
       "bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. " +
-      "Erzeugt von pruefung/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
+      "Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
     ersetzungen: alt?.ersetzungen ?? 0,
     bewusstNichtEnthalten: alt?.bewusstNichtEnthalten || [],
     dateien,
@@ -119,7 +119,7 @@ const summe = fehlenImManifest.length + nichtMehrDa.length + geaendert.length + 
 console.log(`\n${neu.posten} Dateien im Paket · ${summe} Abweichung(en) zum Manifest.`);
 if (summe) {
   console.log("\nManifest und Paketinhalt muessen EIN Stand sein.");
-  console.log("Angleichen mit: node pruefung/paket-manifest.mjs --nachziehen");
+  console.log("Angleichen mit: node checks/paket-manifest.mjs --nachziehen");
   process.exit(1);
 }
 process.exit(0);
