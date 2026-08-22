@@ -246,7 +246,7 @@ Größenordnung aus dieser Werkbank, gemessen am 02.08.2026: `find .ecc-src -typ
 
 Der achte Wächter-Volltext, `pruefstand-warn.js` (§6.8.11), zählt **nicht** mit: §6.8.11a legt für jeden Nachbau Weg A fest — *„gar nicht erst anlegen"*, weil seine zwei Prüfer diese Werkbank messen und nicht den Nachbau.
 
-> **Warum keine Zählung per `grep`:** Ein Muster, das nur Pfade in Backticks zählt, übersieht die vier Dauer-Regeln (ihr Abschnitt schreibt die Pfade bewusst ohne Backticks) und meldet **12** — die Zahl bliebe grün, während der Satz falsch wird. Ein Muster ohne Backticks zählt **23** und nimmt Beispiele wie `settings.js` mit. Beide Zahlen sind gemessen; keine trägt. Wo ein Suchmuster keine Wahrheit liefert, gehört die Liste hin.
+> **Warum keine Zählung per `grep`:** Ein Muster, das nur Pfade in Backticks zählt, übersieht die fuenf Dauer-Regeln (ihr Abschnitt schreibt die Pfade bewusst ohne Backticks) und meldet **12** — die Zahl bliebe grün, während der Satz falsch wird. Ein Muster ohne Backticks zählt **23** und nimmt Beispiele wie `settings.js` mit. Beide Zahlen sind gemessen; keine trägt. Wo ein Suchmuster keine Wahrheit liefert, gehört die Liste hin.
 
 Jede weitere kommt einzeln per `!`-Zeile dazu. Das ist der Unterschied zwischen einem sauberen ersten Commit und einem, der nicht mehr zu reparieren ist, ohne die Historie neu zu schreiben.
 
@@ -327,7 +327,7 @@ git check-ignore -v .claude/settings.local.json .ecc-src/
 git ls-files --others --exclude-standard -z | xargs -0 du -k | sort -rn | head -5
 
 # d) Sicherungsprobe: faellt eine Eigenbau-Datei der Anleitung durchs Raster?
-ANLEITUNG=docs/10-nachbau-anleitung.md          # Pfad zu DIESEM Dokument
+ANLEITUNG=docs/rebuild-guide.md          # Pfad zu DIESEM Dokument
 for f in $(grep -ohE '`\.claude/[A-Za-z0-9_./-]+\.(js|md)`' "$ANLEITUNG" | tr -d '`' | sort -u); do
   if   [ ! -e "$f" ];                                     then echo "kommt spaeter: $f"
   elif git ls-files --error-unmatch "$f" >/dev/null 2>&1;  then echo "gesichert:     $f"
@@ -432,8 +432,8 @@ Sitzungs-Nachrichten) plus die Statusleiste. **Nichts von Hand anzupassen** — 
 `$CLAUDE_PROJECT_DIR`, den Claude Code selbst setzt; absolute Rechnerpfade und ein
 `enabledPlugins`-Eintrag stehen bewusst nicht darin (Weg A, siehe §4).
 
-> Dieser Block ist eine **Volltext-Kopie** von `vorlagen/settings.json`. Er wird von
-> `pruefung/anleitung-sync.mjs` gegen die echte Datei geprüft — läuft er auseinander, meldet der
+> Dieser Block ist eine **Volltext-Kopie** von `templates/settings.json`. Er wird von
+> `checks/anleitung-sync.mjs` gegen die echte Datei geprüft — läuft er auseinander, meldet der
 > Abgleich Drift und `--nachziehen` gleicht ihn an. Von Hand ändern gehört in die echte Datei,
 > nicht hierher.
 ```json
@@ -456,7 +456,7 @@ Sitzungs-Nachrichten) plus die Statusleiste. **Nichts von Hand anzupassen** — 
           },
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/projekt-kontext.js\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/project-context.js\"",
             "timeout": 10,
             "statusMessage": "Projekt-Kontext-Check"
           }
@@ -641,10 +641,10 @@ bleiben unveraendert daneben stehen:
 .claude/rules/ecc/*
 !.claude/rules/ecc/common/
 .claude/rules/ecc/common/*
-!.claude/rules/ecc/common/kein-oneshot.md
-!.claude/rules/ecc/common/vollstaendigkeit.md
-!.claude/rules/ecc/common/werkzeuge.md
-!.claude/rules/ecc/common/ausgabeform.md
+!.claude/rules/ecc/common/no-oneshot.md
+!.claude/rules/ecc/common/completeness.md
+!.claude/rules/ecc/common/tools.md
+!.claude/rules/ecc/common/output-shape.md
 .ecc-src/
 ```
 
@@ -711,7 +711,7 @@ aufgenommene, negierte Datei als auch fuer die bereits getrackte.
 ```bash
 for f in .claude/hooks/git-guard.js \
          .claude/commands/repo-status.md \
-         .claude/rules/ecc/common/werkzeuge.md \
+         .claude/rules/ecc/common/tools.md \
          .claude/settings.local.json \
          .claude/rules/ecc/web/testing.md; do
   if git check-ignore -q "$f"; then echo "IGNORIERT   $f"; else echo "sichtbar    $f"; fi
@@ -728,7 +728,7 @@ Ausgabe ist zustandsabhaengig und taugt zum Nachsehen, nicht als Kriterium:
 
 - **vor** dem `git add` nennen die drei Eigenbauten ihre Negationszeile (im Wegwerf-Repo gemessen:
   `!.claude/*.js`, `!.claude/commands/repo-status.md`,
-  `!.claude/rules/ecc/common/werkzeuge.md`) — das ist der **korrekte** Zwischenzustand, kein Fehler;
+  `!.claude/rules/ecc/common/tools.md`) — das ist der **korrekte** Zwischenzustand, kein Fehler;
 - **nach** `add` + Commit schweigt `-v` zu ihnen, weil sie im Index liegen;
 - die beiden Fremd-Dateien nennen in **beiden** Faellen ihre `.gitignore`-Zeile (in dieser Werkbank:
   `.gitignore:26:.claude/*` fuer `settings.local.json`, `.gitignore:43:.claude/rules/ecc/*` fuer
@@ -1820,7 +1820,7 @@ Zweck: Ansagen helfen beim Nachdenken, Blockieren hilft, wenn nicht nachgedacht 
 Arbeitsbereichs schreiben" stand im Gedächtnis, und trotzdem landeten 5,7 MB samt der Datei mit
 allen ohne Nachfrage erlaubten Shell-Befehlen auf dem Schreibtisch. Deterministischer Code
 kostet null Tokens, läuft vor jedem Bash-Aufruf und ist nicht überredbar.
-*(Das ist die Messbarkeitsprobe G4 aus [11](11-vollstaendigkeitspruefung.md): eine Zusage, die
+*(Das ist die Messbarkeitsprobe G4 aus [11](completeness-check.md): eine Zusage, die
 nur von einer Beurteilung abhängt, wird strukturell gemacht.)*
 
 Fünfzehn Regeln — acht ursprüngliche, sieben am 01.08.2026 nachgerüstet (Beschluss **D5**;
@@ -2774,9 +2774,9 @@ ruft `pruefstand-warn.js`. Das Skript ruft seinerseits `docs/workflows/anleitung
 Volltext** — und das bleibt absichtlich so. Drei gemessene Gründe:
 
 1. **Volltext würde den Fehlalarm nicht beheben.** Beide Prüfer haben Voraussetzungen, die ein
-   frischer Nachbau nicht hat: `anleitung-drift.js` liest fest `docs/10-nachbau-anleitung.md`,
+   frischer Nachbau nicht hat: `anleitung-drift.js` liest fest `docs/rebuild-guide.md`,
    `eigenbau-ungesichert.js` braucht den Fremd-Klon `.ecc-src/` — der in dieser Anleitung
-   nirgends vorkommt (`grep -c 'ecc-src' docs/10-nachbau-anleitung.md` → `0`). Im Wegwerf-Ordner
+   nirgends vorkommt (`grep -c 'ecc-src' docs/rebuild-guide.md` → `0`). Im Wegwerf-Ordner
    nachgestellt: beide brechen mit Rückgabe **2** ab („nicht prüfbar"), der Hook meldet weiter.
    Ein Volltext hier verschöbe den Dauer-Fehlalarm also nur von „Cannot find module" auf
    „FEHLER: .ecc-src/ fehlt".
@@ -2813,7 +2813,7 @@ Volltext** — und das bleibt absichtlich so. Drei gemessene Gründe:
 
 | Voraussetzung | Prüfbefehl | fehlt sie, dann |
 |---|---|---|
-| eigene `docs/10-…`-Anleitung mit Volltext-Kopien unter `.claude/…` | `test -f docs/10-nachbau-anleitung.md && echo ja` | Weg A |
+| eigene `docs/10-…`-Anleitung mit Volltext-Kopien unter `.claude/…` | `test -f docs/rebuild-guide.md && echo ja` | Weg A |
 | Fremd-Klon `.ecc-src/` neben `.claude/` | `test -d .ecc-src && echo ja` | Weg A |
 
 1. Die zwei Prüfer aus dem Werkbank-Repo holen. Es ist privat, deshalb über `gh` und nicht über
@@ -2855,7 +2855,7 @@ Volltext** — und das bleibt absichtlich so. Drei gemessene Gründe:
    Stempeldatei `$TMPDIR/<workspace>-pruefstand-warn-<id>.stamp`; für einen zweiten Versuch eine
    andere Kennung einsetzen, sonst ist das Schweigen nur die Drossel.
 
-### 6.8.12 Die vier Dauer-Regeln (Ordner .claude/rules/ecc/common/) — was in **jeder** Sitzung mitlädt
+### 6.8.12 Die fuenf Dauer-Regeln (Ordner .claude/rules/ecc/common/) — was in **jeder** Sitzung mitlädt
 
 Eine Regeldatei lädt **unbedingt**, wenn sie **kein** `paths:`-Frontmatter trägt. Das ist die
 ganze Bedingung, und sie hängt an der **Datei**, nicht am Ordner. Der Ordner common/ ist der Ort,
@@ -2863,7 +2863,7 @@ an dem das systematisch so ist — keine seiner 14 Dateien hat eins, alle liegen
 im Fenster, bevor die erste Frage gestellt ist. Er ist aber **nicht der einzige**: In dieser
 Werkbank trägt auch das komplette Paket ecc/web/ keins und lädt deshalb ebenfalls immer mit.
 Das ist kein Nebensatz — es sind sieben Dateien, die niemand bestellt hat, und der Befund gehört
-in denselben Blick wie die Kostenrechnung in werkzeuge.md und wie die zu breiten Trigger aus
+in denselben Blick wie die Kostenrechnung in tools.md und wie die zu breiten Trigger aus
 §6.8.1. Nachmessen:
 
 ```bash
@@ -2882,14 +2882,14 @@ kommen — `<ECC_QUELLE>` ist der Quell-/Update-Klon des Harness-Bundles (in die
 nicht versionierte Ordner .ecc-src/; wer keinen hat, überspringt die Probe):
 
 ```bash
-find "<ECC_QUELLE>" \( -name kein-oneshot.md -o -name vollstaendigkeit.md \
-                    -o -name werkzeuge.md   -o -name ausgabeform.md \)   # erwartet: keine Ausgabe
+find "<ECC_QUELLE>" \( -name no-oneshot.md -o -name completeness.md \
+                    -o -name tools.md   -o -name output-shape.md \)   # erwartet: keine Ausgabe
 ls "<ECC_QUELLE>"/rules/common/ | wc -l                                  # erwartet: 10
 ```
 
 #### Was die vier tun und warum es sie gibt
 
-**kein-oneshot.md (77 Zeilen, angelegt 31.07.2026).**
+**no-oneshot.md (77 Zeilen, angelegt 31.07.2026).**
 Verbietet jede inhaltliche Aussage über das Vorhaben, die nicht vorher geprüft wurde — nicht aus
 dem Gedächtnis, nicht aus dem Gesprächsverlauf. Vier Auflagen: erst prüfen, dann formulieren ·
 die richtige Schicht wählen (eigene Plugins und Plan-Dokumente vs. Basis-Plattform; falsche
@@ -2902,7 +2902,7 @@ einen bestehenden Beschluss, Governance in der falschen Schicht gemessen, Laufor
 Erinnerung wiedergegeben. Die Datei hält außerdem fest, welche Mehr-Modell-Befehle gestrichen
 sind und warum — damit niemand ein Werkzeug plant, dessen Anmeldung nicht herstellbar ist.
 
-**vollstaendigkeit.md (73 Zeilen, angelegt 31.07.2026).**
+**completeness.md (73 Zeilen, angelegt 31.07.2026).**
 Legt fest, wann etwas fertig ist — und verbietet das Wort als Selbstauskunft: erlaubt ist
 „geprüft gegen ⟨Quellen⟩ — offen ist ⟨Liste⟩". Kern sind acht Fragen (Akteure · Lebenszyklus ·
 Governance je Fähigkeit · Versprechen · Belege · Fehlerfall · Folgepflichten ·
@@ -2912,9 +2912,9 @@ Code prüft, findet nie ein vergessenes Versprechen. Dazu zwei Sprachregeln, die
 Zahlen beim Schreiben messen und den erzeugenden Befehl danebenschreiben, und ein Warnkasten
 ersetzt keine Korrektur.
 *Anlass:* mehrfach „fertig" gemeldet, während hunderte Lücken offen waren. Langfassung mit
-Beweislage: [11-vollstaendigkeitspruefung.md](11-vollstaendigkeitspruefung.md).
+Beweislage: [completeness-check.md](completeness-check.md).
 
-**werkzeuge.md (40 Zeilen, angelegt 31.07.2026).**
+**tools.md (40 Zeilen, angelegt 31.07.2026).**
 Setzt die Rangfolge **CLI → MCP → Browsersteuerung** und begründet sie über die Kosten statt über
 Geschmack: Eine CLI kostet nichts, bis sie aufgerufen wird, und ihre Ausgabe lässt sich vor dem
 Modell filtern. Ein MCP-Server kostet **dauerhaft** — seine Werkzeug-Schemata liegen in *jeder*
@@ -2924,9 +2924,9 @@ Dazu der Beschaffungsweg (erst nachsehen, ob das Werkzeug schon da ist, dann suc
 Systemrechte installieren) und die Regel, bei einer streikenden CLI erst Version, Argumente und
 Umgehungsschalter zu prüfen, statt eine Stufe abzusteigen.
 *Anlass:* Browsersteuerung für Daten benutzt, für die eine CLI existierte. Langfassung mit
-Messwerten: [12-werkzeug-beschaffung.md](12-werkzeug-beschaffung.md).
+Messwerten: [tool-sourcing.md](tool-sourcing.md).
 
-**ausgabeform.md (59 Zeilen, angelegt 01.08.2026).**
+**output-shape.md (59 Zeilen, angelegt 01.08.2026).**
 Regelt die **Form** der Antwort an den Menschen — die einzige der vier, die nichts über Prüfung
 sagt: erste Zeile = Ergebnis oder nächste Handlung, kein Vorlauf; Mehrschrittiges nummeriert;
 fester Abschlussblock „Zu tun · Auswirkung · Empfehlung"; Listen höchstens fünf Punkte. Liegt eine
@@ -2956,14 +2956,14 @@ oben neu geschrieben (siehe Kasten am Ende dieses Abschnitts).
 
 ```bash
 mkdir -p .claude/rules/ecc/common
-cp "<REFERENZ>"/.claude/rules/ecc/common/{kein-oneshot,vollstaendigkeit,werkzeuge,ausgabeform}.md \
+cp "<REFERENZ>"/.claude/rules/ecc/common/{no-oneshot,completeness,tools,output-shape,working-method}.md \
    .claude/rules/ecc/common/
 ```
 
 **Geklappt, wenn:** vier Mal „ok" erscheint und kein „FEHLT ODER LEER" —
 
 ```bash
-for f in kein-oneshot vollstaendigkeit werkzeuge ausgabeform; do
+for f in no-oneshot completeness tools output-shape working-method; do
   test -s .claude/rules/ecc/common/$f.md && echo "$f ok" || echo "$f FEHLT ODER LEER"
 done
 ```
@@ -2973,7 +2973,7 @@ Sprachregel und verschwindet aus Sitzungen ohne passenden Dateityp — das ist d
 still passiert.
 
 ```bash
-grep -L '^---' .claude/rules/ecc/common/{kein-oneshot,vollstaendigkeit,werkzeuge,ausgabeform}.md
+grep -L '^---' .claude/rules/ecc/common/{no-oneshot,completeness,tools,output-shape,working-method}.md
 ```
 
 **Geklappt, wenn:** alle vier Pfade in der Ausgabe stehen (`grep -L` listet Dateien **ohne**
@@ -2983,7 +2983,7 @@ Frontmatter danebenlegen und mitprüfen — sie darf nicht in der Liste auftauch
 
 ```bash
 printf -- '---\npaths:\n  - "**/*.ts"\n---\ntext\n' > .claude/rules/ecc/common/zz-probe.md
-grep -L '^---' .claude/rules/ecc/common/{kein-oneshot,vollstaendigkeit,werkzeuge,ausgabeform,zz-probe}.md
+grep -L '^---' .claude/rules/ecc/common/{no-oneshot,completeness,tools,output-shape,working-method,zz-probe}.md
 rm .claude/rules/ecc/common/zz-probe.md
 ```
 
@@ -3001,7 +3001,7 @@ sie in §6.2a geholt und nicht hier erfunden.
 Erst prüfen, ob die vier Zeilen wirklich stehen — je Datei, nicht als Summe:
 
 ```bash
-for f in kein-oneshot vollstaendigkeit werkzeuge ausgabeform; do
+for f in no-oneshot completeness tools output-shape working-method; do
   grep -qxF "!.claude/rules/ecc/common/$f.md" .gitignore \
     && echo "negiert          $f" || echo "FEHLT IM BLOCK:  $f"
 done
@@ -3015,10 +3015,10 @@ Dann aufnehmen. Neue Dateien brauchen `git add`; committet wird mit Pathspec und
 diff HEAD` geprüft — Begründung für beides in §6.2a und in CLAUDE.md (Sichern):
 
 ```bash
-git add .claude/rules/ecc/common/{kein-oneshot,vollstaendigkeit,werkzeuge,ausgabeform}.md
+git add .claude/rules/ecc/common/{no-oneshot,completeness,tools,output-shape,working-method}.md
 git diff HEAD --stat -- .claude/rules/ecc/common
-git commit -m "chore: die vier Dauer-Regeln versionieren" \
-  -- .claude/rules/ecc/common/{kein-oneshot,vollstaendigkeit,werkzeuge,ausgabeform}.md
+git commit -m "chore: die fuenf Dauer-Regeln versionieren" \
+  -- .claude/rules/ecc/common/{no-oneshot,completeness,tools,output-shape,working-method}.md
 git push
 ```
 
@@ -3038,7 +3038,7 @@ Erfolgskriterium aus der **Gesamtzahl** hätte das als Erfolg gemeldet.
 ECC-Regel weiterhin ignoriert ist:
 
 ```bash
-for f in kein-oneshot vollstaendigkeit werkzeuge ausgabeform; do
+for f in no-oneshot completeness tools output-shape working-method; do
   p=".claude/rules/ecc/common/$f.md"
   git ls-files --error-unmatch "$p" >/dev/null 2>&1 && i="Index ja  " || i="Index NEIN"
   git ls-tree -r --name-only '@{u}' -- "$p" | grep -qxF "$p" && r="Remote ja  " || r="Remote NEIN"
@@ -3065,7 +3065,7 @@ ausführliches Dokument; fehlt es, führt die Regel ins Leere und wird beim erst
 ignoriert.
 
 ```bash
-ls docs/11-vollstaendigkeitspruefung.md docs/12-werkzeug-beschaffung.md
+ls docs/completeness-check.md docs/tool-sourcing.md
 ```
 
 **Geklappt, wenn:** beide Pfade ausgegeben werden und der Befehl mit Exit 0 endet. Fehlt eines,
@@ -3188,17 +3188,17 @@ Ort im Nachbau: neben den übrigen Regeldateien des Harness (in dieser Werkbank 
 
 ```bash
 mkdir -p .claude/rules/ecc/common
-# Datei .claude/rules/ecc/common/arbeitsweise.md anlegen. Sie MUSS diese drei
+# Datei .claude/rules/ecc/common/working-method.md anlegen. Sie MUSS diese drei
 # Zeilen woertlich enthalten, sonst greift die Pruefung unten ins Leere:
 #   Zieldefinition: Problem · Intent · Goal
 #   Abschluss-Messung 1: Coverage
 #   Abschluss-Messung 2: Fulfillment
-/usr/bin/grep -l "Problem · Intent · Goal" .claude/rules/ecc/common/arbeitsweise.md
+/usr/bin/grep -l "Problem · Intent · Goal" .claude/rules/ecc/common/working-method.md
 
 # SICHERN -- ohne diese drei Zeilen liegt die Regel nur auf der Platte:
-printf '!.claude/rules/ecc/common/arbeitsweise.md\n' >> .gitignore
-git add .claude/rules/ecc/common/arbeitsweise.md
-git commit -m "arbeitsweise-regel" -- .gitignore .claude/rules/ecc/common/arbeitsweise.md
+printf '!.claude/rules/ecc/common/working-method.md\n' >> .gitignore
+git add .claude/rules/ecc/common/working-method.md
+git commit -m "arbeitsweise-regel" -- .gitignore .claude/rules/ecc/common/working-method.md
 git push
 ```
 
@@ -3207,9 +3207,9 @@ git push
 **Geklappt, wenn** drei Dinge zutreffen:
 
 ```bash
-/usr/bin/grep -l "Problem · Intent · Goal" .claude/rules/ecc/common/arbeitsweise.md   # gibt den Dateinamen aus
+/usr/bin/grep -l "Problem · Intent · Goal" .claude/rules/ecc/common/working-method.md   # gibt den Dateinamen aus
 git ls-files --others --ignored --exclude-standard -- .claude/ | /usr/bin/grep arbeitsweise   # gibt NICHTS aus
-git log --oneline -- .claude/rules/ecc/common/arbeitsweise.md | wc -l                  # >= 1
+git log --oneline -- .claude/rules/ecc/common/working-method.md | wc -l                  # >= 1
 ```
 
 …**und** eine frisch gestartete Sitzung beantwortet „welche zwei Messungen schließen eine Aufgabe ab?" mit *Coverage* und *Fulfillment*, ohne die Datei vorher zu öffnen. Erst dann liegt sie im Startkontext und nicht nur auf der Platte.

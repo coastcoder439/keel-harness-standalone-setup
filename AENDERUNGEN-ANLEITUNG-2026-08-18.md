@@ -1,7 +1,7 @@
 # Entwurf: Anleitung des Standalone-Harness neu angelegt
 
 Stand: 2026-08-18 · bezieht sich auf das generierte Paket aus Werkbank-Commit `e165ec6`
-(PAKET.json gebaut 2026-08-06). Dieser Ordner ist ein **Vorschlag für die Werkbank**, kein
+(manifest.json gebaut 2026-08-06). Dieser Ordner ist ein **Vorschlag für die Werkbank**, kein
 Eingriff ins generierte Repo.
 
 Enthalten:
@@ -36,30 +36,30 @@ Nicht Formulierungen, sondern das Modell: die bisherige Anleitung macht den **Or
 
 | Bisher | Wirkung | Im Entwurf |
 |---|---|---|
-| README: „Claude Code **im geklonten Ordner** öffnen (nicht daneben, nicht darüber)" | Sitzung muss im Download laufen. Wer im Harness-Ordner arbeiten will, muss das Paket dorthin kopieren — dann liegen Installer, `harness/`, `vorlagen/`, `pruefung/`, `PAKET.json` … dauerhaft im Harness und in dessen Git-Historie. | Sitzung irgendwo, empfohlen `<HARNESS>`. Paket bleibt, wo es ist. |
+| README: „Claude Code **im geklonten Ordner** öffnen (nicht daneben, nicht darüber)" | Sitzung muss im Download laufen. Wer im Harness-Ordner arbeiten will, muss das Paket dorthin kopieren — dann liegen Installer, `payload/`, `templates/`, `checks/`, `manifest.json` … dauerhaft im Harness und in dessen Git-Historie. | Sitzung irgendwo, empfohlen `<HARNESS>`. Paket bleibt, wo es ist. |
 | `CLAUDE.md` im Paket = Rolle „Harness Control" | Koppelt eine Rolle an den Paketordner. Liegt das Paket im Harness-Ordner, verhindert diese Datei Schritt [7] des Installers („CLAUDE.md nur wenn keine da ist") — die echte `CLAUDE.md` mit den `[?]` wird nie installiert, der Harness trägt dauerhaft die Onboarding-Rolle, jede neue Sitzung dort beginnt wieder als Onboarding-Konsole. | Keine `CLAUDE.md` im Paket. Stattdessen `ONBOARDING-FUER-CLAUDE.md`, per Pfad vorgelegt. |
 | Schritt 7: „Harness-Control-Session schließen, neue Session im Ziel öffnen" | Zwei Ordner, zwei Sitzungen, eine wird weggeworfen. | Eine Sitzung. Nach dem Commit: Claude Code neu starten, **selben** Ordner öffnen. |
 | PAKET-ANLEITUNG: `cd <paket-ordner>` … `cd /pfad/zu/deinem/workspace` | Befehle hängen vom aktuellen Verzeichnis ab; Unix-Pfade ohne Windows-Gegenstück. | Jeder Befehl nennt beide Pfade; `git -C <HARNESS>`; Windows und Unix nebeneinander. |
 
-Das Werkzeug selbst passt bereits zum Modell: `onboarding.mjs` nimmt `--paket` und `--ziel` als Pfade und braucht kein bestimmtes Arbeitsverzeichnis. Die Anleitung widersprach ihrem eigenen Installer.
+Das Werkzeug selbst passt bereits zum Modell: `install.mjs` nimmt `--paket` und `--ziel` als Pfade und braucht kein bestimmtes Arbeitsverzeichnis. Die Anleitung widersprach ihrem eigenen Installer.
 
 ## 3. Änderungen an der Werkbank (Quelle), die der Entwurf voraussetzt
 
 ### 3a. Text (dieser Entwurf)
 
 - `README.md` ersetzen.
-- `PAKET-ANLEITUNG.md` ersetzen. Verweise auf `LIESMICH.md` (README, PAKET.json-Posten) auf den tatsächlichen Namen bringen — **ein** Name, überall.
-- Paket-`CLAUDE.md` aus dem Generator streichen; `ONBOARDING-FUER-CLAUDE.md` als neuen Posten aufnehmen (und in `PAKET.json` zählen).
-- `pruefung/frisch-geklont.mjs` gegenlesen: prüft er auf das Vorhandensein einer Paket-`CLAUDE.md`, muss die Prüfung auf `ONBOARDING-FUER-CLAUDE.md` umgestellt werden.
+- `PAKET-ANLEITUNG.md` ersetzen. Verweise auf `LIESMICH.md` (README, manifest.json-Posten) auf den tatsächlichen Namen bringen — **ein** Name, überall.
+- Paket-`CLAUDE.md` aus dem Generator streichen; `ONBOARDING-FUER-CLAUDE.md` als neuen Posten aufnehmen (und in `manifest.json` zählen).
+- `checks/frisch-geklont.mjs` gegenlesen: prüft er auf das Vorhandensein einer Paket-`CLAUDE.md`, muss die Prüfung auf `ONBOARDING-FUER-CLAUDE.md` umgestellt werden.
 - Klon-URL in der README: bisher `github.com/leonpoesken/keel-harness-standalone.git`, das tatsächliche Repo liegt unter `coastcoder439/`. Der Entwurf trägt `coastcoder439`; die Werkbank sollte die URL aus einer Stelle beziehen.
 
-### 3b. Code (`onboarding.mjs`)
+### 3b. Code (`install.mjs`)
 
 | Zeile | Befund | Änderung |
 |---|---|---|
 | 53 | `path.dirname(decodeURIComponent(new URL(import.meta.url).pathname))` liefert auf Windows `/C:/…` — der Rückfall auf den eigenen Ordner scheitert, `--paket` wird Pflicht. | `import { fileURLToPath } from "node:url"; const HIER = path.dirname(fileURLToPath(import.meta.url));` |
-| 158–161 | `SKILLS` enthält nur `domain-modeling` und `resolving-merge-conflicts`. `harness/.claude/skills/i-have-adhd/SKILL.md` liegt im Paket, wird aber nicht installiert — obwohl `ausgabeform.md` (installierte Dauer-Regel), `session-roles.js` (`/i-have-adhd` beim Start) und die PAKET-ANLEITUNG („3 Skills") ihn voraussetzen. Der `.gitignore`-Block schaltet ihn ebenfalls nicht frei. | `["i-have-adhd", ["SKILL.md"]]` ergänzen; `vorlagen/gitignore-block.txt` um `!.claude/skills/i-have-adhd/` erweitern. Oder die drei Verweise entfernen — aber nicht der jetzige Zwischenzustand. |
-| `erlaubteWurzeln()` in `harness/.claude/danger-guard.js` | Erlaubt ab Werk `/tmp`, `/private/tmp`, `/var/folders`, `~/.claude`. Kein Windows-Temp. | `os.tmpdir()` aufnehmen (deckt `%TEMP%` und die Unix-Fälle ab). |
+| 158–161 | `SKILLS` enthält nur `domain-modeling` und `resolving-merge-conflicts`. `payload/claude/skills/i-have-adhd/SKILL.md` liegt im Paket, wird aber nicht installiert — obwohl `output-shape.md` (installierte Dauer-Regel), `session-roles.js` (`/i-have-adhd` beim Start) und die PAKET-ANLEITUNG („3 Skills") ihn voraussetzen. Der `.gitignore`-Block schaltet ihn ebenfalls nicht frei. | `["i-have-adhd", ["SKILL.md"]]` ergänzen; `templates/gitignore-block.txt` um `!.claude/skills/i-have-adhd/` erweitern. Oder die drei Verweise entfernen — aber nicht der jetzige Zwischenzustand. |
+| `erlaubteWurzeln()` in `payload/claude/danger-guard.js` | Erlaubt ab Werk `/tmp`, `/private/tmp`, `/var/folders`, `~/.claude`. Kein Windows-Temp. | `os.tmpdir()` aufnehmen (deckt `%TEMP%` und die Unix-Fälle ab). |
 | Schritt [7] | „CLAUDE.md — nur wenn keine da ist" bleibt richtig. Zusätzlich sinnvoll: eine Vorprüfung, die abbricht (RC 2), wenn `<PAKET>` innerhalb von `<HARNESS>` liegt oder umgekehrt — dann kann der Fall „Paket im Harness" gar nicht erst entstehen. | Optional, aber billig. |
 
 Die Befehle im Entwurf geben `--paket <PAKET>` **immer** an — bewusst, nicht als Notbehelf: zwei ausgeschriebene Pfade lesen auf jedem System gleich und lassen keinen Spielraum, wo etwas landet. PAKET-ANLEITUNG und ONBOARDING-FUER-CLAUDE tragen zusätzlich einen markierten **Windows-Hinweis**, der erklärt, warum der Schalter dort derzeit Pflicht ist (Zeile 53). Nach der Korrektur in der Werkbank entfällt nur dieser Absatz; die Befehle bleiben.
@@ -88,12 +88,12 @@ Alternativ `ONBOARDING-FUER-CLAUDE.md` einer Sitzung vorlegen, die **in `<HARNES
 
 **Erwartung (Prüfliste):**
 
-- [ ] `<PAKET>` unverändert; kein Paketbestandteil in `<HARNESS>` (kein `onboarding.mjs`, kein `harness/`, kein `vorlagen/`, kein `PAKET.json`, kein `pruefung/`, kein `beileger/`).
-- [ ] `<HARNESS>/CLAUDE.md` existiert und stammt aus `vorlagen/CLAUDE.md` — enthält `[?]`.
+- [ ] `<PAKET>` unverändert; kein Paketbestandteil in `<HARNESS>` (kein `install.mjs`, kein `payload/`, kein `templates/`, kein `manifest.json`, kein `checks/`, kein `payload/docs/`).
+- [ ] `<HARNESS>/CLAUDE.md` existiert und stammt aus `templates/CLAUDE.md` — enthält `[?]`.
 - [ ] Onboarding-Ausgabe: Schritt [7] „angelegt", nicht „uebersprungen"; RC 0 oder 1 (1 nur mit den erwarteten Hinweisen, z. B. „kein git-Repo" vor Schritt 4).
-- [ ] Nach `git init` + Commit in `<HARNESS>`: `git -C <HARNESS> ls-files` zeigt ausschließlich Nutzlast (`.claude/…`, `.gitignore`, `CLAUDE.md`, `docs/…`, `lizenzen/…`, `oberflaeche/…`, `zustand/…`).
+- [ ] Nach `git init` + Commit in `<HARNESS>`: `git -C <HARNESS> ls-files` zeigt ausschließlich Nutzlast (`.claude/…`, `.gitignore`, `CLAUDE.md`, `docs/…`, `licenses/…`, `oberflaeche/…`, `dashboard/…`).
 - [ ] Neustart, Sitzung in `<HARNESS>`: `/repo-status` läuft; die Statusleiste zeigt Repo/Branch; keine Onboarding-Rolle mehr aktiv.
-- [ ] Zweiter Lauf desselben `onboarding.mjs`-Befehls: nur „unveraendert" (Wiederholbarkeit).
+- [ ] Zweiter Lauf desselben `install.mjs`-Befehls: nur „unveraendert" (Wiederholbarkeit).
 - [ ] Windows-Hinweis war nötig (Zeile 53 noch offen) — oder nicht mehr (dann Hinweis streichen).
 
 **Ergebnis 2026-08-18 (durchgeführt, Ordner vorher geleert):** alle Punkte bestanden, bis auf den
@@ -117,13 +117,13 @@ loescht den Arbeitsordner, sagt: „Neu starten, Session im Harness-Ordner oeffn
 Abschnitt 0 — solange `[?]` drinsteht, fuehrt der Agent das Onboarding von selbst: fragt Zweck,
 Beteiligte, Sprache, Repos, offene Punkte; geht Remote/Push, Waechter-Schreibziele,
 settings.json, Sitzungs-Rollen, eigene Regeln durch; committet; loescht Abschnitt 0.
-→ steht in `vorlagen/CLAUDE.md`, Abschnitt 0.
+→ steht in `templates/CLAUDE.md`, Abschnitt 0.
 
 Entfallen: `ONBOARDING-FUER-CLAUDE.md` (Zwischenstand). Der Trockenlauf ist fuer den Menschen
 kein Schritt mehr — nur eine stille Vorpruefung des Agenten.
 
-Fuer die Werkbank zusaetzlich: `vorlagen/CLAUDE.md` Abschnitt 0 in den Generator uebernehmen;
-`pruefung/frisch-geklont.mjs` prueft weiterhin nur `CLAUDE.md` im Ziel (Zeile 191) — passt.
+Fuer die Werkbank zusaetzlich: `templates/CLAUDE.md` Abschnitt 0 in den Generator uebernehmen;
+`checks/frisch-geklont.mjs` prueft weiterhin nur `CLAUDE.md` im Ziel (Zeile 191) — passt.
 
 ## 6. Korrektur zu Abschnitt 5 (gleicher Tag): Onboarding-Prozedur raus aus der CLAUDE.md
 
@@ -131,17 +131,17 @@ Einwand des Auftraggebers, geprueft und bestaetigt: eine einmalige Prozedur geho
 eine Datei, die in jeder Sitzung als Wahrheit ueber den Workspace laedt — dasselbe Argument,
 mit dem die Paket-CLAUDE.md gestrichen wurde. Umgesetzt:
 
-- `harness/.claude/commands/onboarding.md` — die Prozedur als Befehl `/onboarding`.
-- `harness/.claude/onboarding-start.js` — SessionStart-Hook: schickt `/onboarding` als erste
+- `payload/claude/commands/onboarding.md` — die Prozedur als Befehl `/onboarding`.
+- `payload/claude/onboarding-start.js` — SessionStart-Hook: schickt `/onboarding` als erste
   Nachricht, NUR bei Anlass `startup` und NUR solange `CLAUDE.md` `[?]` enthaelt. Sonst still.
   Getestet: startup+[?] → feuert; resume → still; startup ohne [?] → still.
-- `vorlagen/CLAUDE.md` — Abschnitt 0 entfernt; nur ein Satz im Kopf verweist auf `/onboarding`.
-- `vorlagen/settings.json` — Hook verdrahtet (SessionStart, nach session-roles.js).
-- `vorlagen/gitignore-block.txt` — `onboarding.md` und `i-have-adhd/` freigeschaltet.
-- `onboarding.mjs` — Hook und Befehl in WAECHTER/BEFEHLE (Posten 35 → 38); Zeile 53
+- `templates/CLAUDE.md` — Abschnitt 0 entfernt; nur ein Satz im Kopf verweist auf `/onboarding`.
+- `templates/settings.json` — Hook verdrahtet (SessionStart, nach session-roles.js).
+- `templates/gitignore-block.txt` — `onboarding.md` und `i-have-adhd/` freigeschaltet.
+- `install.mjs` — Hook und Befehl in WAECHTER/BEFEHLE (Posten 35 → 38); Zeile 53
   `fileURLToPath` (Windows-Fix, `--paket` nicht mehr Pflicht); Skill `i-have-adhd` wird
-  jetzt installiert (war von ausgabeform.md und session-roles.js vorausgesetzt).
-- `pruefung/frisch-geklont.mjs`: vorher auf Windows 7 rot (Zeile-53-Bug), jetzt 9 gruen / 0 rot.
+  jetzt installiert (war von output-shape.md und session-roles.js vorausgesetzt).
+- `checks/frisch-geklont.mjs`: vorher auf Windows 7 rot (Zeile-53-Bug), jetzt 9 gruen / 0 rot.
 
-Fuer die Werkbank: alle sechs Punkte in den Generator uebernehmen; PAKET.json neu bauen
+Fuer die Werkbank: alle sechs Punkte in den Generator uebernehmen; manifest.json neu bauen
 (Stueckliste zaehlt noch 38 alte Posten mit alten Pruefsummen).
