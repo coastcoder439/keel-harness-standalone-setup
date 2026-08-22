@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-22T19:27:02.002Z",
+  "gebautAm": "2026-08-22T19:29:43.351Z",
   "posten": 49,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -68,32 +68,32 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15386,
-      "sha256": "a77ada83c04bf499"
+      "bytes": 15390,
+      "sha256": "a155cb7b1de819a5"
     },
     {
       "datei": "checks/frisch-geklont.mjs",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 10837,
-      "sha256": "c6a352452ac96c36"
+      "bytes": 10839,
+      "sha256": "d1ac2b4c7cb12284"
     },
     {
       "datei": "checks/paket-manifest.mjs",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 5333,
-      "sha256": "4d33f532c8c38a80"
+      "bytes": 5330,
+      "sha256": "fdc5232050581222"
     },
     {
       "datei": "install.mjs",
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 73341,
-      "sha256": "5475547446b38ac4"
+      "bytes": 73342,
+      "sha256": "7614a0e27afff7ce"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -372,8 +372,8 @@
       "herkunft": "docs/11-vollstaendigkeitspruefung.md",
       "quellordner": "werkbank",
       "gesaeubert": 2,
-      "bytes": 25170,
-      "sha256": "54dbda5e832f058d"
+      "bytes": 25162,
+      "sha256": "1be5d7a2133fb0b4"
     },
     {
       "datei": "payload/docs/rebuild-guide.md",
@@ -388,24 +388,24 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 1590,
-      "sha256": "02a18cf9f74517cf"
+      "bytes": 1582,
+      "sha256": "085c2ffb6f711723"
     },
     {
       "datei": "payload/docs/tool-sourcing.md",
       "herkunft": "docs/12-werkzeug-beschaffung.md",
       "quellordner": "werkbank",
       "gesaeubert": 1,
-      "bytes": 4588,
-      "sha256": "4d46a1352313cf46"
+      "bytes": 4580,
+      "sha256": "cfe9ad0d004a2c21"
     },
     {
       "datei": "templates/CLAUDE.md",
       "herkunft": "erzeugt von paketieren.mjs",
       "quellordner": "erzeugt",
       "gesaeubert": 0,
-      "bytes": 4230,
-      "sha256": "3be4a8e1a14cf660"
+      "bytes": 4226,
+      "sha256": "cd504bf3e1385449"
     },
     {
       "datei": "templates/gitignore-block.txt",

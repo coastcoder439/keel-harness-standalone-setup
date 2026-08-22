@@ -325,14 +325,14 @@ Die operative Kurzfassung liegt als Regel neben den zehn bestehenden ECC-Regeln 
 dadurch **in jeder Session dieses Workspace automatisch geladen** (Tree-Walk über `.claude/`):
 
 ```
-.claude/rules/ecc/common/vollstaendigkeit.md
+.claude/rules/ecc/common/completeness.md
 ```
 
 `.claude/` ist per `.gitignore` ausgenommen (Fremd-Klon plus benutzerabhängiger Inhalt).
 Damit die Regel einen Neuklon überlebt, ist **genau diese eine Datei** erzwungen versioniert:
 
 ```bash
-git add -f .claude/rules/ecc/common/vollstaendigkeit.md
+git add -f .claude/rules/ecc/common/completeness.md
 ```
 
 **Arbeitsteilung der beiden Dateien:** Dieses Dokument trägt die Beweislage und die

@@ -7,7 +7,7 @@
 // einem Generator AUSSERHALB dieses Bausatzes -- der liegt hier nicht bei. Folge:
 // Sobald hier eine Datei dazukam, log das Manifest. Stand 22.08.2026 zaehlte es
 // 38 Posten, im Paket lagen 48; onboarding.md, sessionpost-guard.js,
-// projekt-kontext.js, arbeitsweise.md und werkzeug-landschaft.md fehlten darin.
+// project-context.js, working-method.md und tool-landscape.md fehlten darin.
 //
 // Ein Verzeichnis, das den Bestand falsch angibt, ist schlechter als keins: es
 // sieht aus wie eine Zusage. Deshalb wird es hier aus dem Paket selbst abgeleitet,

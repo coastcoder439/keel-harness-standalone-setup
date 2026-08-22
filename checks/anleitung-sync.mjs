@@ -9,7 +9,7 @@
 // nachbaut, hat die Dateien noch nicht -- ein blosser Verweis waere fuer ihn wertlos.
 //
 // Der Preis sind zwei Staende, die auseinanderlaufen. Am 21.08.2026 belegt: der
-// Projekt-Kontext-Check und die Dauer-Regel arbeitsweise.md standen in der
+// Projekt-Kontext-Check und die Dauer-Regel working-method.md standen in der
 // Anleitung, aber in keiner installierten Datei -- jede frische Installation kam
 // ohne sie. Gefunden wurde das von Hand, durch einen Audit; ohne den waere es
 // weiter unentdeckt geblieben.
@@ -342,7 +342,7 @@ function main() {
       "\nBEIDE STAENDE MUESSEN GLEICH SEIN. Welcher der richtige ist, entscheidet der\n" +
         "Fall: Ist die Datei die gewollte Neuerung, wird die Anleitung nachgezogen.\n" +
         "Nennt die Anleitung etwas, das im Bausatz fehlt, ist die Datei nachzuziehen --\n" +
-        "so entstanden am 21.08.2026 die Luecken (Projekt-Kontext-Check, arbeitsweise.md).\n" +
+        "so entstanden am 21.08.2026 die Luecken (Projekt-Kontext-Check, working-method.md).\n" +
         "Was NICHT geht: eine Seite stehen lassen und die Abweichung vermerken."
     );
     process.exit(1);
