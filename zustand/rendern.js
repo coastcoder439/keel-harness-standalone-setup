@@ -599,7 +599,7 @@ function tiefeArticles(d) {
   ${abschnitt("Die Mess-Prüfer", "Skripte, die diese Seite selbst kontrollieren. Ein Prüfer, der nie fehlschlägt, prüft nichts.", laeufe, p.status)}
   ${abschnitt(
     "Betriebsbericht (ECC)",
-    rd.grund || "Der mitgelieferte Betriebsbericht misst allgemeine Projekt-Reife, nicht unseren Harness — deshalb steht er hier unten und nicht oben.",
+    rd.grund || rd.notiz || "Der mitgelieferte Betriebsbericht misst allgemeine Projekt-Reife, nicht unseren Harness — deshalb steht er hier unten und nicht oben.",
     anforderungen +
       ((rd.naechsteSchritte || []).length
         ? `<p class="block-unter">Vorgeschlagene nächste Schritte:</p><ul class="fakten">${rd.naechsteSchritte.map((x) => `<li>${md(x)}</li>`).join("")}</ul>`

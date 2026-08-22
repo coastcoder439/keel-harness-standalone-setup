@@ -92,7 +92,7 @@ const DOC13 = "docs/13-arbeitsweise-standard.md";
 function effortStufen(wurzel) {
   const befehl = `$EDITOR ${DOC13}   # Abschnitt „2a · Modell- und Effort-Wahl“`;
   const zeilen = lesen(wurzel, DOC13);
-  if (!zeilen) return fehlt("effort", "Denkbudget je Aufgabenform", DOC13, "Datei nicht gefunden", befehl);
+  if (!zeilen) return fehlt("effort", "Denkbudget je Aufgabenform", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Die hier geltende Arbeitsweise steht in .claude/rules/ecc/common/arbeitsweise.md.", befehl);
 
   const t = tabelleZiehen(zeilen, ["Stufe", "Überspringen, wenn", "Aufsteigen, wenn"]);
   if (!t) {
@@ -120,7 +120,7 @@ function effortStufen(wurzel) {
 function waechterkanon(wurzel) {
   const befehl = `$EDITOR .claude/settings.local.json   # hooks.PreToolUse / hooks.Stop / hooks.SessionStart`;
   const zeilen = lesen(wurzel, DOC13);
-  if (!zeilen) return fehlt("waechterkanon", "Was ein Wächter tun darf", DOC13, "Datei nicht gefunden", befehl);
+  if (!zeilen) return fehlt("waechterkanon", "Was ein Wächter tun darf", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Was hier verdrahtet ist, misst der Bereich „Wächter“.", befehl);
 
   const t = tabelleZiehen(zeilen, ["Werkzeug", "Zweck", "Ort / Schalter"]);
   if (!t) return fehlt("waechterkanon", "Was ein Wächter tun darf", DOC13, "Werkzeugkanon-Tabelle nicht gefunden", befehl);
@@ -146,7 +146,7 @@ const POLICY = "konfig/routing-policy.json";
 function modellwahl(wurzel) {
   const befehl = `$EDITOR ${POLICY}`;
   const p = path.join(wurzel, POLICY);
-  if (!fs.existsSync(p)) return fehlt("modellwahl", "Modellwahl je Aufgabentyp", POLICY, "Policy-Datei nicht gefunden", befehl);
+  if (!fs.existsSync(p)) return fehlt("modellwahl", "Modellwahl je Aufgabentyp", POLICY, "Gehoert zur Ursprungs-Werkbank: konfig/routing-policy.json wird von diesem Harness nicht mitgeliefert.", befehl);
   let policy;
   try {
     policy = JSON.parse(fs.readFileSync(p, "utf8"));
@@ -191,15 +191,11 @@ function dauerRegeln(wurzel) {
   if (!ort) {
     return fehlt("dauerregeln", "Dauer-Regeln (jede Sitzung)", ".claude/rules/…/common", "kein common-Regelordner gefunden", "$EDITOR .claude/rules/ecc/common/");
   }
-  if (!fs.existsSync(ort.quelle)) {
-    return fehlt(
-      "dauerregeln",
-      "Dauer-Regeln (jede Sitzung)",
-      ort.rel,
-      ".ecc-src/rules/common fehlt — ohne die Quelle ist Eigenbau nicht von Fremd-Klon zu unterscheiden. Das ist kein „keine Dauer-Regeln“.",
-      `$EDITOR ${ort.rel}/`
-    );
-  }
+  // Frueher stieg die Regel hier aus, wenn der Fremd-Klon .ecc-src/ fehlte. In einem
+  // Standalone-Harness gibt es den nie -- die Folge war ein Dauer-Befund "unlesbar"
+  // fuer Regeln, die vollstaendig vorliegen und in jeder Sitzung laden. Unbestimmbar
+  // ist ohne die Quelle nur die HERKUNFT (Eigenbau vs. mitgeliefert), nicht der Bestand.
+  const herkunftBestimmbar = fs.existsSync(ort.quelle);
 
   const eintraege = [];
   for (const name of fs.readdirSync(ort.ordner).filter((f) => f.endsWith(".md")).sort()) {
@@ -236,7 +232,9 @@ function dauerRegeln(wurzel) {
     befehl: `$EDITOR ${ort.rel}/<datei>.md`,
     art: "regelliste",
     eintraege,
-    abgrenzung: `Eigenbau = liegt in ${ort.rel}, aber nicht in .ecc-src/rules/common (Fremd-Klon).`,
+    abgrenzung: herkunftBestimmbar
+      ? `Eigenbau = liegt in ${ort.rel}, aber nicht in .ecc-src/rules/common (Fremd-Klon).`
+      : `Alle ${eintraege.length} Regeln aus ${ort.rel}. Herkunft (Eigenbau vs. mitgeliefert) ist hier nicht bestimmbar — dafuer braeuchte es den Fremd-Klon .ecc-src/, der nicht zu diesem Harness gehoert.`,
   };
 }
 
@@ -275,8 +273,11 @@ function sicherungsregel(wurzel) {
   if (!zeilen) return fehlt("sicherung", "Sichern im geteilten Arbeitsbaum", DATEI, "CLAUDE.md nicht gefunden", befehl);
 
   const anker = zeileZiehen(zeilen, /NIE `git add` \+ `git commit`/);
-  const committen = zeileZiehen(zeilen, /^\s*git commit -m .*--\s*<pfad>/);
-  const pruefen = zeileZiehen(zeilen, /^\s*git diff HEAD\s+--\s*<pfad>/);
+  // Ohne Zeilenanfangs-Anker: in der CLAUDE.md stehen die Befehle im Fliesstext
+  // ("sondern `git commit ...`"), nicht als eigene Zeile. Mit dem alten Anker meldete
+  // die Regel "unvollstaendig gezogen", obwohl beide Befehle dastanden.
+  const committen = zeileZiehen(zeilen, /git commit -m .*--\s*<pfad>/);
+  const pruefen = zeileZiehen(zeilen, /git diff HEAD\s+--\s*<pfad>/);
   if (!anker || !committen || !pruefen) {
     return fehlt(
       "sicherung",
