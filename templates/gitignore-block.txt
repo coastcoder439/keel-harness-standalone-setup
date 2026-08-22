@@ -29,11 +29,6 @@
 .claude/rules/ecc/*
 !.claude/rules/ecc/common/
 .claude/rules/ecc/common/*
-!.claude/rules/ecc/common/kein-oneshot.md
-!.claude/rules/ecc/common/vollstaendigkeit.md
-!.claude/rules/ecc/common/werkzeuge.md
-!.claude/rules/ecc/common/ausgabeform.md
-!.claude/rules/ecc/common/arbeitsweise.md
 !.claude/rules/ecc/common/no-oneshot.md
 !.claude/rules/ecc/common/completeness.md
 !.claude/rules/ecc/common/tools.md
