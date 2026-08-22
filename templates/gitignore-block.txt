@@ -34,6 +34,12 @@
 !.claude/rules/ecc/common/tools.md
 !.claude/rules/ecc/common/output-shape.md
 !.claude/rules/ecc/common/working-method.md
+!.claude/rules/keel/
+!.claude/rules/keel/no-oneshot.md
+!.claude/rules/keel/completeness.md
+!.claude/rules/keel/tools.md
+!.claude/rules/keel/output-shape.md
+!.claude/rules/keel/working-method.md
 
 # Rechnerlokal, NIE committen: die Befehls-Freigabeliste.
 .claude/settings.local.json
