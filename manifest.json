@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-22T19:45:53.159Z",
+  "gebautAm": "2026-08-22T19:53:48.225Z",
   "posten": 49,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -52,16 +52,16 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 8818,
-      "sha256": "c087061f2111746b"
+      "bytes": 8814,
+      "sha256": "8885d9c72749e18c"
     },
     {
       "datei": "README.md",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 5763,
-      "sha256": "f1dc6d1ce1b17dc1"
+      "bytes": 5759,
+      "sha256": "d7468b731debb18a"
     },
     {
       "datei": "checks/anleitung-sync.mjs",
@@ -92,8 +92,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 73342,
-      "sha256": "7614a0e27afff7ce"
+      "bytes": 73298,
+      "sha256": "2f6c4ce8117fb58d"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -316,24 +316,24 @@
       "herkunft": "zustand/README.md",
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 4160,
-      "sha256": "6be2c753fa5e6a02"
+      "bytes": 4154,
+      "sha256": "85633c7d8825fe76"
     },
     {
       "datei": "payload/dashboard/classify.js",
       "herkunft": "zustand/einordnen.js",
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 13895,
-      "sha256": "b35eb49ce7da139b"
+      "bytes": 13893,
+      "sha256": "844dcbabcb554464"
     },
     {
       "datei": "payload/dashboard/index.js",
       "herkunft": "zustand/zustand.js",
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 5357,
-      "sha256": "ac0c7c936aed6680"
+      "bytes": 5355,
+      "sha256": "e6e83eb480ce0e43"
     },
     {
       "datei": "payload/dashboard/inventory.js",
@@ -356,8 +356,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 50669,
-      "sha256": "042ca6a077064025"
+      "bytes": 51163,
+      "sha256": "e779de297f998dc0"
     },
     {
       "datei": "payload/dashboard/rules.js",
@@ -404,8 +404,8 @@
       "herkunft": "erzeugt von paketieren.mjs",
       "quellordner": "erzeugt",
       "gesaeubert": 0,
-      "bytes": 4226,
-      "sha256": "cd504bf3e1385449"
+      "bytes": 4228,
+      "sha256": "bbf2afff7fac6542"
     },
     {
       "datei": "templates/gitignore-block.txt",
@@ -413,7 +413,7 @@
       "quellordner": "erzeugt",
       "gesaeubert": 0,
       "bytes": 1765,
-      "sha256": "b0317f0efce3531f"
+      "sha256": "73e21602128abf69"
     },
     {
       "datei": "templates/settings.json",

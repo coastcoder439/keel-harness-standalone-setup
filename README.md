@@ -110,7 +110,7 @@ Wer etwas ändern will, ändert es an der Quelle in der Werkbank — nicht hier.
 |---|---|
 | `payload/` | Die Nutzlast: `.claude` mit Wächter-Hooks, Dauer-Regeln, Befehlen (`/repo-status`, `/save-work`, `/session-map`, `/tell-session`, `/onboarding`), Skills |
 | `templates/` | `CLAUDE.md`, `settings.json` und der `.gitignore`-Block, die ins Ziel geschrieben werden |
-| `payload/dashboard/` | Zustandsseite: misst und zeigt an, ein Aufruf |
+| `payload/dashboard/` | Dashboard: misst und zeigt an, ein Aufruf |
 | `payload/docs/`, `licenses/` | Langfassungen, auf die die Regeln verweisen; Lizenzen der übernommenen Skills |
 | `install.mjs` | Installiert die Nutzlast nach `<HARNESS>` (fragt selbst nichts ab, löscht nichts) |
 | `PAKET-ANLEITUNG.md` | Der Weg von Hand, mit Fehlertabelle |

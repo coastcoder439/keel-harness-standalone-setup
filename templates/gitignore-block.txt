@@ -41,10 +41,10 @@
 # Der ECC-Fremd-Klon (Update-Quelle), falls er spaeter danebengelegt wird.
 .ecc-src/
 
-# Die Zustandsseite ist ein STAND, kein Quelltext. Eine eingecheckte Fassung
+# Die Dashboard ist ein STAND, kein Quelltext. Eine eingecheckte Fassung
 # waere sofort veraltet und wuerde trotzdem als aktuell gelesen.
-zustand.html
-zustand.json
+dashboard.html
+dashboard.json
 
 # Zugaenge: nie.
 .env
