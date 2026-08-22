@@ -1,5 +1,12 @@
 # 10 — Nachbau-Anleitung: AIOS-Workspace mit Projekt-Repos
 
+> **⚠️ NICHT MASSGEBLICH — die echten Dateien gewinnen.** Was installiert wird, bestimmen allein
+> der Installer `onboarding.mjs` und die echten Dateien (`vorlagen/`, `harness/.claude/`). Diese
+> Anleitung ist der Entwurfs- und Begründungs-Bericht; bei Widerspruch zwischen ihr und den
+> Dateien gelten die Dateien. Sie wird nicht mehr in Installationen mitkopiert. (Genau dieser
+> Parallel-Bestand hat die Drift verursacht — der Projekt-Kontext-Check und `arbeitsweise.md`
+> standen hier, aber nicht in den installierten Dateien.)
+
 > ### 🔧 Ist-Abgleich dieser Werkbank (Stand 31.07.2026)
 >
 > Die Spezifikation steht in [`10-nachbau-anleitung.html`](10-nachbau-anleitung.html) und beschreibt **Anforderungen**, keinen Bestand. Was *diese* Werkbank davon erfüllt, steht hier — und nur hier.
