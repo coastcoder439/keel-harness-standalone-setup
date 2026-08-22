@@ -566,7 +566,7 @@ code{font-family:var(--mono);font-size:.92em;background:var(--gedaempft);padding
     <div class="leiste-fuss">
       Gemessen am ${esc(gemessen)}.<br><br>
       Diese Seite ist eine Momentaufnahme, kein Live-Blick. Neu erzeugen mit:
-      <code>node zustand/zustand.js</code>
+      <code>node dashboard/index.js</code>
     </div>
   </aside>
   <main class="haupt">
