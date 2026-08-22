@@ -33,6 +33,21 @@ function lesen(wurzel, relPfad) {
   }
 }
 
+// Zwei verschiedene Dinge, die frueher denselben Zustand trugen:
+// - fehlt()    = sollte da sein, ist es nicht. Das ist ein Befund.
+// - entfaellt()= gehoert gar nicht zu diesem Harness (Dokument der Ursprungs-Werkbank).
+//   Das ist KEIN Befund. Beides "unlesbar" zu nennen hiess: die Uebersicht listete drei
+//   bewusste Auslassungen unter "Braucht Aufmerksamkeit" -- und wer dreimal umsonst
+//   hinsieht, sieht beim vierten Mal nicht mehr hin.
+const entfaellt = (id, titel, quelle, grund) => ({
+  id,
+  titel,
+  status: "entfaellt",
+  grund,
+  quelle: { datei: quelle, zeile: null },
+  befehl: null,
+});
+
 const fehlt = (id, titel, quelle, grund, befehl) => ({
   id,
   titel,
@@ -92,7 +107,7 @@ const DOC13 = "docs/13-arbeitsweise-standard.md";
 function effortStufen(wurzel) {
   const befehl = `$EDITOR ${DOC13}   # Abschnitt „2a · Modell- und Effort-Wahl“`;
   const zeilen = lesen(wurzel, DOC13);
-  if (!zeilen) return fehlt("effort", "Denkbudget je Aufgabenform", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Die hier geltende Arbeitsweise steht in .claude/rules/keel/working-method.md.", befehl);
+  if (!zeilen) return entfaellt("effort", "Denkbudget je Aufgabenform", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Die hier geltende Arbeitsweise steht in .claude/rules/keel/working-method.md.", befehl);
 
   const t = tabelleZiehen(zeilen, ["Stufe", "Überspringen, wenn", "Aufsteigen, wenn"]);
   if (!t) {
@@ -120,7 +135,7 @@ function effortStufen(wurzel) {
 function waechterkanon(wurzel) {
   const befehl = `$EDITOR .claude/settings.local.json   # hooks.PreToolUse / hooks.Stop / hooks.SessionStart`;
   const zeilen = lesen(wurzel, DOC13);
-  if (!zeilen) return fehlt("waechterkanon", "Was ein Wächter tun darf", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Was hier verdrahtet ist, misst der Bereich „Wächter“.", befehl);
+  if (!zeilen) return entfaellt("waechterkanon", "Was ein Wächter tun darf", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Was hier verdrahtet ist, misst der Bereich „Wächter“.", befehl);
 
   const t = tabelleZiehen(zeilen, ["Werkzeug", "Zweck", "Ort / Schalter"]);
   if (!t) return fehlt("waechterkanon", "Was ein Wächter tun darf", DOC13, "Werkzeugkanon-Tabelle nicht gefunden", befehl);
@@ -146,7 +161,7 @@ const POLICY = "konfig/routing-policy.json";
 function modellwahl(wurzel) {
   const befehl = `$EDITOR ${POLICY}`;
   const p = path.join(wurzel, POLICY);
-  if (!fs.existsSync(p)) return fehlt("modellwahl", "Modellwahl je Aufgabentyp", POLICY, "Gehoert zur Ursprungs-Werkbank: konfig/routing-policy.json wird von diesem Harness nicht mitgeliefert.", befehl);
+  if (!fs.existsSync(p)) return entfaellt("modellwahl", "Modellwahl je Aufgabentyp", POLICY, "Gehoert zur Ursprungs-Werkbank: konfig/routing-policy.json wird von diesem Harness nicht mitgeliefert.", befehl);
   let policy;
   try {
     policy = JSON.parse(fs.readFileSync(p, "utf8"));
@@ -329,6 +344,7 @@ function regeln(wurzel) {
     liste: alle,
     zuordnung: ZUORDNUNG,
     unlesbar: alle.filter((r) => r.status === "unlesbar").length,
+    entfaellt: alle.filter((r) => r.status === "entfaellt").length,
   };
 }
 

@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-22T20:02:15.330Z",
+  "gebautAm": "2026-08-22T20:36:00.741Z",
   "posten": 49,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -332,8 +332,8 @@
       "herkunft": "zustand/zustand.js",
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 5355,
-      "sha256": "e6e83eb480ce0e43"
+      "bytes": 5487,
+      "sha256": "178470260db70cc4"
     },
     {
       "datei": "payload/dashboard/inventory.js",
@@ -348,24 +348,24 @@
       "herkunft": "zustand/messen.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 49589,
-      "sha256": "b8f56fd42c8e695d"
+      "bytes": 49757,
+      "sha256": "bb156b8997531f9f"
     },
     {
       "datei": "payload/dashboard/render.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 51157,
-      "sha256": "6fadf7c5bb21387e"
+      "bytes": 51598,
+      "sha256": "12093aeda20c946d"
     },
     {
       "datei": "payload/dashboard/rules.js",
       "herkunft": "zustand/regeln.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 14378,
-      "sha256": "192fbb6192ee3272"
+      "bytes": 15070,
+      "sha256": "7070b2287c439550"
     },
     {
       "datei": "payload/docs/completeness-check.md",

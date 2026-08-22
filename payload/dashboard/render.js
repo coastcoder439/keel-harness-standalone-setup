@@ -101,7 +101,9 @@ function postenIndex(m, regeln) {
   for (const r of regeln.liste || []) {
     nimm({
       bereich: "regeln", titel: r.titel, unter: (r.quelle && r.quelle.datei) || "",
-      zustand: r.status === "gezogen" ? "ok" : "unlesbar",
+      // Drei Zustaende, nicht zwei: gelesen · gehoert nicht zu diesem Harness ·
+      // sollte lesbar sein und ist es nicht. Nur das Letzte ist ein Befund.
+      zustand: r.status === "gezogen" ? "ok" : r.status === "entfaellt" ? "entfaellt" : "unlesbar",
       quelle: (r.quelle && r.quelle.datei) || null, befehl: r.befehl || null,
       warum: r.grund || r.abgrenzung || null, roh: r,
     });
@@ -507,6 +509,7 @@ details.roh pre{margin:0;padding:0 13px 12px;font-family:var(--mono);font-size:1
     fehlt:    { wort: "Nicht vorhanden",farbe: "var(--st-fehlt)",    rang: 3 },
     hinweis:  { wort: "Hinweis",        farbe: "var(--st-hinweis)",  rang: 2 },
     ok:       { wort: "In Ordnung",     farbe: "var(--st-ok)",       rang: 1 },
+    entfaellt:{ wort: "Nicht Teil dieses Harness", farbe: "var(--st-ohne)", rang: 0 },
     ohne:     { wort: "Ohne gemessenen Zustand", farbe: "var(--st-ohne)", rang: 0 }
   };
   function zst(p) { return p.zustand || "ohne"; }
@@ -614,7 +617,7 @@ details.roh pre{margin:0;padding:0 13px 12px;font-family:var(--mono);font-size:1
   }
 
   function sichtBrett(liste) {
-    var reihen = ["unlesbar", "fehlt", "hinweis", "ok", "ohne"];
+    var reihen = ["unlesbar", "fehlt", "hinweis", "ok", "entfaellt", "ohne"];
     return '<div class="brett">' + reihen.map(function (k) {
       var i = zInfo(k);
       var karten = liste.filter(function (p) { return zst(p) === k || (k === "unlesbar" && zst(p) === "befund"); });
@@ -708,7 +711,10 @@ details.roh pre{margin:0;padding:0 13px 12px;font-family:var(--mono);font-size:1
         + '<div class="k-wert"' + (x[3] ? ' style="color:' + x[3] + '"' : "") + ">" + esc(x[1]) + "</div>"
         + '<div class="k-quelle">' + esc(x[2]) + "</div></div>";
     }).join("") + "</div>";
-    var offene = POSTEN.filter(function (p) { return p.zustand && p.zustand !== "ok"; });
+    // "entfaellt" gehoert NICHT hierher: es ist eine bewusste Auslassung, kein Befund.
+    var offene = POSTEN.filter(function (p) {
+      return p.zustand && p.zustand !== "ok" && p.zustand !== "entfaellt";
+    });
     h += '<div class="karte"><div class="karte-kopf">Braucht Aufmerksamkeit<span class="zahl">' + offene.length + "</span></div>";
     h += offene.length ? offene.map(function (p, i) { return zeile(p, i); }).join("")
       : '<div class="karte-notiz" style="border:0">Nichts. Alle Bereiche mit gemessenem Zustand sind in Ordnung.</div>';
@@ -765,7 +771,7 @@ details.roh pre{margin:0;padding:0 13px 12px;font-family:var(--mono);font-size:1
   function filterzeile() {
     if (S.flaeche === "ueberblick" || S.flaeche === "rohdaten") return "";
     var b = basis();
-    var h = ["unlesbar", "fehlt", "hinweis", "ok", "ohne"].map(function (k) {
+    var h = ["unlesbar", "fehlt", "hinweis", "ok", "entfaellt", "ohne"].map(function (k) {
       var n = b.filter(function (p) { return zst(p) === k || (k === "unlesbar" && zst(p) === "befund"); }).length;
       if (!n) return "";
       var i = zInfo(k);
