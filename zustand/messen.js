@@ -157,7 +157,13 @@ function gruppe({ id, titel, ordner, art, laden, notiz, wurzel, hooks }) {
   // Namen -> Einordnung, damit die Anzeige je Posten zeigen kann, woher er kommt.
   const nachName = new Map((einordnung?.eintraege || []).map((e) => [path.basename(e.pfad).replace(/\.md$/, ""), e]));
   const postenPlus = posten.map((p) => {
-    const e = nachName.get(String(p.name || "").split(" · ")[0]);
+    // Befehle liefert der Lader mit fuehrendem Schraegstrich ("/onboarding"), die
+    // Einordnung schluesselt aber nach Dateiname ohne Endung ("onboarding"). Ohne
+    // diese Angleichung bekommt KEIN Befehl Herkunft und Ladeart -- still, weil die
+    // Gruppensumme trotzdem stimmt.
+    let schluessel = String(p.name || "").split(" · ")[0];
+    if (schluessel.startsWith("/")) schluessel = schluessel.slice(1);
+    const e = nachName.get(schluessel);
     return e ? { ...p, herkunft: e.herkunft, ladeart: e.ladeart } : p;
   });
 
@@ -314,7 +320,7 @@ function werkzeugGruppe(wurzel) {
   const posten = [];
   let rubrik = null;
   for (const z of zeilen) {
-    const u = z.match(/^##s+(.+?)s*$/);
+    const u = z.match(/^##\s+(.+?)\s*$/);
     if (u) { rubrik = u[1]; continue; }
     if (!rubrik || !z.trim().startsWith("|")) continue;
     const spalten = z.split("|").map((s) => s.trim());
