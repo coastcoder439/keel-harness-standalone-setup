@@ -1,12 +1,5 @@
 # 10 — Nachbau-Anleitung: AIOS-Workspace mit Projekt-Repos
 
-> **⚠️ NICHT MASSGEBLICH — die echten Dateien gewinnen.** Was installiert wird, bestimmen allein
-> der Installer `onboarding.mjs` und die echten Dateien (`vorlagen/`, `harness/.claude/`). Diese
-> Anleitung ist der Entwurfs- und Begründungs-Bericht; bei Widerspruch zwischen ihr und den
-> Dateien gelten die Dateien. Sie wird nicht mehr in Installationen mitkopiert. (Genau dieser
-> Parallel-Bestand hat die Drift verursacht — der Projekt-Kontext-Check und `arbeitsweise.md`
-> standen hier, aber nicht in den installierten Dateien.)
-
 > ### 🔧 Ist-Abgleich dieser Werkbank (Stand 31.07.2026)
 >
 > Die Spezifikation steht in [`10-nachbau-anleitung.html`](10-nachbau-anleitung.html) und beschreibt **Anforderungen**, keinen Bestand. Was *diese* Werkbank davon erfüllt, steht hier — und nur hier.
@@ -433,20 +426,38 @@ Die Dateien aus §6.3–§6.6 in `<WORKSPACE>/.claude/` anlegen. `settings.json`
 ## 6. Alle Config-Dateien im Volltext
 
 ### 6.1 `.claude/settings.json`
-Aktiviert das Plugin (nur hier) und die zwei Hooks. **`<WORKSPACE_ABS>` im Stop-Command anpassen.**
+Verdrahtet alle Wächter: drei bei Sitzungsstart (Rollen · Onboarding-Frage · Projekt-Kontext-Frage),
+einen am Sitzungsende (Backup-Warnung) und vier vor Werkzeugaufrufen (drei an Bash, einer an die
+Sitzungs-Nachrichten) plus die Statusleiste. **Nichts von Hand anzupassen** — alle Pfade laufen über
+`$CLAUDE_PROJECT_DIR`, den Claude Code selbst setzt; absolute Rechnerpfade und ein
+`enabledPlugins`-Eintrag stehen bewusst nicht darin (Weg A, siehe §4).
 
-> **Der zweite Stop-Eintrag (`pruefstand-warn.js`) ist bedingt und im Nachbau wegzulassen** — er ruft zwei Prüfer, die diese Anleitung nicht mitliefert und die im frischen Nachbau ohnehin nicht laufen könnten. Begründung und beide Wege: §6.8.11a.
+> Dieser Block ist eine **Volltext-Kopie** von `vorlagen/settings.json`. Er wird von
+> `pruefung/anleitung-sync.mjs` gegen die echte Datei geprüft — läuft er auseinander, meldet der
+> Abgleich Drift und `--nachziehen` gleicht ihn an. Von Hand ändern gehört in die echte Datei,
+> nicht hierher.
 ```json
 {
-  "enabledPlugins": { "<PLUGIN>": true },
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|clear",
         "hooks": [
           {
             "type": "command",
-            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"SessionStart\",\"additionalContext\":\"Projekt-Kontext-Check (Session-Start): Bevor du die erste Aufgabe angehst, klaere kurz per AskUserQuestion den Projekt-Kontext dieser Session. Optionen: a) NEUES Projekt - eigener Ordner in user-projects/ plus eigenes privates GitHub-Repo, Ordnername gleich Repo-Name. b) gehoert zu einem BESTEHENDEN user-projects-Ordner - zu welchem. c) reine Random-, Frage- oder Recherche-Session - kein Repo noetig. d) Arbeit am AIOS-Harness selbst - Workspace-Repo. Wenn die erste User-Nachricht den Kontext schon eindeutig macht, den Dialog ueberspringen.\"}}'",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/session-roles.js\"",
+            "timeout": 10,
+            "statusMessage": "Sitzungs-Rollen laden"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/onboarding-start.js\"",
+            "timeout": 10,
+            "statusMessage": "Onboarding offen? (CLAUDE.md [AUSFUELLEN])"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/projekt-kontext.js\"",
+            "timeout": 10,
             "statusMessage": "Projekt-Kontext-Check"
           }
         ]
@@ -457,19 +468,55 @@ Aktiviert das Plugin (nur hier) und die zwei Hooks. **`<WORKSPACE_ABS>` im Stop-
         "hooks": [
           {
             "type": "command",
-            "command": "node \"<WORKSPACE_ABS>/.claude/hooks/uncommitted-warn.js\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/uncommitted-warn.js\"",
             "async": true,
             "statusMessage": "Backup-Check (ungesicherte Arbeit)"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/danger-guard.js\"",
+            "timeout": 10,
+            "statusMessage": "danger-guard (zerstoerende Befehle)"
           },
           {
             "type": "command",
-            "command": "node \"<WORKSPACE_ABS>/.claude/hooks/pruefstand-warn.js\"",
-            "async": true,
-            "statusMessage": "Pruefstand (Drift + Eigenbau-Sicherung)"
+            "if": "Bash(git *)",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/git-guard.js\"",
+            "timeout": 10,
+            "statusMessage": "git-guard (Ziel-Repo + Lock)"
+          },
+          {
+            "type": "command",
+            "if": "Bash(git *)",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/commit-pathspec-guard.js\"",
+            "timeout": 10,
+            "statusMessage": "commit-pathspec-guard (geteilter Index)"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__ccd_session_mgmt__(send_message|list_sessions)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/sessionpost-guard.js\"",
+            "timeout": 10,
+            "statusMessage": "sessionpost-guard (knappe Inter-Session-Nachrichten)"
           }
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node \"$CLAUDE_PROJECT_DIR/.claude/statusline.js\""
   }
 }
 ```
@@ -959,7 +1006,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const WORKSPACE = process.env.CLAUDE_PROJECT_DIR || path.resolve(__dirname, '..', '..');
+const WORKSPACE = process.env.CLAUDE_PROJECT_DIR || path.resolve(__dirname, '..');
 const WORKSPACES_ROOT = path.resolve(WORKSPACE, '..');
 const THROTTLE_MIN = 15, FILE_THRESHOLD = 8, AGE_THRESHOLD_MIN = 120;
 
@@ -987,7 +1034,7 @@ function main(rohEingabe) {
     const d = JSON.parse(rohEingabe || '{}');
     if (d.session_id) sid = String(d.session_id).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || 'global';
   } catch (e) {}
-  const stamp = path.join(os.tmpdir(), `<workspace>-uncommitted-warn-${sid}.stamp`);
+  const stamp = path.join(os.tmpdir(), `harness-uncommitted-warn-${sid}.stamp`);
 
   try {
     const last = parseInt(fs.readFileSync(stamp, 'utf8'), 10);
@@ -1084,7 +1131,7 @@ description: Sichert die ungesicherte Arbeit DIESES Kontexts -- commit + push in
 1. Ziel-Repo ermitteln (aus dem Gespraech; wenn unklar: `node .claude/repo-status.js` zeigen + fragen. NIE raten).
    Moegliche Ziele: die **Werkbank** selbst (cwd) -- oder ein **Projekt-Repo unter
    `user-projects/`**. Die liegen auch ZWEI Ebenen tief (`user-projects/<projekt>/<feature>`),
-   der Fork ist eines davon (`user-projects/<produkt-fork>`).
+   (ein Produkt-Fork oder ein Feature-Repo ist typischerweise eines davon).
    `repo-status.js` sucht rekursiv und listet sie alle -- die Liste von dort nehmen,
    keine Pfade aus dem Kopf.
 2. `git -C "<repo>" status --porcelain` -- ungesicherte Aenderungen? Wenn nein: fertig.
@@ -1222,8 +1269,20 @@ function sh(cmd, cwd) {
 }
 
 function laeuftGit() {
-  const ps = sh("ps -Ao command=") || "";
-  return ps.split("\n").some((z) => /(^|\/)git(\s|$)/.test(z.trim()));
+  // [Mac->Win-Fix 21.08.2026, U2] Prozessliste plattformabhaengig. 'ps -Ao' existiert
+  // unter Windows nicht (weder cmd.exe noch das MSYS-ps der Git-Bash kennen -A/-o) ->
+  // sh() gab null -> laeuftGit() lieferte IMMER false -> die 0-Byte-index.lock wurde
+  // auch geloescht, waehrend eine Parallel-Sitzung real ein git hielt (Index-Beschaedigung).
+  const roh =
+    process.platform === "win32"
+      ? sh('tasklist /FI "IMAGENAME eq git.exe" /NH')
+      : sh("ps -Ao command=");
+  // Fail-SAFE statt fail-open: laesst sich die Prozessliste nicht ermitteln (null),
+  // konservativ annehmen, dass git laeuft -> die Lock NICHT entfernen. Ein stehender
+  // Hinweis ist harmlos, eine zerschossene Index-Datei nicht.
+  if (roh == null) return true;
+  if (process.platform === "win32") return /(^|\s)git\.exe\b/i.test(roh);
+  return roh.split("\n").some((z) => /(^|\/)git(\s|$)/.test(z.trim()));
 }
 
 let eingabe = "";
@@ -1346,7 +1405,7 @@ Repos ist das irrefuehrend. Diese zeigt **Repo · Branch · Sicherungsstand**
 
 ```js
 #!/usr/bin/env node
-// Statusline fuer den <WORKSPACE>-Workspace: zeigt NICHT den Workspace-Namen,
+// Statusline fuer den Workspace: zeigt NICHT den Workspace-Namen,
 // sondern das Repo, dessen .git fuer den aktuellen cwd tatsaechlich zustaendig
 // ist (Werkbank ODER eines der verschachtelten Projekt-Repos unter
 // user-projects/), plus Branch und Sicherungsstatus (ungepushte Commits +
@@ -1364,7 +1423,7 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const WORKSPACE = path.resolve(__dirname, '..'); // = <WORKSPACE>
+const WORKSPACE = path.resolve(__dirname, '..'); // = die Workspace-Wurzel
 const GIT_TIMEOUT_MS = 800;
 
 function readStdin() {
@@ -1395,7 +1454,7 @@ function findRepoRoot(startDir) {
 
 // Kompaktes Label: Werkbank -> Ordnername; verschachteltes Projekt-Repo ->
 // Pfad relativ zur Werkbank, ohne das immer gleiche "user-projects/"-Praefix
-// (z.B. "<projekt>/plugin-brain" statt "user-projects/<projekt>/plugin-brain").
+// (z.B. "projekt/feature" statt "user-projects/projekt/feature").
 function repoLabel(repoRoot) {
   if (repoRoot === WORKSPACE) return path.basename(WORKSPACE);
   const rel = path.relative(WORKSPACE, repoRoot).split(path.sep).join('/');
@@ -1477,7 +1536,7 @@ SessionStart-Hook liest die Rollen-Tabelle aus `docs/08-sessions-rollen.md` und 
 const fs = require("fs");
 const path = require("path");
 
-const WURZEL = process.env.CLAUDE_PROJECT_DIR || path.resolve(__dirname, "..", "..");
+const WURZEL = process.env.CLAUDE_PROJECT_DIR || path.resolve(__dirname, "..");
 const QUELLE = path.join(WURZEL, "docs", "08-sessions-rollen.md");
 const MAX_ZWECK = 110; // Zeichen je Zweck-Spalte
 
@@ -1486,8 +1545,7 @@ const MAX_ZWECK = 110; // Zeichen je Zweck-Spalte
 // darum bei JEDEM davon "/i-have-adhd" erneut in den Gespraechsverlauf -- also
 // auch mitten in der Arbeit bei jedem Auto-Compact, ohne dass ein Mensch etwas
 // getippt hatte. Bei zwei Anlaessen kurz hintereinander doppelt.
-// [Auftraggeber: "Teilweise wurde es zweimal hintereinander reingefeuert, ohne dass
-// ueberhaupt irgendwas geschrieben wurde von mir."]
+// [Anlass: der Befehl feuerte doppelt hintereinander, ohne Nutzereingabe.]
 //
 // Die Rollen-Tabelle bleibt bei ALLEN vier richtig -- nach einem Compact ist sie
 // aus dem Fenster und wird gebraucht. Nur der Slash-Befehl darf sich nicht
@@ -1523,19 +1581,24 @@ function zeilen() {
   return treffer.length ? treffer : null;
 }
 
+// [Bug-Fix 21.08.2026, Baustelle 2a] Rollen-Load und Antwortform-Skill-Load ENTKOPPELT.
+// Vorher stand hier `if (!rollen) process.exit(0)` -- im Solo-Betrieb (keine
+// docs/08-sessions-rollen.md) stieg der Hook damit aus, BEVOR der /i-have-adhd-Aufruf
+// kam; frische Sessions bekamen den Antwortform-Skill NIE. Jetzt: Rollen-Tabelle nur,
+// wenn vorhanden -- aber der Skill-Aufruf laeuft bei jedem "startup" unabhaengig davon.
 const rollen = zeilen();
-if (!rollen) process.exit(0);
-
-const text = [
-  "Sitzungs-Rollen dieses Workspace (aus docs/08-sessions-rollen.md, automatisch geladen).",
-  "Es arbeiten mehrere Sitzungen parallel im selben Ordner:",
-  ...rollen,
-  "",
-  "MELDE-REGEL: Aenderst oder findest du einen Fakt, auf dem eine ANDERE Rolle aufbaut",
-  "(Pfad, Repo-/Branch-Name, Datenbank, ein Beschluss), dann schick ihn ihr per /tell-session,",
-  "statt ihn nur zu notieren. Gehoert eine Aufgabe erkennbar einer anderen Rolle: dorthin",
-  "uebergeben, nicht selbst machen. Ueberblick: /session-map",
-].join("\n");
+const rollenText = rollen
+  ? [
+      "Sitzungs-Rollen dieses Workspace (aus docs/08-sessions-rollen.md, automatisch geladen).",
+      "Es arbeiten mehrere Sitzungen parallel im selben Ordner:",
+      ...rollen,
+      "",
+      "MELDE-REGEL: Aenderst oder findest du einen Fakt, auf dem eine ANDERE Rolle aufbaut",
+      "(Pfad, Repo-/Branch-Name, Datenbank, ein Beschluss), dann schick ihn ihr per /tell-session,",
+      "statt ihn nur zu notieren. Gehoert eine Aufgabe erkennbar einer anderen Rolle: dorthin",
+      "uebergeben, nicht selbst machen. Ueberblick: /session-map",
+    ].join("\n")
+  : null;
 
 // initialUserMessage wird wie eine ECHTE Nutzer-Nachricht verarbeitet, Slash-Befehle
 // eingeschlossen (offizielle Doku, Beispiel dort: "/read CLAUDE.md"). Damit laedt der
@@ -1555,11 +1618,12 @@ const text = [
 //
 // WARUM NICHT DEN SKILL-TEXT EINBLENDEN: der Aufruf kostet 14 Zeichen, der Volltext
 // 6.848 -- und nur der Aufruf hat das Gewicht einer Nutzer-Anweisung.
-const ausgabe = {
-  hookEventName: "SessionStart",
-  additionalContext: text,
-};
+const ausgabe = { hookEventName: "SessionStart" };
+if (rollenText) ausgabe.additionalContext = rollenText;
 if (anlass() === "startup") ausgabe.initialUserMessage = "/i-have-adhd";
+
+// Weder Rollen noch startup (z.B. resume/compact ohne docs/08) -> still bleiben.
+if (!ausgabe.additionalContext && !ausgabe.initialUserMessage) process.exit(0);
 
 process.stdout.write(JSON.stringify({ hookSpecificOutput: ausgabe }));
 ```
@@ -1632,8 +1696,8 @@ Ablauf:
    nicht wuehlen); eine Session kann lesen, hat dieselben Dateien, und eine Kopie
    fuellt ihr Fenster und driftet, sobald die Quelle sich aendert.
 
-   Gut: "Die Live-DB heisst jetzt <board> (ref <db-ref>...). <alt-board> ist
-   nur noch Backup -- keine Writes. Betrifft deinen Install-Schritt 3."
+   Gut: "Der Branch heisst jetzt wp3-anbindung, nicht mehr feature/anbindung.
+   Der alte ist geloescht. Betrifft deinen Install-Schritt 3."
    Schlecht: "Wir haben eben besprochen, dass sich was geaendert hat."
 
    Schlecht (real, 03.08.2026, 2.932 Zeichen an HARNESS CONTROL): eine Nachricht mit
@@ -1873,6 +1937,24 @@ const path = require("path");
 const os = require("os");
 
 const HOME = os.homedir();
+const IST_WIN = process.platform === "win32";
+
+// [Mac->Win-Fix 21.08.2026] Pfad-Vergleiche separatorneutral (\ und /) und unter
+// Windows case-insensitiv -- sonst scheitern sie an ~-expandierten Pfaden
+// (C:\Users\x/Desktop, gemischt) und an Gross/Kleinschreibung. Belegt: der
+// Schreibschutz war unter Windows fail-open (Selbsttest 10/14).
+function normPfad(p) {
+  if (!p) return p;
+  let n = String(p);
+  if (IST_WIN) n = n.split("\\").join("/").toLowerCase();
+  return n;
+}
+/** Liegt p unter der Wurzel w, oder IST es w? Separatorneutral. */
+function unter(p, w) {
+  const np = normPfad(p);
+  const nw = normPfad(w);
+  return np === nw || np.startsWith(nw.endsWith("/") ? nw : nw + "/");
+}
 
 /** Verzeichnisse, in die geschrieben werden darf. Alles andere unter $HOME ist tabu. */
 function erlaubteWurzeln() {
@@ -1881,7 +1963,10 @@ function erlaubteWurzeln() {
   // ~/.claude. Belegt: Codex nimmt unsere AGENTS.md per Tree-Walk auf (Testlauf gab
   // "Keel — Shipwright" zurueck, steht nirgends sonst). Wer den einen Ort erlaubt und
   // den anderen sperrt, sperrt die Haelfte des eigenen Harness aus.
-  const wurzeln = ["/tmp", "/private/tmp", "/var/folders", path.join(HOME, ".claude"), path.join(HOME, ".codex")];
+  // [Mac->Win-Fix 21.08.2026, U1] os.tmpdir() ist der echte Temp (Windows:
+  // C:\Users\...\AppData\Local\Temp); /private/tmp und /var/folders sind rein macOS.
+  const wurzeln = [os.tmpdir(), "/tmp", path.join(HOME, ".claude"), path.join(HOME, ".codex")];
+  if (process.platform === "darwin") wurzeln.push("/private/tmp", "/var/folders");
   if (process.env.CLAUDE_PROJECT_DIR) wurzeln.push(path.resolve(process.env.CLAUDE_PROJECT_DIR));
   return wurzeln;
 }
@@ -1969,11 +2054,11 @@ function gitUnterbefehl(segment) {
  */
 function allePfade(segment) {
   const treffer = [];
-  const re = /"((?:~|\/)[^"]*)"|'((?:~|\/)[^']*)'|(?<![\w"'=])((?:~|\/)[^\s;|&><)"']+)/g;
+  const re = /"((?:~|\/|[A-Za-z]:[\\/])[^"]*)"|'((?:~|\/|[A-Za-z]:[\\/])[^']*)'|(?<![\w"'=])((?:~|\/|[A-Za-z]:[\\/])[^\s;|&><)"']+)/g;
   let m;
   while ((m = re.exec(segment))) {
     const roh = m[1] || m[2] || m[3];
-    treffer.push(roh.replace(/^~(?=\/|$)/, HOME));
+    treffer.push(roh.replace(/^~(?=[\\/]|$)/, HOME));
   }
   return treffer;
 }
@@ -1981,14 +2066,14 @@ function allePfade(segment) {
 function fremdePfade(segment) {
   const wurzeln = erlaubteWurzeln();
   const treffer = [];
-  const re = /"((?:~|\/)[^"]*)"|'((?:~|\/)[^']*)'|(?<![\w"'=])((?:~|\/)[^\s;|&><)"']+)/g;
+  const re = /"((?:~|\/|[A-Za-z]:[\\/])[^"]*)"|'((?:~|\/|[A-Za-z]:[\\/])[^']*)'|(?<![\w"'=])((?:~|\/|[A-Za-z]:[\\/])[^\s;|&><)"']+)/g;
   let m;
   while ((m = re.exec(segment))) {
     const abFundstelle = segment.slice(m.index).replace(/^["']/, "");
-    const voll = abFundstelle.startsWith("~") ? HOME + abFundstelle.slice(1) : abFundstelle;
-    if (wurzeln.some((w) => voll === w || voll.startsWith(w + path.sep))) continue;
+    const voll = abFundstelle.replace(/^~(?=[\\/]|$)/, HOME);
+    if (wurzeln.some((w) => unter(voll, w))) continue;
     const roh = m[1] || m[2] || m[3];
-    treffer.push(roh.replace(/^~(?=\/|$)/, HOME));
+    treffer.push(roh.replace(/^~(?=[\\/]|$)/, HOME));
   }
   return treffer;
 }
@@ -2060,7 +2145,7 @@ const REGELN = [
     name: "Schreiben oder Loeschen ausserhalb des Arbeitsbereichs",
     gilt: (k, s) => SCHREIB_VERB.test(k) || UMLEITUNG.test(s),
     treffer: (s, k) => {
-      const unterHeimat = (p) => p.startsWith(HOME + path.sep) || p === HOME;
+      const unterHeimat = (p) => unter(p, HOME);
       // KOPIER-VERBEN: Nur das LETZTE Argument ist das Schreibziel -- `cp <fremd> <erlaubt>`
       // LIEST von fremd und SCHREIBT in den Arbeitsbereich, das ist harmlos. Der umgekehrte
       // Fall (`cp <erlaubt> ~/Desktop`) bleibt geblockt, denn dort ist das Ziel fremd.
@@ -2073,17 +2158,17 @@ const REGELN = [
         // (Die erste Fassung zaehlte absolute Pfade und liess dadurch
         //  `cp .claude/settings.local.json ~/Desktop/` durch -- genau den Vorfall,
         //  wegen dem diese Regel existiert. Beim Test aufgefallen, nicht im Betrieb.)
-        const m = s.match(/(?:"((?:~|\/)[^"]*)"|'((?:~|\/)[^']*)'|((?:~|\/)[^\s;|&><)"']+))\s*$/);
+        const m = s.match(/(?:"((?:~|\/|[A-Za-z]:[\\/])[^"]*)"|'((?:~|\/|[A-Za-z]:[\\/])[^']*)'|((?:~|\/|[A-Za-z]:[\\/])[^\s;|&><)"']+))\s*$/);
         if (!m) return false;
-        const ziel = (m[1] || m[2] || m[3]).replace(/^~(?=\/|$)/, HOME);
-        const erlaubt = erlaubteWurzeln().some((w) => ziel === w || ziel.startsWith(w + path.sep));
+        const ziel = (m[1] || m[2] || m[3]).replace(/^~(?=[\\/]|$)/, HOME);
+        const erlaubt = erlaubteWurzeln().some((w) => unter(ziel, w));
         return !erlaubt && unterHeimat(ziel);
       }
       // Uebrige Schreib-Verben (rm, touch, mkdir, tee, chmod …): jedes Argument zaehlt.
       if (SCHREIB_VERB.test(k)) return fremdePfade(s).some(unterHeimat);
       const ziel = umleitungsZiel(s);
-      if (!ziel || !ziel.startsWith("/")) return false;
-      return unterHeimat(ziel) && !erlaubteWurzeln().some((w) => ziel === w || ziel.startsWith(w + path.sep));
+      if (!ziel || !path.isAbsolute(ziel)) return false;
+      return unterHeimat(ziel) && !erlaubteWurzeln().some((w) => unter(ziel, w));
     },
     rat: `Geschrieben wird nur in Werkbank, user-projects, /tmp, ~/.claude und ~/.codex -- nicht sonstwo unter ${HOME}.`,
   },
