@@ -164,7 +164,35 @@ function gruppe({ id, titel, ordner, art, laden, notiz, wurzel, hooks }) {
     let schluessel = String(p.name || "").split(" · ")[0];
     if (schluessel.startsWith("/")) schluessel = schluessel.slice(1);
     const e = nachName.get(schluessel);
-    return e ? { ...p, herkunft: e.herkunft, ladeart: e.ladeart } : p;
+    if (!e) return p;
+    // Die Belege rechnet classify.js ohnehin aus -- frueher landeten sie im Muell.
+    // Ohne sie kann eine Einzelansicht nur behaupten statt zu belegen, woher ein
+    // Posten kommt und wann er laedt. Groesse und Aenderungszeit kommen dazu: ohne
+    // sie gibt es weder "was ist gross" noch "was ist neu".
+    let bytes = null;
+    let geaendert = null;
+    try {
+      const abs = path.join(wurzel, e.pfad);
+      const s = fs.statSync(abs);
+      geaendert = s.mtime.toISOString();
+      // Ein Skill IST ein Ordner. statSync liefert dafuer 0 Byte -- eine Zahl, die
+      // aussieht wie "leer" und keine ist. Deshalb den Inhalt summieren.
+      bytes = s.isDirectory()
+        ? fs.readdirSync(abs).reduce((a, f) => {
+            try { const t = fs.statSync(path.join(abs, f)); return a + (t.isFile() ? t.size : 0); } catch { return a; }
+          }, 0)
+        : s.size;
+    } catch { /* nicht lesbar -> null, nicht eine erfundene Zahl */ }
+    return {
+      ...p,
+      herkunft: e.herkunft,
+      ladeart: e.ladeart,
+      quelle: e.pfad,
+      herkunftBeleg: e.herkunftBeleg || e.beleg || null,
+      ladeartBeleg: e.ladeartBeleg || null,
+      bytes,
+      geaendert,
+    };
   });
 
   return {
