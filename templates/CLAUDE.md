@@ -42,7 +42,7 @@ eintragen. Andersherum wird das Projekt unsichtbar und ungesichert zugleich.
 | `uncommitted-warn.js` | am Sitzungsende | warnt bei ungesicherter Arbeit (nur Hinweis, blockiert nie) |
 | `session-roles.js` | bei Sitzungsstart | laedt die Rollen aus `docs/08-sessions-rollen.md`, falls vorhanden |
 | `onboarding-start.js` | bei Sitzungsstart | startet `/onboarding`, solange eine Ausfuell-Marke offen ist — danach still |
-| `projekt-kontext.js` | bei Sitzungsstart | fragt beim Start nach Projekt/Rolle dieser Sitzung (AskUserQuestion) |
+| `project-context.js` | bei Sitzungsstart | fragt beim Start nach Projekt/Rolle dieser Sitzung (AskUserQuestion) |
 | `statusline.js` | dauerhaft | Repo · Branch · Sicherungsstand in der Statusleiste |
 | `repo-status.js` | auf Aufruf (`/repo-status`) | lokales Git vs. GitHub vs. Sync, rekursiv |
 
@@ -63,7 +63,7 @@ austauschen, ohne die Messung anzufassen.
   Der `commit-pathspec-guard` erzwingt das.
 - **Verschachtelte Repos immer via `git -C <repo>`** committen — nie ins falsche Repo.
 - **Keine Zugaenge in Dateien.** Schluesselbund oder Umgebungsvariablen.
-- **Werkzeuge: CLI vor MCP vor Browser** — Begruendung in `.claude/rules/ecc/common/werkzeuge.md`.
+- **Werkzeuge: CLI vor MCP vor Browser** — Begruendung in `.claude/rules/ecc/common/tools.md`.
 - **Automatisch geladene Regeln:** `.claude/rules/ecc/common/` — fuenf Dateien,
   bewusst ohne Frontmatter, damit sie Dauer-Kontext sind und nicht nur abrufbar.
 

@@ -165,7 +165,7 @@ const REGELN = ["no-oneshot.md", "completeness.md", "tools.md", "output-shape.md
 const SKILLS = [
   ["domain-modeling", ["SKILL.md", "ADR-FORMAT.md", "CONTEXT-FORMAT.md"]],
   ["resolving-merge-conflicts", ["SKILL.md"]],
-  // Bis 18.08.2026 fehlte dieser Eintrag: die Dauer-Regel ausgabeform.md und der
+  // Bis 18.08.2026 fehlte dieser Eintrag: die Dauer-Regel output-shape.md und der
   // Start-Hook session-roles.js verwiesen auf einen Skill, den der Installer nie kopierte.
   ["i-have-adhd", ["SKILL.md"]],
 ];
