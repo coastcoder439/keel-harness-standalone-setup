@@ -98,7 +98,7 @@ try {
     // Dieser Bausatz beschreibt denselben Harness zweimal -- als echte Dateien und
     // als Volltext-Zitate in der Nachbau-Anleitung. Laufen die auseinander, ist die
     // Anleitung eine Falle: Am 21.08.2026 nannte sie den Projekt-Kontext-Check und
-    // die Dauer-Regel arbeitsweise.md, waehrend keine installierte Datei sie hatte.
+    // die Dauer-Regel working-method.md, waehrend keine installierte Datei sie hatte.
     // Deshalb laeuft der Abgleich HIER mit und nicht auf Zuruf -- eine gemerkte
     // Pflicht haette genau das schon einmal nicht verhindert.
     pruefe("anleitung-sync", () => {
