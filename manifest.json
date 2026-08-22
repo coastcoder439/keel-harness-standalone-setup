@@ -1,8 +1,8 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-22T19:24:56.099Z",
+  "gebautAm": "2026-08-22T19:27:02.002Z",
   "posten": 49,
-  "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von pruefung/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
+  "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
     {
@@ -68,8 +68,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15388,
-      "sha256": "b6dc6e38477537b2"
+      "bytes": 15386,
+      "sha256": "a77ada83c04bf499"
     },
     {
       "datei": "checks/frisch-geklont.mjs",
@@ -84,8 +84,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 5341,
-      "sha256": "db9e6c18adeefbf2"
+      "bytes": 5333,
+      "sha256": "4d33f532c8c38a80"
     },
     {
       "datei": "install.mjs",
@@ -412,8 +412,8 @@
       "herkunft": "erzeugt von paketieren.mjs",
       "quellordner": "erzeugt",
       "gesaeubert": 0,
-      "bytes": 1975,
-      "sha256": "acb0660e1859cb90"
+      "bytes": 1765,
+      "sha256": "b0317f0efce3531f"
     },
     {
       "datei": "templates/settings.json",
