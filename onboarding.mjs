@@ -147,6 +147,7 @@ const WAECHTER = [
   "danger-guard.js",
   "git-guard.js",
   "commit-pathspec-guard.js",
+  "sessionpost-guard.js", // PreToolUse: blockt zu lange/menschliche Inter-Session-Nachrichten
   "repo-status.js",
   "session-roles.js",
   "onboarding-start.js", // SessionStart: startet /onboarding, solange CLAUDE.md [AUSFUELLEN] enthaelt
