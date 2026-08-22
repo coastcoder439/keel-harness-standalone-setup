@@ -208,7 +208,7 @@ try {
 
     // 5c. Dauer-Regeln: mindestens 4 .md-Dateien, keine mit Frontmatter.
     pruefe("dauer-regeln", () => {
-      const regelOrdner = path.join(ziel, ".claude", "rules", "ecc", "common");
+      const regelOrdner = path.join(ziel, ".claude", "rules", "keel");
       if (!istOrdner(regelOrdner)) return `${regelOrdner} fehlt`;
       const mds = fs.readdirSync(regelOrdner).filter((n) => n.endsWith(".md"));
       if (mds.length < 4) return `nur ${mds.length} .md-Dateien, mindestens 4 erwartet`;
