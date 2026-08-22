@@ -10,13 +10,13 @@
 // ohne die Messung anzufassen, und die Messung ohne die Anzeige laufen kann.
 //
 // AUFRUF
-//   node zustand/zustand.js                        HTML nach zustand.html
-//   node zustand/zustand.js --html <datei>         HTML woandershin
-//   node zustand/zustand.js --json                 nur Daten, nach stdout
-//   node zustand/zustand.js --daten <datei>        Daten in eine Datei
-//   node zustand/zustand.js --wurzel <pfad>        andere Werkbank messen
-//   node zustand/zustand.js --mit-github           GitHub-Abfragen zulassen (Netz)
-//   node zustand/zustand.js --exit-code            1 bei Befund, 2 bei "nicht pruefbar"
+//   node dashboard/index.js                        HTML nach zustand.html
+//   node dashboard/index.js --html <datei>         HTML woandershin
+//   node dashboard/index.js --json                 nur Daten, nach stdout
+//   node dashboard/index.js --daten <datei>        Daten in eine Datei
+//   node dashboard/index.js --wurzel <pfad>        andere Werkbank messen
+//   node dashboard/index.js --mit-github           GitHub-Abfragen zulassen (Netz)
+//   node dashboard/index.js --exit-code            1 bei Befund, 2 bei "nicht pruefbar"
 //
 // RUECKGABE ohne --exit-code immer 0 (die Seite ist erzeugt), mit --exit-code
 // nach Gesamtstatus. "nicht pruefbar" bekommt den HOEHEREN Rueckgabewert als
@@ -25,12 +25,12 @@
 const fs = require("fs");
 const path = require("path");
 
-const { messen } = require("./messen");
-const { regeln } = require("./regeln");
+const { messen } = require("./measure");
+const { regeln } = require("./rules");
 // Anzeige im Keel-Design (Seitenleiste, Bereiche, Details auf Klick).
 // Die alte einseitige Fassung liegt weiter als ./rendern -- die Messung kennt keine
 // Darstellung, deshalb laesst sich die Anzeige tauschen, ohne sie anzufassen.
-const { renderHTML } = require("./rendern-keel");
+const { renderHTML } = require("./render");
 
 function argumenteLesen(argv) {
   const a = argv.slice(2);

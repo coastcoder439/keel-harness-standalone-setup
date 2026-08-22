@@ -25,8 +25,8 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
-const { hookSkripte, kontrollprobe, gruppeEinordnen, dauerRegelBeleg } = require("./einordnen");
-const bordmittel = require("./bordmittel");
+const { hookSkripte, kontrollprobe, gruppeEinordnen, dauerRegelBeleg } = require("./classify");
+const bordmittel = require("./inventory");
 
 const SCHEMA = "harness.zustand.v1";
 const MAX_BESCHREIBUNG = 200; // Zeichen je Posten -- die Seite zeigt Bestand, nicht Handbuecher
@@ -301,12 +301,12 @@ function kontextMessen(wurzel, harness) {
   };
 }
 
-// Die Werkzeug-Landschaft (CLIs, MCPs, APIs, Zugaenge) aus docs/werkzeug-landschaft.md.
+// Die Werkzeug-Landschaft (CLIs, MCPs, APIs, Zugaenge) aus docs/tool-landscape.md.
 // Erhoben wird sie vom Onboarding-Schritt 3; hier wird nur gezeigt, was drinsteht.
 // Absicht: die Uebersicht "womit arbeite ich hier eigentlich" gehoert auf dieselbe
 // Seite wie Skills, Befehle und Waechter -- sonst muss man sie sich zusammensuchen.
 function werkzeugGruppe(wurzel) {
-  const rel = "docs/werkzeug-landschaft.md";
+  const rel = "docs/tool-landscape.md";
   const datei = path.join(wurzel, rel);
   const leer = {
     id: "werkzeuge", titel: "Werkzeug-Landschaft",
@@ -346,10 +346,10 @@ function bestandMessen(wurzel, harness) {
   // Harness nicht bei. Frueher stieg der ganze Bereich dann mit "unlesbar" aus und
   // meldete einen Defekt, wo nur eine fremde Abhaengigkeit fehlte -- genau die
   // Uebersicht, wofuer die Seite da ist, blieb leer. Jetzt wird mit Bordmitteln
-  // aufgezaehlt (zustand/bordmittel.js), und die Quelle sagt, welcher Weg lief.
+  // aufgezaehlt (dashboard/inventory.js), und die Quelle sagt, welcher Weg lief.
   const ecc = eccLaden(wurzel, "dashboard-web.js");
   const modul = ecc.modul || bordmittel;
-  const pfad = ecc.pfad || "zustand/bordmittel.js";
+  const pfad = ecc.pfad || "dashboard/inventory.js";
 
   const hooks = hookSkripte(wurzel);
 
@@ -772,7 +772,7 @@ function repoStatusMessen(wurzel) {
 const PRUEFER = [
   {
     id: "anleitung-sync",
-    pfad: "pruefung/anleitung-sync.mjs",
+    pfad: "checks/anleitung-sync.mjs",
     zweck: "Volltext-Kopien der Nachbau-Anleitung gegen die echten Dateien",
     kennzahlen: {
       muster: /(\d+) Kopien geprueft: (\d+) deckungsgleich, (\d+) abweichend/,
@@ -781,8 +781,8 @@ const PRUEFER = [
   },
   {
     id: "paket-manifest",
-    pfad: "pruefung/paket-manifest.mjs",
-    zweck: "PAKET.json gegen den tatsaechlichen Paketinhalt",
+    pfad: "checks/paket-manifest.mjs",
+    zweck: "manifest.json gegen den tatsaechlichen Paketinhalt",
     kennzahlen: {
       muster: /(\d+) Dateien im Paket · (\d+) Abweichung/,
       namen: ["Dateien im Paket", "Abweichungen"],
@@ -855,7 +855,7 @@ function rollenMessen(wurzel) {
   const skript = path.join(wurzel, ".claude", "session-roles.js");
   // Die Herkunft ist der Pfad, den session-roles.js liest -- aber ob dort etwas
   // liegt, wird GEMESSEN. Fest verdrahtet nannte dieses Feld eine Datei, die das
-  // Paket bewusst nicht mitliefert (PAKET.json, „bewusstNichtEnthalten“): der
+  // Paket bewusst nicht mitliefert (manifest.json, „bewusstNichtEnthalten“): der
   // Empfaenger las eine Quellenangabe fuer Daten, die es bei ihm nicht gibt.
   const tabelle = path.join(wurzel, "docs", "08-sessions-rollen.md");
   const grundlage = {
