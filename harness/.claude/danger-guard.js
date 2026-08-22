@@ -40,7 +40,14 @@ const IST_WIN = process.platform === "win32";
 function normPfad(p) {
   if (!p) return p;
   let n = String(p);
-  if (IST_WIN) n = n.split("\\").join("/").toLowerCase();
+  if (IST_WIN) {
+    n = n.split("\\").join("/").toLowerCase();
+    // MSYS/Git-Bash schreibt Laufwerke als /c/... Ohne diese Umschrift zaehlt
+    // "/c/Users/..." nicht als derselbe Ort wie "C:/Users/..." -- und die
+    // Heim-Schranke greift nicht. Belegt 22.08.2026: eine Umleitung nach
+    // /c/Users/<du>/Desktop/ lief durch, dieselbe als C:/... und ~/... wurde blockiert.
+    n = n.replace(/^\/([a-z])(?=\/|$)/, "$1:");
+  }
   return n;
 }
 /** Liegt p unter der Wurzel w, oder IST es w? Separatorneutral. */
