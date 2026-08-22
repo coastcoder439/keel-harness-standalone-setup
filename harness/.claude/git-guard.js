@@ -10,6 +10,15 @@ const fs = require("fs");
 const path = require("path");
 
 const LOCK_MIN_ALTER_MIN = 5; // juenger = laeuft evtl. wirklich
+// MSYS/Git-Bash schreibt Windows-Laufwerke als /c/... -- path.resolve() macht daraus
+// C:\c\... , einen Pfad den es nicht gibt. Der Waechter meldete dann "liegt in keinem
+// Git-Repo", obwohl das Repo da war (belegt 22.08.2026, mehrfach in einer Sitzung).
+// Ein Waechter, der bei einem gaengigen Pfadformat Fehlalarme gibt, wird ignoriert.
+function msysPfad(p) {
+  if (process.platform !== "win32" || !p) return p;
+  return String(p).replace(/^\/([A-Za-z])(?=\/|$)/, "$1:");
+}
+
 
 function sh(cmd, cwd) {
   try {
@@ -71,12 +80,12 @@ process.stdin.on("end", () => {
   while ((cdTreffer = cdRe.exec(befehl)) && cdTreffer.index < gitPos) {
     cdPfad = cdTreffer[1] || cdTreffer[2] || cdTreffer[3];
     if (cdPfad.includes("$")) basisUnpruefbar = true;
-    else if (path.isAbsolute(cdPfad)) basisUnpruefbar = false;
-    basis = path.resolve(basis, cdPfad);
+    else if (path.isAbsolute(msysPfad(cdPfad))) basisUnpruefbar = false;
+    basis = path.resolve(basis, msysPfad(cdPfad));
   }
   const mC = befehl.match(/git\s+-C\s+(?:"([^"]+)"|'([^']+)'|(\S+))/);
   const zielRoh = mC ? mC[1] || mC[2] || mC[3] : cdPfad;
-  const ziel = mC ? path.resolve(basis, zielRoh) : basis;
+  const ziel = mC ? path.resolve(basis, msysPfad(zielRoh)) : basis;
   const top = sh("git rev-parse --show-toplevel", ziel);
 
   // --- 1) Verwaiste Locks raeumen (im Ziel-Repo) ---

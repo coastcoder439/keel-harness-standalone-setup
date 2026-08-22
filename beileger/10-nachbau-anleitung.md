@@ -1259,6 +1259,15 @@ const fs = require("fs");
 const path = require("path");
 
 const LOCK_MIN_ALTER_MIN = 5; // juenger = laeuft evtl. wirklich
+// MSYS/Git-Bash schreibt Windows-Laufwerke als /c/... -- path.resolve() macht daraus
+// C:\c\... , einen Pfad den es nicht gibt. Der Waechter meldete dann "liegt in keinem
+// Git-Repo", obwohl das Repo da war (belegt 22.08.2026, mehrfach in einer Sitzung).
+// Ein Waechter, der bei einem gaengigen Pfadformat Fehlalarme gibt, wird ignoriert.
+function msysPfad(p) {
+  if (process.platform !== "win32" || !p) return p;
+  return String(p).replace(/^\/([A-Za-z])(?=\/|$)/, "$1:");
+}
+
 
 function sh(cmd, cwd) {
   try {
@@ -1320,12 +1329,12 @@ process.stdin.on("end", () => {
   while ((cdTreffer = cdRe.exec(befehl)) && cdTreffer.index < gitPos) {
     cdPfad = cdTreffer[1] || cdTreffer[2] || cdTreffer[3];
     if (cdPfad.includes("$")) basisUnpruefbar = true;
-    else if (path.isAbsolute(cdPfad)) basisUnpruefbar = false;
-    basis = path.resolve(basis, cdPfad);
+    else if (path.isAbsolute(msysPfad(cdPfad))) basisUnpruefbar = false;
+    basis = path.resolve(basis, msysPfad(cdPfad));
   }
   const mC = befehl.match(/git\s+-C\s+(?:"([^"]+)"|'([^']+)'|(\S+))/);
   const zielRoh = mC ? mC[1] || mC[2] || mC[3] : cdPfad;
-  const ziel = mC ? path.resolve(basis, zielRoh) : basis;
+  const ziel = mC ? path.resolve(basis, msysPfad(zielRoh)) : basis;
   const top = sh("git rev-parse --show-toplevel", ziel);
 
   // --- 1) Verwaiste Locks raeumen (im Ziel-Repo) ---
@@ -1946,7 +1955,14 @@ const IST_WIN = process.platform === "win32";
 function normPfad(p) {
   if (!p) return p;
   let n = String(p);
-  if (IST_WIN) n = n.split("\\").join("/").toLowerCase();
+  if (IST_WIN) {
+    n = n.split("\\").join("/").toLowerCase();
+    // MSYS/Git-Bash schreibt Laufwerke als /c/... Ohne diese Umschrift zaehlt
+    // "/c/Users/..." nicht als derselbe Ort wie "C:/Users/..." -- und die
+    // Heim-Schranke greift nicht. Belegt 22.08.2026: eine Umleitung nach
+    // /c/Users/<du>/Desktop/ lief durch, dieselbe als C:/... und ~/... wurde blockiert.
+    n = n.replace(/^\/([a-z])(?=\/|$)/, "$1:");
+  }
   return n;
 }
 /** Liegt p unter der Wurzel w, oder IST es w? Separatorneutral. */
@@ -2437,6 +2453,15 @@ Wiederholbare Testreihe (16 Fälle, Wegwerf-Repo): `user-projects/harness-lab/ho
 const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+// MSYS/Git-Bash schreibt Windows-Laufwerke als /c/... -- path.resolve() macht daraus
+// C:\c\... , einen Pfad den es nicht gibt. Der Waechter meldete dann "liegt in keinem
+// Git-Repo", obwohl das Repo da war (belegt 22.08.2026, mehrfach in einer Sitzung).
+// Ein Waechter, der bei einem gaengigen Pfadformat Fehlalarme gibt, wird ignoriert.
+function msysPfad(p) {
+  if (process.platform !== "win32" || !p) return p;
+  return String(p).replace(/^\/([A-Za-z])(?=\/|$)/, "$1:");
+}
+
 
 function sh(cmd, cwd) {
   try {
@@ -2532,9 +2557,9 @@ process.stdin.on("end", () => {
     if (cdM) {
       const cdRoh = cdM[1] || cdM[2] || cdM[3];
       if (cdRoh.includes("$")) basisUnpruefbar = true;
-      else if (path.isAbsolute(cdRoh)) basisUnpruefbar = false;
+      else if (path.isAbsolute(msysPfad(cdRoh))) basisUnpruefbar = false;
       // relativer Pfad ohne Variable: Flag bleibt (relativ zu Unpruefbarem ist unpruefbar)
-      basis = path.resolve(basis, cdRoh);
+      basis = path.resolve(basis, msysPfad(cdRoh));
       continue;
     }
     if (kopf(seg) !== "git" || gitUnterbefehl(seg) !== "commit") continue;
@@ -2542,7 +2567,7 @@ process.stdin.on("end", () => {
     // Ziel-Repo dieses Segments: -C gewinnt (relativ zur cd-Basis), sonst Basis.
     const mC = seg.match(/git\s+-C\s+(?:"([^"]+)"|'([^']+)'|(\S+))/);
     const zielRoh = mC ? mC[1] || mC[2] || mC[3] : null;
-    const ziel = mC ? path.resolve(basis, zielRoh) : basis;
+    const ziel = mC ? path.resolve(basis, msysPfad(zielRoh)) : basis;
     const zielUnpruefbar = zielRoh
       ? zielRoh.includes("$") || (!path.isAbsolute(zielRoh) && basisUnpruefbar)
       : basisUnpruefbar;

@@ -38,6 +38,15 @@
 const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+// MSYS/Git-Bash schreibt Windows-Laufwerke als /c/... -- path.resolve() macht daraus
+// C:\c\... , einen Pfad den es nicht gibt. Der Waechter meldete dann "liegt in keinem
+// Git-Repo", obwohl das Repo da war (belegt 22.08.2026, mehrfach in einer Sitzung).
+// Ein Waechter, der bei einem gaengigen Pfadformat Fehlalarme gibt, wird ignoriert.
+function msysPfad(p) {
+  if (process.platform !== "win32" || !p) return p;
+  return String(p).replace(/^\/([A-Za-z])(?=\/|$)/, "$1:");
+}
+
 
 function sh(cmd, cwd) {
   try {
@@ -133,9 +142,9 @@ process.stdin.on("end", () => {
     if (cdM) {
       const cdRoh = cdM[1] || cdM[2] || cdM[3];
       if (cdRoh.includes("$")) basisUnpruefbar = true;
-      else if (path.isAbsolute(cdRoh)) basisUnpruefbar = false;
+      else if (path.isAbsolute(msysPfad(cdRoh))) basisUnpruefbar = false;
       // relativer Pfad ohne Variable: Flag bleibt (relativ zu Unpruefbarem ist unpruefbar)
-      basis = path.resolve(basis, cdRoh);
+      basis = path.resolve(basis, msysPfad(cdRoh));
       continue;
     }
     if (kopf(seg) !== "git" || gitUnterbefehl(seg) !== "commit") continue;
@@ -143,7 +152,7 @@ process.stdin.on("end", () => {
     // Ziel-Repo dieses Segments: -C gewinnt (relativ zur cd-Basis), sonst Basis.
     const mC = seg.match(/git\s+-C\s+(?:"([^"]+)"|'([^']+)'|(\S+))/);
     const zielRoh = mC ? mC[1] || mC[2] || mC[3] : null;
-    const ziel = mC ? path.resolve(basis, zielRoh) : basis;
+    const ziel = mC ? path.resolve(basis, msysPfad(zielRoh)) : basis;
     const zielUnpruefbar = zielRoh
       ? zielRoh.includes("$") || (!path.isAbsolute(zielRoh) && basisUnpruefbar)
       : basisUnpruefbar;
