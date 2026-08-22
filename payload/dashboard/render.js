@@ -1,21 +1,30 @@
-// Zustandsseite im Keel-Design: Seitenleiste, klare Bereiche, Details auf Klick.
+// Die Zustandsseite als Bedienpult -- im Aussehen von Keel Light.
 //
-// WARUM ES DIESE ZWEITE ANZEIGE GIBT
-// Die erste Fassung (rendern.js) legte alles untereinander auf eine lange Seite.
-// Der Auftraggeber dazu (22.08.2026): unuebersichtlich, Abkuerzungen, Info-Flut.
-// Gewuenscht: das Aussehen von Keel (Seitenleiste, ruhige Flaechen), klare
-// Strukturen, und Tiefe erst auf Klick statt alles sofort.
+// WAS DIESE DATEI IST
+// Sie bekommt die Messdaten und macht daraus EINE statische HTML-Datei: eigenes CSS,
+// eingebettete Daten, schlichtes JavaScript. Kein Bauschritt, keine Bibliothek, kein
+// Netz. Doppelklick genuegt.
 //
-// Die Messung wird dafuer NICHT angefasst -- sie kennt keine Darstellung. Diese
-// Datei bekommt dieselben Daten wie rendern.js und macht etwas anderes daraus.
-// Genau dafuer war der Schnitt "messen -> Daten -> rendern" gedacht.
+// WARUM SIE SO AUSSIEHT
+// Die Masse stammen aus der echten Oberflaeche (keel-showcase), nicht aus dem Gefuehl:
+// Seitenleiste 240px mit DEMSELBEN Hintergrund wie die Hauptflaeche, getrennt allein
+// durch einen Haarstrich; Navigationspille 6/8px Innenabstand bei 8px Radius; die
+// Symbol-Achse bei 28px; Kopfzeilen 48px ohne Trennlinie; Gruppen-Ueberschriften in
+// Maschinenschrift, Versalien, 0.1em gesperrt. Die Palette ist woertlich aus
+// keel-theme.css uebernommen (oklch, Blauton 205-238), hell und dunkel.
 //
-// Palette: uebernommen aus user-projects/keel-light/ui/src/keel-light/keel-theme.css
-// (oklch, Blauton 205-238, hell und dunkel). Umgeschaltet ueber prefers-color-scheme.
+// WAS SIE LEISTEN MUSS -- und woran die Vorfassung scheiterte
+// Sie war ein Lesedokument: keine Tiefe, keine Ansichten, keine Bedienung. Diese
+// Fassung traegt EINEN flachen Posten-Index; alle Ansichten, die Suche, die Filter,
+// die Sortierung und die Einzelansicht arbeiten auf derselben Liste. Das ist der
+// Grund, warum es echte Blickwinkel auf dieselben Daten gibt statt sieben Seiten.
 //
-// AUFRUF ueber zustand.js; nach aussen gibt es nur renderHTML(messung, regelDaten).
-
-// --- kleine Helfer ---------------------------------------------------------
+// EINE EHRLICHKEITS-REGEL, die das Aussehen bestimmt: Posten OHNE gemessenen Zustand
+// bekommen keinen abgeleiteten. Sie stehen im Brett in einer eigenen Spalte
+// "ohne gemessenen Zustand". Ein erfundener Zustand, der aussieht wie ein gemessener,
+// waere schlimmer als eine Luecke -- man glaubt ihm.
+//
+// AUFRUF ueber index.js; nach aussen gibt es nur renderHTML(messung, regelDaten).
 
 const esc = (s) =>
   String(s == null ? "" : s)
@@ -24,368 +33,205 @@ const esc = (s) =>
     .split(">").join("&gt;")
     .split('"').join("&quot;");
 
-// Markdown-Krumen, die in den Messtexten vorkommen: Code in Rueckticks und **fett**.
-function md(s) {
-  let t = esc(s);
-  t = t.replace(/`([^`]+)`/g, "<code>$1</code>");
-  t = t.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-  return t;
-}
+// ---------------------------------------------------------------------------
+// Der flache Posten-Index -- die eine Liste, auf der alles arbeitet.
+// ---------------------------------------------------------------------------
 
-const zahl = (n) => (typeof n === "number" ? n.toLocaleString("de-DE") : String(n == null ? "—" : n));
-
-// Statuswoerter ausgeschrieben -- keine Abkuerzungen, keine Fachbegriffe.
-const STATUS = {
-  ok: { wort: "In Ordnung", klasse: "gut" },
-  hinweis: { wort: "Hinweis", klasse: "warn" },
-  fehlt: { wort: "Nicht vorhanden", klasse: "warn" },
-  befund: { wort: "Befund", klasse: "schlecht" },
-  unlesbar: { wort: "Nicht messbar", klasse: "schlecht" },
-  gezogen: { wort: "Gelesen", klasse: "gut" },
-};
-const st = (s) => STATUS[s] || { wort: s || "unbekannt", klasse: "neutral" };
-
-const punkt = (s) => `<span class="punkt ${st(s).klasse}" title="${esc(st(s).wort)}"></span>`;
-const marke = (s) => `<span class="marke ${st(s).klasse}">${esc(st(s).wort)}</span>`;
-
-function kennzahl({ titel, wert, unter, status }) {
-  return `<div class="kennzahl">
-    <div class="kennzahl-kopf">${esc(titel)}${status ? punkt(status) : ""}</div>
-    <div class="kennzahl-wert">${esc(wert)}</div>
-    ${unter ? `<div class="kennzahl-unter">${md(unter)}</div>` : ""}
-  </div>`;
-}
-
-function aufklapp(titel, rechts, inhalt, offen) {
-  return `<details class="klapp"${offen ? " open" : ""}>
-    <summary><span class="klapp-titel">${esc(titel)}</span>${rechts || ""}<span class="klapp-pfeil"></span></summary>
-    <div class="klapp-inhalt">${inhalt}</div>
-  </details>`;
-}
-
-const leer = (text) => `<p class="leer">${md(text)}</p>`;
-
-const BEREICHS_NAMEN = {
-  kontext: { titel: "Was jede Sitzung mitliest", gut: "Der Grundstock wird geladen." },
-  bestand: { titel: "Fähigkeiten und Befehle", gut: "Alles aufgezählt." },
-  waechter: { titel: "Wächter", gut: "Alle verdrahtet und gemessen." },
-  sicherung: { titel: "Sicherung", gut: "Alle Verzeichnisse gesichert." },
-  pruefer: { titel: "Prüfer", gut: "Nichts zu beanstanden." },
-  rollen: { titel: "Sitzungs-Rollen", gut: "Rollen geladen." },
-  readiness: { titel: "Betriebsbericht", gut: "Nichts zu messen." },
-  verlauf: { titel: "Letzte Änderungen", gut: "Verlauf gelesen." },
+const BEREICHE = {
+  zutun: "Zu tun",
+  kontext: "Sitzungs-Kontext",
+  werkzeuge: "Werkzeug-Landschaft",
+  faehigkeiten: "Fähigkeiten",
+  befehle: "Befehle",
+  agenten: "Agenten",
+  mcp: "MCP-Server",
+  hooks: "Hook-Ordner",
+  waechter: "Wächter",
+  regeln: "Dauer-Regeln",
+  sicherung: "Sicherung",
+  pruefer: "Prüfer",
+  verlauf: "Änderungen",
 };
 
-const UNTERTITEL = {
-  ueberblick: "Wie es um diesen Harness steht — alles Wichtige auf einer Fläche.",
-  zutun: "Was offen ist. Jede Karte nennt den Grund und den passenden Befehl.",
-  werkzeuge: "Womit hier gearbeitet wird: Kommandozeilen-Programme, MCP-Server, Schnittstellen und Zugänge.",
-  bestand: "Was der Harness kann und was auf Zuruf bereitliegt.",
-  waechter: "Prüfungen, die bei jedem Befehl von selbst mitlaufen.",
-  regeln: "Regeln, die in jeder Sitzung geladen werden — ohne dass jemand sie aufruft.",
-  sicherung: "Wo Arbeit liegt und ob sie auch außerhalb dieses Rechners existiert.",
-  rollen: "Wer arbeitet woran, wenn mehrere Sitzungen gleichzeitig laufen.",
-  verlauf: "Die letzten Änderungen über alle Verzeichnisse hinweg.",
+function postenIndex(m, regeln) {
+  const raus = [];
+  let lfd = 0;
+  const nimm = (o) => raus.push({ id: "p" + ++lfd, ...o });
+
+  for (const t of m.zuTun || []) {
+    nimm({
+      bereich: "zutun", titel: t.text, unter: t.grund || "", zustand: t.status,
+      quelle: null, befehl: t.befehl || null, roh: t,
+    });
+  }
+
+  for (const s of m.bereiche.kontext?.stuecke || []) {
+    nimm({
+      bereich: "kontext", titel: s.pfad, unter: s.art, zustand: null,
+      quelle: s.pfad, bytes: s.bytes, aufwand: s.tokenSchaetzung,
+      warum: s.warum, roh: s,
+    });
+  }
+
+  for (const g of m.bereiche.bestand?.gruppen || []) {
+    for (const p of g.posten || []) {
+      nimm({
+        bereich: g.id, titel: String(p.name).split(" · ")[0], unter: p.beschreibung || "",
+        zustand: null, quelle: p.quelle || null, bytes: p.bytes, geaendert: p.geaendert,
+        herkunft: p.herkunft, ladeart: p.ladeart,
+        herkunftBeleg: p.herkunftBeleg, ladeartBeleg: p.ladeartBeleg,
+        rubrik: String(p.name).split(" · ")[1] || null, roh: p,
+      });
+    }
+  }
+
+  for (const w of m.bereiche.waechter?.eintraege || []) {
+    nimm({
+      bereich: "waechter", titel: w.skript || w.art,
+      unter: w.ansage || "", zustand: w.vorhanden === false ? "fehlt" : "ok",
+      quelle: w.skript ? ".claude/" + w.skript : null,
+      marke: w.blockt ? "kann stoppen" : "meldet nur",
+      warum: w.blockBeleg, ereignis: w.ereignis, roh: w,
+    });
+  }
+
+  for (const r of regeln.liste || []) {
+    nimm({
+      bereich: "regeln", titel: r.titel, unter: (r.quelle && r.quelle.datei) || "",
+      zustand: r.status === "gezogen" ? "ok" : "unlesbar",
+      quelle: (r.quelle && r.quelle.datei) || null, befehl: r.befehl || null,
+      warum: r.grund || r.abgrenzung || null, roh: r,
+    });
+  }
+
+  for (const r of m.bereiche.sicherung?.repos || []) {
+    nimm({
+      bereich: "sicherung", titel: r.name,
+      unter: r.sync || "", zustand: r.status, quelle: null,
+      marke: r.lage, warum: r.github ? "auf GitHub: " + r.github : "kein Fernziel eingerichtet",
+      roh: r,
+    });
+  }
+
+  for (const p of m.bereiche.pruefer?.laeufe || []) {
+    nimm({
+      bereich: "pruefer", titel: p.id, unter: p.zweck || "",
+      zustand: p.status, quelle: p.quelle || null, befehl: p.befehl || null,
+      warum: p.grund || p.notiz || null, roh: p,
+    });
+  }
+
+  for (const e of m.bereiche.verlauf?.eintraege || []) {
+    nimm({
+      bereich: "verlauf", titel: e.betreff, unter: e.repo,
+      zustand: null, quelle: null, datum: e.datum, kennung: e.hash,
+      warum: "von " + (e.autor || "unbekannt"), roh: e,
+    });
+  }
+
+  return raus;
+}
+
+// ---------------------------------------------------------------------------
+// Symbole -- 16x16, Strichstaerke 1.5, wie im Vorbild.
+// ---------------------------------------------------------------------------
+
+const SVG = (d) =>
+  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+
+const SYMBOL = {
+  ueberblick: SVG('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>'),
+  zutun: SVG('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>'),
+  werkzeuge: SVG('<path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>'),
+  faehigkeiten: SVG('<path d="M12 3l1.9 5.8H20l-4.9 3.6 1.9 5.8L12 14.6 7 18.2l1.9-5.8L4 8.8h6.1z"/>'),
+  befehle: SVG('<path d="M4 17l6-6-6-6"/><path d="M12 19h8"/>'),
+  waechter: SVG('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'),
+  regeln: SVG('<path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/>'),
+  sicherung: SVG('<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>'),
+  kontext: SVG('<circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 2"/>'),
+  verlauf: SVG('<path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 106 5.3L3 8"/><path d="M12 7v5l4 2"/>'),
+  rohdaten: SVG('<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>'),
 };
 
-// --- die einzelnen Flaechen ------------------------------------------------
-
-function ueberblick(m, regeln) {
-  const b = m.bereiche;
-  const offen = (m.zuTun || []).length;
-  const w = b.waechter || {};
-  const gelesen = (regeln.liste || []).filter((r) => r.status === "gezogen").length;
-  const repos = b.sicherung?.repos || [];
-  const unsicher = repos.filter((r) => r.status !== "ok").length;
-  const gruppen = b.bestand?.gruppen || [];
-  const anzahlVon = (id) => gruppen.find((g) => g.id === id)?.anzahl || 0;
-
-  const lage = st(m.gesamtstatus);
-  return `
-  <div class="lage ${lage.klasse}">
-    <div class="lage-wort">${esc(lage.wort)}</div>
-    <div class="lage-text">${
-      offen === 0
-        ? "Alle Bereiche sind gemessen, nichts ist offen."
-        : `${offen === 1 ? "Ein Punkt ist offen" : offen + " Punkte sind offen"} — sie stehen unter „Zu tun&#8220;.`
-    }</div>
-  </div>
-
-  <div class="kennzahlen">
-    ${kennzahl({
-      titel: "Wächter aktiv",
-      wert: zahl(w.zaehlung?.gesamt || 0),
-      unter: `davon **${zahl(w.zaehlung?.blockend || 0)}** können einen Befehl stoppen`,
-      status: w.status,
-    })}
-    ${kennzahl({ titel: "Fähigkeiten", wert: zahl(anzahlVon("faehigkeiten")), unter: "stehen zum Abruf bereit" })}
-    ${kennzahl({ titel: "Befehle", wert: zahl(anzahlVon("befehle")), unter: "mit Schrägstrich aufrufbar" })}
-    ${kennzahl({ titel: "Dauer-Regeln", wert: zahl(gelesen), unter: "werden in jeder Sitzung geladen" })}
-    ${kennzahl({
-      titel: "Verzeichnisse gesichert",
-      wert: `${zahl(repos.length - unsicher)} von ${zahl(repos.length)}`,
-      unter: unsicher ? "eines hat ungesicherte Arbeit" : "alles gesichert",
-      status: b.sicherung?.status,
-    })}
-    ${kennzahl({
-      titel: "Aufwand je Sitzung",
-      wert: zahl(b.kontext?.tokenSchaetzungJeSitzung || 0),
-      unter: "geschätzte Wortbausteine, die jede Sitzung mitliest",
-      status: b.kontext?.status,
-    })}
-  </div>
-
-  <h3 class="unter-titel">Die Bereiche auf einen Blick</h3>
-  <div class="bereichs-gitter">
-    ${Object.entries(b)
-      .map(([id, v]) => {
-        const n = BEREICHS_NAMEN[id] || { titel: id, gut: "gemessen" };
-        return `<div class="bereichs-kachel">
-          <div class="bk-kopf">${punkt(v.status)}<span>${esc(n.titel)}</span></div>
-          <div class="bk-text">${md(v.grund || v.notiz || n.gut)}</div>
-        </div>`;
-      })
-      .join("")}
-  </div>`;
-}
-
-function zuTunFlaeche(m) {
-  const liste = m.zuTun || [];
-  if (!liste.length) return leer("Nichts offen. Alle Bereiche sind gemessen und in Ordnung.");
-  return `<div class="tun-spalten">${liste
-    .map(
-      (t) => `<article class="tun-karte ${st(t.status).klasse}">
-      <header>${marke(t.status)}<span class="tun-bereich">${esc(BEREICHS_NAMEN[t.bereich]?.titel || t.bereich)}</span></header>
-      <p class="tun-text">${md(t.text)}</p>
-      ${t.grund ? `<p class="tun-grund">${md(t.grund)}</p>` : ""}
-      ${t.befehl ? `<pre class="befehl"><code>${esc(t.befehl)}</code></pre>` : ""}
-    </article>`
-    )
-    .join("")}</div>`;
-}
-
-function werkzeugFlaeche(m) {
-  const g = (m.bereiche.bestand?.gruppen || []).find((x) => x.id === "werkzeuge");
-  if (!g) return leer("Die Werkzeug-Landschaft wird von dieser Fassung noch nicht gemessen.");
-  if (!g.posten.length) {
-    return `${leer(g.notiz || "Noch nichts erhoben.")}
-      <div class="hinweis-box">
-        <strong>So wird sie gefüllt:</strong> Das Onboarding fragt in Schritt 3 „Womit arbeitest du?&#8220; nach den
-        Programmen und Diensten, mit denen du arbeitest, prüft selbst nach, was davon vorhanden ist,
-        und trägt das Ergebnis ein. Zugänge stehen dort nur mit Namen, nie mit Wert.
-        <pre class="befehl"><code>/onboarding</code></pre>
-      </div>`;
-  }
-  const rubriken = {};
-  for (const p of g.posten) {
-    const teile = String(p.name).split(" · ");
-    const rubrik = teile[1] || "Sonstige";
-    (rubriken[rubrik] = rubriken[rubrik] || []).push({ name: teile[0], beschreibung: p.beschreibung });
-  }
-  return `<div class="rubrik-gitter">${Object.entries(rubriken)
-    .map(
-      ([r, eintraege]) => `<section class="rubrik">
-      <h3>${esc(r)}<span class="rubrik-zahl">${zahl(eintraege.length)}</span></h3>
-      <ul class="liste">${eintraege
-        .map(
-          (e) =>
-            `<li><span class="li-name">${esc(e.name)}</span>${e.beschreibung ? `<span class="li-text">${md(e.beschreibung)}</span>` : ""}</li>`
-        )
-        .join("")}</ul>
-    </section>`
-    )
-    .join("")}</div>`;
-}
-
-function bestandFlaeche(m) {
-  const gruppen = (m.bereiche.bestand?.gruppen || []).filter((g) => g.id !== "werkzeuge");
-  const gefuellt = gruppen.filter((g) => g.anzahl > 0);
-  const leere = gruppen.filter((g) => g.anzahl === 0);
-  const eintrag = (p) =>
-    `<li><span class="li-name">${esc(p.name)}</span>${p.beschreibung ? `<span class="li-text">${md(p.beschreibung)}</span>` : ""}</li>`;
-
-  return `
-    ${gefuellt
-      .map((g) =>
-        aufklapp(
-          g.titel,
-          `<span class="klapp-zahl">${zahl(g.anzahl)}</span>`,
-          `${g.notiz ? `<p class="notiz">${md(g.notiz)}</p>` : ""}
-           <ul class="liste">${g.posten.map(eintrag).join("")}</ul>`,
-          g.id === "faehigkeiten"
-        )
-      )
-      .join("")}
-    ${
-      leere.length
-        ? aufklapp(
-            "In diesem Harness nicht belegt",
-            `<span class="klapp-zahl">${zahl(leere.length)}</span>`,
-            `<p class="notiz">Diese Bereiche sind leer. Bei einem schlanken Harness ist das der Normalfall und kein Mangel —
-             bei den MCP-Servern ist es sogar das Ziel: erst Kommandozeile, dann MCP, dann Browser.</p>
-             <ul class="liste">${leere
-               .map(
-                 (g) =>
-                   `<li><span class="li-name">${esc(g.titel)}</span><span class="li-text">${md(g.notiz || g.grund || "keine Einträge")}</span></li>`
-               )
-               .join("")}</ul>`
-          )
-        : ""
-    }`;
-}
-
-function waechterFlaeche(m) {
-  const e = m.bereiche.waechter?.eintraege || [];
-  if (!e.length) return leer("Keine Wächter verdrahtet.");
-  const zeile = (x) => `<li>
-      <span class="li-name">${esc(x.skript || x.art)}</span>
-      <span class="li-text">${esc(x.ansage || "")}</span>
-      <span class="li-tag">läuft bei: ${esc(x.ereignis)}</span>
-    </li>`;
-  const blockend = e.filter((x) => x.blockt);
-  const ansagend = e.filter((x) => !x.blockt);
-  return `
-    <p class="notiz">Wächter laufen von selbst — niemand ruft sie auf. Manche <strong>stoppen</strong> einen Befehl,
-    bevor er ausgeführt wird; die übrigen <strong>melden</strong> nur und halten nichts auf.</p>
-    <div class="rubrik-gitter">
-      <section class="rubrik">
-        <h3>Können einen Befehl stoppen<span class="rubrik-zahl">${zahl(blockend.length)}</span></h3>
-        <ul class="liste">${blockend.map(zeile).join("") || "<li><span class='li-text'>—</span></li>"}</ul>
-      </section>
-      <section class="rubrik">
-        <h3>Melden nur<span class="rubrik-zahl">${zahl(ansagend.length)}</span></h3>
-        <ul class="liste">${ansagend.map(zeile).join("") || "<li><span class='li-text'>—</span></li>"}</ul>
-      </section>
-    </div>`;
-}
-
-function regelFlaeche(regeln) {
-  const liste = regeln.liste || [];
-  const da = liste.filter((r) => r.status === "gezogen");
-  const nicht = liste.filter((r) => r.status !== "gezogen");
-
-  const inhalt = (r) => {
-    if (r.eintraege) {
-      return `<ul class="liste">${r.eintraege
-        .map(
-          (e) =>
-            `<li><span class="li-name">${esc(e.titel || e.datei)}</span><span class="li-text">${esc((e.kern || []).join(" · "))}</span></li>`
-        )
-        .join("")}</ul>${r.abgrenzung ? `<p class="notiz">${md(r.abgrenzung)}</p>` : ""}`;
-    }
-    if (r.befehle) {
-      return `<ul class="liste">${r.befehle
-        .map((b) => `<li><span class="li-name">${esc(b.zweck)}</span><pre class="befehl"><code>${esc(b.code)}</code></pre></li>`)
-        .join("")}</ul>`;
-    }
-    if (r.saetze) {
-      return `<ul class="liste">${r.saetze
-        .map((s) => `<li><span class="li-text">${md(typeof s === "string" ? s : JSON.stringify(s))}</span></li>`)
-        .join("")}</ul>`;
-    }
-    if (r.reihen) {
-      return `<ul class="liste">${r.reihen
-        .map((z) => `<li><span class="li-text">${esc(Array.isArray(z) ? z.join(" · ") : String(z))}</span></li>`)
-        .join("")}</ul>`;
-    }
-    return `<p class="notiz">${md(r.abgrenzung || r.grundsatz?.text || "—")}</p>`;
-  };
-
-  return `
-    ${da.map((r) => aufklapp(r.titel, `<span class="klapp-quelle">${esc(r.quelle?.datei || "")}</span>`, inhalt(r))).join("")}
-    ${
-      nicht.length
-        ? aufklapp(
-            "Gehört nicht zu diesem Harness",
-            `<span class="klapp-zahl">${zahl(nicht.length)}</span>`,
-            `<p class="notiz">Diese Regeln stammen aus der Ursprungs-Werkbank und werden hier nicht mitgeliefert.
-             Das ist so gewollt — kein Fehler.</p>
-             <ul class="liste">${nicht
-               .map((r) => `<li><span class="li-name">${esc(r.titel)}</span><span class="li-text">${md(r.grund || "")}</span></li>`)
-               .join("")}</ul>`
-          )
-        : ""
-    }`;
-}
-
-function sicherungFlaeche(m) {
-  const repos = m.bereiche.sicherung?.repos || [];
-  if (!repos.length) return leer("Keine Verzeichnisse gefunden.");
-  const karte = (r) => `<article class="repo-karte">
-      <header>${punkt(r.status)}<span class="repo-name">${esc(r.name)}</span></header>
-      <dl>
-        <dt>Stand</dt><dd>${esc(r.sync || "—")}</dd>
-        <dt>Auf GitHub</dt><dd>${esc(r.github || "kein Fernziel eingerichtet")}</dd>
-        ${r.ungesichert ? `<dt>Ungesichert</dt><dd>${zahl(r.ungesichert)} Datei(en)</dd>` : ""}
-      </dl>
-    </article>`;
-  const offen = repos.filter((r) => r.status !== "ok");
-  const gut = repos.filter((r) => r.status === "ok");
-  return `
-    ${
-      offen.length
-        ? `<h3 class="unter-titel">Braucht Aufmerksamkeit</h3><div class="repo-gitter">${offen.map(karte).join("")}</div>`
-        : leer("Alle Verzeichnisse sind gesichert und mit GitHub synchron.")
-    }
-    ${
-      gut.length
-        ? aufklapp("Gesichert und synchron", `<span class="klapp-zahl">${zahl(gut.length)}</span>`, `<div class="repo-gitter">${gut.map(karte).join("")}</div>`)
-        : ""
-    }`;
-}
-
-function rollenFlaeche(m) {
-  const r = m.bereiche.rollen || {};
-  if (!(r.rollen || []).length) {
-    return `${leer(r.grund || "Keine Rollen-Tabelle vorhanden.")}
-      <div class="hinweis-box">
-        <strong>Wofür das gut ist:</strong> Laufen mehrere Sitzungen gleichzeitig in diesem Ordner, hält eine
-        Tabelle fest, wer woran arbeitet — jede Sitzung liest sie beim Start und weiß dadurch von den anderen.
-        Im Alleinbetrieb wird sie nicht gebraucht; jede Zeile darin kostet in jeder Sitzung Platz.
-        <pre class="befehl"><code>docs/08-sessions-rollen.md</code></pre>
-      </div>`;
-  }
-  return `<ul class="liste">${r.rollen
-    .map((x) => `<li><span class="li-name">${esc(x.titel || x.name)}</span><span class="li-text">${esc(x.zweck || "")}</span></li>`)
-    .join("")}</ul>`;
-}
-
-function verlaufFlaeche(m) {
-  const e = m.bereiche.verlauf?.eintraege || [];
-  if (!e.length) return leer("Keine Einträge gefunden.");
-  return `<ul class="verlauf">${e
-    .slice(0, 25)
-    .map(
-      (x) => `<li>
-      <span class="v-datum">${esc(String(x.datum || "").slice(0, 10))}</span>
-      <span class="v-betreff">${esc(x.betreff)}</span>
-      <span class="v-repo">${esc(x.repo)}</span>
-    </li>`
-    )
-    .join("")}</ul>`;
-}
-
-// --- die Seite --------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Die Seite
+// ---------------------------------------------------------------------------
 
 function renderHTML(m, regelDaten) {
   const regeln = regelDaten || { liste: [] };
+  const posten = postenIndex(m, regeln);
   const b = m.bereiche;
   const offen = (m.zuTun || []).length;
-
-  const flaechen = [
-    { id: "ueberblick", titel: "Überblick", status: m.gesamtstatus, html: ueberblick(m, regeln) },
-    { id: "zutun", titel: "Zu tun", status: offen ? "hinweis" : "ok", anzahl: offen, html: zuTunFlaeche(m) },
-    { id: "werkzeuge", titel: "Werkzeug-Landschaft", status: "ok", html: werkzeugFlaeche(m) },
-    { id: "bestand", titel: "Fähigkeiten und Befehle", status: b.bestand?.status, html: bestandFlaeche(m) },
-    { id: "waechter", titel: "Wächter", status: b.waechter?.status, html: waechterFlaeche(m) },
-    { id: "regeln", titel: "Dauer-Regeln", status: regeln.unlesbar ? "hinweis" : "ok", html: regelFlaeche(regeln) },
-    { id: "sicherung", titel: "Sicherung", status: b.sicherung?.status, html: sicherungFlaeche(m) },
-    { id: "rollen", titel: "Sitzungs-Rollen", status: b.rollen?.status, html: rollenFlaeche(m) },
-    { id: "verlauf", titel: "Letzte Änderungen", status: b.verlauf?.status, html: verlaufFlaeche(m) },
-  ];
-
   const gemessen = new Date(m.gemessenAm).toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" });
   const ordner = String(m.wurzel).split(/[/\\]/).filter(Boolean).pop();
+
+  const zaehle = (id) => posten.filter((p) => p.bereich === id).length;
+
+  // Erste Gruppe ohne Beschriftung -- so macht es das Vorbild.
+  const NAV = [
+    { gruppe: null, punkte: [
+      { id: "ueberblick", titel: "Überblick", symbol: "ueberblick" },
+      { id: "zutun", titel: "Zu tun", symbol: "zutun", abzeichen: offen || null, ton: offen ? "warn" : null },
+    ]},
+    { gruppe: "Bestand", punkte: [
+      { id: "werkzeuge", titel: "Werkzeug-Landschaft", symbol: "werkzeuge", abzeichen: zaehle("werkzeuge") || null },
+      { id: "faehigkeiten", titel: "Fähigkeiten", symbol: "faehigkeiten", abzeichen: zaehle("faehigkeiten") || null },
+      { id: "befehle", titel: "Befehle", symbol: "befehle", abzeichen: zaehle("befehle") || null },
+      { id: "kontext", titel: "Sitzungs-Kontext", symbol: "kontext", abzeichen: zaehle("kontext") || null },
+    ]},
+    { gruppe: "Betrieb", punkte: [
+      { id: "waechter", titel: "Wächter", symbol: "waechter", abzeichen: zaehle("waechter") || null },
+      { id: "regeln", titel: "Dauer-Regeln", symbol: "regeln", abzeichen: zaehle("regeln") || null },
+      { id: "sicherung", titel: "Sicherung", symbol: "sicherung", abzeichen: zaehle("sicherung") || null },
+      { id: "verlauf", titel: "Änderungen", symbol: "verlauf", abzeichen: zaehle("verlauf") || null },
+    ]},
+    { gruppe: "Belege", punkte: [
+      { id: "rohdaten", titel: "Rohdaten", symbol: "rohdaten" },
+    ]},
+  ];
+
+  const UNTER = {
+    ueberblick: "Was ist der Fall, braucht es mich, was tue ich dagegen.",
+    zutun: "Was offen ist — mit Grund und passendem Befehl.",
+    werkzeuge: "Womit hier gearbeitet wird: Kommandozeilen-Programme, MCP-Server, Schnittstellen, Zugänge.",
+    faehigkeiten: "Was auf Zuruf bereitliegt.",
+    befehle: "Was mit Schrägstrich aufrufbar ist.",
+    kontext: "Was jede Sitzung mitliest — und was es kostet.",
+    waechter: "Prüfungen, die bei jedem Befehl von selbst mitlaufen.",
+    regeln: "Regeln, die in jeder Sitzung geladen werden.",
+    sicherung: "Wo Arbeit liegt und ob sie auch außerhalb dieses Rechners existiert.",
+    verlauf: "Die letzten Änderungen über alle Verzeichnisse hinweg.",
+    rohdaten: "Der gemessene Datensatz selbst — damit jede Zahl nachschlagbar ist.",
+  };
+
+  const daten = {
+    posten,
+    bereiche: BEREICHE,
+    unter: UNTER,
+    lage: {
+      gesamt: m.gesamtstatus,
+      zaehlung: m.zaehlung || {},
+      offen,
+      waechterGesamt: b.waechter?.zaehlung?.gesamt || 0,
+      waechterBlockend: b.waechter?.zaehlung?.blockend || 0,
+      regelnGelesen: (regeln.liste || []).filter((r) => r.status === "gezogen").length,
+      regelnGesamt: (regeln.liste || []).length,
+      repos: (b.sicherung?.repos || []).length,
+      reposOffen: (b.sicherung?.repos || []).filter((r) => r.status !== "ok").length,
+      aufwand: b.kontext?.tokenSchaetzungJeSitzung || 0,
+      aufwandHinweis: b.kontext?.faktorHinweis || null,
+      gemessen,
+    },
+    roh: { messung: m, regeln },
+  };
+
+  const navHTML = NAV.map((g) => `
+      ${g.gruppe ? `<div class="nav-gruppe">${esc(g.gruppe)}</div>` : ""}
+      ${g.punkte.map((p) => `<button class="navpunkt" data-ziel="${p.id}"${p.id === "ueberblick" ? ' aria-current="page"' : ""}>
+        <span class="nav-symbol">${SYMBOL[p.symbol] || ""}</span>
+        <span class="nav-text">${esc(p.titel)}</span>
+        ${p.abzeichen ? `<span class="nav-zahl${p.ton ? " " + p.ton : ""}">${p.abzeichen}</span>` : ""}
+      </button>`).join("")}`).join("");
 
   return `<!doctype html>
 <html lang="de">
@@ -394,204 +240,700 @@ function renderHTML(m, regelDaten) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Harness-Zustand — ${esc(ordner)}</title>
 <style>
+/* Palette woertlich aus keel-theme.css (oklch, Blauton 205-238). */
 :root{
-  --grund: oklch(0.978 0.007 214); --schrift: oklch(0.22 0.025 233);
-  --flaeche: oklch(0.99 0.004 210); --gedaempft: oklch(0.935 0.018 205);
-  --gedaempft-schrift: oklch(0.47 0.022 228); --akzent: oklch(0.4 0.07 224);
-  --akzent-schrift: oklch(0.985 0.004 210); --rand: oklch(0.28 0.03 230 / 0.22);
-  --leiste: oklch(0.976 0.007 210); --leiste-schwebe: oklch(0.92 0.028 212);
-  --gut: oklch(0.58 0.09 165); --warn: oklch(0.65 0.13 70); --schlecht: oklch(0.55 0.17 25);
-  --radius: 0.5rem;
-  --schriftart: "InterVariable","Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
-  --mono: ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --grund:oklch(0.978 0.007 214); --schrift:oklch(0.22 0.025 233);
+  --flaeche:oklch(0.99 0.004 210); --gedaempft:oklch(0.935 0.018 205);
+  --gedaempft-schrift:oklch(0.47 0.022 228); --akzent:oklch(0.4 0.07 224);
+  --akzent-schrift:oklch(0.985 0.004 210); --rahmen:oklch(0.28 0.03 230 / 0.22);
+  --leiste-aktiv:oklch(0.92 0.028 212);
+  /* Zustandsfarben: je Ton eigens gesetzt, nicht aus einer Formel -- Gelb und Grau
+     brauchen einen dunkleren Textanteil als Rot, sonst faellt der Kontrast unter 3:1. */
+  --st-ok:oklch(0.52 0.10 165); --st-hinweis:oklch(0.52 0.12 72);
+  --st-fehlt:oklch(0.50 0.13 45); --st-unlesbar:oklch(0.52 0.18 25);
+  --st-ohne:oklch(0.52 0.02 230);
+  --radius:8px; --radius-lg:10px; --radius-xl:12px;
+  --schrift-familie:"InterVariable","Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --kopf:48px;
 }
-@media (prefers-color-scheme: dark){:root{
-  --grund: oklch(0.16 0.038 238); --schrift: oklch(0.94 0.012 210);
-  --flaeche: oklch(0.26 0.045 233); --gedaempft: oklch(0.275 0.058 232);
-  --gedaempft-schrift: oklch(0.7 0.02 218); --akzent: oklch(0.78 0.075 205);
-  --akzent-schrift: oklch(0.16 0.038 238); --rand: oklch(0.92 0.02 210 / 0.18);
-  --leiste: oklch(0.19 0.04 236); --leiste-schwebe: oklch(0.275 0.058 232);
-  --gut: oklch(0.75 0.1 165); --warn: oklch(0.8 0.12 80); --schlecht: oklch(0.7 0.15 25);
+:root[data-thema="dunkel"], html:not([data-thema="hell"]) body.system-dunkel{}
+@media (prefers-color-scheme: dark){ :root:not([data-thema="hell"]){
+  --grund:oklch(0.16 0.038 238); --schrift:oklch(0.94 0.012 210);
+  --flaeche:oklch(0.26 0.045 233); --gedaempft:oklch(0.275 0.058 232);
+  --gedaempft-schrift:oklch(0.7 0.02 218); --akzent:oklch(0.78 0.075 205);
+  --akzent-schrift:oklch(0.16 0.038 238); --rahmen:oklch(0.92 0.02 210 / 0.18);
+  --leiste-aktiv:oklch(0.275 0.058 232);
+  --st-ok:oklch(0.78 0.11 165); --st-hinweis:oklch(0.82 0.13 78);
+  --st-fehlt:oklch(0.76 0.13 45); --st-unlesbar:oklch(0.72 0.16 25);
+  --st-ohne:oklch(0.68 0.02 220);
 }}
+:root[data-thema="dunkel"]{
+  --grund:oklch(0.16 0.038 238); --schrift:oklch(0.94 0.012 210);
+  --flaeche:oklch(0.26 0.045 233); --gedaempft:oklch(0.275 0.058 232);
+  --gedaempft-schrift:oklch(0.7 0.02 218); --akzent:oklch(0.78 0.075 205);
+  --akzent-schrift:oklch(0.16 0.038 238); --rahmen:oklch(0.92 0.02 210 / 0.18);
+  --leiste-aktiv:oklch(0.275 0.058 232);
+  --st-ok:oklch(0.78 0.11 165); --st-hinweis:oklch(0.82 0.13 78);
+  --st-fehlt:oklch(0.76 0.13 45); --st-unlesbar:oklch(0.72 0.16 25);
+  --st-ohne:oklch(0.68 0.02 220);
+}
 *{box-sizing:border-box}
-body{margin:0;background:var(--grund);color:var(--schrift);font-family:var(--schriftart);
-  font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
-.rahmen{display:flex;min-height:100vh}
+body{margin:0;background:var(--grund);color:var(--schrift);font-family:var(--schrift-familie);
+  font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased;
+  display:grid;grid-template-columns:240px 1fr;height:100vh;overflow:hidden}
 
-/* Seitenleiste */
-.leiste{width:252px;flex:0 0 252px;background:var(--leiste);border-right:1px solid var(--rand);
-  padding:22px 14px;position:sticky;top:0;height:100vh;overflow-y:auto}
-.marke-kopf{padding:0 10px 18px;border-bottom:1px solid var(--rand);margin-bottom:14px}
-.marke-kopf h1{font-size:15px;margin:0 0 3px;letter-spacing:-0.01em}
-.marke-kopf p{margin:0;font-size:12px;color:var(--gedaempft-schrift);font-family:var(--mono);
-  overflow:hidden;text-overflow:ellipsis}
-.nav{display:flex;flex-direction:column;gap:2px}
-.nav button{display:flex;align-items:center;gap:9px;width:100%;text-align:left;border:0;
-  background:transparent;color:var(--schrift);font:inherit;font-size:14px;padding:9px 10px;
-  border-radius:var(--radius);cursor:pointer;transition:background .12s}
-.nav button:hover{background:var(--leiste-schwebe)}
-.nav button[aria-selected="true"]{background:var(--akzent);color:var(--akzent-schrift);font-weight:550}
-.nav-zahl{margin-left:auto;background:var(--schlecht);color:#fff;font-size:11px;font-weight:600;
-  min-width:19px;height:19px;border-radius:10px;display:grid;place-items:center;padding:0 5px}
-.leiste-fuss{margin-top:18px;padding:12px 10px 0;border-top:1px solid var(--rand);
-  font-size:11.5px;color:var(--gedaempft-schrift);line-height:1.55}
+/* --- Seitenleiste: gleicher Grundton wie die Hauptflaeche, nur ein Haarstrich --- */
+aside{border-right:1px solid var(--rahmen);display:flex;flex-direction:column;min-height:0}
+.leiste-kopf{height:var(--kopf);display:flex;align-items:center;gap:8px;padding:0 12px;flex:0 0 auto}
+.marke{width:20px;height:20px;border-radius:6.4px;background:var(--akzent);color:var(--akzent-schrift);
+  display:grid;place-items:center;font-weight:700;font-size:11px;flex:0 0 20px}
+.marke-text{font-size:14px;font-weight:700;letter-spacing:-.01em;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kopf-knopf{width:28px;height:28px;border:0;background:none;color:var(--gedaempft-schrift);border-radius:6px;
+  display:grid;place-items:center;cursor:pointer}
+.kopf-knopf:hover{background:var(--leiste-aktiv);color:var(--schrift)}
+.kopf-knopf svg{width:15px;height:15px}
+nav{padding:12px;overflow-y:auto;flex:1;min-height:0}
+.nav-gruppe{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--gedaempft-schrift);opacity:.75;padding-left:16px;margin:16px 0 6px}
+.nav-gruppe:first-child{margin-top:0}
+.navpunkt{display:flex;align-items:center;gap:10px;width:calc(100% - 16px);margin:0 8px;padding:6px 8px;
+  border:0;background:none;color:var(--schrift);font:inherit;font-size:14px;font-weight:500;
+  border-radius:var(--radius);cursor:pointer;text-align:left}
+.navpunkt+.navpunkt{margin-top:2px}
+.navpunkt:hover{background:var(--leiste-aktiv)}
+.navpunkt[aria-current="page"]{background:var(--leiste-aktiv);font-weight:600}
+.nav-symbol{width:16px;height:16px;flex:0 0 16px;color:var(--gedaempft-schrift);display:block}
+.navpunkt[aria-current="page"] .nav-symbol{color:var(--schrift)}
+.nav-symbol svg{width:16px;height:16px;display:block}
+.nav-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav-zahl{font-size:11px;font-weight:600;color:var(--gedaempft-schrift);font-variant-numeric:tabular-nums}
+.nav-zahl.warn{background:var(--st-hinweis);color:var(--flaeche);min-width:18px;height:18px;
+  border-radius:9px;display:grid;place-items:center;padding:0 5px}
+.leiste-fuss{border-top:1px solid var(--rahmen);padding:10px 12px;font-size:11px;
+  color:var(--gedaempft-schrift);line-height:1.5;flex:0 0 auto}
+.leiste-fuss code{font-family:var(--mono);font-size:10.5px}
 
-/* Hauptflaeche */
-.haupt{flex:1;padding:30px 38px 60px;max-width:1100px}
-.flaeche{display:none}
-.flaeche.aktiv{display:block;animation:auf .16s ease}
-@keyframes auf{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
-.flaeche > h2{font-size:24px;margin:0 0 4px;letter-spacing:-0.02em}
-.flaeche > .unter{margin:0 0 24px;color:var(--gedaempft-schrift);font-size:14px}
+/* --- Hauptflaeche --- */
+main{display:flex;flex-direction:column;min-width:0;min-height:0}
+.kopfzeile{height:var(--kopf);flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:0 20px;
+  border-bottom:1px solid var(--rahmen);font-size:13px}
+.krume{color:var(--gedaempft-schrift)}
+.krume b{color:var(--schrift);font-weight:600}
+.krume-pfeil{opacity:.5;margin:0 2px}
+.kopf-rechts{margin-left:auto;display:flex;align-items:center;gap:10px;color:var(--gedaempft-schrift);font-size:12px}
 
-/* Bausteine */
-.punkt{width:8px;height:8px;border-radius:50%;flex:0 0 8px;display:inline-block;
-  background:var(--gedaempft-schrift)}
-.punkt.gut{background:var(--gut)} .punkt.warn{background:var(--warn)} .punkt.schlecht{background:var(--schlecht)}
-.marke{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 8px;border-radius:99px;
-  background:var(--gedaempft);color:var(--gedaempft-schrift)}
-.marke.gut{background:color-mix(in oklab,var(--gut) 18%,transparent);color:var(--gut)}
-.marke.warn{background:color-mix(in oklab,var(--warn) 20%,transparent);color:var(--warn)}
-.marke.schlecht{background:color-mix(in oklab,var(--schlecht) 18%,transparent);color:var(--schlecht)}
+.buehne{flex:1;min-height:0;padding:16px 20px 20px;overflow:hidden;position:relative}
+.tafel{background:var(--grund);height:100%;display:flex;flex-direction:column;min-height:0;position:relative}
 
-.lage{border:1px solid var(--rand);border-left:4px solid var(--gedaempft-schrift);
-  background:var(--flaeche);border-radius:var(--radius);padding:18px 20px;margin-bottom:22px}
-.lage.gut{border-left-color:var(--gut)} .lage.warn{border-left-color:var(--warn)}
-.lage.schlecht{border-left-color:var(--schlecht)}
-.lage-wort{font-size:19px;font-weight:600;letter-spacing:-0.01em}
-.lage-text{color:var(--gedaempft-schrift);font-size:14px;margin-top:2px}
+.seitenkopf{flex:0 0 auto;padding:6px 2px 18px}
+.seitenkopf h1{font-size:19px;font-weight:650;letter-spacing:-.01em;margin:0 0 3px}
+.seitenkopf p{margin:0;font-size:13px;color:var(--gedaempft-schrift)}
 
-.kennzahlen{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:12px;margin-bottom:8px}
-.kennzahl{background:var(--flaeche);border:1px solid var(--rand);border-radius:var(--radius);padding:14px 16px}
-.kennzahl-kopf{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--gedaempft-schrift);
-  text-transform:uppercase;letter-spacing:.04em;font-weight:600}
-.kennzahl-wert{font-size:27px;font-weight:600;letter-spacing:-0.02em;margin:5px 0 2px}
-.kennzahl-unter{font-size:12.5px;color:var(--gedaempft-schrift)}
+.werkzeugleiste{flex:0 0 auto;display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-bottom:14px}
+.sicht{display:flex;gap:2px;background:var(--gedaempft);padding:2px;border-radius:var(--radius)}
+.sicht button{border:0;background:none;color:var(--gedaempft-schrift);font:inherit;font-size:12.5px;
+  padding:4px 11px;border-radius:6px;cursor:pointer}
+.sicht button[aria-pressed="true"]{background:var(--flaeche);color:var(--schrift);font-weight:650}
+.suche{margin-left:auto;display:flex;align-items:center;gap:6px;background:var(--flaeche);
+  border:1px solid var(--rahmen);border-radius:var(--radius);padding:0 10px;height:30px;min-width:220px}
+.suche svg{width:14px;height:14px;color:var(--gedaempft-schrift);flex:0 0 14px}
+.suche input{border:0;background:none;outline:none;font:inherit;font-size:13px;color:var(--schrift);width:100%}
+.filterzeile{flex:0 0 auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-bottom:12px}
+.pille{border:1px dashed var(--rahmen);background:none;color:var(--gedaempft-schrift);font:inherit;
+  font-size:12px;padding:3px 11px;border-radius:99px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.pille[aria-pressed="true"]{border-style:solid;border-color:var(--sc,var(--akzent));
+  background:color-mix(in oklab,var(--sc,var(--akzent)) 12%,transparent);color:var(--sc,var(--akzent));font-weight:600}
+.pille .zahl{font-size:10px;font-weight:700;line-height:14px;opacity:.75;font-variant-numeric:tabular-nums}
+.waehler{border:1px solid var(--rahmen);background:var(--flaeche);color:var(--schrift);font:inherit;
+  font-size:12.5px;padding:4px 8px;border-radius:var(--radius);cursor:pointer}
+.textknopf{border:0;background:none;color:var(--akzent);font:inherit;font-size:12px;
+  text-decoration:underline;cursor:pointer;padding:0}
 
-.unter-titel{font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--gedaempft-schrift);
-  margin:26px 0 12px;font-weight:600}
-.bereichs-gitter{display:grid;grid-template-columns:repeat(auto-fill,minmax(262px,1fr));gap:10px}
-.bereichs-kachel{background:var(--flaeche);border:1px solid var(--rand);border-radius:var(--radius);padding:13px 15px}
-.bk-kopf{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;margin-bottom:3px}
-.bk-text{font-size:13px;color:var(--gedaempft-schrift)}
+.leib{flex:1;min-height:0;overflow:auto;padding-right:2px}
 
-.tun-spalten{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:12px}
-.tun-karte{background:var(--flaeche);border:1px solid var(--rand);border-top:3px solid var(--warn);
-  border-radius:var(--radius);padding:15px 17px}
-.tun-karte.schlecht{border-top-color:var(--schlecht)} .tun-karte.gut{border-top-color:var(--gut)}
-.tun-karte header{display:flex;align-items:center;gap:9px;margin-bottom:9px}
-.tun-bereich{font-size:12.5px;color:var(--gedaempft-schrift);font-weight:600}
-.tun-text{margin:0 0 6px;font-weight:500}
-.tun-grund{margin:0 0 4px;font-size:13px;color:var(--gedaempft-schrift)}
+/* --- Karten: aussen Seitenton, innen heller. Das ist die Schichtung des Vorbilds. --- */
+.karte{background:var(--flaeche);border:1px solid var(--rahmen);border-radius:var(--radius-xl);
+  overflow:hidden;margin-bottom:12px}
+.karte-kopf{padding:12px 16px;font-size:13.5px;font-weight:650;border-bottom:1px solid var(--rahmen);
+  display:flex;align-items:center;gap:9px}
+.karte-kopf .zahl{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--gedaempft-schrift);
+  font-variant-numeric:tabular-nums}
+.karte-notiz{padding:10px 16px;font-size:12.5px;color:var(--gedaempft-schrift);border-bottom:1px solid var(--rahmen)}
 
-.klapp{background:var(--flaeche);border:1px solid var(--rand);border-radius:var(--radius);margin-bottom:9px}
-.klapp summary{display:flex;align-items:center;gap:11px;padding:13px 16px;cursor:pointer;
-  list-style:none;font-weight:550}
-.klapp summary::-webkit-details-marker{display:none}
-.klapp summary:hover{background:var(--gedaempft);border-radius:var(--radius)}
-.klapp-titel{flex:1}
-.klapp-zahl{background:var(--gedaempft);color:var(--gedaempft-schrift);font-size:12px;font-weight:600;
-  padding:1px 9px;border-radius:99px}
-.klapp-quelle{font-family:var(--mono);font-size:11.5px;color:var(--gedaempft-schrift)}
-.klapp-pfeil{width:7px;height:7px;border-right:2px solid var(--gedaempft-schrift);
-  border-bottom:2px solid var(--gedaempft-schrift);transform:rotate(45deg);transition:transform .15s;
-  margin-left:4px;flex:0 0 7px}
-.klapp[open] .klapp-pfeil{transform:rotate(225deg)}
-.klapp-inhalt{padding:13px 16px 15px;border-top:1px solid var(--rand)}
+.zeile{display:flex;align-items:flex-start;gap:10px;padding:10px 16px;cursor:pointer;
+  border-bottom:1px solid var(--rahmen)}
+.zeile:last-child{border-bottom:0}
+.zeile:hover{background:color-mix(in oklab,var(--gedaempft) 45%,transparent)}
+.zeile[aria-selected="true"]{background:color-mix(in oklab,var(--akzent) 10%,transparent);
+  box-shadow:inset 2px 0 0 var(--akzent)}
+.punkt{width:9px;height:9px;border-radius:50%;flex:0 0 9px;margin-top:5px;background:var(--st-ohne)}
+.z-mitte{flex:1;min-width:0}
+.z-titel{font-size:13.5px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.z-unter{font-size:11.5px;color:var(--gedaempft-schrift);margin-top:2px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.z-pfad{font-family:var(--mono);font-size:11px;color:var(--gedaempft-schrift);margin-top:2px}
+.z-rechts{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.marke-zustand{padding:1px 8px;font-size:10.5px;font-weight:600;line-height:16px;border:0;border-radius:6px;
+  background:color-mix(in oklab,var(--sc) 18%,transparent);color:var(--sc);white-space:nowrap}
+.aufklapp{padding:0 16px 12px 35px;font-size:12.5px;color:var(--gedaempft-schrift);
+  border-bottom:1px solid var(--rahmen);background:color-mix(in oklab,var(--gedaempft) 30%,transparent)}
+.aufklapp dl{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin:10px 0 0}
+.aufklapp dt{color:var(--gedaempft-schrift)} .aufklapp dd{margin:0;word-break:break-word}
 
-.liste{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
-.liste li{display:flex;flex-direction:column;gap:2px;padding:9px 11px;background:var(--grund);
-  border:1px solid var(--rand);border-radius:calc(var(--radius) * 0.7)}
-.li-name{font-weight:600;font-size:13.5px}
-.li-text{font-size:12.5px;color:var(--gedaempft-schrift)}
-.li-tag{font-size:11px;color:var(--gedaempft-schrift);font-family:var(--mono);margin-top:2px}
+.gruppenkopf{font-size:10px;font-weight:650;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--gedaempft-schrift);padding:14px 2px 6px;display:flex;align-items:center;gap:8px}
+.gruppenkopf .zahl{font-variant-numeric:tabular-nums;opacity:.7}
 
-.rubrik-gitter{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px}
-.rubrik{background:var(--flaeche);border:1px solid var(--rand);border-radius:var(--radius);padding:15px 17px}
-.rubrik h3{display:flex;align-items:center;gap:9px;margin:0 0 11px;font-size:14px}
-.rubrik-zahl{background:var(--gedaempft);color:var(--gedaempft-schrift);font-size:11.5px;
-  font-weight:600;padding:1px 8px;border-radius:99px}
+/* --- Kennzahlen --- */
+.kennzahlen{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px}
+.kachel{background:var(--flaeche);border:1px solid var(--rahmen);border-radius:var(--radius-xl);padding:14px}
+.kachel .k-titel{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--gedaempft-schrift);font-weight:600}
+.kachel .k-wert{font-size:22px;font-weight:700;letter-spacing:-.02em;margin:6px 0 3px;font-variant-numeric:tabular-nums}
+.kachel .k-quelle{font-size:10.5px;color:var(--gedaempft-schrift);line-height:1.4}
 
-.repo-gitter{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:11px}
-.repo-karte{background:var(--flaeche);border:1px solid var(--rand);border-radius:var(--radius);padding:13px 15px}
-.repo-karte header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.repo-name{font-weight:600;font-size:14px;word-break:break-all}
-.repo-karte dl{display:grid;grid-template-columns:auto 1fr;gap:3px 11px;margin:0;font-size:12.5px}
-.repo-karte dt{color:var(--gedaempft-schrift)} .repo-karte dd{margin:0}
+/* --- Brett: die Spaltenflaeche traegt die Zustandsfarbe --- */
+.brett{display:flex;gap:14px;overflow-x:auto;height:100%;padding-bottom:6px}
+.spalte{flex:0 0 262px;display:flex;flex-direction:column;min-height:0}
+.spalte-kopf{display:flex;align-items:center;gap:8px;padding:0 4px 8px;font-size:12.5px;font-weight:650}
+.spalte-kopf .zahl{margin-left:auto;font-size:11px;color:var(--gedaempft-schrift);font-variant-numeric:tabular-nums}
+.spalte-leib{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;gap:4px;
+  background:color-mix(in oklab,var(--sc) 8%,var(--grund));
+  box-shadow:inset 0 0 0 1px color-mix(in oklab,var(--sc) 15%,transparent);
+  border-radius:var(--radius-lg);padding:8px}
+.bkarte{background:var(--flaeche);border:1px solid var(--rahmen);border-radius:var(--radius);
+  padding:10px 12px;cursor:pointer}
+.bkarte:hover{border-color:color-mix(in oklab,var(--schrift) 20%,transparent)}
+.bk-titel{font-size:12.5px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bk-unter{font-size:11px;color:var(--gedaempft-schrift);margin-top:3px;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+.bk-fuss{display:flex;gap:8px;margin-top:6px;font-size:10.5px;color:var(--gedaempft-schrift)}
+.spalte-leer{font-size:11.5px;color:var(--gedaempft-schrift);padding:10px 4px;line-height:1.45}
 
-.verlauf{list-style:none;margin:0;padding:0}
-.verlauf li{display:grid;grid-template-columns:96px 1fr auto;gap:14px;align-items:baseline;
-  padding:9px 2px;border-bottom:1px solid var(--rand)}
-.v-datum{font-family:var(--mono);font-size:12px;color:var(--gedaempft-schrift)}
-.v-betreff{font-size:13.5px}
-.v-repo{font-size:11.5px;color:var(--gedaempft-schrift);font-family:var(--mono)}
+/* --- Tabelle --- */
+table{width:100%;border-collapse:collapse;font-size:12.5px;background:var(--flaeche);
+  border:1px solid var(--rahmen);border-radius:var(--radius-xl);overflow:hidden}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--gedaempft-schrift);
+  font-weight:600;padding:10px 12px;border-bottom:1px solid var(--rahmen);cursor:pointer;white-space:nowrap}
+th:hover{color:var(--schrift)}
+td{padding:9px 12px;border-bottom:1px solid var(--rahmen)}
+tr:last-child td{border-bottom:0}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:color-mix(in oklab,var(--gedaempft) 45%,transparent)}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono);font-size:11.5px}
+.balken{display:block;height:4px;border-radius:2px;background:var(--akzent);opacity:.5;margin-top:3px}
 
-.befehl{background:var(--gedaempft);border-radius:calc(var(--radius) * 0.7);padding:9px 12px;
-  overflow-x:auto;margin:8px 0 0}
-.befehl code{font-family:var(--mono);font-size:12.5px;background:none;padding:0}
-code{font-family:var(--mono);font-size:.92em;background:var(--gedaempft);padding:1px 5px;border-radius:4px}
-.notiz{font-size:13px;color:var(--gedaempft-schrift);margin:0 0 11px}
-.leer{color:var(--gedaempft-schrift);font-size:14px;padding:10px 0 16px;margin:0}
-.hinweis-box{background:var(--flaeche);border:1px solid var(--rand);border-left:3px solid var(--akzent);
-  border-radius:var(--radius);padding:14px 17px;font-size:13.5px}
+/* --- Einzelansicht: schwebt INNERHALB der Tafel --- */
+.einzel{position:absolute;top:14px;right:14px;bottom:14px;width:min(340px,88%);
+  background:var(--flaeche);border:1px solid var(--rahmen);border-radius:14px;
+  box-shadow:0 8px 28px oklch(0.2 0.03 235 / .18);z-index:25;display:flex;flex-direction:column;overflow:hidden}
+.einzel-kopf{display:flex;align-items:center;gap:8px;padding:13px 16px;border-bottom:1px solid var(--rahmen)}
+.einzel-kopf h2{font-size:14px;font-weight:650;margin:0;flex:1;overflow:hidden;text-overflow:ellipsis}
+.einzel-leib{flex:1;overflow-y:auto;padding:14px 16px;font-size:12.5px}
+.einzel-leib dl{display:grid;grid-template-columns:auto 1fr;gap:5px 12px;margin:0 0 14px}
+.einzel-leib dt{color:var(--gedaempft-schrift)} .einzel-leib dd{margin:0;word-break:break-word}
+.einzel-leib h3{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--gedaempft-schrift);
+  margin:16px 0 6px;font-weight:600}
 
-@media (max-width:880px){
-  .rahmen{flex-direction:column}
-  .leiste{width:100%;flex:none;height:auto;position:static;padding:16px}
-  .nav{flex-direction:row;flex-wrap:wrap}
-  .nav button{width:auto}
-  .haupt{padding:22px 18px 50px}
-  .verlauf li{grid-template-columns:1fr;gap:2px}
+.kopierbar{cursor:copy;border:0;background:none;font:inherit;color:inherit;padding:0;text-align:left}
+.kopierbar:hover{color:var(--akzent)}
+.kopiert{font-size:10.5px;color:var(--st-ok);margin-left:6px}
+pre.befehl{background:var(--gedaempft);border-radius:6px;padding:8px 10px;overflow-x:auto;margin:6px 0 0;
+  font-family:var(--mono);font-size:11.5px;white-space:pre-wrap;word-break:break-all}
+.leer-text{color:var(--gedaempft-schrift);font-size:13px;padding:24px 2px;line-height:1.6}
+details.roh{background:var(--flaeche);border:1px solid var(--rahmen);border-radius:var(--radius);margin-bottom:6px}
+details.roh summary{padding:9px 13px;cursor:pointer;font-size:12.5px;font-weight:600;list-style:none}
+details.roh summary::-webkit-details-marker{display:none}
+details.roh pre{margin:0;padding:0 13px 12px;font-family:var(--mono);font-size:11px;overflow-x:auto;
+  color:var(--gedaempft-schrift);white-space:pre-wrap;word-break:break-word}
+
+@media (max-width:900px){
+  body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  aside{border-right:0;border-bottom:1px solid var(--rahmen);max-height:44vh}
+  .einzel{width:auto;left:14px}
 }
 </style>
 </head>
 <body>
-<div class="rahmen">
-  <aside class="leiste">
-    <div class="marke-kopf">
-      <h1>Harness-Zustand</h1>
-      <p>${esc(ordner)}</p>
-    </div>
-    <nav class="nav" role="tablist">
-      ${flaechen
-        .map(
-          (f, i) =>
-            `<button role="tab" aria-selected="${i === 0 ? "true" : "false"}" data-ziel="${f.id}">
-              ${punkt(f.status)}<span>${esc(f.titel)}</span>
-              ${f.anzahl ? `<span class="nav-zahl">${zahl(f.anzahl)}</span>` : ""}
-            </button>`
-        )
-        .join("")}
-    </nav>
-    <div class="leiste-fuss">
-      Gemessen am ${esc(gemessen)}.<br><br>
-      Diese Seite ist eine Momentaufnahme, kein Live-Blick. Neu erzeugen mit:
-      <code>node dashboard/index.js</code>
-    </div>
-  </aside>
-  <main class="haupt">
-    ${flaechen
-      .map(
-        (f, i) => `<section class="flaeche${i === 0 ? " aktiv" : ""}" id="f-${f.id}">
-        <h2>${esc(f.titel)}</h2>
-        <p class="unter">${esc(UNTERTITEL[f.id] || "")}</p>
-        ${f.html}
-      </section>`
-      )
-      .join("")}
-  </main>
-</div>
+<aside>
+  <div class="leiste-kopf">
+    <span class="marke">H</span>
+    <span class="marke-text">Harness-Zustand</span>
+    <button class="kopf-knopf" id="thema" title="Hell oder dunkel">
+      ${SVG('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M5 5l1.5 1.5M17.5 17.5L19 19M2 12h2M20 12h2M5 19l1.5-1.5M17.5 6.5L19 5"/>')}
+    </button>
+  </div>
+  <nav>${navHTML}</nav>
+  <div class="leiste-fuss">
+    Gemessen ${esc(gemessen)}<br>
+    <button class="kopierbar" data-kopie="node dashboard/index.js --html zustand.html"><code>node dashboard/index.js --html zustand.html</code></button>
+  </div>
+</aside>
+
+<main>
+  <div class="kopfzeile">
+    <span class="krume"><b>${esc(ordner)}</b><span class="krume-pfeil">›</span><span id="krume-flaeche">Überblick</span><span id="krume-rest"></span></span>
+    <span class="kopf-rechts"><span id="zaehler"></span></span>
+  </div>
+  <div class="buehne">
+    <section class="tafel">
+      <div class="seitenkopf">
+        <h1 id="titel">Überblick</h1>
+        <p id="untertitel"></p>
+      </div>
+      <div class="werkzeugleiste" id="werkzeugleiste"></div>
+      <div class="filterzeile" id="filterzeile"></div>
+      <div class="leib" id="leib"></div>
+    </section>
+  </div>
+</main>
+
+<script id="daten" type="application/json">${JSON.stringify(daten).split("<").join("\\u003c")}</script>
 <script>
-document.querySelectorAll(".nav button").forEach(function (b) {
-  b.addEventListener("click", function () {
-    document.querySelectorAll(".nav button").forEach(function (x) { x.setAttribute("aria-selected", "false"); });
-    b.setAttribute("aria-selected", "true");
-    document.querySelectorAll(".flaeche").forEach(function (s) { s.classList.remove("aktiv"); });
-    var ziel = document.getElementById("f-" + b.dataset.ziel);
-    if (ziel) ziel.classList.add("aktiv");
-    window.scrollTo(0, 0);
+(function () {
+  "use strict";
+  var D = JSON.parse(document.getElementById("daten").textContent);
+  var POSTEN = D.posten;
+
+  var ZUSTAND = {
+    unlesbar: { wort: "Nicht messbar", farbe: "var(--st-unlesbar)", rang: 4 },
+    befund:   { wort: "Befund",         farbe: "var(--st-unlesbar)", rang: 4 },
+    fehlt:    { wort: "Nicht vorhanden",farbe: "var(--st-fehlt)",    rang: 3 },
+    hinweis:  { wort: "Hinweis",        farbe: "var(--st-hinweis)",  rang: 2 },
+    ok:       { wort: "In Ordnung",     farbe: "var(--st-ok)",       rang: 1 },
+    ohne:     { wort: "Ohne gemessenen Zustand", farbe: "var(--st-ohne)", rang: 0 }
+  };
+  function zst(p) { return p.zustand || "ohne"; }
+  function zInfo(k) { return ZUSTAND[k] || ZUSTAND.ohne; }
+
+  var S = {
+    flaeche: "ueberblick", sicht: "liste", suche: "",
+    filter: [], sortier: "dringlichkeit", richtung: "ab", gruppe: "bereich",
+    offen: {}, einzel: null, auswahl: -1
+  };
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+  function zahl(n) { return typeof n === "number" ? n.toLocaleString("de-DE") : "—"; }
+  function groesse(n) {
+    if (typeof n !== "number") return "—";
+    return n < 1024 ? n + " B" : (n / 1024).toFixed(1).replace(".", ",") + " KB";
+  }
+  function datum(s) { return s ? String(s).slice(0, 10) : "—"; }
+
+  // --- Auswahl: Seitenleiste IST der Bereichsfilter --------------------------
+  function basis() {
+    if (S.flaeche === "ueberblick" || S.flaeche === "rohdaten") return POSTEN;
+    if (S.flaeche === "zutun") return POSTEN.filter(function (p) { return p.bereich === "zutun"; });
+    return POSTEN.filter(function (p) { return p.bereich === S.flaeche; });
+  }
+  function sichtbar() {
+    var q = S.suche.trim().toLowerCase();
+    return basis().filter(function (p) {
+      if (S.filter.length && S.filter.indexOf(zst(p)) === -1) return false;
+      if (!q) return true;
+      return [p.titel, p.unter, p.quelle, p.warum, p.befehl, D.bereiche[p.bereich], p.herkunft, p.ladeart]
+        .filter(Boolean).join(" ").toLowerCase().indexOf(q) !== -1;
+    });
+  }
+  function sortiere(liste) {
+    var r = S.richtung === "ab" ? -1 : 1;
+    var f = {
+      dringlichkeit: function (a, b) { return (zInfo(zst(a)).rang - zInfo(zst(b)).rang) * r; },
+      titel: function (a, b) { return String(a.titel).localeCompare(String(b.titel)) * -r; },
+      quelle: function (a, b) { return String(a.quelle || "").localeCompare(String(b.quelle || "")) * -r; },
+      groesse: function (a, b) { return ((a.bytes || 0) - (b.bytes || 0)) * r; },
+      datum: function (a, b) { return String(a.geaendert || a.datum || "").localeCompare(String(b.geaendert || b.datum || "")) * r; }
+    }[S.sortier];
+    return liste.slice().sort(f);
+  }
+
+  // --- Bausteine -------------------------------------------------------------
+  function punkt(p) { return '<span class="punkt" style="background:' + zInfo(zst(p)).farbe + '"></span>'; }
+  function marke(p) {
+    if (!p.zustand) return "";
+    var i = zInfo(zst(p));
+    return '<span class="marke-zustand" style="--sc:' + i.farbe + '">' + esc(i.wort) + "</span>";
+  }
+  function kopierbar(text, anzeige, klasse) {
+    return '<button class="kopierbar ' + (klasse || "") + '" data-kopie="' + esc(text) + '">' + (anzeige || esc(text)) + "</button>";
+  }
+
+  function zeile(p, i) {
+    var auf = S.offen[p.id];
+    var h = '<div class="zeile" data-id="' + p.id + '" data-i="' + i + '"' + (S.auswahl === i ? ' aria-selected="true"' : "") + ">";
+    h += punkt(p);
+    h += '<span class="z-mitte">';
+    h += '<span class="z-titel">' + esc(p.titel) + "</span>";
+    if (p.unter) h += '<span class="z-unter">' + esc(p.unter) + "</span>";
+    if (p.quelle) h += '<div class="z-pfad">' + esc(p.quelle) + "</div>";
+    h += "</span>";
+    h += '<span class="z-rechts">' + marke(p) + "</span></div>";
+    if (auf) {
+      h += '<div class="aufklapp"><dl>';
+      if (p.quelle) h += "<dt>Quelle</dt><dd>" + kopierbar(p.quelle, '<span class="mono">' + esc(p.quelle) + "</span>") + "</dd>";
+      if (typeof p.bytes === "number") h += "<dt>Größe</dt><dd>" + groesse(p.bytes) + "</dd>";
+      if (p.geaendert) h += "<dt>Geändert</dt><dd>" + datum(p.geaendert) + "</dd>";
+      if (p.herkunft) h += "<dt>Herkunft</dt><dd>" + esc(p.herkunft) + (p.herkunftBeleg ? " — " + esc(p.herkunftBeleg) : "") + "</dd>";
+      if (p.ladeart) h += "<dt>Lädt</dt><dd>" + esc(p.ladeart) + (p.ladeartBeleg ? " — " + esc(p.ladeartBeleg) : "") + "</dd>";
+      if (p.ereignis) h += "<dt>Läuft bei</dt><dd>" + esc(p.ereignis) + "</dd>";
+      if (p.warum) h += "<dt>Warum</dt><dd>" + esc(p.warum) + "</dd>";
+      h += "</dl>";
+      if (p.befehl) h += kopierbar(p.befehl, '<pre class="befehl">' + esc(p.befehl) + "</pre>");
+      h += "</div>";
+    }
+    return h;
+  }
+
+  // --- Ansichten -------------------------------------------------------------
+  function sichtListe(liste) {
+    if (!liste.length) return leerText();
+    var gruppen = {};
+    liste.forEach(function (p) {
+      var k = S.gruppe === "zustand" ? zInfo(zst(p)).wort
+            : S.gruppe === "herkunft" ? (p.herkunft || "nicht bestimmbar")
+            : S.gruppe === "ladeart" ? (p.ladeart || "ohne Angabe")
+            : D.bereiche[p.bereich] || p.bereich;
+      (gruppen[k] = gruppen[k] || []).push(p);
+    });
+    var i = -1;
+    return Object.keys(gruppen).map(function (k) {
+      var h = '<div class="gruppenkopf">' + esc(k) + '<span class="zahl">' + gruppen[k].length + "</span></div>";
+      h += '<div class="karte">' + gruppen[k].map(function (p) { i++; return zeile(p, i); }).join("") + "</div>";
+      return h;
+    }).join("");
+  }
+
+  function sichtBrett(liste) {
+    var reihen = ["unlesbar", "fehlt", "hinweis", "ok", "ohne"];
+    return '<div class="brett">' + reihen.map(function (k) {
+      var i = zInfo(k);
+      var karten = liste.filter(function (p) { return zst(p) === k || (k === "unlesbar" && zst(p) === "befund"); });
+      var h = '<div class="spalte"><div class="spalte-kopf"><span class="punkt" style="background:' + i.farbe + '"></span>'
+        + esc(i.wort) + '<span class="zahl">' + karten.length + "</span></div>";
+      h += '<div class="spalte-leib" style="--sc:' + i.farbe + '">';
+      h += karten.length ? karten.map(function (p) {
+        return '<div class="bkarte" data-id="' + p.id + '"><div class="bk-titel">' + esc(p.titel) + "</div>"
+          + (p.unter ? '<div class="bk-unter">' + esc(p.unter) + "</div>" : "")
+          + '<div class="bk-fuss"><span>' + esc(D.bereiche[p.bereich] || p.bereich) + "</span>"
+          + (p.quelle ? '<span class="mono" style="margin-left:auto">' + esc(String(p.quelle).split(/[/\\\\]/).pop()) + "</span>" : "")
+          + "</div></div>";
+      }).join("")
+        : '<div class="spalte-leer">' + (k === "ohne"
+            ? "Alles hier Gezeigte hat einen gemessenen Zustand."
+            : "Kein Posten in diesem Zustand.") + "</div>";
+      return h + "</div></div>";
+    }).join("") + "</div>";
+  }
+
+  function sichtTabelle(liste) {
+    if (!liste.length) return leerText();
+    var max = liste.reduce(function (a, p) { return Math.max(a, p.bytes || 0); }, 0) || 1;
+    var kopf = [["titel", "Posten"], ["quelle", "Quelldatei"], ["bereich", "Bereich"],
+                ["herkunft", "Herkunft"], ["ladeart", "Lädt"], ["groesse", "Größe"], ["datum", "Geändert"]];
+    var h = "<table><thead><tr>" + kopf.map(function (k) {
+      return '<th data-sort="' + k[0] + '">' + esc(k[1]) + (S.sortier === k[0] ? (S.richtung === "ab" ? " ↓" : " ↑") : "") + "</th>";
+    }).join("") + "<th>Zustand</th></tr></thead><tbody>";
+    h += liste.map(function (p) {
+      return '<tr data-id="' + p.id + '"><td>' + esc(p.titel) + "</td>"
+        + '<td class="mono">' + esc(p.quelle || "—") + "</td>"
+        + "<td>" + esc(D.bereiche[p.bereich] || p.bereich) + "</td>"
+        + "<td>" + esc(p.herkunft || "—") + "</td>"
+        + "<td>" + esc(p.ladeart || "—") + "</td>"
+        + '<td class="num">' + groesse(p.bytes)
+        + (typeof p.bytes === "number" ? '<span class="balken" style="width:' + Math.max(2, Math.round((p.bytes / max) * 100)) + '%"></span>' : "")
+        + "</td>"
+        + '<td class="mono">' + datum(p.geaendert || p.datum) + "</td>"
+        + "<td>" + (marke(p) || "—") + "</td></tr>";
+    }).join("");
+    return h + "</tbody></table>";
+  }
+
+  function sichtZeit(liste) {
+    var mit = liste.filter(function (p) { return p.datum || p.geaendert; });
+    if (!mit.length) return '<p class="leer-text">Keiner dieser Posten trägt ein Datum.</p>';
+    var tage = {};
+    mit.forEach(function (p) { var t = datum(p.datum || p.geaendert); (tage[t] = tage[t] || []).push(p); });
+    return Object.keys(tage).sort().reverse().map(function (t, i) {
+      return '<details class="roh"' + (i === 0 ? " open" : "") + '><summary><span class="mono">' + esc(t)
+        + '</span> <span style="color:var(--gedaempft-schrift);font-weight:400">' + tage[t].length + " Einträge</span></summary>"
+        + '<div class="karte" style="margin:0 13px 12px">' + tage[t].map(function (p, j) { return zeile(p, j); }).join("") + "</div></details>";
+    }).join("");
+  }
+
+  function sichtRoh() {
+    function baum(o, tiefe) {
+      if (o === null || typeof o !== "object") return '<span class="mono">' + esc(JSON.stringify(o)) + "</span>";
+      if (tiefe > 2) return '<span class="mono">' + esc(JSON.stringify(o).slice(0, 120)) + "…</span>";
+      return Object.keys(o).map(function (k) {
+        var v = o[k];
+        var einfach = v === null || typeof v !== "object";
+        return '<details class="roh"><summary>' + esc(k) + (Array.isArray(v) ? " [" + v.length + "]" : "")
+          + "</summary><pre>" + (einfach ? esc(JSON.stringify(v)) : esc(JSON.stringify(v, null, 1).slice(0, 4000))) + "</pre></details>";
+      }).join("");
+    }
+    return '<div class="karte-notiz" style="border:1px solid var(--rahmen);border-radius:12px;margin-bottom:12px">'
+      + "Der gemessene Datensatz, unverändert. Jede Zahl auf den anderen Flächen lässt sich hier nachschlagen."
+      + "</div>" + baum(D.roh.messung, 0);
+  }
+
+  function leerText() {
+    if (S.suche) return '<p class="leer-text">Kein Posten enthält „' + esc(S.suche)
+      + '". <button class="textknopf" id="suche-leeren">Suche leeren</button></p>';
+    if (S.filter.length) return '<p class="leer-text">Kein Posten in diesem Zustand. <button class="textknopf" id="filter-leeren">Filter zurücksetzen</button></p>';
+    return '<p class="leer-text">Hier wurde noch nichts gemessen.</p>';
+  }
+
+  function ueberblick() {
+    var L = D.lage;
+    var k = [
+      ["Offene Punkte", L.offen, L.offen ? "stehen in der Liste Zu tun" : "nichts offen", L.offen ? "var(--st-hinweis)" : null],
+      ["Wächter aktiv", L.waechterGesamt, L.waechterBlockend + " können einen Befehl stoppen", null],
+      ["Dauer-Regeln", L.regelnGelesen + " von " + L.regelnGesamt, "in jeder Sitzung geladen", null],
+      ["Verzeichnisse", (L.repos - L.reposOffen) + " von " + L.repos, L.reposOffen ? "eines braucht Aufmerksamkeit" : "alle gesichert", L.reposOffen ? "var(--st-hinweis)" : null],
+      ["Aufwand je Sitzung", zahl(L.aufwand), L.aufwandHinweis ? "Schätzung — " + L.aufwandHinweis.slice(0, 60) : "geschätzte Wortbausteine", null],
+      ["Posten gesamt", POSTEN.length, "gemessen " + L.gemessen, null]
+    ];
+    var h = '<div class="kennzahlen">' + k.map(function (x) {
+      return '<div class="kachel"><div class="k-titel">' + esc(x[0]) + "</div>"
+        + '<div class="k-wert"' + (x[3] ? ' style="color:' + x[3] + '"' : "") + ">" + esc(x[1]) + "</div>"
+        + '<div class="k-quelle">' + esc(x[2]) + "</div></div>";
+    }).join("") + "</div>";
+    var offene = POSTEN.filter(function (p) { return p.zustand && p.zustand !== "ok"; });
+    h += '<div class="karte"><div class="karte-kopf">Braucht Aufmerksamkeit<span class="zahl">' + offene.length + "</span></div>";
+    h += offene.length ? offene.map(function (p, i) { return zeile(p, i); }).join("")
+      : '<div class="karte-notiz" style="border:0">Nichts. Alle Bereiche mit gemessenem Zustand sind in Ordnung.</div>';
+    return h + "</div>";
+  }
+
+  // --- Einzelansicht ---------------------------------------------------------
+  function einzelHTML(p) {
+    var h = '<aside class="einzel"><div class="einzel-kopf"><h2>' + esc(p.titel) + "</h2>"
+      + marke(p) + '<button class="kopf-knopf" id="einzel-zu" title="Schließen">✕</button></div><div class="einzel-leib">';
+    h += "<dl>";
+    h += "<dt>Bereich</dt><dd>" + esc(D.bereiche[p.bereich] || p.bereich) + "</dd>";
+    if (p.quelle) h += "<dt>Quelle</dt><dd>" + kopierbar(p.quelle, '<span class="mono">' + esc(p.quelle) + "</span>") + "</dd>";
+    if (typeof p.bytes === "number") h += "<dt>Größe</dt><dd>" + groesse(p.bytes) + "</dd>";
+    if (p.geaendert) h += "<dt>Geändert</dt><dd>" + datum(p.geaendert) + "</dd>";
+    if (p.herkunft) h += "<dt>Herkunft</dt><dd>" + esc(p.herkunft) + "</dd>";
+    if (p.herkunftBeleg) h += "<dt>Beleg</dt><dd>" + esc(p.herkunftBeleg) + "</dd>";
+    if (p.ladeart) h += "<dt>Lädt</dt><dd>" + esc(p.ladeart) + "</dd>";
+    if (p.ladeartBeleg) h += "<dt>Beleg</dt><dd>" + esc(p.ladeartBeleg) + "</dd>";
+    if (p.ereignis) h += "<dt>Läuft bei</dt><dd>" + esc(p.ereignis) + "</dd>";
+    if (p.marke) h += "<dt>Art</dt><dd>" + esc(p.marke) + "</dd>";
+    if (p.kennung) h += "<dt>Kennung</dt><dd>" + kopierbar(p.kennung, '<span class="mono">' + esc(p.kennung) + "</span>") + "</dd>";
+    h += "</dl>";
+    if (p.warum) h += "<h3>Warum</h3><p style=\\"margin:0\\">" + esc(p.warum) + "</p>";
+    if (p.befehl) h += "<h3>Befehl</h3>" + kopierbar(p.befehl, '<pre class="befehl">' + esc(p.befehl) + "</pre>");
+    h += "<h3>Rohobjekt</h3><details class=\\"roh\\"><summary>anzeigen</summary><pre>"
+      + esc(JSON.stringify(p.roh, null, 1)) + "</pre></details>";
+    return h + "</div></aside>";
+  }
+
+  // --- Zeichnen --------------------------------------------------------------
+  function werkzeugleiste() {
+    if (S.flaeche === "ueberblick" || S.flaeche === "rohdaten") return "";
+    var sichten = [["liste", "Liste"], ["brett", "Brett"], ["tabelle", "Tabelle"], ["zeit", "Zeitleiste"]];
+    var h = '<div class="sicht">' + sichten.map(function (s) {
+      return '<button data-sicht="' + s[0] + '" aria-pressed="' + (S.sicht === s[0]) + '">' + s[1] + "</button>";
+    }).join("") + "</div>";
+    h += '<select class="waehler" id="sortier">' + [["dringlichkeit", "Dringlichkeit"], ["titel", "Name"],
+      ["quelle", "Quelldatei"], ["groesse", "Größe"], ["datum", "Datum"]].map(function (o) {
+      return '<option value="' + o[0] + '"' + (S.sortier === o[0] ? " selected" : "") + ">Sortieren: " + o[1] + "</option>";
+    }).join("") + "</select>";
+    if (S.sicht === "liste") {
+      h += '<select class="waehler" id="gruppe">' + [["bereich", "Bereich"], ["zustand", "Zustand"],
+        ["herkunft", "Herkunft"], ["ladeart", "Ladeart"]].map(function (o) {
+        return '<option value="' + o[0] + '"' + (S.gruppe === o[0] ? " selected" : "") + ">Gruppieren: " + o[1] + "</option>";
+      }).join("") + "</select>";
+    }
+    h += '<span class="suche">' + '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+      + '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>'
+      + '<input id="suche" placeholder="Suchen …" value="' + esc(S.suche) + '"></span>';
+    return h;
+  }
+
+  function filterzeile() {
+    if (S.flaeche === "ueberblick" || S.flaeche === "rohdaten") return "";
+    var b = basis();
+    var h = ["unlesbar", "fehlt", "hinweis", "ok", "ohne"].map(function (k) {
+      var n = b.filter(function (p) { return zst(p) === k || (k === "unlesbar" && zst(p) === "befund"); }).length;
+      if (!n) return "";
+      var i = zInfo(k);
+      return '<button class="pille" data-filter="' + k + '" aria-pressed="' + (S.filter.indexOf(k) !== -1)
+        + '" style="--sc:' + i.farbe + '">' + esc(i.wort) + '<span class="zahl">' + n + "</span></button>";
+    }).join("");
+    if (S.filter.length) h += '<button class="textknopf" id="filter-leeren">alle zurücksetzen</button>';
+    return h;
+  }
+
+  function zeichne() {
+    document.querySelectorAll(".navpunkt").forEach(function (b) {
+      if (b.dataset.ziel === S.flaeche) b.setAttribute("aria-current", "page");
+      else b.removeAttribute("aria-current");
+    });
+    var name = S.flaeche === "ueberblick" ? "Überblick"
+      : S.flaeche === "rohdaten" ? "Rohdaten" : (D.bereiche[S.flaeche] || S.flaeche);
+    document.getElementById("titel").textContent = name;
+    document.getElementById("untertitel").textContent = D.unter[S.flaeche] || "";
+    document.getElementById("krume-flaeche").textContent = name;
+    document.getElementById("werkzeugleiste").innerHTML = werkzeugleiste();
+    document.getElementById("filterzeile").innerHTML = filterzeile();
+
+    var liste = sortiere(sichtbar());
+    document.getElementById("zaehler").textContent =
+      S.flaeche === "ueberblick" || S.flaeche === "rohdaten" ? POSTEN.length + " Posten gesamt"
+      : liste.length + " von " + basis().length + " sichtbar";
+
+    var leib = document.getElementById("leib");
+    leib.innerHTML = S.flaeche === "ueberblick" ? ueberblick()
+      : S.flaeche === "rohdaten" ? sichtRoh()
+      : S.sicht === "brett" ? sichtBrett(liste)
+      : S.sicht === "tabelle" ? sichtTabelle(liste)
+      : S.sicht === "zeit" ? sichtZeit(liste)
+      : sichtListe(liste);
+
+    var alt = document.querySelector(".einzel");
+    if (alt) alt.remove();
+    var krumeRest = document.getElementById("krume-rest");
+    if (S.einzel) {
+      var p = POSTEN.filter(function (x) { return x.id === S.einzel; })[0];
+      if (p) {
+        document.querySelector(".tafel").insertAdjacentHTML("beforeend", einzelHTML(p));
+        krumeRest.innerHTML = '<span class="krume-pfeil">›</span>' + esc(p.titel);
+      }
+    } else krumeRest.textContent = "";
+    anker();
+  }
+
+  function anker() {
+    var t = [S.flaeche, S.sicht, S.gruppe, S.sortier];
+    if (S.suche) t.push("q=" + encodeURIComponent(S.suche));
+    if (S.filter.length) t.push("f=" + S.filter.join("+"));
+    if (S.einzel) t.push("p=" + S.einzel);
+    history.replaceState(null, "", "#" + t.join("/"));
+  }
+  function ausAnker() {
+    var t = decodeURIComponent(location.hash.slice(1)).split("/");
+    if (!t[0]) return;
+    S.flaeche = t[0]; if (t[1]) S.sicht = t[1]; if (t[2]) S.gruppe = t[2]; if (t[3]) S.sortier = t[3];
+    t.slice(4).forEach(function (x) {
+      if (x.indexOf("q=") === 0) S.suche = decodeURIComponent(x.slice(2));
+      if (x.indexOf("f=") === 0) S.filter = x.slice(2).split("+");
+      if (x.indexOf("p=") === 0) S.einzel = x.slice(2);
+    });
+  }
+
+  // --- Bedienung -------------------------------------------------------------
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    var nav = t.closest ? t.closest(".navpunkt") : null;
+    if (nav) { S.flaeche = nav.dataset.ziel; S.einzel = null; S.auswahl = -1; S.filter = []; return zeichne(); }
+
+    var kop = t.closest ? t.closest(".kopierbar") : null;
+    if (kop) {
+      var txt = kop.dataset.kopie;
+      var fertig = function () {
+        var s = document.createElement("span");
+        s.className = "kopiert"; s.textContent = "kopiert";
+        kop.parentNode.insertBefore(s, kop.nextSibling);
+        setTimeout(function () { s.remove(); }, 1500);
+      };
+      if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(txt).then(fertig, ersatz);
+      else ersatz();
+      function ersatz() {
+        var ta = document.createElement("textarea");
+        ta.value = txt; ta.style.position = "fixed"; ta.style.opacity = "0";
+        document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); fertig(); } catch (x) { alert("Kopieren nicht möglich:\\n" + txt); }
+        ta.remove();
+      }
+      e.stopPropagation(); return;
+    }
+
+    if (t.id === "thema") {
+      var jetzt = document.documentElement.getAttribute("data-thema");
+      var neu = jetzt === "dunkel" ? "hell" : jetzt === "hell" ? "" : "dunkel";
+      if (neu) document.documentElement.setAttribute("data-thema", neu);
+      else document.documentElement.removeAttribute("data-thema");
+      try { localStorage.setItem("harness-thema", neu); } catch (x) {}
+      return;
+    }
+    if (t.id === "einzel-zu") { S.einzel = null; return zeichne(); }
+    if (t.id === "suche-leeren") { S.suche = ""; return zeichne(); }
+    if (t.id === "filter-leeren") { S.filter = []; return zeichne(); }
+
+    var si = t.closest ? t.closest("[data-sicht]") : null;
+    if (si) { S.sicht = si.dataset.sicht; return zeichne(); }
+
+    var fi = t.closest ? t.closest("[data-filter]") : null;
+    if (fi) {
+      var k = fi.dataset.filter, i = S.filter.indexOf(k);
+      if (i === -1) S.filter.push(k); else S.filter.splice(i, 1);
+      return zeichne();
+    }
+
+    var th = t.closest ? t.closest("th[data-sort]") : null;
+    if (th) {
+      if (S.sortier === th.dataset.sort) S.richtung = S.richtung === "ab" ? "auf" : "ab";
+      else { S.sortier = th.dataset.sort; S.richtung = "ab"; }
+      return zeichne();
+    }
+
+    var bk = t.closest ? t.closest(".bkarte, tbody tr") : null;
+    if (bk && bk.dataset.id) { S.einzel = bk.dataset.id; return zeichne(); }
+
+    var z = t.closest ? t.closest(".zeile") : null;
+    if (z) {
+      var id = z.dataset.id;
+      S.offen[id] = !S.offen[id];
+      S.auswahl = parseInt(z.dataset.i, 10);
+      return zeichne();
+    }
   });
-});
+
+  document.addEventListener("input", function (e) {
+    if (e.target.id === "suche") { S.suche = e.target.value; var s = e.target.selectionStart; zeichne();
+      var n = document.getElementById("suche"); if (n) { n.focus(); n.setSelectionRange(s, s); } }
+  });
+  document.addEventListener("change", function (e) {
+    if (e.target.id === "sortier") { S.sortier = e.target.value; zeichne(); }
+    if (e.target.id === "gruppe") { S.gruppe = e.target.value; zeichne(); }
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") {
+      if (e.key === "Escape") { e.target.blur(); }
+      return;
+    }
+    var zeilen = Array.prototype.slice.call(document.querySelectorAll(".zeile"));
+    if (e.key === "/") { e.preventDefault(); var s = document.getElementById("suche"); if (s) s.focus(); return; }
+    if (e.key === "Escape") { if (S.einzel) { S.einzel = null; zeichne(); } return; }
+    if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); S.auswahl = Math.min(zeilen.length - 1, S.auswahl + 1); zeichne(); scrollHin(); return; }
+    if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); S.auswahl = Math.max(0, S.auswahl - 1); zeichne(); scrollHin(); return; }
+    if (e.key === "Enter" && zeilen[S.auswahl]) { S.einzel = zeilen[S.auswahl].dataset.id; zeichne(); return; }
+    if ((e.key === "ArrowRight" || e.key === "ArrowLeft") && zeilen[S.auswahl]) {
+      e.preventDefault();
+      S.offen[zeilen[S.auswahl].dataset.id] = e.key === "ArrowRight";
+      zeichne();
+    }
+  });
+  function scrollHin() {
+    var n = document.querySelector('.zeile[aria-selected="true"]');
+    if (n && n.scrollIntoView) n.scrollIntoView({ block: "nearest" });
+  }
+
+  try {
+    var gespeichert = localStorage.getItem("harness-thema");
+    if (gespeichert) document.documentElement.setAttribute("data-thema", gespeichert);
+  } catch (x) {}
+  ausAnker();
+  zeichne();
+})();
 </script>
 </body>
 </html>`;

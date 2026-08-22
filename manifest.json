@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-22T19:30:42.226Z",
+  "gebautAm": "2026-08-22T19:45:53.159Z",
   "posten": 49,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -348,16 +348,16 @@
       "herkunft": "zustand/messen.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 48470,
-      "sha256": "382c8dfe9af6cfd4"
+      "bytes": 49610,
+      "sha256": "b8b8d36749a07903"
     },
     {
       "datei": "payload/dashboard/render.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 28622,
-      "sha256": "2898decbbd396d2a"
+      "bytes": 50669,
+      "sha256": "042ca6a077064025"
     },
     {
       "datei": "payload/dashboard/rules.js",
