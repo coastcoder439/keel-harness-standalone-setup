@@ -34,6 +34,11 @@
 !.claude/rules/ecc/common/werkzeuge.md
 !.claude/rules/ecc/common/ausgabeform.md
 !.claude/rules/ecc/common/arbeitsweise.md
+!.claude/rules/ecc/common/no-oneshot.md
+!.claude/rules/ecc/common/completeness.md
+!.claude/rules/ecc/common/tools.md
+!.claude/rules/ecc/common/output-shape.md
+!.claude/rules/ecc/common/working-method.md
 
 # Rechnerlokal, NIE committen: die Befehls-Freigabeliste.
 .claude/settings.local.json
