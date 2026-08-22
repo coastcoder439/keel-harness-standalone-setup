@@ -61,6 +61,17 @@
             "statusMessage": "commit-pathspec-guard (geteilter Index)"
           }
         ]
+      },
+      {
+        "matcher": "mcp__ccd_session_mgmt__(send_message|list_sessions)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/sessionpost-guard.js\"",
+            "timeout": 10,
+            "statusMessage": "sessionpost-guard (knappe Inter-Session-Nachrichten)"
+          }
+        ]
       }
     ]
   },
