@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-22T20:01:35.023Z",
+  "gebautAm": "2026-08-22T20:02:15.330Z",
   "posten": 49,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -76,8 +76,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 10839,
-      "sha256": "d1ac2b4c7cb12284"
+      "bytes": 10830,
+      "sha256": "2701a8aa64c88906"
     },
     {
       "datei": "checks/paket-manifest.mjs",
