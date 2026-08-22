@@ -170,7 +170,7 @@ const SKILLS = [
   ["i-have-adhd", ["SKILL.md"]],
 ];
 
-const ZUSTAND = ["zustand.js", "messen.js", "einordnen.js", "regeln.js", "rendern.js", "bordmittel.js", "README.md"];
+const ZUSTAND = ["zustand.js", "messen.js", "einordnen.js", "regeln.js", "rendern.js", "rendern-keel.js", "bordmittel.js", "README.md"];
 
 const BEILEGER = [
   // Die Nachbau-Anleitung (10-nachbau-anleitung.md) wird bewusst NICHT mehr installiert:

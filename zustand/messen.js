@@ -303,7 +303,7 @@ function werkzeugGruppe(wurzel) {
   const rel = "docs/werkzeug-landschaft.md";
   const datei = path.join(wurzel, rel);
   const leer = {
-    id: "werkzeuge", titel: "Werkzeug-Landschaft (CLIs · MCPs · APIs · Zugaenge)",
+    id: "werkzeuge", titel: "Werkzeug-Landschaft",
     ordner: datei, anzahl: 0, plattenzaehlung: null, einordnung: null, posten: [],
   };
   if (!fs.existsSync(datei)) {
@@ -362,7 +362,7 @@ function bestandMessen(wurzel, harness) {
       wurzel,
       hooks,
       id: "faehigkeiten",
-      titel: "Fähigkeiten (Skills)",
+      titel: "Fähigkeiten",
       ordner: path.join(harness, "skills"),
       art: "dir",
       laden: () => modul.loadSkills(harness).map((s) => ({ name: s.n, beschreibung: kurz(s.d) })),
@@ -380,7 +380,7 @@ function bestandMessen(wurzel, harness) {
       wurzel,
       hooks,
       id: "mcp",
-      titel: "MCP-Server",
+      titel: "MCP-Server (Programme, die dem Agenten Werkzeuge bereitstellen)",
       ordner: path.join(harness, "mcp-configs"),
       art: "dir",
       laden: () =>
@@ -391,7 +391,7 @@ function bestandMessen(wurzel, harness) {
       wurzel,
       hooks,
       id: "hooks",
-      titel: "Hooks (ECC-Format)",
+      titel: "Hooks als Ordner (Format der Ursprungs-Werkbank)",
       ordner: path.join(harness, "hooks"),
       art: "md",
       laden: () => modul.loadHooks(harness).map((h) => ({ name: `${h.ev} · ${h.m}`, beschreibung: kurz(h.d) })),
