@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-22T16:23:06.580Z",
-  "posten": 50,
+  "gebautAm": "2026-08-22T16:38:50.281Z",
+  "posten": 51,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser PAKET.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von pruefung/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -332,8 +332,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 74130,
-      "sha256": "b6771cd6ad3f266d"
+      "bytes": 74147,
+      "sha256": "d73547bbd7570a8f"
     },
     {
       "datei": "pruefung/anleitung-sync.mjs",
@@ -392,6 +392,14 @@
       "sha256": "febc480c57561956"
     },
     {
+      "datei": "zustand/bordmittel.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 4203,
+      "sha256": "df4c732fba0e7f38"
+    },
+    {
       "datei": "zustand/einordnen.js",
       "herkunft": "zustand/einordnen.js",
       "quellordner": "bausatz",
@@ -404,24 +412,24 @@
       "herkunft": "zustand/messen.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 44430,
-      "sha256": "24166d55977a4ffa"
+      "bytes": 48046,
+      "sha256": "73e5495d5bef6480"
     },
     {
       "datei": "zustand/regeln.js",
       "herkunft": "zustand/regeln.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 13472,
-      "sha256": "2e2b4165806cd055"
+      "bytes": 14421,
+      "sha256": "71d3fa42267a484b"
     },
     {
       "datei": "zustand/rendern.js",
       "herkunft": "zustand/rendern.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 58362,
-      "sha256": "5dfe09973af52d29"
+      "bytes": 58374,
+      "sha256": "49a6328e1e05284b"
     },
     {
       "datei": "zustand/zustand.js",

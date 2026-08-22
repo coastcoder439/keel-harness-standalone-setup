@@ -26,6 +26,7 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { hookSkripte, kontrollprobe, gruppeEinordnen, dauerRegelBeleg } = require("./einordnen");
+const bordmittel = require("./bordmittel");
 
 const SCHEMA = "harness.zustand.v1";
 const MAX_BESCHREIBUNG = 200; // Zeichen je Posten -- die Seite zeigt Bestand, nicht Handbuecher
@@ -294,13 +295,60 @@ function kontextMessen(wurzel, harness) {
   };
 }
 
+// Die Werkzeug-Landschaft (CLIs, MCPs, APIs, Zugaenge) aus docs/werkzeug-landschaft.md.
+// Erhoben wird sie vom Onboarding-Schritt 3; hier wird nur gezeigt, was drinsteht.
+// Absicht: die Uebersicht "womit arbeite ich hier eigentlich" gehoert auf dieselbe
+// Seite wie Skills, Befehle und Waechter -- sonst muss man sie sich zusammensuchen.
+function werkzeugGruppe(wurzel) {
+  const rel = "docs/werkzeug-landschaft.md";
+  const datei = path.join(wurzel, rel);
+  const leer = {
+    id: "werkzeuge", titel: "Werkzeug-Landschaft (CLIs · MCPs · APIs · Zugaenge)",
+    ordner: datei, anzahl: 0, plattenzaehlung: null, einordnung: null, posten: [],
+  };
+  if (!fs.existsSync(datei)) {
+    return { ...leer, status: "fehlt", grund: `${rel} fehlt -- die Vorlage kommt mit dem Bausatz.`,
+      notiz: "Erhoben wird sie im Onboarding-Schritt 3 (Womit arbeitest du?)." };
+  }
+  const zeilen = fs.readFileSync(datei, "utf8").split(String.fromCharCode(13, 10)).join(String.fromCharCode(10)).split(String.fromCharCode(10));
+  const posten = [];
+  let rubrik = null;
+  for (const z of zeilen) {
+    const u = z.match(/^##s+(.+?)s*$/);
+    if (u) { rubrik = u[1]; continue; }
+    if (!rubrik || !z.trim().startsWith("|")) continue;
+    const spalten = z.split("|").map((s) => s.trim());
+    const erste = spalten[1] || "";
+    if (!erste || /^-+$/.test(erste) || /noch nichts erhoben/i.test(erste)) continue;
+    if (/^(Programm|Dienst|Werkzeug)/i.test(erste)) continue; // Kopfzeile
+    posten.push({ name: erste + " · " + rubrik, beschreibung: spalten.slice(2).filter(Boolean).join(" — ") });
+  }
+  return {
+    ...leer,
+    anzahl: posten.length,
+    posten,
+    status: "ok",
+    grund: null,
+    notiz: posten.length
+      ? `Erhoben im Onboarding-Schritt 3. Zugaenge stehen hier nur als NAME, nie als Wert.`
+      : `Noch nichts erhoben -- ${rel} traegt nur die leere Vorlage. Nachholen: /onboarding Schritt 3 (Womit arbeitest du?).`,
+  };
+}
+
 function bestandMessen(wurzel, harness) {
-  const { modul, pfad, grund } = eccLaden(wurzel, "dashboard-web.js");
-  if (!modul) return { status: "unlesbar", grund, quelle: null, gruppen: [], regelsaetze: [], regelEbene: null };
+  // dashboard-web.js gehoert zur Ursprungs-Werkbank und liegt einem Standalone-
+  // Harness nicht bei. Frueher stieg der ganze Bereich dann mit "unlesbar" aus und
+  // meldete einen Defekt, wo nur eine fremde Abhaengigkeit fehlte -- genau die
+  // Uebersicht, wofuer die Seite da ist, blieb leer. Jetzt wird mit Bordmitteln
+  // aufgezaehlt (zustand/bordmittel.js), und die Quelle sagt, welcher Weg lief.
+  const ecc = eccLaden(wurzel, "dashboard-web.js");
+  const modul = ecc.modul || bordmittel;
+  const pfad = ecc.pfad || "zustand/bordmittel.js";
 
   const hooks = hookSkripte(wurzel);
 
   const gruppen = [
+    werkzeugGruppe(wurzel),
     gruppe({
       wurzel,
       hooks,
@@ -365,12 +413,18 @@ function bestandMessen(wurzel, harness) {
     }, {});
 
   const probe = kontrollprobe(wurzel);
+  const fremdklon = fs.existsSync(path.join(wurzel, ".ecc-src"));
 
   return {
     // Faellt die Kontrollprobe, ist die Einordnung wertlos — dann NICHT "ok" melden.
-    status: gruppen.some((g) => g.status === "unlesbar") ? "unlesbar" : probe.bestanden ? "ok" : "hinweis",
-    grund: probe.bestanden ? null : "Kontrollprobe der Herkunftsbestimmung fehlgeschlagen — Eigenbau/Mitgeliefert ist nicht belastbar",
-    massnahme: probe.bestanden
+    // Die Herkunftsbestimmung (Eigenbau vs. mitgeliefert) vergleicht gegen den
+    // Fremd-Klon .ecc-src/. Den gibt es in einem Standalone-Harness nicht -- dann ist
+    // die Frage nicht offen, sondern gegenstandslos. Sie als fehlgeschlagene Probe zu
+    // melden erzeugte einen Dauer-Hinweis, den niemand abstellen kann.
+    status: gruppen.some((g) => g.status === "unlesbar") ? "unlesbar" : probe.bestanden || !fremdklon ? "ok" : "hinweis",
+    grund: probe.bestanden || !fremdklon ? null : "Kontrollprobe der Herkunftsbestimmung fehlgeschlagen — Eigenbau/Mitgeliefert ist nicht belastbar",
+    notiz: fremdklon ? null : "Herkunft (Eigenbau vs. mitgeliefert) wird gegen den Fremd-Klon .ecc-src/ bestimmt. Der gehoert nicht zu diesem Harness -- die Spalte bleibt daher leer.",
+    massnahme: probe.bestanden || !fremdklon
       ? null
       : { text: "Prüfen, ob .ecc-src/ vollständig ausgecheckt ist — ohne die Quelle gilt alles als Eigenbau.", befehl: "ls .ecc-src/rules" },
     quelle: rel(wurzel, pfad),
@@ -711,21 +765,21 @@ function repoStatusMessen(wurzel) {
 // ---------------------------------------------------------------------------
 const PRUEFER = [
   {
-    id: "anleitung-drift",
-    pfad: "docs/workflows/anleitung-drift.js",
-    zweck: "Volltext-Kopien in docs/10-nachbau-anleitung.md gegen die Live-Dateien",
+    id: "anleitung-sync",
+    pfad: "pruefung/anleitung-sync.mjs",
+    zweck: "Volltext-Kopien der Nachbau-Anleitung gegen die echten Dateien",
     kennzahlen: {
-      muster: /(\d+) Kopien geprueft: (\d+) deckungsgleich, (\d+) abweichend, (\d+) Vorlage, (\d+) ohne Datei/,
-      namen: ["geprüft", "deckungsgleich", "abweichend", "Vorlage", "ohne Datei"],
+      muster: /(\d+) Kopien geprueft: (\d+) deckungsgleich, (\d+) abweichend/,
+      namen: ["geprüft", "deckungsgleich", "abweichend"],
     },
   },
   {
-    id: "eigenbau-ungesichert",
-    pfad: "docs/workflows/eigenbau-ungesichert.js",
-    zweck: "Eigenbauten in .claude/, die das Git ignoriert — also ohne Sicherung",
+    id: "paket-manifest",
+    pfad: "pruefung/paket-manifest.mjs",
+    zweck: "PAKET.json gegen den tatsaechlichen Paketinhalt",
     kennzahlen: {
-      muster: /(\d+) Dateien in \.claude\/ · (\d+) davon Eigenbau/,
-      namen: ["Dateien in .claude/", "davon Eigenbau"],
+      muster: /(\d+) Dateien im Paket · (\d+) Abweichung/,
+      namen: ["Dateien im Paket", "Abweichungen"],
     },
   },
 ];
@@ -745,8 +799,11 @@ function prueferMessen(wurzel) {
       return {
         ...grundlage,
         befehl: null,
-        status: "fehlt",
-        grund: `Prüfer nicht installiert — ${p.pfad} liegt nicht in diesem Workspace`,
+        // Diese Pruefer liegen im Bausatz-Repo, nicht in einer fertigen Installation.
+        // Ihr Fehlen ist der Normalfall eines installierten Harness und kein Defekt.
+        status: "ok",
+        grund: null,
+        notiz: `Nicht in dieser Installation: ${p.pfad} liegt im Bausatz-Repo. Ungemessen bleibt damit: ${p.zweck}.`,
         massnahme: {
           text: `Der Prüfer „${p.id}“ gehört nicht zum Grundbestand dieses Harness. Ungemessen bleibt damit: ${p.zweck}. Entweder anlegen oder die Lücke bewusst hinnehmen.`,
           befehl: null,
@@ -834,7 +891,17 @@ function rollenMessen(wurzel) {
 // ---------------------------------------------------------------------------
 function readinessMessen(wurzel, mitGithub) {
   const { modul, pfad, grund } = eccLaden(wurzel, "operator-readiness-dashboard.js");
-  if (!modul) return { status: "fehlt", grund, quelle: null };
+  if (!modul)
+    // Der Betriebsbericht ist ein Werkzeug der Ursprungs-Werkbank und gehoert nicht
+    // zum Standalone-Harness. Ihn als "fehlt" zu melden macht aus einer bewussten
+    // Auslassung einen Defekt -- und eine Seite, die Nicht-Defekte rot faerbt, wird
+    // nicht mehr gelesen. Gemeldet wird, dass hier nichts zu messen ist.
+    return {
+      status: "ok",
+      grund: null,
+      quelle: null,
+      notiz: "Nicht Teil dieses Harness: der ECC-Betriebsbericht (operator-readiness-dashboard.js) gehoert zur Ursprungs-Werkbank. Hier gibt es dazu nichts zu messen.",
+    };
   try {
     const argv = ["node", pfad, "--json", "--root", wurzel];
     if (!mitGithub) argv.push("--skip-github");
