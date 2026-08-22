@@ -98,7 +98,7 @@ function claudeMdZeilen(wurzel) {
 // Die Muster werden der Reihe nach probiert, GENAUESTES ZUERST. Beim ersten
 // Versuch stand hier ein einziges Oder-Muster -- es fand in der eigenen
 // Werkbank die richtige Ueberschrift, zitierte aber den falschen Satz daraus
-// (irgendeine Zeile mit „rules/ecc/common“ statt der Zusage „common immer“).
+// (irgendeine Zeile mit „rules/keel“ statt der Zusage „common immer“).
 // Ein Zitat, das die Behauptung nicht traegt, ist derselbe Fehler eine Stufe
 // kleiner.
 function claudeMdFundstelle(wurzel, muster) {
@@ -128,7 +128,7 @@ const zitat = (f) =>
     ? `CLAUDE.md, Abschnitt „${f.ueberschrift}“: „${f.wortlaut}“`
     : `CLAUDE.md, Zeile ${f.zeile}: „${f.wortlaut}“`;
 
-// Die Zusage, die rules/ecc/common/ zum Dauer-Kontext erklaert -- genauestes
+// Die Zusage, die rules/keel/ zum Dauer-Kontext erklaert -- genauestes
 // Muster zuerst. Zwei Formulierungen kennt dieser Bausatz: die der
 // Ursprungs-Werkbank („common immer“) und die des erzeugten
 // CLAUDE.md-Geruests („Automatisch geladene Regeln“). Findet keine davon
@@ -136,7 +136,7 @@ const zitat = (f) =>
 const ZUSAGE_DAUER = [
   /\bcommon\b[^\n]{0,40}\bimmer\b/i,
   /Automatisch geladene Regeln/i,
-  /rules\/ecc\/common/i,
+  /rules\/keel/i,
 ];
 const ZUSAGE_SPRACHPAKET = [/Sprachpaket[^\n]{0,40}Dateityp/i, /Sprachpaket/i, /pro Dateityp/i];
 
@@ -155,8 +155,8 @@ function hatFrontmatter(absPfad) {
 function dauerRegelBeleg(wurzel, absPfad) {
   const ort =
     hatFrontmatter(absPfad) === false
-      ? "Dauer-Regel — liegt in .claude/rules/ecc/common/ und hat kein Frontmatter (Dauer-Kontext statt Abruf)"
-      : "Dauer-Regel — liegt in .claude/rules/ecc/common/";
+      ? "Dauer-Regel — liegt in .claude/rules/keel/ und hat kein Frontmatter (Dauer-Kontext statt Abruf)"
+      : "Dauer-Regel — liegt in .claude/rules/keel/";
   const f = claudeMdFundstelle(wurzel, ZUSAGE_DAUER);
   return f ? `${ort} · belegt in ${zitat(f)}` : `${ort} · keine Zusage dazu in der CLAUDE.md dieses Workspace`;
 }
@@ -175,7 +175,7 @@ function sprachpaketBeleg(wurzel) {
 // schlafend  liegt da, wird in diesem Workspace nie geladen -> kostet nichts
 //
 // "dauerhaft" wird nicht geraten: entweder der Ort sagt es (CLAUDE.md, die
-// Dauer-Regeln unter rules/ecc/common/) oder die Datei haengt in einem Hook.
+// Dauer-Regeln unter rules/keel/) oder die Datei haengt in einem Hook.
 // ---------------------------------------------------------------------------
 function hookSkripte(wurzel) {
   const treffer = new Map();
@@ -210,7 +210,7 @@ const DAUERHAFT_ORTE = [
     grund: () => "Wurzel-Kontext — laedt in jeder Sitzung (Claude Code liest CLAUDE.md beim Start)",
   },
   {
-    test: (r) => r.startsWith(path.join(".claude", "rules", "ecc", "common") + path.sep) && r.endsWith(".md"),
+    test: (r) => r.startsWith(path.join(".claude", "rules", "keel") + path.sep) && r.endsWith(".md"),
     grund: dauerRegelBeleg,
     gegenprobe: (absPfad) =>
       hatFrontmatter(absPfad) === true
@@ -259,7 +259,7 @@ function kontrollprobe(wurzel) {
   const faelle = [
     {
       name: "eigene Dauer-Regel gilt als Eigenbau",
-      pfad: path.join(wurzel, ".claude", "rules", "ecc", "common", "completeness.md"),
+      pfad: path.join(wurzel, ".claude", "rules", "keel", "completeness.md"),
       erwartet: "eigenbau",
     },
     {

@@ -8,7 +8,7 @@
 > - **Zugaenge nur als NAMEN, nie als Werte.** Schluessel bleiben im Schluesselbund oder in
 >   Umgebungsvariablen; hier steht nur, WIE der Zugang heisst und WO er liegt.
 > - **Rangfolge bei fehlendem Werkzeug: CLI vor MCP vor Browser** (Begruendung:
->   [`tools.md`](../.claude/rules/ecc/common/tools.md)). Ein lokal gefundenes
+>   [`tools.md`](../.claude/rules/keel/tools.md)). Ein lokal gefundenes
 >   Werkzeug ist BELEGT; ein Registertreffer ist nur ein Kandidat.
 > - **Fehlendes wird vermerkt, nicht gebaut.** Eine CLI zu erzeugen ist ein spaeterer,
 >   bewusster Schritt ausserhalb des Onboardings.

@@ -303,7 +303,7 @@ function kontextMessen(wurzel, harness) {
   // Derselbe gemessene Beleg wie in der Einordnung -- nicht eine zweite,
   // fest verdrahtete Formulierung. Hier stand „CLAUDE.md §5: common immer“ und
   // damit eine Abschnittsnummer, die es nur in der Ursprungs-Werkbank gibt.
-  const common = path.join(harness, "rules", "ecc", "common");
+  const common = path.join(harness, "rules", "keel");
   for (const f of dateienListe(common, "md")) nimm(f, "Dauer-Regel", dauerRegelBeleg(wurzel, f));
 
   // Hook-Skripte: was bei SessionStart laeuft, wirkt auf jede Sitzung -- seine
@@ -317,10 +317,10 @@ function kontextMessen(wurzel, harness) {
   const bytes = stuecke.filter((s) => s.art !== "Hook-Skript").reduce((a, s) => a + s.bytes, 0);
   return {
     status: stuecke.length ? "ok" : "fehlt",
-    grund: stuecke.length ? null : "Keine dauerhaft geladenen Dateien gefunden — CLAUDE.md und rules/ecc/common/ fehlen",
+    grund: stuecke.length ? null : "Keine dauerhaft geladenen Dateien gefunden — CLAUDE.md und rules/keel/ fehlen",
     massnahme: stuecke.length
       ? null
-      : { text: "Ohne CLAUDE.md und die Dauer-Regeln ist es ein leerer Claude Code, kein Harness.", befehl: "ls CLAUDE.md .claude/rules/ecc/common/" },
+      : { text: "Ohne CLAUDE.md und die Dauer-Regeln ist es ein leerer Claude Code, kein Harness.", befehl: "ls CLAUDE.md .claude/rules/keel/" },
     faktor: ZEICHEN_JE_TOKEN,
     faktorHinweis: `Schätzung: Bytes ÷ ${ZEICHEN_JE_TOKEN}. Keine Messung — der echte Wert hängt am Tokenisierer.`,
     bytesJeSitzung: bytes,

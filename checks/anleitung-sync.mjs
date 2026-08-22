@@ -262,7 +262,7 @@ function main() {
       continue;
     }
 
-    // Ein Anker kann auf ein VERZEICHNIS zeigen -- `.claude/rules/ecc/common/` in
+    // Ein Anker kann auf ein VERZEICHNIS zeigen -- `.claude/rules/keel/` in
     // einer Ueberschrift, gefolgt von einem Codeblock, der etwas anderes zeigt.
     // Frueher riss das den Abgleich mit EISDIR ab: ein Werkzeugausfall, der wie
     // ein Befund aussah.

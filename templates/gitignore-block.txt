@@ -25,16 +25,8 @@
 !.claude/skills/i-have-adhd/
 !.claude/rules/
 .claude/rules/*
-!.claude/rules/ecc/
-.claude/rules/ecc/*
-!.claude/rules/ecc/common/
-.claude/rules/ecc/common/*
-!.claude/rules/ecc/common/no-oneshot.md
-!.claude/rules/ecc/common/completeness.md
-!.claude/rules/ecc/common/tools.md
-!.claude/rules/ecc/common/output-shape.md
-!.claude/rules/ecc/common/working-method.md
 !.claude/rules/keel/
+.claude/rules/keel/*
 !.claude/rules/keel/no-oneshot.md
 !.claude/rules/keel/completeness.md
 !.claude/rules/keel/tools.md

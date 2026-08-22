@@ -437,7 +437,7 @@ function zielOrdner(ziel) {
     ziel,
     j(".claude"),
     j(".claude", "commands"),
-    j(".claude", "rules", "ecc", "common"),
+    j(".claude", "rules", "keel"),
     ...SKILLS.map(([ordner]) => j(".claude", "skills", ordner)),
     j("licenses"),
     j("dashboard"),
@@ -457,7 +457,7 @@ function paketBedarf() {
     "templates/CLAUDE.md", // -> CLAUDE.md
     ...WAECHTER.map((d) => `payload/claude/${d}`),
     ...BEFEHLE.map((d) => `payload/claude/commands/${d}`),
-    ...REGELN.map((d) => `payload/claude/rules/ecc/common/${d}`),
+    ...REGELN.map((d) => `payload/claude/rules/keel/${d}`),
     ...SKILLS.flatMap(([ordner, dateien]) => dateien.map((d) => `payload/claude/skills/${ordner}/${d}`)),
     ...LIZENZEN.map((d) => `licenses/${d}`),
     ...DASHBOARD.map((d) => `payload/dashboard/${d}`),
@@ -993,7 +993,7 @@ const MENSCHEN_PUNKTE = [
   },
   {
     titel: "Die fuenf Dauer-Regeln mit EIGENER Beweislage fuellen",
-    handlung: ".claude/rules/ecc/common/*.md lesen und die fremden Anlaesse durch eigene ersetzen.",
+    handlung: ".claude/rules/keel/*.md lesen und die fremden Anlaesse durch eigene ersetzen.",
     wirkung:
       "Die Regeln zitieren die Faelle, aus denen sie entstanden sind — aus einem fremden " +
       "Vorhaben. Eine uebernommene Regel ohne eigenen Anlass wird nicht befolgt.",
@@ -1246,9 +1246,9 @@ function main() {
   }
 
   // -------------------------------------------------------------------------
-  abschnitt(4, "Dauer-Regeln nach .claude/rules/ecc/common/ (laden bei jedem Sitzungsstart)");
+  abschnitt(4, "Dauer-Regeln nach .claude/rules/keel/ (laden bei jedem Sitzungsstart)");
   for (const datei of REGELN) {
-    const rel = `payload/claude/rules/ecc/common/${datei}`;
+    const rel = `payload/claude/rules/keel/${datei}`;
     const inhalt = lesenAusPaket(paket, rel);
     // Bedingung fuer "laedt in jeder Sitzung": KEIN Frontmatter. Mit `---`-Kopf
     // wird die Datei zu einem abrufbaren Dokument — die Regel waere still
@@ -1256,8 +1256,8 @@ function main() {
     if (inhalt.startsWith("---")) {
       melden("achtung", `${datei} hat Frontmatter`, "sie wuerde dann NICHT dauerhaft laden — Paket pruefen");
     }
-    const p = path.join(ziel, ".claude", "rules", "ecc", "common", datei);
-    dateiSetzen(p, inhalt, { ...opt, anzeige: `.claude/rules/ecc/common/${datei}` });
+    const p = path.join(ziel, ".claude", "rules", "keel", datei);
+    dateiSetzen(p, inhalt, { ...opt, anzeige: `.claude/rules/keel/${datei}` });
     eigenbauPfade.push(p);
   }
 
