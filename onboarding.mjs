@@ -173,7 +173,9 @@ const SKILLS = [
 const ZUSTAND = ["zustand.js", "messen.js", "einordnen.js", "regeln.js", "rendern.js", "README.md"];
 
 const BEILEGER = [
-  "10-nachbau-anleitung.md",
+  // Die Nachbau-Anleitung (10-nachbau-anleitung.md) wird bewusst NICHT mehr installiert:
+  // sie ist der Entwurfs-/Begruendungs-Bericht, nicht Teil eines fertigen Workspace. Die
+  // Quelle der Wahrheit sind onboarding.mjs + die echten Dateien. Parallel-Bestand = Drift.
   // Zwei der vier Dauer-Regeln verweisen in ihrem Kopf auf diese Langfassungen.
   // Fehlen sie, fuehrt die Regel ins Leere und wird beim ersten Zweifel ignoriert.
   "11-vollstaendigkeitspruefung.md",
