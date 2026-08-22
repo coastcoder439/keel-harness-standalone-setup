@@ -116,6 +116,27 @@ try {
         `-- angleichen mit: node pruefung/anleitung-sync.mjs --nachziehen`;
     });
 
+    // 1c. PAKET.json muss den tatsaechlichen Paketinhalt abbilden.
+    //
+    // Das Manifest sagt, was der Bausatz ausliefert. Sein urspruenglicher Generator lag
+    // AUSSERHALB dieses Bausatzes -- deshalb log es still mit, sobald hier eine Datei
+    // dazukam: Stand 22.08.2026 waren 38 Posten gelistet, 50 vorhanden. Ein Verzeichnis,
+    // das den Bestand falsch angibt, sieht aus wie eine Zusage und ist keine.
+    pruefe("paket-manifest", () => {
+      const lauf = spawnSync("node", [path.join(BAUSATZ, "pruefung", "paket-manifest.mjs")], {
+        cwd: BAUSATZ,
+        encoding: "utf8",
+      });
+      if (lauf.status === 0) return null;
+      const letzte = (lauf.stdout || "")
+        .split(String.fromCharCode(10))
+        .filter((z) => /NICHT GELISTET|NICHT MEHR DA|GEAENDERT|POSTEN|FEHLER/.test(z))
+        .slice(0, 4)
+        .join(" | ");
+      return `PAKET.json und Paketinhalt weichen ab (Exitcode ${lauf.status}). ${letzte} ` +
+        `-- angleichen mit: node pruefung/paket-manifest.mjs --nachziehen`;
+    });
+
     // 2. Frischer Zielordner + git init.
     ziel = fs.mkdtempSync(path.join(os.tmpdir(), "harness-abnahme-"));
     const gitInit = spawnSync("git", ["init"], { cwd: ziel, encoding: "utf8" });
