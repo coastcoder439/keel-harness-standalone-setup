@@ -1,4 +1,4 @@
-# Zustandsseite
+# Dashboard
 
 Erzeugt eine HTML-Datei: was installiert ist, ob es gesund ist, **welche Regel
 wofür gilt** — und mit welchem Befehl man sie ändert.
@@ -15,7 +15,7 @@ Messung eine andere Anzeige. Getauscht wird dann `rendern.js` — an `messen.js`
 ## Aufruf
 
 ```bash
-node dashboard/index.js                     # HTML nach ./zustand.html
+node dashboard/index.js                     # HTML nach ./dashboard.html
 node dashboard/index.js --html <datei>      # HTML woandershin
 node dashboard/index.js --json              # nur die Daten, nach stdout
 node dashboard/index.js --daten <datei>     # die Daten in eine Datei
@@ -48,7 +48,7 @@ Nichts davon ist neu geschrieben:
 
 ## Die Regel je Bereich wird GEZOGEN, nicht abgetippt
 
-Eine Zustandsseite, die Regeln nacherzählt, ist die zweite Kopie, vor der das
+Eine Dashboard, die Regeln nacherzählt, ist die zweite Kopie, vor der das
 README des Bausatzes warnt. Deshalb kommt jede Regel mit **Datei + Zeile** aus
 ihrer Quelle:
 

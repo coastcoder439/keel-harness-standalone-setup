@@ -10,7 +10,7 @@
 // ohne die Messung anzufassen, und die Messung ohne die Anzeige laufen kann.
 //
 // AUFRUF
-//   node dashboard/index.js                        HTML nach zustand.html
+//   node dashboard/index.js                        HTML nach dashboard.html
 //   node dashboard/index.js --html <datei>         HTML woandershin
 //   node dashboard/index.js --json                 nur Daten, nach stdout
 //   node dashboard/index.js --daten <datei>        Daten in eine Datei
@@ -76,9 +76,9 @@ function argumenteLesen(argv) {
 function hilfe() {
   process.stdout.write(
     [
-      "Zustandsseite des Harness — messen -> Daten -> rendern -> Datei",
+      "Dashboard des Harness — messen -> Daten -> rendern -> Datei",
       "",
-      "  --html <datei>    HTML-Datei (Vorgabe: ./zustand.html; entfaellt bei --json)",
+      "  --html <datei>    HTML-Datei (Vorgabe: ./dashboard.html; entfaellt bei --json)",
       "  --daten <datei>   die gemessenen Daten als JSON in eine Datei",
       "  --json            nur die Daten nach stdout, kein HTML",
       "  --wurzel <pfad>   Werkbank-Wurzel (Vorgabe: aufwaerts gesucht, Ordner mit .claude/)",
@@ -123,13 +123,13 @@ function main() {
   if (o.nurJson) {
     process.stdout.write(JSON.stringify(gebuendelt, null, 2) + "\n");
   } else {
-    const ziel = o.html || path.resolve(process.cwd(), "zustand.html");
+    const ziel = o.html || path.resolve(process.cwd(), "dashboard.html");
     fs.mkdirSync(path.dirname(ziel), { recursive: true });
     fs.writeFileSync(ziel, renderHTML(messung, regelDaten), "utf8");
 
     const z = messung.zaehlung;
     process.stdout.write(
-      `Zustandsseite geschrieben: ${ziel}\n` +
+      `Dashboard geschrieben: ${ziel}\n` +
         `  Werkbank        : ${messung.wurzel}\n` +
         `  Gesamtstatus    : ${messung.gesamtstatus}\n` +
         `  Bereiche        : ${Object.entries(z).map(([k, v]) => `${v}× ${k}`).join(" · ")}\n` +

@@ -1,7 +1,7 @@
 # Harness einrichten — fünf Schritte
 
 Du hast einen Ordner bekommen. Danach hast du einen laufenden Harness und eine
-Zustandsseite, die dir zeigt, was installiert ist und ob es gesund ist.
+Dashboard, die dir zeigt, was installiert ist und ob es gesund ist.
 
 **Gebraucht wird:** Node (18 oder neuer) und Git. Sonst nichts — kein npm, keine
 Toolchain, kein Bauschritt.
@@ -122,17 +122,17 @@ in Ordnung; im Harness liegt nichts davon.
 
 ---
 
-## Die Zustandsseite
+## Die Dashboard
 
-Sie wird am Ende des Onboardings erzeugt und liegt als `zustand.html` in
+Sie wird am Ende des Onboardings erzeugt und liegt als `dashboard.html` in
 `<HARNESS>`. Öffnen im Browser — eine einzelne Datei, keine Netzabfrage, per Mail
 versendbar.
 
 Jederzeit neu messen:
 
 ```
-node <HARNESS>/dashboard/index.js --json --daten <HARNESS>/zustand.json
-node <HARNESS>/dashboard/index.js <HARNESS>/ <HARNESS>/zustand.json <HARNESS>/zustand.html
+node <HARNESS>/dashboard/index.js --json --daten <HARNESS>/dashboard.json
+node <HARNESS>/dashboard/index.js <HARNESS>/ <HARNESS>/dashboard.json <HARNESS>/dashboard.html
 ```
 
 Zwei Läufe, weil **Messung und Anzeige getrennt sind**: `zustand.js` misst und
@@ -149,7 +149,7 @@ austauschen, ohne die Messung anzufassen.
 | **4 Dauer-Regeln** | laden bei jedem Sitzungsstart: erst prüfen dann antworten · Vollständigkeit · Werkzeugwahl · Antwortform |
 | **3 Skills** | Domänenmodell, Merge-Konflikte, Antwortform (`i-have-adhd`) — übernommen unter MIT, Lizenzen liegen bei |
 | **`CLAUDE.md`** | die Vorlage mit `[?]`-Platzhaltern — nur, wenn im Ziel noch keine liegt |
-| **Zustandsseite** | misst Bestand, Sicherung, Prüfer, Rollen — und zeigt sie |
+| **Dashboard** | misst Bestand, Sicherung, Prüfer, Rollen — und zeigt sie |
 | **Beileger** | die Nachbau-Anleitung und die zwei Langfassungen, auf die die Regeln verweisen |
 
 **Was bewusst fehlt:** die Befehls-Freigabeliste (sie erteilte sonst

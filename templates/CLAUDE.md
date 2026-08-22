@@ -48,8 +48,8 @@ eintragen. Andersherum wird das Projekt unsichtbar und ungesichert zugleich.
 
 **Befehle:** `/repo-status` · `/save-work` · `/session-map` · `/tell-session` · `/onboarding` (einmalig)
 
-**Zustandsseite:** `node zustand/zustand.js --json --daten zustand.json` misst,
-`node oberflaeche/befuellen.mjs oberflaeche/dist/index.html zustand.json zustand.html`
+**Dashboard:** `node zustand/zustand.js --json --daten dashboard.json` misst,
+`node oberflaeche/befuellen.mjs oberflaeche/dist/index.html dashboard.json dashboard.html`
 zeigt an. Die Messung kennt keine Darstellung — die Anzeige laesst sich
 austauschen, ohne die Messung anzufassen.
 

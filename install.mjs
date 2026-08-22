@@ -25,7 +25,7 @@
 //   node install.mjs --ziel <ordner> --trocken    jeden Schritt zeigen, nichts schreiben
 //   node install.mjs --ziel <ordner> --ersetzen   abweichende Dateien ueberschreiben
 //   node install.mjs --paket <ordner>             Paketordner explizit setzen
-//   node install.mjs --ohne-seite                 Zustandsseite nicht erzeugen
+//   node install.mjs --ohne-seite                 Dashboard nicht erzeugen
 //   node install.mjs --spur                       bei unerwartetem Fehler den Stack zeigen
 //
 // RUECKGABE  0 = eingerichtet, nichts offen
@@ -876,13 +876,13 @@ function wirkprobe(ziel, verdrahtet, mitgeliefert) {
 // Der Empfaenger baut nichts — es laeuft alles ueber node:fs und node:path.
 // =============================================================================
 
-function zustandsseiteErzeugen(ziel, trocken) {
-  const daten = path.join(ziel, "zustand.json");
-  const seite = path.join(ziel, "zustand.html");
+function dashboardErzeugen(ziel, trocken) {
+  const daten = path.join(ziel, "dashboard.json");
+  const seite = path.join(ziel, "dashboard.html");
   const messer = path.join(ziel, "dashboard", "index.js");
 
   if (trocken) {
-    melden("uebersprungen", "Zustandsseite", `wuerde erzeugen: ${path.relative(ziel, seite)} (aus ${path.relative(ziel, daten)})`);
+    melden("uebersprungen", "Dashboard", `wuerde erzeugen: ${path.relative(ziel, seite)} (aus ${path.relative(ziel, daten)})`);
     return { ok: null, seite };
   }
 
@@ -909,7 +909,7 @@ function zustandsseiteErzeugen(ziel, trocken) {
   // wird bewusst als "nicht pruefbar" gemeldet statt als "alles sauber".
   // Wer das nicht erklaert, laesst den Empfaenger auf einen Fehler starren,
   // den es nicht gibt — oder schlimmer: er gewoehnt sich an rote Meldungen.
-  melden("angelegt", `Zustandsseite: ${seite}`, `Gesamtstatus der Messung: ${status}${statusErklaeren(status)}`);
+  melden("angelegt", `Dashboard: ${seite}`, `Gesamtstatus der Messung: ${status}${statusErklaeren(status)}`);
   return { ok: true, seite, status };
 }
 
@@ -1078,7 +1078,7 @@ function hilfe() {
       "  --paket <ordner>  Paketordner (Vorgabe: der Ordner dieses Programms, sonst ../paket/)",
       "  --trocken         jeden Schritt zeigen, nichts schreiben",
       "  --ersetzen        abweichende vorhandene Dateien ueberschreiben",
-      "  --ohne-seite      die Zustandsseite am Ende nicht erzeugen",
+      "  --ohne-seite      die Dashboard am Ende nicht erzeugen",
       "  --spur            bei einem unerwarteten Fehler den Stack mit ausgeben",
       "",
       "Rueckgabe: 0 eingerichtet · 1 eingerichtet, aber etwas braucht Aufmerksamkeit",
@@ -1382,7 +1382,7 @@ function main() {
   }
 
   // -------------------------------------------------------------------------
-  abschnitt(8, "Zustandsseite");
+  abschnitt(8, "Dashboard");
   for (const datei of DASHBOARD) {
     dateiSetzen(path.join(ziel, "dashboard", datei), lesenAusPaket(paket, `payload/dashboard/${datei}`), {
       ...opt,
@@ -1411,10 +1411,10 @@ function main() {
   else hookGegenprobe(ziel, settingsZusage, mitgeliefert);
 
   // -------------------------------------------------------------------------
-  abschnitt(11, "Zustandsseite erzeugen");
+  abschnitt(11, "Dashboard erzeugen");
   let seite = { ok: null, seite: null };
-  if (o.ohneSeite) melden("uebersprungen", "Zustandsseite", "--ohne-seite war gesetzt");
-  else seite = zustandsseiteErzeugen(ziel, o.trocken);
+  if (o.ohneSeite) melden("uebersprungen", "Dashboard", "--ohne-seite war gesetzt");
+  else seite = dashboardErzeugen(ziel, o.trocken);
 
   // Gegenprobe zur eigenen Zaehlung: postenGesamt() ist gerechnet, die
   // Einzelzaehlung laeuft ueber die Abschnitte [1] bis [9]. Laufen beide
@@ -1452,11 +1452,11 @@ function main() {
 
   process.stdout.write("\n" + "-".repeat(78) + "\n");
   if (seite.seite && seite.ok) {
-    process.stdout.write(`Die Zustandsseite liegt hier — im Browser oeffnen:\n  ${seite.seite}\n`);
+    process.stdout.write(`Die Dashboard liegt hier — im Browser oeffnen:\n  ${seite.seite}\n`);
   } else if (!o.ohneSeite && !o.trocken) {
-    process.stdout.write("Die Zustandsseite konnte nicht erzeugt werden — siehe Abschnitt 11.\n");
+    process.stdout.write("Die Dashboard konnte nicht erzeugt werden — siehe Abschnitt 11.\n");
   }
-  process.stdout.write(`Erneut messen und anzeigen (jederzeit, veraendert nichts):\n  node dashboard/index.js --html zustand.html\n`);
+  process.stdout.write(`Erneut messen und anzeigen (jederzeit, veraendert nichts):\n  node dashboard/index.js --html dashboard.html\n`);
 
   // Die Schlusszeile steht in BEIDEN Zweigen. Bis 02.08.2026 kam sie nach dem
   // process.exit(1) — ein Trockenlauf mit einem einzigen Befund endete deshalb
@@ -1464,14 +1464,14 @@ function main() {
   // meisten gebraucht wird.
   //
   // Die Zahl "geschrieben" zaehlt, was durch schreiben() ging — also Paketinhalt.
-  // Die Zustandsseite entsteht in [11] durch zwei Unterprozesse und ist da nicht
+  // Die Dashboard entsteht in [11] durch zwei Unterprozesse und ist da nicht
   // dabei; ohne diesen Zusatz liest sich "0 Datei(en) geschrieben" bei einem
-  // zweiten Lauf wie "es ist gar nichts passiert", obwohl zustand.html neu ist.
+  // zweiten Lauf wie "es ist gar nichts passiert", obwohl dashboard.html neu ist.
   const seiteNeu = !o.ohneSeite && seite.ok;
   const schluss = o.trocken
     ? `\nTrockenlauf beendet — es wurde nichts geschrieben. ${fortschritt.gesamt} Posten wuerden bearbeitet.\n`
     : `\nEingerichtet: ${fortschritt.erledigt} von ${fortschritt.gesamt} Posten, ${fortschritt.geschrieben} davon neu geschrieben` +
-      `${seiteNeu ? " (die Zustandsseite in [11] entsteht jedes Mal neu und ist hier nicht mitgezaehlt)" : ""}.\n`;
+      `${seiteNeu ? " (die Dashboard in [11] entsteht jedes Mal neu und ist hier nicht mitgezaehlt)" : ""}.\n`;
 
   if (achtungen.length) {
     // MIT dem Zusatz. Ohne ihn stand hier eine Liste von Dateinamen — "·

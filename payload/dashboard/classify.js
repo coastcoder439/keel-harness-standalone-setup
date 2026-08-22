@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// EINORDNEN — die zwei Achsen, an denen die erste Fassung der Zustandsseite scheiterte.
+// EINORDNEN — die zwei Achsen, an denen die erste Fassung der Dashboard scheiterte.
 //
 // Sie zaehlte "67 Agenten, 280 Faehigkeiten, 96 Befehle" und nannte das den Harness.
 // Das war der ECC-Fremdklon. Unser Eigenbau sind 16 Dateien. Und sie unterschied
@@ -62,7 +62,7 @@ function herkunftBestimmen(wurzel, absPfad) {
 // ueberschreibt eine vorhandene CLAUDE.md bewusst nicht -- beim Bestandsprojekt
 // zeigte der Beleg damit auf einen Abschnitt, den es dort nicht gibt.
 // Gemessen an einem frisch eingerichteten Ziel mit eigener CLAUDE.md ohne §5:
-// 4x in zustand.json, ebenso oft in der HTML-Seite.
+// 4x in dashboard.json, ebenso oft in der HTML-Seite.
 //
 // Ein Beleg, der sich nicht nachschlagen laesst, ist schlimmer als keiner: er
 // taeuscht Pruefbarkeit vor. Deshalb wird er GEMESSEN statt behauptet --
