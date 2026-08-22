@@ -17,7 +17,7 @@
           },
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/projekt-kontext.js\"",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/project-context.js\"",
             "timeout": 10,
             "statusMessage": "Projekt-Kontext-Check"
           }

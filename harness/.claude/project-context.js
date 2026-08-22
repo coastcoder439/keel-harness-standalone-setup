@@ -6,8 +6,8 @@
 // bestimmt Repo-Ziel und Rolle der Sitzung.
 //
 // Herkunft: dieser Hook war im AIOS-Harness (Mac) verdrahtet und in
-// docs/10-nachbau-anleitung.md (Abschnitt 6.1) dokumentiert, ist aber beim Umpacken
-// in den Keel-Standalone-Bausatz NIE in vorlagen/settings.json gelandet -- die Doku
+// docs/rebuild-guide.md (Abschnitt 6.1) dokumentiert, ist aber beim Umpacken
+// in den Keel-Standalone-Bausatz NIE in templates/settings.json gelandet -- die Doku
 // beschrieb ihn, die installierte Vorlage hatte ihn nicht. Deshalb fragte jede frische
 // Sitzung nichts. Wieder eingebaut 21.08.2026.
 //
