@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-22T17:22:53.103Z",
+  "gebautAm": "2026-08-22T18:12:17.856Z",
   "posten": 52,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser PAKET.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von pruefung/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -412,8 +412,8 @@
       "herkunft": "zustand/messen.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 48085,
-      "sha256": "d35666924c59e233"
+      "bytes": 48478,
+      "sha256": "ded8ea5ee94ff9df"
     },
     {
       "datei": "zustand/regeln.js",
