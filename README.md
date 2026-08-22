@@ -47,7 +47,7 @@ entscheidest und erledigst du selbst.
    Änderungen: sag es dem Menschen und warte, bis gesichert ist. Führe dann den Trockenlauf
    aus, ohne ihn zu zeigen:
    ```
-   node <ARBEIT>/onboarding.mjs --paket <ARBEIT> --ziel <HARNESS> --trocken
+   node <ARBEIT>/install.mjs --paket <ARBEIT> --ziel <HARNESS> --trocken
    ```
    Nur wenn dort etwas Ungewöhnliches steht — eine vorhandene `CLAUDE.md` in `<HARNESS>`,
    `ABWEICHEND`, `ACHTUNG`, ein Rückgabewert 2 — sagst du es dem Menschen wörtlich und
@@ -55,7 +55,7 @@ entscheidest und erledigst du selbst.
 
 4. **Installiere:**
    ```
-   node <ARBEIT>/onboarding.mjs --paket <ARBEIT> --ziel <HARNESS>
+   node <ARBEIT>/install.mjs --paket <ARBEIT> --ziel <HARNESS>
    ```
    Rückgabewert 2 = Abbruch: die Meldung wörtlich zeigen, samt „N von M Posten", nicht
    improvisieren, keinen eigenen Reparaturversuch.
@@ -63,7 +63,7 @@ entscheidest und erledigst du selbst.
 5. **Sichere in `<HARNESS>`:**
    ```
    git -C <HARNESS> init -b main          # nur, falls noch kein Repo
-   git -C <HARNESS> add .claude .gitignore CLAUDE.md zustand oberflaeche docs lizenzen
+   git -C <HARNESS> add .claude .gitignore CLAUDE.md dashboard docs licenses
    git -C <HARNESS> commit -m "harness: installiert"
    ```
    Ein Remote anlegen und pushen ist Sache des Menschen — das kommt im Onboarding.
@@ -92,7 +92,7 @@ Der Inhalt hier entsteht automatisch aus der Werkbank (Quell-Commit: `e165ec6`).
 **Handänderungen an diesem Repo werden beim nächsten Generator-Lauf überschrieben.**
 Wer etwas ändern will, ändert es an der Quelle in der Werkbank — nicht hier.
 
-> **Ausnahme, 2026-08-18:** README, PAKET-ANLEITUNG, `vorlagen/` und der Installer wurden
+> **Ausnahme, 2026-08-18:** README, PAKET-ANLEITUNG, `templates/` und der Installer wurden
 > von Hand auf den Zwei-Phasen-Ablauf umgestellt (neu: `/onboarding` + `onboarding-start.js`);
 > die Paket-`CLAUDE.md` ist entfallen. Begründung und Änderungsliste für die Werkbank:
 > `AENDERUNGEN-ANLEITUNG-2026-08-18.md`. Bis die Werkbank nachgezogen ist, überschreibt
@@ -108,11 +108,11 @@ Wer etwas ändern will, ändert es an der Quelle in der Werkbank — nicht hier.
 
 | Teil | Zweck |
 |---|---|
-| `harness/` | Die Nutzlast: `.claude` mit Wächter-Hooks, Dauer-Regeln, Befehlen (`/repo-status`, `/save-work`, `/session-map`, `/tell-session`, `/onboarding`), Skills |
-| `vorlagen/` | `CLAUDE.md`, `settings.json` und der `.gitignore`-Block, die ins Ziel geschrieben werden |
-| `zustand/`, `oberflaeche/` | Zustandsseite: Messung und gebaute Hülle |
-| `beileger/`, `lizenzen/` | Langfassungen, auf die die Regeln verweisen; Lizenzen der übernommenen Skills |
-| `onboarding.mjs` | Installiert die Nutzlast nach `<HARNESS>` (fragt selbst nichts ab, löscht nichts) |
+| `payload/` | Die Nutzlast: `.claude` mit Wächter-Hooks, Dauer-Regeln, Befehlen (`/repo-status`, `/save-work`, `/session-map`, `/tell-session`, `/onboarding`), Skills |
+| `templates/` | `CLAUDE.md`, `settings.json` und der `.gitignore`-Block, die ins Ziel geschrieben werden |
+| `payload/dashboard/` | Zustandsseite: misst und zeigt an, ein Aufruf |
+| `payload/docs/`, `licenses/` | Langfassungen, auf die die Regeln verweisen; Lizenzen der übernommenen Skills |
+| `install.mjs` | Installiert die Nutzlast nach `<HARNESS>` (fragt selbst nichts ab, löscht nichts) |
 | `PAKET-ANLEITUNG.md` | Der Weg von Hand, mit Fehlertabelle |
-| `pruefung/frisch-geklont.mjs` | Abnahmetest des Pakets |
-| `PAKET.json` | Stückliste: jede Datei mit Herkunft, Größe, Prüfsumme; darunter, was bewusst fehlt |
+| `checks/frisch-geklont.mjs` | Abnahmetest des Pakets |
+| `manifest.json` | Stückliste: jede Datei mit Herkunft, Größe, Prüfsumme; darunter, was bewusst fehlt |

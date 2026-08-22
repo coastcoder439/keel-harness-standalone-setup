@@ -32,23 +32,23 @@ eigenen Ordner nicht. Das ist behoben; der Schalter bleibt als Konvention.)
 ## 1. Nachsehen, was drin ist
 
 ```
-node -e "const p=require('<PAKET>/PAKET.json');console.log(p.posten+' Posten, gebaut '+p.gebautAm)"
+node -e "const p=require('<PAKET>/manifest.json');console.log(p.posten+' Posten, gebaut '+p.gebautAm)"
 ```
 
-`PAKET.json` ist die Stückliste: jede Datei mit Herkunft, Größe und Prüfsumme.
+`manifest.json` ist die Stückliste: jede Datei mit Herkunft, Größe und Prüfsumme.
 Darunter steht unter `bewusstNichtEnthalten`, **was absichtlich fehlt und warum** —
 das ist kein Versehen und braucht kein Nachtragen.
 
 ## 2. Trocken laufen lassen
 
 ```
-node <PAKET>/onboarding.mjs --paket <PAKET> --ziel <HARNESS> --trocken
+node <PAKET>/install.mjs --paket <PAKET> --ziel <HARNESS> --trocken
 ```
 
 Windows, ausgeschrieben:
 
 ```
-node C:\Users\du\Downloads\keel-harness-standalone\onboarding.mjs --paket C:\Users\du\Downloads\keel-harness-standalone --ziel C:\Users\du\WORKSPACES\mein-workspace --trocken
+node C:\Users\du\Downloads\keel-harness-standalone\install.mjs --paket C:\Users\du\Downloads\keel-harness-standalone --ziel C:\Users\du\WORKSPACES\mein-workspace --trocken
 ```
 
 Zeigt jeden Schritt und schreibt **nichts**. Lies die Ausgabe einmal durch. Sie
@@ -66,7 +66,7 @@ bei einem neuen Ordner ist etwas falsch gelaufen.
 ## 3. Einrichten
 
 ```
-node <PAKET>/onboarding.mjs --paket <PAKET> --ziel <HARNESS>
+node <PAKET>/install.mjs --paket <PAKET> --ziel <HARNESS>
 ```
 
 Der Lauf ist wiederholbar. Eine Datei, die schon da ist und abweicht, wird
@@ -90,7 +90,7 @@ Verzeichnis im richtigen Repo landen:
 
 ```
 git -C <HARNESS> init -b main
-git -C <HARNESS> add .claude .gitignore CLAUDE.md zustand oberflaeche docs lizenzen
+git -C <HARNESS> add .claude .gitignore CLAUDE.md dashboard docs licenses
 git -C <HARNESS> commit -m "harness: installiert"
 ```
 
@@ -131,8 +131,8 @@ versendbar.
 Jederzeit neu messen:
 
 ```
-node <HARNESS>/zustand/zustand.js --json --daten <HARNESS>/zustand.json
-node <HARNESS>/oberflaeche/befuellen.mjs <HARNESS>/oberflaeche/dist/index.html <HARNESS>/zustand.json <HARNESS>/zustand.html
+node <HARNESS>/dashboard/index.js --json --daten <HARNESS>/zustand.json
+node <HARNESS>/dashboard/index.js <HARNESS>/ <HARNESS>/zustand.json <HARNESS>/zustand.html
 ```
 
 Zwei Läufe, weil **Messung und Anzeige getrennt sind**: `zustand.js` misst und
@@ -166,7 +166,7 @@ abgeschaltet — das ist schlechter als gar keiner.
 | `ABWEICHEND` | Deine Fassung bleibt stehen, die neue liegt als `.neu` daneben. Vergleichen, dann entscheiden. |
 | `ACHTUNG … kein git-Repo` | Nichts ist gesichert. Schritt 4 nachholen. |
 | `ACHTUNG … werden von git ignoriert` | Die `.gitignore` verdeckt Eigenbauten. Der Harness-Block muss **nach** einer breiteren Regel stehen. |
-| `ABBRUCH: Paket nicht gefunden` | `--paket <PAKET>` zeigt nicht auf den Ordner mit `PAKET.json`. Pfad prüfen. |
+| `ABBRUCH: Paket nicht gefunden` | `--paket <PAKET>` zeigt nicht auf den Ordner mit `manifest.json`. Pfad prüfen. |
 | Rückgabewert `1` | Eingerichtet, aber etwas braucht Aufmerksamkeit — die Punkte stehen am Ende der Ausgabe. |
 | Rückgabewert `2` | **Abbruch — es ist nicht eingerichtet.** Die Meldung nennt den Grund in einer Zeile Klartext (Schreibrechte, kein Platz, Ziel unbrauchbar) und dahinter den Stand: `N von M Posten`. |
 | `2` mit `N > 0` | Der Ordner ist **halb** eingerichtet. Ursache beheben, dann **denselben** Befehl erneut — er ergänzt nur das Fehlende. Nicht ignorieren: beim nächsten Lauf sieht ein halbes Ziel wie ein gewachsener Bestand aus. |
