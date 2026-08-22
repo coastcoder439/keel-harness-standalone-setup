@@ -980,7 +980,9 @@ function readinessMessen(wurzel, mitGithub) {
 // ---------------------------------------------------------------------------
 // Zusammenführung
 // ---------------------------------------------------------------------------
-const RANG = { unlesbar: 4, befund: 3, fehlt: 2, hinweis: 1, ok: 0 };
+// "entfaellt" steht bewusst auf derselben Stufe wie "ok": es beschreibt eine
+// Auslassung, die so gewollt ist, und darf den Gesamtstatus nicht faerben.
+const RANG = { unlesbar: 4, befund: 3, fehlt: 2, hinweis: 1, ok: 0, entfaellt: 0 };
 
 function messen(optionen = {}) {
   const wurzel = path.resolve(optionen.wurzel || wurzelSuchen(__dirname) || process.cwd());
