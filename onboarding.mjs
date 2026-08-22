@@ -150,6 +150,7 @@ const WAECHTER = [
   "repo-status.js",
   "session-roles.js",
   "onboarding-start.js", // SessionStart: startet /onboarding, solange CLAUDE.md [AUSFUELLEN] enthaelt
+  "projekt-kontext.js",  // SessionStart: fragt beim Start nach Projekt/Rolle (AskUserQuestion)
   "statusline.js",
   "uncommitted-warn.js",
 ];
