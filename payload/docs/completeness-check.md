@@ -5,7 +5,7 @@
 > fertig. Es sind tausend Lücken drin." Das stimmte jedes Mal. Dieses Dokument ist die
 > Antwort darauf: die Fehlermuster, die Definition von *fertig*, die Prüf-Dimensionen und
 > die Gegenproben. Es ist harness-tauglich geschrieben (übernehmbar nach
-> `.claude/rules/ecc/common/`).
+> `.claude/rules/keel/`).
 
 ---
 
@@ -282,7 +282,7 @@ sieben gewachsen — eine Regel auf Platz zwölf findet niemand.
   hängt an einer Pfad-Abbildung — bricht sie in die eine Richtung, gilt alles als Eigenbau
   (laut, fällt auf); bricht sie in die andere, gilt alles als Fremdmaterial, der Befund lautet
   **„0 Eigenbauten, alles sauber"**, und niemand merkt etwas. Genau dieser Bruch, absichtlich
-  herbeigeführt, wird jetzt gefangen: `.claude/rules/ecc/common/testing.md wurde als "eigen"
+  herbeigeführt, wird jetzt gefangen: `.claude/rules/keel/testing.md wurde als "eigen"
   eingestuft, erwartet war "fremd"` → Rückgabe 2. **Die stille Richtung ist immer die, die
   entwarnt** — deshalb muss der bekannt-gute Fall sie abdecken, nicht die laute.
 
@@ -325,14 +325,14 @@ Die operative Kurzfassung liegt als Regel neben den zehn bestehenden ECC-Regeln 
 dadurch **in jeder Session dieses Workspace automatisch geladen** (Tree-Walk über `.claude/`):
 
 ```
-.claude/rules/ecc/common/completeness.md
+.claude/rules/keel/completeness.md
 ```
 
 `.claude/` ist per `.gitignore` ausgenommen (Fremd-Klon plus benutzerabhängiger Inhalt).
 Damit die Regel einen Neuklon überlebt, ist **genau diese eine Datei** erzwungen versioniert:
 
 ```bash
-git add -f .claude/rules/ecc/common/completeness.md
+git add -f .claude/rules/keel/completeness.md
 ```
 
 **Arbeitsteilung der beiden Dateien:** Dieses Dokument trägt die Beweislage und die

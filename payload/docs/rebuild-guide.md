@@ -548,7 +548,7 @@ trennt es:
 |---|---|---|
 | **Fremd-Klon** (ECC-Installation) | `.claude/skills/`, `.claude/agents/` (gemessen 02.08.2026: `ls .claude/skills \| wc -l` → 280, `ls .claude/agents \| wc -l` → 67) | **draussen** — Fremdmaterial, aus der Update-Quelle nachziehbar |
 | **Rechner-Zustand** | `.claude/settings.local.json` (Befehls-Freigabeliste) | **draussen** — pro Rechner verschieden |
-| **Eigenbauten** | die acht Skripte direkt unter `.claude/` (`git-guard.js`, `danger-guard.js`, `commit-pathspec-guard.js`, `statusline.js`, `session-roles.js`, `repo-status.js`, `uncommitted-warn.js`, `pruefstand-warn.js`), die vier `commands/*.md`, die vier eigenen Regeln unter `rules/ecc/common/`, `plan/`, die drei eigenen Skills | **drin** — sonst existieren sie nur auf einer Platte |
+| **Eigenbauten** | die acht Skripte direkt unter `.claude/` (`git-guard.js`, `danger-guard.js`, `commit-pathspec-guard.js`, `statusline.js`, `session-roles.js`, `repo-status.js`, `uncommitted-warn.js`, `pruefstand-warn.js`), die vier `commands/*.md`, die vier eigenen Regeln unter `rules/keel/`, `plan/`, die drei eigenen Skills | **drin** — sonst existieren sie nur auf einer Platte |
 
 **Warum die Eigenbauten hinein muessen** (Anlass, belegt am 01.08.2026): Sie lagen ohne Sicherung
 und ohne Historie nur lokal. Der `git-guard`-Fix vom selben Tag existierte nur auf der Platte,
@@ -639,12 +639,12 @@ bleiben unveraendert daneben stehen:
 .claude/rules/*
 !.claude/rules/ecc/
 .claude/rules/ecc/*
-!.claude/rules/ecc/common/
-.claude/rules/ecc/common/*
-!.claude/rules/ecc/common/no-oneshot.md
-!.claude/rules/ecc/common/completeness.md
-!.claude/rules/ecc/common/tools.md
-!.claude/rules/ecc/common/output-shape.md
+!.claude/rules/keel/
+.claude/rules/keel/*
+!.claude/rules/keel/no-oneshot.md
+!.claude/rules/keel/completeness.md
+!.claude/rules/keel/tools.md
+!.claude/rules/keel/output-shape.md
 .ecc-src/
 ```
 
@@ -711,7 +711,7 @@ aufgenommene, negierte Datei als auch fuer die bereits getrackte.
 ```bash
 for f in .claude/hooks/git-guard.js \
          .claude/commands/repo-status.md \
-         .claude/rules/ecc/common/tools.md \
+         .claude/rules/keel/tools.md \
          .claude/settings.local.json \
          .claude/rules/ecc/web/testing.md; do
   if git check-ignore -q "$f"; then echo "IGNORIERT   $f"; else echo "sichtbar    $f"; fi
@@ -728,7 +728,7 @@ Ausgabe ist zustandsabhaengig und taugt zum Nachsehen, nicht als Kriterium:
 
 - **vor** dem `git add` nennen die drei Eigenbauten ihre Negationszeile (im Wegwerf-Repo gemessen:
   `!.claude/*.js`, `!.claude/commands/repo-status.md`,
-  `!.claude/rules/ecc/common/tools.md`) — das ist der **korrekte** Zwischenzustand, kein Fehler;
+  `!.claude/rules/keel/tools.md`) — das ist der **korrekte** Zwischenzustand, kein Fehler;
 - **nach** `add` + Commit schweigt `-v` zu ihnen, weil sie im Index liegen;
 - die beiden Fremd-Dateien nennen in **beiden** Faellen ihre `.gitignore`-Zeile (in dieser Werkbank:
   `.gitignore:26:.claude/*` fuer `settings.local.json`, `.gitignore:43:.claude/rules/ecc/*` fuer
@@ -2855,7 +2855,7 @@ Volltext** — und das bleibt absichtlich so. Drei gemessene Gründe:
    Stempeldatei `$TMPDIR/<workspace>-pruefstand-warn-<id>.stamp`; für einen zweiten Versuch eine
    andere Kennung einsetzen, sonst ist das Schweigen nur die Drossel.
 
-### 6.8.12 Die fuenf Dauer-Regeln (Ordner .claude/rules/ecc/common/) — was in **jeder** Sitzung mitlädt
+### 6.8.12 Die fuenf Dauer-Regeln (Ordner .claude/rules/keel/) — was in **jeder** Sitzung mitlädt
 
 Eine Regeldatei lädt **unbedingt**, wenn sie **kein** `paths:`-Frontmatter trägt. Das ist die
 ganze Bedingung, und sie hängt an der **Datei**, nicht am Ordner. Der Ordner common/ ist der Ort,
@@ -2867,7 +2867,7 @@ in denselben Blick wie die Kostenrechnung in tools.md und wie die zu breiten Tri
 §6.8.1. Nachmessen:
 
 ```bash
-grep -L '^---' .claude/rules/ecc/common/*.md | wc -l        # 14 — keine Datei in common hat Frontmatter
+grep -L '^---' .claude/rules/keel/*.md | wc -l        # 14 — keine Datei in common hat Frontmatter
 grep -l '^---' .claude/rules/ecc/*/*.md      | wc -l        # 104 tragen eins ...
 ls           .claude/rules/ecc/*/*.md | grep -cv /common/   # ... von 111 Sprachdateien
 grep -L '^---' .claude/rules/ecc/*/*.md | grep -v /common/  # die 7 Ausreisser: alle in ecc/web/
@@ -2955,16 +2955,16 @@ einer bereits laufenden Werkbank; existiert keine, werden die Dateien aus den Be
 oben neu geschrieben (siehe Kasten am Ende dieses Abschnitts).
 
 ```bash
-mkdir -p .claude/rules/ecc/common
-cp "<REFERENZ>"/.claude/rules/ecc/common/{no-oneshot,completeness,tools,output-shape,working-method}.md \
-   .claude/rules/ecc/common/
+mkdir -p .claude/rules/keel
+cp "<REFERENZ>"/.claude/rules/keel/{no-oneshot,completeness,tools,output-shape,working-method}.md \
+   .claude/rules/keel/
 ```
 
 **Geklappt, wenn:** vier Mal „ok" erscheint und kein „FEHLT ODER LEER" —
 
 ```bash
 for f in no-oneshot completeness tools output-shape working-method; do
-  test -s .claude/rules/ecc/common/$f.md && echo "$f ok" || echo "$f FEHLT ODER LEER"
+  test -s .claude/rules/keel/$f.md && echo "$f ok" || echo "$f FEHLT ODER LEER"
 done
 ```
 
@@ -2973,7 +2973,7 @@ Sprachregel und verschwindet aus Sitzungen ohne passenden Dateityp — das ist d
 still passiert.
 
 ```bash
-grep -L '^---' .claude/rules/ecc/common/{no-oneshot,completeness,tools,output-shape,working-method}.md
+grep -L '^---' .claude/rules/keel/{no-oneshot,completeness,tools,output-shape,working-method}.md
 ```
 
 **Geklappt, wenn:** alle vier Pfade in der Ausgabe stehen (`grep -L` listet Dateien **ohne**
@@ -2982,9 +2982,9 @@ verlieren. **Gegenprobe, dass der Befehl überhaupt etwas aussortiert:** eine We
 Frontmatter danebenlegen und mitprüfen — sie darf nicht in der Liste auftauchen.
 
 ```bash
-printf -- '---\npaths:\n  - "**/*.ts"\n---\ntext\n' > .claude/rules/ecc/common/zz-probe.md
-grep -L '^---' .claude/rules/ecc/common/{no-oneshot,completeness,tools,output-shape,working-method,zz-probe}.md
-rm .claude/rules/ecc/common/zz-probe.md
+printf -- '---\npaths:\n  - "**/*.ts"\n---\ntext\n' > .claude/rules/keel/zz-probe.md
+grep -L '^---' .claude/rules/keel/{no-oneshot,completeness,tools,output-shape,working-method,zz-probe}.md
+rm .claude/rules/keel/zz-probe.md
 ```
 
 **Schritt 3 — aufnehmen und sichern, sonst überlebt keine davon einen Rechnerwechsel.**
@@ -3002,7 +3002,7 @@ Erst prüfen, ob die vier Zeilen wirklich stehen — je Datei, nicht als Summe:
 
 ```bash
 for f in no-oneshot completeness tools output-shape working-method; do
-  grep -qxF "!.claude/rules/ecc/common/$f.md" .gitignore \
+  grep -qxF "!.claude/rules/keel/$f.md" .gitignore \
     && echo "negiert          $f" || echo "FEHLT IM BLOCK:  $f"
 done
 ```
@@ -3015,10 +3015,10 @@ Dann aufnehmen. Neue Dateien brauchen `git add`; committet wird mit Pathspec und
 diff HEAD` geprüft — Begründung für beides in §6.2a und in CLAUDE.md (Sichern):
 
 ```bash
-git add .claude/rules/ecc/common/{no-oneshot,completeness,tools,output-shape,working-method}.md
-git diff HEAD --stat -- .claude/rules/ecc/common
+git add .claude/rules/keel/{no-oneshot,completeness,tools,output-shape,working-method}.md
+git diff HEAD --stat -- .claude/rules/keel
 git commit -m "chore: die fuenf Dauer-Regeln versionieren" \
-  -- .claude/rules/ecc/common/{no-oneshot,completeness,tools,output-shape,working-method}.md
+  -- .claude/rules/keel/{no-oneshot,completeness,tools,output-shape,working-method}.md
 git push
 ```
 
@@ -3039,12 +3039,12 @@ ECC-Regel weiterhin ignoriert ist:
 
 ```bash
 for f in no-oneshot completeness tools output-shape working-method; do
-  p=".claude/rules/ecc/common/$f.md"
+  p=".claude/rules/keel/$f.md"
   git ls-files --error-unmatch "$p" >/dev/null 2>&1 && i="Index ja  " || i="Index NEIN"
   git ls-tree -r --name-only '@{u}' -- "$p" | grep -qxF "$p" && r="Remote ja  " || r="Remote NEIN"
   echo "$i $r $f"
 done
-git check-ignore -q .claude/rules/ecc/common/testing.md; echo "ECC-Regel ignoriert? Exit $?"
+git check-ignore -q .claude/rules/keel/testing.md; echo "ECC-Regel ignoriert? Exit $?"
 ```
 
 Viermal `Index ja Remote ja`, und die letzte Zeile **Exit 0**. Die Gegenrichtung ist kein Zierrat:
@@ -3184,37 +3184,37 @@ Mindestinhalt der Datei — drei Dinge, die zusammengehören:
    Coverage findet Lücken, Fulfillment findet Frame-Fehler. Keins ersetzt das andere: eine lückenlose Bewertung gegen die falsche Messlatte ist lückenlos falsch.
 3. **Sprachregel:** „fertig" ist als Selbstauskunft verboten. Erlaubt ist *„Geprüft gegen ⟨Quellen⟩ — offen ist ⟨Liste⟩."* Zahlen werden beim Schreiben gemessen, nicht erinnert, und der Befehl, der die Zahl erzeugt hat, steht daneben.
 
-Ort im Nachbau: neben den übrigen Regeldateien des Harness (in dieser Werkbank `.claude/rules/ecc/common/`), nicht in `docs/`.
+Ort im Nachbau: neben den übrigen Regeldateien des Harness (in dieser Werkbank `.claude/rules/keel/`), nicht in `docs/`.
 
 ```bash
-mkdir -p .claude/rules/ecc/common
-# Datei .claude/rules/ecc/common/working-method.md anlegen. Sie MUSS diese drei
+mkdir -p .claude/rules/keel
+# Datei .claude/rules/keel/working-method.md anlegen. Sie MUSS diese drei
 # Zeilen woertlich enthalten, sonst greift die Pruefung unten ins Leere:
 #   Zieldefinition: Problem · Intent · Goal
 #   Abschluss-Messung 1: Coverage
 #   Abschluss-Messung 2: Fulfillment
-/usr/bin/grep -l "Problem · Intent · Goal" .claude/rules/ecc/common/working-method.md
+/usr/bin/grep -l "Problem · Intent · Goal" .claude/rules/keel/working-method.md
 
 # SICHERN -- ohne diese drei Zeilen liegt die Regel nur auf der Platte:
-printf '!.claude/rules/ecc/common/working-method.md\n' >> .gitignore
-git add .claude/rules/ecc/common/working-method.md
-git commit -m "arbeitsweise-regel" -- .gitignore .claude/rules/ecc/common/working-method.md
+printf '!.claude/rules/keel/working-method.md\n' >> .gitignore
+git add .claude/rules/keel/working-method.md
+git commit -m "arbeitsweise-regel" -- .gitignore .claude/rules/keel/working-method.md
 git push
 ```
 
-**Der Sicherungs-Block ist kein Anhängsel.** Das `.gitignore`-Muster aus §5/§6 sperrt `.claude/rules/ecc/common/*` und holt einzelne Dateien mit `!`-Zeilen zurück — eine neue Datei ist von keiner Ausnahme erfasst. Im frischen Nachbau gemessen: nach dem Anlegen zeigt `git status --short` **nichts**, `git check-ignore -q` gibt **0** (ignoriert), und `git add` antwortet „The following paths are ignored by one of your .gitignore files". Die Regeldatei ist da, wirkt, und ist beim nächsten Rechnerwechsel weg. Die `!`-Zeile allein behebt das nicht: sie entscheidet nur, ob git die Datei **sehen darf**. Gesichert ist sie erst durch Commit und Push.
+**Der Sicherungs-Block ist kein Anhängsel.** Das `.gitignore`-Muster aus §5/§6 sperrt `.claude/rules/keel/*` und holt einzelne Dateien mit `!`-Zeilen zurück — eine neue Datei ist von keiner Ausnahme erfasst. Im frischen Nachbau gemessen: nach dem Anlegen zeigt `git status --short` **nichts**, `git check-ignore -q` gibt **0** (ignoriert), und `git add` antwortet „The following paths are ignored by one of your .gitignore files". Die Regeldatei ist da, wirkt, und ist beim nächsten Rechnerwechsel weg. Die `!`-Zeile allein behebt das nicht: sie entscheidet nur, ob git die Datei **sehen darf**. Gesichert ist sie erst durch Commit und Push.
 
 **Geklappt, wenn** drei Dinge zutreffen:
 
 ```bash
-/usr/bin/grep -l "Problem · Intent · Goal" .claude/rules/ecc/common/working-method.md   # gibt den Dateinamen aus
+/usr/bin/grep -l "Problem · Intent · Goal" .claude/rules/keel/working-method.md   # gibt den Dateinamen aus
 git ls-files --others --ignored --exclude-standard -- .claude/ | /usr/bin/grep arbeitsweise   # gibt NICHTS aus
-git log --oneline -- .claude/rules/ecc/common/working-method.md | wc -l                  # >= 1
+git log --oneline -- .claude/rules/keel/working-method.md | wc -l                  # >= 1
 ```
 
 …**und** eine frisch gestartete Sitzung beantwortet „welche zwei Messungen schließen eine Aufgabe ab?" mit *Coverage* und *Fulfillment*, ohne die Datei vorher zu öffnen. Erst dann liegt sie im Startkontext und nicht nur auf der Platte.
 
-**Wenn die frische Sitzung es nicht weiß:** Der Harness liest diesen Ordner **flach aus** — kein Manifest, kein Frontmatter, kein Eintrag in einer Einstellungsdatei nötig. Gemessen in dieser Werkbank: 14 Dateien in `.claude/rules/ecc/common/`, alle 14 im Startkontext, **0** davon mit Frontmatter (`/usr/bin/grep -l '^---' .claude/rules/ecc/common/*.md | wc -l`), und `.claude/rules/` enthält außer `ecc/` keinen Eintrag. Die zwei Fehler, die dann in Frage kommen: der **Ablageort** — eine Ebene zu hoch in `.claude/rules/`, oder in einem der 22 Sprach-Unterordner, die nur bei passendem Dateityp laden (§6.8.1; in dieser Sitzung selbst beobachtet: die `typescript/`-Regeln erschienen erst, nachdem eine `.js`-Datei gelesen wurde) — und ein **nicht neu gestarteter Client** (§6.8.8). Die Datei nachträglich in `CLAUDE.md` zu verlinken behebt es **nicht**: ein Link ist eine Empfehlung, kein Startkontext. Genau darum geht es in diesem Schritt.
+**Wenn die frische Sitzung es nicht weiß:** Der Harness liest diesen Ordner **flach aus** — kein Manifest, kein Frontmatter, kein Eintrag in einer Einstellungsdatei nötig. Gemessen in dieser Werkbank: 14 Dateien in `.claude/rules/keel/`, alle 14 im Startkontext, **0** davon mit Frontmatter (`/usr/bin/grep -l '^---' .claude/rules/keel/*.md | wc -l`), und `.claude/rules/` enthält außer `ecc/` keinen Eintrag. Die zwei Fehler, die dann in Frage kommen: der **Ablageort** — eine Ebene zu hoch in `.claude/rules/`, oder in einem der 22 Sprach-Unterordner, die nur bei passendem Dateityp laden (§6.8.1; in dieser Sitzung selbst beobachtet: die `typescript/`-Regeln erschienen erst, nachdem eine `.js`-Datei gelesen wurde) — und ein **nicht neu gestarteter Client** (§6.8.8). Die Datei nachträglich in `CLAUDE.md` zu verlinken behebt es **nicht**: ein Link ist eine Empfehlung, kein Startkontext. Genau darum geht es in diesem Schritt.
 
 ### Schritt 2 — Verify ist ein Pflicht-Schritt, und er beginnt mit einer Frage
 

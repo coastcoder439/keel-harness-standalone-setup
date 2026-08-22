@@ -70,5 +70,5 @@ Wächter vorschlägt: diese vier zuerst entkräften.
 - **Zahlen und Widerspruchsprobe:** Sprachregel und G1 in `completeness.md` — dort das Zuhause.
 - **Wenn eine Prüfung nicht möglich ist:** das sagen, statt zu schätzen.
 
-Verwandt: [`docs/completeness-check.md`](../../../../docs/completeness-check.md) *(im Paket-Rohzustand: `beileger/completeness-check.md` — das Onboarding legt sie nach `docs/`)*
+Verwandt: [`docs/completeness-check.md`](../../../docs/completeness-check.md) *(im Paket-Rohzustand: `beileger/completeness-check.md` — das Onboarding legt sie nach `docs/`)*
 · Fehlermuster F2 (gegen sich selbst geprüft, nie gegen die Quellen) und F6 (halbe Verifikation).

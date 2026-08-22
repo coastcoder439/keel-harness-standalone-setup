@@ -63,8 +63,8 @@ austauschen, ohne die Messung anzufassen.
   Der `commit-pathspec-guard` erzwingt das.
 - **Verschachtelte Repos immer via `git -C <repo>`** committen — nie ins falsche Repo.
 - **Keine Zugaenge in Dateien.** Schluesselbund oder Umgebungsvariablen.
-- **Werkzeuge: CLI vor MCP vor Browser** — Begruendung in `.claude/rules/ecc/common/tools.md`.
-- **Automatisch geladene Regeln:** `.claude/rules/ecc/common/` — fuenf Dateien,
+- **Werkzeuge: CLI vor MCP vor Browser** — Begruendung in `.claude/rules/keel/tools.md`.
+- **Automatisch geladene Regeln:** `.claude/rules/keel/` — fuenf Dateien,
   bewusst ohne Frontmatter, damit sie Dauer-Kontext sind und nicht nur abrufbar.
 
 ## 5. `[?]` Deine eigenen Regeln

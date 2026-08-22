@@ -92,7 +92,7 @@ const DOC13 = "docs/13-arbeitsweise-standard.md";
 function effortStufen(wurzel) {
   const befehl = `$EDITOR ${DOC13}   # Abschnitt „2a · Modell- und Effort-Wahl“`;
   const zeilen = lesen(wurzel, DOC13);
-  if (!zeilen) return fehlt("effort", "Denkbudget je Aufgabenform", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Die hier geltende Arbeitsweise steht in .claude/rules/ecc/common/working-method.md.", befehl);
+  if (!zeilen) return fehlt("effort", "Denkbudget je Aufgabenform", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Die hier geltende Arbeitsweise steht in .claude/rules/keel/working-method.md.", befehl);
 
   const t = tabelleZiehen(zeilen, ["Stufe", "Überspringen, wenn", "Aufsteigen, wenn"]);
   if (!t) {
@@ -184,12 +184,12 @@ function modellwahl(wurzel) {
 // ---------------------------------------------------------------------------
 function dauerRegeln(wurzel) {
   const kandidaten = [
-    { ordner: path.join(wurzel, ".claude", "rules", "ecc", "common"), quelle: path.join(wurzel, ".ecc-src", "rules", "common"), rel: ".claude/rules/ecc/common" },
+    { ordner: path.join(wurzel, ".claude", "rules", "keel"), quelle: path.join(wurzel, ".ecc-src", "rules", "common"), rel: ".claude/rules/keel" },
     { ordner: path.join(wurzel, ".claude", "rules", "common"), quelle: path.join(wurzel, ".ecc-src", "rules", "common"), rel: ".claude/rules/common" },
   ];
   const ort = kandidaten.find((k) => fs.existsSync(k.ordner));
   if (!ort) {
-    return fehlt("dauerregeln", "Dauer-Regeln (jede Sitzung)", ".claude/rules/…/common", "kein common-Regelordner gefunden", "$EDITOR .claude/rules/ecc/common/");
+    return fehlt("dauerregeln", "Dauer-Regeln (jede Sitzung)", ".claude/rules/…/common", "kein common-Regelordner gefunden", "$EDITOR .claude/rules/keel/");
   }
   // Frueher stieg die Regel hier aus, wenn der Fremd-Klon .ecc-src/ fehlte. In einem
   // Standalone-Harness gibt es den nie -- die Folge war ein Dauer-Befund "unlesbar"
@@ -242,7 +242,7 @@ function dauerRegeln(wurzel) {
 // REGEL 5 — Werkzeug-Rangfolge (CLI vor MCP vor Browser)
 // ---------------------------------------------------------------------------
 function werkzeugrang(wurzel) {
-  const kandidaten = [".claude/rules/ecc/common/tools.md", ".claude/rules/common/tools.md"];
+  const kandidaten = [".claude/rules/keel/tools.md", ".claude/rules/common/tools.md"];
   const relPfad = kandidaten.find((k) => fs.existsSync(path.join(wurzel, k)));
   const befehl = `$EDITOR ${relPfad || kandidaten[0]}`;
   if (!relPfad) return fehlt("werkzeugrang", "Werkzeug-Beschaffung", kandidaten[0], "tools.md nicht gefunden", befehl);
