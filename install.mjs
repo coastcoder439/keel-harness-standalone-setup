@@ -21,12 +21,12 @@
 // Lauf auf demselben Ziel besteht idealerweise nur aus "unveraendert".
 //
 // AUFRUF
-//   node onboarding.mjs --ziel <ordner>              einrichten
-//   node onboarding.mjs --ziel <ordner> --trocken    jeden Schritt zeigen, nichts schreiben
-//   node onboarding.mjs --ziel <ordner> --ersetzen   abweichende Dateien ueberschreiben
-//   node onboarding.mjs --paket <ordner>             Paketordner explizit setzen
-//   node onboarding.mjs --ohne-seite                 Zustandsseite nicht erzeugen
-//   node onboarding.mjs --spur                       bei unerwartetem Fehler den Stack zeigen
+//   node install.mjs --ziel <ordner>              einrichten
+//   node install.mjs --ziel <ordner> --trocken    jeden Schritt zeigen, nichts schreiben
+//   node install.mjs --ziel <ordner> --ersetzen   abweichende Dateien ueberschreiben
+//   node install.mjs --paket <ordner>             Paketordner explizit setzen
+//   node install.mjs --ohne-seite                 Zustandsseite nicht erzeugen
+//   node install.mjs --spur                       bei unerwartetem Fehler den Stack zeigen
 //
 // RUECKGABE  0 = eingerichtet, nichts offen
 //            1 = eingerichtet, aber etwas braucht Aufmerksamkeit (die Punkte
@@ -111,7 +111,7 @@ let spurZeigen = false; // --spur
 // EINE Ausgangstuer fuer jeden Abbruch. Sie darf nur mit Rueckgabewert 2
 // verlassen werden — sonst ist der Vertrag oben wieder nur eine Behauptung.
 // `unerwartet` setzt nur das letzte Netz unten. Ein Abbruch, dessen Text die
-// Ursache schon benennt ("Paketdatei ist kein gueltiges JSON: vorlagen/…"),
+// Ursache schon benennt ("Paketdatei ist kein gueltiges JSON: templates/…"),
 // darf nicht mit "dieser Fehler war unerwartet" enden — das schickt den
 // Empfaenger auf die Suche nach einem Fehler, der gerade erklaert wurde.
 function abbruch(text, fehler, unerwartet = false) {
@@ -151,7 +151,7 @@ const WAECHTER = [
   "repo-status.js",
   "session-roles.js",
   "onboarding-start.js", // SessionStart: startet /onboarding, solange CLAUDE.md [AUSFUELLEN] enthaelt
-  "projekt-kontext.js",  // SessionStart: fragt beim Start nach Projekt/Rolle (AskUserQuestion)
+  "project-context.js",  // SessionStart: fragt beim Start nach Projekt/Rolle (AskUserQuestion)
   "statusline.js",
   "uncommitted-warn.js",
 ];
@@ -160,7 +160,7 @@ const BEFEHLE = ["repo-status.md", "save-work.md", "session-map.md", "tell-sessi
 
 // Diese fuenf laden bei JEDEM Sitzungsstart. Sie kosten dauerhaft Kontext und
 // sind genau deshalb bewusst kurz gehalten.
-const REGELN = ["kein-oneshot.md", "vollstaendigkeit.md", "werkzeuge.md", "ausgabeform.md", "arbeitsweise.md"];
+const REGELN = ["no-oneshot.md", "completeness.md", "tools.md", "output-shape.md", "working-method.md"];
 
 const SKILLS = [
   ["domain-modeling", ["SKILL.md", "ADR-FORMAT.md", "CONTEXT-FORMAT.md"]],
@@ -170,20 +170,20 @@ const SKILLS = [
   ["i-have-adhd", ["SKILL.md"]],
 ];
 
-const ZUSTAND = ["zustand.js", "messen.js", "einordnen.js", "regeln.js", "rendern.js", "rendern-keel.js", "bordmittel.js", "README.md"];
+const DASHBOARD = ["index.js", "measure.js", "classify.js", "rules.js", "render.js", "inventory.js", "README.md"];
 
 const BEILEGER = [
-  // Die Nachbau-Anleitung (10-nachbau-anleitung.md) wird bewusst NICHT mehr installiert:
+  // Die Nachbau-Anleitung (rebuild-guide.md) wird bewusst NICHT mehr installiert:
   // sie ist der Entwurfs-/Begruendungs-Bericht, nicht Teil eines fertigen Workspace. Die
   // Quelle der Wahrheit sind onboarding.mjs + die echten Dateien. Parallel-Bestand = Drift.
-  // Zwei der vier Dauer-Regeln verweisen in ihrem Kopf auf diese Langfassungen.
+  // Zwei der fuenf Dauer-Regeln verweisen in ihrem Kopf auf diese Langfassungen.
   // Fehlen sie, fuehrt die Regel ins Leere und wird beim ersten Zweifel ignoriert.
-  "11-vollstaendigkeitspruefung.md",
-  "12-werkzeug-beschaffung.md",
+  "completeness-check.md",
+  "tool-sourcing.md",
   // Ablage-Vorlage fuer den Onboarding-Schritt "Werkzeug-Landschaft" (Schritt 3):
   // vier Rubriken CLI/MCP/API/Zugaenge. Wird nach docs/ kopiert, dort traegt der
   // Onboarding-Befehl die erkannten Werkzeuge ein.
-  "werkzeug-landschaft.md",
+  "tool-landscape.md",
 ];
 
 const LIZENZEN = ["LICENSE-mattpocock-skills.txt", "LICENSE-i-have-adhd.txt"];
@@ -348,7 +348,7 @@ function lesenAusPaket(paket, rel) {
 }
 
 // JSON.parse nennt im Fehlerfall nur Zeile und Spalte, nie die Datei. Ohne
-// diesen Umweg meldete ein kaputtes vorlagen/settings.json blank "Expected
+// diesen Umweg meldete ein kaputtes templates/settings.json blank "Expected
 // property name or '}' in JSON at position 2" — richtig, aber unbrauchbar:
 // der Empfaenger weiss nicht, WELCHE Datei er ansehen soll.
 function jsonAusPaket(paket, rel) {
@@ -439,10 +439,8 @@ function zielOrdner(ziel) {
     j(".claude", "commands"),
     j(".claude", "rules", "ecc", "common"),
     ...SKILLS.map(([ordner]) => j(".claude", "skills", ordner)),
-    j("lizenzen"),
-    j("zustand"),
-    j("oberflaeche"),
-    j("oberflaeche", "dist"),
+    j("licenses"),
+    j("dashboard"),
     j("docs"),
   ];
 }
@@ -454,18 +452,16 @@ function zielOrdner(ziel) {
 // "12 von 35" — eine falsche Zahl ist schlimmer als keine, weil man ihr glaubt.
 function paketBedarf() {
   return [
-    "vorlagen/gitignore-block.txt", // -> .gitignore
-    "vorlagen/settings.json", // -> .claude/settings.json
-    "vorlagen/CLAUDE.md", // -> CLAUDE.md
-    ...WAECHTER.map((d) => `harness/.claude/${d}`),
-    ...BEFEHLE.map((d) => `harness/.claude/commands/${d}`),
-    ...REGELN.map((d) => `harness/.claude/rules/ecc/common/${d}`),
-    ...SKILLS.flatMap(([ordner, dateien]) => dateien.map((d) => `harness/.claude/skills/${ordner}/${d}`)),
-    ...LIZENZEN.map((d) => `lizenzen/${d}`),
-    ...ZUSTAND.map((d) => `zustand/${d}`),
-    "oberflaeche/befuellen.mjs",
-    "oberflaeche/dist/index.html",
-    ...BEILEGER.map((d) => `beileger/${d}`),
+    "templates/gitignore-block.txt", // -> .gitignore
+    "templates/settings.json", // -> .claude/settings.json
+    "templates/CLAUDE.md", // -> CLAUDE.md
+    ...WAECHTER.map((d) => `payload/claude/${d}`),
+    ...BEFEHLE.map((d) => `payload/claude/commands/${d}`),
+    ...REGELN.map((d) => `payload/claude/rules/ecc/common/${d}`),
+    ...SKILLS.flatMap(([ordner, dateien]) => dateien.map((d) => `payload/claude/skills/${ordner}/${d}`)),
+    ...LIZENZEN.map((d) => `licenses/${d}`),
+    ...DASHBOARD.map((d) => `payload/dashboard/${d}`),
+    ...BEILEGER.map((d) => `payload/docs/${d}`),
   ];
 }
 
@@ -474,7 +470,7 @@ const postenGesamt = () => paketBedarf().length;
 
 // Das Paket VOR dem ersten Schreibvorgang durchzaehlen — aus demselben Grund
 // wie die Schreibprobe. Gemessen (02.08.2026): ein Paket mit kaputter
-// vorlagen/settings.json lief bis Abschnitt [6] durch, schrieb 22 von 35 Posten
+// templates/settings.json lief bis Abschnitt [6] durch, schrieb 22 von 35 Posten
 // und brach dann ab. `lesenAusPaket` faengt das zwar, aber zu spaet — es steht
 // mitten in den Kopierschleifen und kann nur noch abbrechen, nicht mehr
 // verhindern. Hier kostet die Pruefung 35 existsSync und spart eine Ruine.
@@ -485,14 +481,14 @@ function paketPruefen(paket) {
       `Paket unvollstaendig — ${fehlend.length} von ${paketBedarf().length} Dateien fehlen.\n` +
         fehlend.map((f) => `    ${f}`).join("\n") +
         `\n  gesucht in: ${paket}\n` +
-        `\n  Behebung: das Paket neu bauen (paketieren.mjs) oder --paket auf den\n` +
+        `\n  Behebung: das Paket neu bauen (checks/paket-manifest.mjs --nachziehen) oder --paket auf den\n` +
         `  richtigen Ordner zeigen lassen. Im Ziel wurde nichts angefasst.`
     );
   }
   // Die eine Vorlage, die geparst werden MUSS: settings.json traegt die
   // Hook-Verdrahtung. Ist sie kaputt, ist das Paket unbrauchbar — und das
   // faellt sonst erst nach Abschnitt [5] auf, mit 22 geschriebenen Dateien.
-  jsonAusPaket(paket, "vorlagen/settings.json");
+  jsonAusPaket(paket, "templates/settings.json");
 }
 
 // =============================================================================
@@ -720,7 +716,7 @@ function skriptAusBefehl(befehl, ziel) {
   return { roh, pfad: path.isAbsolute(roh) ? roh : path.resolve(ziel, roh) };
 }
 
-// Dieselbe Messung wie zustand/messen.js, Funktion blockwirkung(): der
+// Dieselbe Messung wie dashboard/measure.js, Funktion blockwirkung(): der
 // Rueckgabewert 2 ist die Blockier-Vereinbarung von Claude Code. Ein PreToolUse-
 // Hook ohne exit(2) im Code kann nicht blocken, egal wie er heisst.
 const BLOCK_MUSTER = /process\.exit\(\s*2\s*\)|\bexit\(\s*2\s*\)/;
@@ -818,7 +814,7 @@ function hookGegenprobe(ziel, zusage, mitgeliefert) {
 // "· .claude/danger-guard.js".
 //
 // Deshalb wird die Blockwirkung jetzt GEMESSEN, mit demselben Mass wie
-// zustand/messen.js:400 — und der Befund ist eng gefasst: nur wenn die
+// dashboard/measure.js:400 — und der Befund ist eng gefasst: nur wenn die
 // MITGELIEFERTE Fassung blockt und die VERDRAHTETE nicht, ist etwas kaputt.
 // Ein Waechter, der ab Werk nur ansagt (git-guard.js), bleibt kein Befund.
 // =============================================================================
@@ -872,25 +868,25 @@ function wirkprobe(ziel, verdrahtet, mitgeliefert) {
 // =============================================================================
 // 6 — ZUSTANDSSEITE
 //
-// Zwei Laeufe, weil Messung und Anzeige getrennt sind:
-//   1) zustand.js  misst und schreibt reine Daten (JSON)
-//   2) befuellen.mjs spritzt die Daten in die fertig gebaute Huelle
-// Der Empfaenger baut nichts — befuellen.mjs benutzt nur node:fs und node:path.
+// EIN Lauf: dashboard/index.js misst und schreibt die Seite in einem Zug (--html).
+// Frueher waren es zwei — messen, dann die Daten in eine fertig gebaute HTML-Huelle
+// spritzen. Die Huelle war ein gebuendeltes Erzeugnis ohne Quelle im Paket und der
+// zweite Weg fuer dieselbe Sache; beides ist entfallen. Messung und Anzeige bleiben
+// getrennte Bausteine (measure.js gegen render.js), nur eben in einem Aufruf.
+// Der Empfaenger baut nichts — es laeuft alles ueber node:fs und node:path.
 // =============================================================================
 
 function zustandsseiteErzeugen(ziel, trocken) {
   const daten = path.join(ziel, "zustand.json");
   const seite = path.join(ziel, "zustand.html");
-  const messer = path.join(ziel, "zustand", "zustand.js");
-  const huelle = path.join(ziel, "oberflaeche", "dist", "index.html");
-  const spritze = path.join(ziel, "oberflaeche", "befuellen.mjs");
+  const messer = path.join(ziel, "dashboard", "index.js");
 
   if (trocken) {
     melden("uebersprungen", "Zustandsseite", `wuerde erzeugen: ${path.relative(ziel, seite)} (aus ${path.relative(ziel, daten)})`);
     return { ok: null, seite };
   }
 
-  const messen = spawnSync(process.execPath, [messer, "--wurzel", ziel, "--json", "--daten", daten], {
+  const messen = spawnSync(process.execPath, [messer, "--wurzel", ziel, "--daten", daten, "--html", seite], {
     cwd: ziel,
     encoding: "utf8",
     timeout: 300000,
@@ -900,14 +896,8 @@ function zustandsseiteErzeugen(ziel, trocken) {
     return { ok: false, seite };
   }
 
-  const fuellen = spawnSync(process.execPath, [spritze, huelle, daten, seite], { cwd: ziel, encoding: "utf8", timeout: 60000 });
-  if (fuellen.status !== 0) {
-    melden("achtung", "Befuellen der Huelle fehlgeschlagen", (fuellen.stderr || fuellen.error?.message || "").trim().split("\n")[0]);
-    return { ok: false, seite };
-  }
-
   // Den Gesamtstatus aus den Daten holen — nicht aus dem Rueckgabewert.
-  // zustand.js gibt ohne --exit-code immer 0 zurueck; der Status steht in den Daten.
+  // index.js gibt ohne --exit-code immer 0 zurueck; der Status steht in den Daten.
   let status = "unbekannt";
   try {
     status = JSON.parse(fs.readFileSync(daten, "utf8")).messung?.gesamtstatus || "unbekannt";
@@ -1002,7 +992,7 @@ const MENSCHEN_PUNKTE = [
       "werden muessen, UND Faelle, die durchgehen muessen, obwohl sie gefaehrlich klingen.",
   },
   {
-    titel: "Die vier Dauer-Regeln mit EIGENER Beweislage fuellen",
+    titel: "Die fuenf Dauer-Regeln mit EIGENER Beweislage fuellen",
     handlung: ".claude/rules/ecc/common/*.md lesen und die fremden Anlaesse durch eigene ersetzen.",
     wirkung:
       "Die Regeln zitieren die Faelle, aus denen sie entstanden sind — aus einem fremden " +
@@ -1099,18 +1089,18 @@ function hilfe() {
   );
 }
 
-// Der Paketordner ist der eigene, wenn er eine PAKET.json traegt (so liegt es
+// Der Paketordner ist der eigene, wenn er eine manifest.json traegt (so liegt es
 // beim Empfaenger). Wird das Programm dagegen aus dem Bausatz-Repo aufgerufen,
 // liegt das gebaute Paket typischerweise daneben.
 function paketFinden(gesetzt) {
   if (gesetzt) return gesetzt;
   const kandidaten = [HIER, path.resolve(HIER, "..", "paket"), path.resolve(HIER, "paket")];
-  const treffer = kandidaten.find((k) => fs.existsSync(path.join(k, "PAKET.json")));
+  const treffer = kandidaten.find((k) => fs.existsSync(path.join(k, "manifest.json")));
   if (!treffer) {
     abbruch(
-      "Paket nicht gefunden (gesucht: ein Ordner mit PAKET.json in\n" +
+      "Paket nicht gefunden (gesucht: ein Ordner mit manifest.json in\n" +
       kandidaten.map((k) => `    ${k}`).join("\n") +
-      "\n  --paket <ordner> setzen, oder zuerst paketieren.mjs laufen lassen."
+      "\n  --paket <ordner> setzen, oder zuerst checks/paket-manifest.mjs --nachziehen laufen lassen."
     );
   }
   return treffer;
@@ -1131,9 +1121,9 @@ function main() {
 
   let manifest = {};
   try {
-    manifest = JSON.parse(fs.readFileSync(path.join(paket, "PAKET.json"), "utf8"));
+    manifest = JSON.parse(fs.readFileSync(path.join(paket, "manifest.json"), "utf8"));
   } catch (e) {
-    abbruch(`PAKET.json ist nicht lesbar oder kein gueltiges JSON\n  ${e.code ? klartextOhnePfad(e) : e.message}\n  gesucht in: ${paket}`, e);
+    abbruch(`manifest.json ist nicht lesbar oder kein gueltiges JSON\n  ${e.code ? klartextOhnePfad(e) : e.message}\n  gesucht in: ${paket}`, e);
   }
 
   process.stdout.write(
@@ -1194,7 +1184,7 @@ function main() {
   // Erst das Paket, dann das Ziel: beides muss stimmen, BEVOR die erste Datei
   // entsteht. Ein Abbruch hier hinterlaesst ein unberuehrtes Ziel.
   paketPruefen(paket);
-  melden("ok", `Paketprobe: alle ${postenGesamt()} gebrauchten Paketdateien sind da, vorlagen/settings.json ist lesbares JSON`);
+  melden("ok", `Paketprobe: alle ${postenGesamt()} gebrauchten Paketdateien sind da, templates/settings.json ist lesbares JSON`);
 
   melden(
     "ok",
@@ -1210,7 +1200,7 @@ function main() {
   // Reihenfolge ist nicht Kosmetik: ein nachgereichtes Ignorier-Muster holt eine
   // bereits getrackte Datei nicht mehr heraus. Umgekehrt gilt dasselbe — wer die
   // Negationen erst nachtraegt, hat die Eigenbauten zwischenzeitlich unsichtbar.
-  const block = lesenAusPaket(paket, "vorlagen/gitignore-block.txt");
+  const block = lesenAusPaket(paket, "templates/gitignore-block.txt");
   const giPfad = path.join(ziel, ".gitignore");
   if (!fs.existsSync(giPfad)) {
     if (!o.trocken) schreiben(giPfad, block);
@@ -1241,7 +1231,7 @@ function main() {
   const mitgeliefert = new Map();
   for (const datei of WAECHTER) {
     const p = path.join(ziel, ".claude", datei);
-    const inhalt = lesenAusPaket(paket, `harness/.claude/${datei}`);
+    const inhalt = lesenAusPaket(paket, `payload/claude/${datei}`);
     mitgeliefert.set(path.resolve(p), inhalt);
     dateiSetzen(p, inhalt, { ...opt, anzeige: `.claude/${datei}` });
     eigenbauPfade.push(p);
@@ -1251,14 +1241,14 @@ function main() {
   abschnitt(3, "Befehle nach .claude/commands/");
   for (const datei of BEFEHLE) {
     const p = path.join(ziel, ".claude", "commands", datei);
-    dateiSetzen(p, lesenAusPaket(paket, `harness/.claude/commands/${datei}`), { ...opt, anzeige: `.claude/commands/${datei}` });
+    dateiSetzen(p, lesenAusPaket(paket, `payload/claude/commands/${datei}`), { ...opt, anzeige: `.claude/commands/${datei}` });
     eigenbauPfade.push(p);
   }
 
   // -------------------------------------------------------------------------
   abschnitt(4, "Dauer-Regeln nach .claude/rules/ecc/common/ (laden bei jedem Sitzungsstart)");
   for (const datei of REGELN) {
-    const rel = `harness/.claude/rules/ecc/common/${datei}`;
+    const rel = `payload/claude/rules/ecc/common/${datei}`;
     const inhalt = lesenAusPaket(paket, rel);
     // Bedingung fuer "laedt in jeder Sitzung": KEIN Frontmatter. Mit `---`-Kopf
     // wird die Datei zu einem abrufbaren Dokument — die Regel waere still
@@ -1276,7 +1266,7 @@ function main() {
   for (const [ordner, dateien] of SKILLS) {
     for (const datei of dateien) {
       const p = path.join(ziel, ".claude", "skills", ordner, datei);
-      dateiSetzen(p, lesenAusPaket(paket, `harness/.claude/skills/${ordner}/${datei}`), {
+      dateiSetzen(p, lesenAusPaket(paket, `payload/claude/skills/${ordner}/${datei}`), {
         ...opt,
         anzeige: `.claude/skills/${ordner}/${datei}`,
       });
@@ -1284,15 +1274,15 @@ function main() {
     }
   }
   for (const datei of LIZENZEN) {
-    dateiSetzen(path.join(ziel, "lizenzen", datei), lesenAusPaket(paket, `lizenzen/${datei}`), {
+    dateiSetzen(path.join(ziel, "licenses", datei), lesenAusPaket(paket, `licenses/${datei}`), {
       ...opt,
-      anzeige: `lizenzen/${datei}`,
+      anzeige: `licenses/${datei}`,
     });
   }
 
   // -------------------------------------------------------------------------
   abschnitt(6, ".claude/settings.json — Hook-Verdrahtung");
-  const vorlage = jsonAusPaket(paket, "vorlagen/settings.json");
+  const vorlage = jsonAusPaket(paket, "templates/settings.json");
   const sPfad = path.join(ziel, ".claude", "settings.json");
 
   // Die ZUSAGE dieses Abschnitts, als Liste von Befehlen — sie ist das, was die
@@ -1388,30 +1378,22 @@ function main() {
     );
     fortschritt.erledigt++; // uebersprungen ist auch bearbeitet
   } else {
-    dateiSetzen(cPfad, lesenAusPaket(paket, "vorlagen/CLAUDE.md"), { ...opt, anzeige: "CLAUDE.md" });
+    dateiSetzen(cPfad, lesenAusPaket(paket, "templates/CLAUDE.md"), { ...opt, anzeige: "CLAUDE.md" });
   }
 
   // -------------------------------------------------------------------------
-  abschnitt(8, "Zustandsseite: Messung und Huelle");
-  for (const datei of ZUSTAND) {
-    dateiSetzen(path.join(ziel, "zustand", datei), lesenAusPaket(paket, `zustand/${datei}`), {
+  abschnitt(8, "Zustandsseite");
+  for (const datei of DASHBOARD) {
+    dateiSetzen(path.join(ziel, "dashboard", datei), lesenAusPaket(paket, `payload/dashboard/${datei}`), {
       ...opt,
-      anzeige: `zustand/${datei}`,
+      anzeige: `dashboard/${datei}`,
     });
   }
-  dateiSetzen(path.join(ziel, "oberflaeche", "befuellen.mjs"), lesenAusPaket(paket, "oberflaeche/befuellen.mjs"), {
-    ...opt,
-    anzeige: "oberflaeche/befuellen.mjs",
-  });
-  dateiSetzen(path.join(ziel, "oberflaeche", "dist", "index.html"), lesenAusPaket(paket, "oberflaeche/dist/index.html"), {
-    ...opt,
-    anzeige: "oberflaeche/dist/index.html  (die gebaute Huelle — kein npm noetig)",
-  });
 
   // -------------------------------------------------------------------------
   abschnitt(9, "Beileger nach docs/");
   for (const datei of BEILEGER) {
-    dateiSetzen(path.join(ziel, "docs", datei), lesenAusPaket(paket, `beileger/${datei}`), {
+    dateiSetzen(path.join(ziel, "docs", datei), lesenAusPaket(paket, `payload/docs/${datei}`), {
       ...opt,
       anzeige: `docs/${datei}`,
     });
@@ -1474,7 +1456,7 @@ function main() {
   } else if (!o.ohneSeite && !o.trocken) {
     process.stdout.write("Die Zustandsseite konnte nicht erzeugt werden — siehe Abschnitt 11.\n");
   }
-  process.stdout.write(`Erneut messen (jederzeit, veraendert nichts):\n  node zustand/zustand.js --json --daten zustand.json\n  node oberflaeche/befuellen.mjs oberflaeche/dist/index.html zustand.json zustand.html\n`);
+  process.stdout.write(`Erneut messen und anzeigen (jederzeit, veraendert nichts):\n  node dashboard/index.js --html zustand.html\n`);
 
   // Die Schlusszeile steht in BEIDEN Zweigen. Bis 02.08.2026 kam sie nach dem
   // process.exit(1) — ein Trockenlauf mit einem einzigen Befund endete deshalb
