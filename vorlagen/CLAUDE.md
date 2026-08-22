@@ -5,8 +5,8 @@
 > **Ausfuell-Marke** gekennzeichnet: lieber die offene Marke als eine geratene Angabe.
 > (Ein blosses `[?]` ist dagegen ein spaeterer Platzhalter, kein Onboarding-Ausloeser.)
 >
-> Angelegt von der Harness-Installation. Die Abschnitte 1-3 gehoeren dir, Abschnitt 4-5
-> beschreiben, was tatsaechlich installiert ist. Solange eine Ausfuell-Pflichtmarke offen
+> Angelegt von der Harness-Installation. Die Abschnitte 1-2 und 5 gehoeren dir, 3-4
+> beschreiben, was installiert ist und hier gilt. Solange eine Ausfuell-Pflichtmarke offen
 > steht, startet jede neue Sitzung von selbst `/onboarding` und fuellt sie mit dir aus.
 
 ## 1. Was das hier ist
@@ -30,12 +30,7 @@ nicht ineinander.
 anlegen und **verifiziert pushen**, DANN die Ignorier-Zeile in die `.gitignore`
 eintragen. Andersherum wird das Projekt unsichtbar und ungesichert zugleich.
 
-## 3. Offene Punkte
-
-`[AUSFUELLEN]` — hier hinein, was noch entschieden werden muss. Nicht im Sitzungsverlauf
-lassen: der geht verloren.
-
-## 4. Was installiert ist (vom Onboarding gesetzt)
+## 3. Was installiert ist (vom Onboarding gesetzt)
 
 **Waechter — laufen automatisch, ohne dass jemand etwas tippt:**
 
@@ -47,6 +42,7 @@ lassen: der geht verloren.
 | `uncommitted-warn.js` | am Sitzungsende | warnt bei ungesicherter Arbeit (nur Hinweis, blockiert nie) |
 | `session-roles.js` | bei Sitzungsstart | laedt die Rollen aus `docs/08-sessions-rollen.md`, falls vorhanden |
 | `onboarding-start.js` | bei Sitzungsstart | startet `/onboarding`, solange eine Ausfuell-Marke offen ist — danach still |
+| `projekt-kontext.js` | bei Sitzungsstart | fragt beim Start nach Projekt/Rolle dieser Sitzung (AskUserQuestion) |
 | `statusline.js` | dauerhaft | Repo · Branch · Sicherungsstand in der Statusleiste |
 | `repo-status.js` | auf Aufruf (`/repo-status`) | lokales Git vs. GitHub vs. Sync, rekursiv |
 
@@ -57,7 +53,7 @@ lassen: der geht verloren.
 zeigt an. Die Messung kennt keine Darstellung — die Anzeige laesst sich
 austauschen, ohne die Messung anzufassen.
 
-## 5. Konventionen, die hier gelten
+## 4. Konventionen, die hier gelten
 
 - **Im Workspace-Repo NIE `git add` + `git commit` und nie `git commit -a`** —
   sondern `git commit -m "…" -- <pfad>`. Grund: mehrere Sitzungen teilen einen
@@ -68,12 +64,12 @@ austauschen, ohne die Messung anzufassen.
 - **Verschachtelte Repos immer via `git -C <repo>`** committen — nie ins falsche Repo.
 - **Keine Zugaenge in Dateien.** Schluesselbund oder Umgebungsvariablen.
 - **Werkzeuge: CLI vor MCP vor Browser** — Begruendung in `.claude/rules/ecc/common/werkzeuge.md`.
-- **Automatisch geladene Regeln:** `.claude/rules/ecc/common/` — vier Dateien,
+- **Automatisch geladene Regeln:** `.claude/rules/ecc/common/` — fuenf Dateien,
   bewusst ohne Frontmatter, damit sie Dauer-Kontext sind und nicht nur abrufbar.
 
-## 6. `[?]` Deine eigenen Regeln
+## 5. `[?]` Deine eigenen Regeln
 
-Die vier mitgelieferten Regeln **gelten und werden befolgt** — aber ihre Beweislage
+Die mitgelieferten Regeln **gelten und werden befolgt** — aber ihre Beweislage
 stammt aus der Ursprungs-Werkbank, ist also fremd. Verlass dich nicht auf geerbte
 Autoritaet: erlebst du hier eigene Faelle, schreib sie in die Regel hinein — mit
 Datum und Messwert, damit sie hier verankert ist.
