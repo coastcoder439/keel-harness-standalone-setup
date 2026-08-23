@@ -170,7 +170,54 @@ const SKILLS = [
   ["i-have-adhd", ["SKILL.md"]],
 ];
 
-const DASHBOARD = ["index.js", "measure.js", "classify.js", "rules.js", "render.js", "inventory.js", "README.md"];
+// Die Dateien des Dashboards. Unterordner sind erlaubt -- schreiben() legt sie an.
+//
+// ACHTUNG, diese Liste ist die einzige Wahrheit: was hier fehlt, kommt in einer
+// frischen Installation nicht an. Am 23.08.2026 wuchs das Dashboard von sieben
+// auf achtundzwanzig Dateien; ohne diesen Nachtrag haette jede neue Installation
+// ein index.js bekommen, das vier nicht vorhandene Module verlangt.
+//
+// render.js ist FORT (23.08.2026): sie war die alte, einteilige Anzeige. Ihre
+// Aufgabe uebernehmen render/shell.js und render/client/*. Zwei Anzeigen
+// nebeneinander driften auseinander -- derselbe Grund, aus dem die
+// Nachbau-Anleitung nicht mehr mitinstalliert wird.
+const DASHBOARD = [
+  // Einstieg und Messung
+  "index.js",
+  "measure.js",
+  "classify.js",
+  "inventory.js",
+  "rules.js",
+  // Messung v2 -- je ein eigener, pruefbarer Baustein
+  "inventar.js",
+  "hooks-detail.js",
+  "zutun-docs.js",
+  "verwandt.js",
+  // Anzeige: Woerter, Daten, Aussehen, Symbole, Schale
+  "render/worte.js",
+  "render/data.js",
+  "render/styles.js",
+  "render/icons.js",
+  "render/markdown.js",
+  "render/shell.js",
+  // Anzeige: der Teil, der im Browser laeuft
+  "render/client/core.js",
+  "render/client/pages.js",
+  "render/client/detail.js",
+  "render/client/start.js",
+  // Die Selbstpruefung wandert mit. Ein Harness, das seine eigenen Zusagen
+  // nachweisen kann, ist der Zweck dieses Bausatzes -- ohne die Tests waere
+  // ein "geprueft" beim Empfaenger nicht nachvollziehbar.
+  "test/worte.test.js",
+  "test/inventar.test.js",
+  "test/hooks-detail.test.js",
+  "test/zutun-docs.test.js",
+  "test/verwandt.test.js",
+  "test/styles.test.js",
+  "test/icons.test.js",
+  "test/markdown.test.js",
+  "README.md",
+];
 
 const BEILEGER = [
   // Die Nachbau-Anleitung (rebuild-guide.md) wird bewusst NICHT mehr installiert:
@@ -872,7 +919,7 @@ function wirkprobe(ziel, verdrahtet, mitgeliefert) {
 // Frueher waren es zwei — messen, dann die Daten in eine fertig gebaute HTML-Huelle
 // spritzen. Die Huelle war ein gebuendeltes Erzeugnis ohne Quelle im Paket und der
 // zweite Weg fuer dieselbe Sache; beides ist entfallen. Messung und Anzeige bleiben
-// getrennte Bausteine (measure.js gegen render.js), nur eben in einem Aufruf.
+// getrennte Bausteine (measure.js gegen render/), nur eben in einem Aufruf.
 // Der Empfaenger baut nichts — es laeuft alles ueber node:fs und node:path.
 // =============================================================================
 

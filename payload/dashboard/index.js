@@ -27,10 +27,14 @@ const path = require("path");
 
 const { messen } = require("./measure");
 const { regeln } = require("./rules");
-// Anzeige im Keel-Design (Seitenleiste, Bereiche, Details auf Klick).
-// Die alte einseitige Fassung liegt weiter als ./rendern -- die Messung kennt keine
-// Darstellung, deshalb laesst sich die Anzeige tauschen, ohne sie anzufassen.
-const { renderHTML } = require("./render");
+// Anzeige im Keel-Design: Seitenleiste, Ordnerbaum, Dateiansicht, Eigenschaften.
+// Sie zerfaellt in Woerter (render/worte.js), Daten (render/data.js), Aussehen
+// (render/styles.js), Symbole, Markdown, Schale und vier Browser-Teile.
+// Die Messung kennt keine Darstellung -- deshalb laesst sich die Anzeige
+// austauschen, ohne measure.js anzufassen.
+const { daten } = require("./render/data.js");
+const { renderHTML } = require("./render/shell.js");
+const { ZUGANGS_MUSTER } = require("./inventar.js");
 
 function argumenteLesen(argv) {
   const a = argv.slice(2);
@@ -125,7 +129,32 @@ function main() {
   } else {
     const ziel = o.html || path.resolve(process.cwd(), "dashboard.html");
     fs.mkdirSync(path.dirname(ziel), { recursive: true });
-    fs.writeFileSync(ziel, renderHTML(messung, regelDaten), "utf8");
+
+    const seite = renderHTML(daten(messung, regelDaten));
+
+    // AUSGABE-WAECHTER -- der dritte Riegel (Spezifikation 7.3).
+    // Die beiden anderen sitzen in inventar.js und koennen umgangen werden, wenn
+    // ein neues Modul einen String einbaut, ohne ihn durch textSichern zu geben.
+    // Dieser hier prueft, was WIRKLICH auf die Platte geht. Bei Verdacht wird
+    // KEINE Datei geschrieben: eine halbe Warnung neben einer geschriebenen
+    // Datei mit einem Zugang darin hilft niemandem.
+    const verdacht = [];
+    const zeilen = seite.split("\n");
+    for (let i = 0; i < zeilen.length; i++) {
+      for (const muster of ZUGANGS_MUSTER) {
+        if (muster.test(zeilen[i])) { verdacht.push(i + 1); break; }
+      }
+    }
+    if (verdacht.length) {
+      process.stderr.write(
+        "ABBRUCH: die erzeugte Seite enthaelt " + verdacht.length + " Zeile(n), die wie ein Zugang aussehen.\n" +
+        "  Zeilen: " + verdacht.slice(0, 10).join(", ") + (verdacht.length > 10 ? " …" : "") + "\n" +
+        "  Es wurde KEINE Datei geschrieben. Pruefe die Quelle und den Filter in dashboard/inventar.js.\n"
+      );
+      process.exit(2);
+    }
+
+    fs.writeFileSync(ziel, seite, "utf8");
 
     const z = messung.zaehlung;
     process.stdout.write(

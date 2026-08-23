@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-22T20:36:00.741Z",
-  "posten": 49,
+  "gebautAm": "2026-08-23T00:55:24.957Z",
+  "posten": 70,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -92,8 +92,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 73250,
-      "sha256": "43b4e911af2b56a6"
+      "bytes": 74850,
+      "sha256": "761bf0ba704ea0ba"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -196,8 +196,8 @@
       "herkunft": ".claude/repo-status.js",
       "quellordner": "werkbank",
       "gesaeubert": 0,
-      "bytes": 8863,
-      "sha256": "2fccb291b58a376c"
+      "bytes": 10159,
+      "sha256": "7aab5ee23b22c48b"
     },
     {
       "datei": "payload/claude/rules/keel/completeness.md",
@@ -324,16 +324,32 @@
       "herkunft": "zustand/einordnen.js",
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 13838,
-      "sha256": "a3514a46a7c6ac6f"
+      "bytes": 14016,
+      "sha256": "e3896f32ce074543"
+    },
+    {
+      "datei": "payload/dashboard/hooks-detail.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 20979,
+      "sha256": "90b69c85996114c1"
     },
     {
       "datei": "payload/dashboard/index.js",
       "herkunft": "zustand/zustand.js",
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 5487,
-      "sha256": "178470260db70cc4"
+      "bytes": 6843,
+      "sha256": "be623c8c575350d6"
+    },
+    {
+      "datei": "payload/dashboard/inventar.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 28059,
+      "sha256": "313546eeacb6789a"
     },
     {
       "datei": "payload/dashboard/inventory.js",
@@ -348,16 +364,88 @@
       "herkunft": "zustand/messen.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 49757,
-      "sha256": "bb156b8997531f9f"
+      "bytes": 54749,
+      "sha256": "abd66ee525db9ba3"
     },
     {
-      "datei": "payload/dashboard/render.js",
+      "datei": "payload/dashboard/render/client/core.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 51598,
-      "sha256": "12093aeda20c946d"
+      "bytes": 11304,
+      "sha256": "353f1077b84dbdea"
+    },
+    {
+      "datei": "payload/dashboard/render/client/detail.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 15835,
+      "sha256": "4a23dfd8fdd80f85"
+    },
+    {
+      "datei": "payload/dashboard/render/client/pages.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 15733,
+      "sha256": "5e34fcfadb0f80d1"
+    },
+    {
+      "datei": "payload/dashboard/render/client/start.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 12918,
+      "sha256": "b16922eef320f517"
+    },
+    {
+      "datei": "payload/dashboard/render/data.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 27175,
+      "sha256": "f08c9857b654157f"
+    },
+    {
+      "datei": "payload/dashboard/render/icons.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 13820,
+      "sha256": "ed9a2a88d16c6dc9"
+    },
+    {
+      "datei": "payload/dashboard/render/markdown.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 21518,
+      "sha256": "c3008186375f274b"
+    },
+    {
+      "datei": "payload/dashboard/render/shell.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 6264,
+      "sha256": "304a7f68cfa46f0e"
+    },
+    {
+      "datei": "payload/dashboard/render/styles.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 39011,
+      "sha256": "653034d78e405dd6"
+    },
+    {
+      "datei": "payload/dashboard/render/worte.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 20200,
+      "sha256": "85d9e200053076f4"
     },
     {
       "datei": "payload/dashboard/rules.js",
@@ -366,6 +454,86 @@
       "gesaeubert": 2,
       "bytes": 15070,
       "sha256": "7070b2287c439550"
+    },
+    {
+      "datei": "payload/dashboard/test/hooks-detail.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 20631,
+      "sha256": "159fa0faae0b0020"
+    },
+    {
+      "datei": "payload/dashboard/test/icons.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 7426,
+      "sha256": "67e6b05cf4ef15a5"
+    },
+    {
+      "datei": "payload/dashboard/test/inventar.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 21548,
+      "sha256": "c45815c1b6363800"
+    },
+    {
+      "datei": "payload/dashboard/test/markdown.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 11817,
+      "sha256": "694d87ae7f868777"
+    },
+    {
+      "datei": "payload/dashboard/test/styles.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 15730,
+      "sha256": "fb854d42ad2fdf1d"
+    },
+    {
+      "datei": "payload/dashboard/test/verwandt.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 15617,
+      "sha256": "0fd512ce6a5c2805"
+    },
+    {
+      "datei": "payload/dashboard/test/worte.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 7421,
+      "sha256": "6f4728595b099a79"
+    },
+    {
+      "datei": "payload/dashboard/test/zutun-docs.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 10181,
+      "sha256": "10ddcc91d1abd1c9"
+    },
+    {
+      "datei": "payload/dashboard/verwandt.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 15186,
+      "sha256": "6738fc507e8a30dc"
+    },
+    {
+      "datei": "payload/dashboard/zutun-docs.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 7243,
+      "sha256": "5290d7709c6b67a2"
     },
     {
       "datei": "payload/docs/completeness-check.md",
@@ -380,8 +548,8 @@
       "herkunft": "docs/10-nachbau-anleitung.md",
       "quellordner": "werkbank",
       "gesaeubert": 11,
-      "bytes": 208155,
-      "sha256": "77ad8ee8cfb2cb9a"
+      "bytes": 209451,
+      "sha256": "fdb6d04cb874c674"
     },
     {
       "datei": "payload/docs/tool-landscape.md",
