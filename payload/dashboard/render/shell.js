@@ -135,7 +135,7 @@ function renderHTML(daten) {
   </div>
 </div>
 
-<div class="kopieren" id="meldung" role="status" aria-live="polite"></div>
+<div class="meldung" id="meldung" role="status" aria-live="polite"></div>
 
 <script id="daten" type="application/json">${datenBlock(d)}</script>
 <script>

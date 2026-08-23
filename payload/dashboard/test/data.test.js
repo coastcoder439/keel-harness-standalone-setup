@@ -230,3 +230,68 @@ test("die Wortliste der Seite ist die aus worte.js -- kein zweiter Bestand", () 
 test("die Seitenliste des Datensatzes deckt sich mit worte.js", () => {
   assert.deepStrictEqual(Object.keys(d.seiten).sort(), Object.keys(SEITEN).sort(), "Seiten in worte.js und im Datensatz weichen ab");
 });
+
+// ---------------------------------------------------------------------------
+// Zwei Funde der Gegenpruefung vom 23.08.2026 -- beide waren LATENT: sie
+// zeigten sich im Normalbetrieb nicht und haetten beim ersten Umschalten
+// zugeschlagen. Genau deshalb stehen sie hier.
+// ---------------------------------------------------------------------------
+
+test("eine nicht gelaufene Hook-Probe gilt nicht als Fehler", () => {
+  // Vier Hooks werden bewusst nicht ausgefuehrt (uncommitted-warn.js schreibt
+  // einen Drossel-Stempel, die drei Waechter brauchen eine echte Eingabe). Sie
+  // bekommen ein Proben-Objekt mit exit: null. Der alte Ausdruck fragte nur
+  // exit !== 0 -- und null ist ungleich 0, also standen genau diese vier auf
+  // "Fehler", sobald jemand die Proben einschaltet.
+  const { hooksDetail } = require("../hooks-detail.js");
+  const mitProben = hooksDetail(WURZEL, { proben: true });
+  const uebersprungen = (mitProben.eintraege || []).filter(
+    (e) => e.probe && typeof e.probe.exit !== "number"
+  );
+  assert.ok(uebersprungen.length > 0, "es gibt ueberhaupt uebersprungene Proben -- sonst prueft dieser Test nichts");
+
+  const mitLauf = { ...messung, hooks: mitProben };
+  const d2 = daten(mitLauf, regelDaten);
+  const namen = new Set(uebersprungen.map((e) => e.skript || e.ereignis));
+  const falsch = d2.eintraege
+    .filter((e) => e.seite === "hooks" && namen.has(e.name) && e.status === "befund")
+    .map((e) => e.name);
+  assert.deepStrictEqual(falsch, [], "uebersprungene Probe als Fehler gewertet");
+
+  // Gegenprobe: eine Probe, die WIRKLICH mit einem Fehler endete, muss weiterhin
+  // als Fehler durchschlagen.
+  const erfunden = {
+    ...mitProben,
+    eintraege: (mitProben.eintraege || []).map((e, i) =>
+      i === 0 ? { ...e, probe: { ...(e.probe || {}), exit: 2 } } : e
+    ),
+  };
+  const d3 = daten({ ...messung, hooks: erfunden }, regelDaten);
+  const ersterName = (mitProben.eintraege || [])[0];
+  const treffer = d3.eintraege.find(
+    (e) => e.seite === "hooks" && e.name === (ersterName.skript || ersterName.ereignis)
+  );
+  assert.strictEqual(treffer.status, "befund", "ein echter Fehlschlag wird nicht mehr gemeldet");
+});
+
+test("gleich benannte Repos bekommen verschiedene Kennungen", () => {
+  // Die Kennung steht in der Adresse. Zwei Eintraege mit derselben Kennung
+  // zeigen auf denselben -- ein Klick auf das eine Repo oeffnet das andere.
+  const zwei = {
+    ...messung,
+    bereiche: {
+      ...messung.bereiche,
+      sicherung: {
+        ...(messung.bereiche.sicherung || {}),
+        repos: [
+          { name: "a/werkzeug", pfad: "user-projects/a/werkzeug", status: "ok", git: "JA (Branch main)" },
+          { name: "b/werkzeug", pfad: "user-projects/b/werkzeug", status: "ok", git: "JA (Branch main)" },
+        ],
+      },
+    },
+  };
+  const d2 = daten(zwei, regelDaten);
+  const ids = d2.eintraege.filter((e) => e.seite === "backup").map((e) => e.id);
+  assert.strictEqual(ids.length, 2, "beide Repos stehen im Index");
+  assert.strictEqual(new Set(ids).size, 2, "beide tragen dieselbe Kennung: " + ids.join(" · "));
+});
