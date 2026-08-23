@@ -88,7 +88,13 @@ HD.melden = function (text) {
   m.textContent = text;
   m.classList.add("sichtbar");
   clearTimeout(HD._meldeUhr);
-  HD._meldeUhr = setTimeout(function () { m.classList.remove("sichtbar"); }, 1500);
+  HD._meldeUhr = setTimeout(function () {
+    m.classList.remove("sichtbar");
+    // Auch den Text raeumen: die Klasse allein blendet nur aus, der Inhalt
+    // blieb im Vorleser-Bereich stehen und wurde beim naechsten Mal doppelt
+    // angesagt.
+    m.textContent = "";
+  }, 1500);
 };
 
 HD.kopieren = function (text) {

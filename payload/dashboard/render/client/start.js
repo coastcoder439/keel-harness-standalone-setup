@@ -71,6 +71,23 @@ document.addEventListener("click", function (ev) {
   // hier wird NUR gemerkt, wie sie stehen, damit der naechste Zeichenlauf sie
   // nicht wieder zuklappt. Kein preventDefault: sonst waere das native
   // Verhalten kaputt, und der Pfeil taete wieder nichts.
+  // Der Umschalter Gerendert/Quelltext steht INNERHALB des <summary> des
+  // Abschnitts "Dateiinhalt". Deshalb muss er VOR der summary-Weiche gefragt
+  // werden: die hat ein bedingungsloses return und verschluckte den Klick
+  // (gemessen 23.08.2026 -- die Quelltext-Ansicht war ueberhaupt nicht
+  // erreichbar, waehrend aria-pressed einen Schalter vortaeuschte).
+  var qtFrueh = nah("[data-quelltext]");
+  if (qtFrueh) {
+    var eqf = HD.eintragMit(HD.S.auswahl) || (HD.S.baumDatei ? HD.eintragMit("datei:" + HD.S.baumDatei) : null);
+    if (eqf && eqf.pfad) {
+      HD.S.quelltext[eqf.pfad] = qtFrueh.dataset.quelltext === "1";
+      HD.zeichnen();
+    }
+    // Das native Aufklappen des <details> wuerde sonst zusaetzlich ausloesen.
+    ev.preventDefault();
+    return;
+  }
+
   var summary = nah("summary");
   if (summary) {
     var block = summary.closest(".eigenschaft-abschnitt");

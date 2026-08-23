@@ -171,7 +171,21 @@ function hookEintraege(m, kanten) {
       art: "hook-skript",
       artWort: ART["hook-skript"] + " · " + e.ereignis,
       gruppe: e.ereignis,
-      status: e.vorhanden === false ? "fehlt" : (e.probe && e.probe.exit !== 0 ? "befund" : "ok"),
+      // Eine Probe, die NICHT GELAUFEN ist, ist kein Fehler.
+      //
+      // Vier Hooks werden bewusst nicht ausgefuehrt (uncommitted-warn.js
+      // schreibt einen Drossel-Stempel, die drei Waechter brauchen eine echte
+      // Eingabe). Sie bekommen ein Proben-Objekt mit exit: null. Der alte
+      // Ausdruck fragte nur exit !== 0 -- und null ist ungleich 0, also
+      // standen genau diese vier auf "Fehler", sobald man die Proben
+      // einschaltet. Ein Werkzeug, das nicht gelaufen ist, darf nicht
+      // aussehen wie ein durchgefallenes (gemessen 23.08.2026).
+      status:
+        e.vorhanden === false
+          ? "fehlt"
+          : e.probe && typeof e.probe.exit === "number" && e.probe.exit !== 0
+            ? "befund"
+            : "ok",
       beschreibung: {
         text: beschr,
         quelle: e.ansage ? QUELLE.statusmessage : (e.kopfkommentar ? QUELLE.kopfkommentar : null),
@@ -392,8 +406,19 @@ function backupEintraege(m) {
     ungesichert: "Uncommittete Änderungen im Arbeitsbaum.",
     ok: "Gesichert.",
   };
+  // Die Kennung steht in der Adresse -- zwei Eintraege mit derselben Kennung
+  // zeigen auf denselben. Das letzte Pfadsegment allein reicht dafuer nicht:
+  // zwei Projekte duerfen gleich heissen, wenn sie in verschiedenen Ordnern
+  // liegen. Bei einer Kollision wird deshalb ein Segment mehr genommen.
+  const gesehen = new Map();
   return (s.repos || []).map((r) => {
-    const kurz = r.kurzname || String(r.name).split("/").filter(Boolean).pop();
+    const roh = r.kurzname || String(r.name).split("/").filter(Boolean).pop();
+    const voll = String(r.pfad || r.name || roh).split("\\").join("/");
+    let kurz = roh;
+    if (gesehen.has(roh) && gesehen.get(roh) !== voll) {
+      kurz = voll.split("/").filter(Boolean).slice(-2).join("/");
+    }
+    gesehen.set(roh, voll);
     const branch = String(r.git || "").replace(/^JA \(Branch /, "").replace(/,.*$/, "") || null;
     return {
       id: "repo:" + kurz,
