@@ -31,6 +31,11 @@ HD.S = {
   quelltext: {},      // Dateipfad -> true (Quelltext statt gerendert)
   breite: 320,
   palette: false,
+  // Der Editor: welcher Pfad gerade bearbeitet wird, der Entwurf und der
+  // Stand beim Oeffnen (fuer die Rueckfrage beim Abbrechen).
+  bearbeitet: null,
+  entwurf: null,
+  entwurfStart: null,
 };
 
 // --- Speicher (mit Praefix, siehe shell.js) ------------------------------
@@ -83,11 +88,76 @@ HD.icon = function (name) {
   return HD.D.icons[name] || HD.D.icons[k] || HD.D.icons.circle || "";
 };
 
-HD.melden = function (text) {
+// Platzhalter in einem Wort ersetzen. Dieselbe Regel wie in worte.js: ein
+// Platzhalter, der nicht gefuellt wird, bleibt SICHTBAR stehen -- er verraet
+// dem Leser, dass hier etwas fehlt, statt es zu verschweigen.
+HD.fuellen = function (vorlage, werte) {
+  return String(vorlage == null ? "" : vorlage).replace(/{([a-zA-Z]+)}/g, function (ganz, name) {
+    return Object.prototype.hasOwnProperty.call(werte || {}, name) ? String(werte[name]) : ganz;
+  });
+};
+
+// Kommt die Seite von einem Server oder liegt sie als Datei vor? Davon haengt
+// ab, ob ueberhaupt etwas geaendert werden kann: als Datei geoeffnet gibt es
+// niemanden, der zurueckschreiben koennte -- ein Bearbeiten-Knopf waere dann
+// eine Luege. Wer die Seite weitergibt, gibt keinen Schreibzugang mit.
+HD.serverModus = function () {
+  return location.protocol === "http:" || location.protocol === "https:";
+};
+
+// Welche Dateien lassen sich hier bearbeiten. Dieselbe Liste wie im Server --
+// der prueft noch einmal; hier geht es nur darum, keinen Knopf anzubieten, der
+// danach abgelehnt wird.
+HD.bearbeitbar = function (pfad) {
+  if (!pfad) return false;
+  if (pfad === "dashboard.html" || pfad === "dashboard.json") return false;
+  // ACHTUNG, Backslash: dieser Text steht in einem Template-Literal und wird
+  // beim Auslesen einmal aufgeloest -- ein einfaches \\. kommt im Browser als
+  // blosser Punkt an, und aus /(^|\\/)/ wird /(^|/)/ mit unbalancierter
+  // Klammer. Deshalb hier ueberall DOPPELT. Der Syntaxtest in
+  // test/client.test.js faengt es, wenn es vergessen wird.
+  if (/(^|\\/)settings\\.local\\.json$|(^|\\/)\\.env($|\\.)|\\.key$|\\.pem$/i.test(pfad)) return false;
+  return /\\.(md|txt|json|js|mjs|cjs|css|html|yml|yaml)$|(^|\\/)\\.gitignore$/i.test(pfad);
+};
+
+// Speichern gegen den Vorschau-Server. Danach wird neu gemessen, sonst zeigt
+// die Seite den alten Stand und behauptet, er sei aktuell.
+HD.speichern = function (pfad, text) {
+  var feld = document.getElementById("editor-feld");
+  if (feld) feld.disabled = true;
+  // Das Neu-Messen dauert je nach Groesse des Workspace mehrere Sekunden. Ohne
+  // Ansage sieht ein totes Textfeld aus wie ein Absturz.
+  HD.melden(HD.W.wirdGespeichert, true);
+  fetch("/datei?pfad=" + encodeURIComponent(pfad), {
+    method: "PUT",
+    headers: { "content-type": "text/plain; charset=utf-8" },
+    body: text,
+  })
+    .then(function (a) { return a.json().then(function (j) { return { ok: a.ok, j: j }; }); })
+    .then(function (r) {
+      if (!r.ok) throw new Error((r.j && r.j.fehler) || "unbekannt");
+      HD.melden(HD.W.wirdGemessen, true);
+      HD.S.bearbeitet = null;
+      HD.S.entwurf = null;
+      return fetch("/neu-messen", { method: "POST" });
+    })
+    .then(function (a) {
+      if (a && a.ok) location.reload();
+    })
+    .catch(function (e) {
+      if (feld) feld.disabled = false;
+      HD.melden(HD.fuellen(HD.W.speichernFehlgeschlagen, { grund: e.message }));
+    });
+};
+
+HD.melden = function (text, bleiben) {
   var m = document.getElementById("meldung");
   m.textContent = text;
   m.classList.add("sichtbar");
   clearTimeout(HD._meldeUhr);
+  // bleiben: fuer Vorgaenge, die laenger dauern als die 1,5 Sekunden. Die
+  // Meldung verschwindet dann erst, wenn die naechste sie ersetzt.
+  if (bleiben) return;
   HD._meldeUhr = setTimeout(function () {
     m.classList.remove("sichtbar");
     // Auch den Text raeumen: die Klasse allein blendet nur aus, der Inhalt

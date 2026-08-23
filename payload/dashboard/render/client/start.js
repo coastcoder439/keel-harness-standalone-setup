@@ -76,6 +76,38 @@ document.addEventListener("click", function (ev) {
   // werden: die hat ein bedingungsloses return und verschluckte den Klick
   // (gemessen 23.08.2026 -- die Quelltext-Ansicht war ueberhaupt nicht
   // erreichbar, waehrend aria-pressed einen Schalter vortaeuschte).
+  var bearb = nah("[data-bearbeiten]");
+  if (bearb) {
+    HD.S.bearbeitet = bearb.dataset.bearbeiten;
+    HD.S.entwurf = null;
+    HD.zeichnen();
+    var neuesFeld = document.getElementById("editor-feld");
+    if (neuesFeld) neuesFeld.focus();
+    ev.preventDefault();
+    return;
+  }
+
+  if (nah("[data-bearbeiten-aus]")) {
+    var laufend = document.getElementById("editor-feld");
+    if (laufend && HD.S.entwurfStart != null && laufend.value !== HD.S.entwurfStart) {
+      if (!confirm(HD.W.ungespeichert)) { ev.preventDefault(); return; }
+    }
+    HD.S.bearbeitet = null;
+    HD.S.entwurf = null;
+    HD.S.entwurfStart = null;
+    HD.zeichnen();
+    ev.preventDefault();
+    return;
+  }
+
+  var sp = nah("[data-speichern]");
+  if (sp) {
+    var feldJetzt = document.getElementById("editor-feld");
+    if (feldJetzt) HD.speichern(sp.dataset.speichern, feldJetzt.value);
+    ev.preventDefault();
+    return;
+  }
+
   var qtFrueh = nah("[data-quelltext]");
   if (qtFrueh) {
     var eqf = HD.eintragMit(HD.S.auswahl) || (HD.S.baumDatei ? HD.eintragMit("datei:" + HD.S.baumDatei) : null);

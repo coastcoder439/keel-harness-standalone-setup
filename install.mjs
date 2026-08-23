@@ -184,6 +184,9 @@ const SKILLS = [
 const DASHBOARD = [
   // Einstieg und Messung
   "index.js",
+  // Der Vorschau-Server: macht aus der Seite ein Werkzeug zum Aendern.
+  // Ohne ihn ist sie nur lesbar -- ein Doppelklick genuegt dafuer.
+  "serve.js",
   "measure.js",
   "classify.js",
   "inventory.js",
@@ -221,6 +224,7 @@ const DASHBOARD = [
   "test/markdown.test.js",
   "test/data.test.js",
   "test/zugangsfilter.test.js",
+  "test/serve.test.js",
   "test/shell.test.js",
   "test/client.test.js",
   // Der Meta-Test: haelt fest, dass jedes Modul einen Test hat, keins zu gross

@@ -46,7 +46,11 @@ const SEITEN = {
   ueberblick: {
     name: "Überblick",
     ort: null,
-    zweck: "{workspace} — {zweck} Gemessen am {gemessen}.",
+    // KEIN Text aus der CLAUDE.md des Workspace. Das Dashboard ist Teil des
+    // Harness-Bausatzes und laeuft in JEDER Installation -- eine Ueberschrift,
+    // die eine bestimmte Zeile in einer bestimmten CLAUDE.md sucht, ist beim
+    // naechsten Empfaenger leer oder falsch (gefunden 23.08.2026).
+    zweck: "Was in {workspace} installiert ist, wo es liegt und ob es trägt. Gemessen am {gemessen}.",
     icon: "layout-dashboard",
   },
   zutun: {
@@ -334,6 +338,16 @@ const UI = {
   verknuepftMit: "Verknüpft mit",
   rohobjekt: "Rohobjekt",
   gerendert: "Gerendert",
+  bearbeiten: "Bearbeiten",
+  speichern: "Speichern",
+  abbrechen: "Abbrechen",
+  gespeichert: "Gespeichert.",
+  wirdGespeichert: "Wird gespeichert …",
+  wirdGemessen: "Gespeichert. Wird neu gemessen …",
+  speichernFehlgeschlagen: "Nicht gespeichert: {grund}",
+  nurLesen: "Nur lesen — zum Ändern: node dashboard/serve.js",
+  ungespeichert: "Ungespeicherte Änderungen. Wirklich verwerfen?",
+  neuGemessen: "Neu gemessen.",
   quelltext: "Quelltext",
   vollbild: "Vollbild",
   verkleinern: "Verkleinern",
