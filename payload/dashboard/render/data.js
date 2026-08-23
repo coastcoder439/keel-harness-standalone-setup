@@ -14,6 +14,7 @@
 const W = require("./worte.js");
 const { icon, NAMEN, ZWEITNAMEN } = require("./icons.js");
 const { markdownZuHtml } = require("./markdown.js");
+const { ZUGANGS_MUSTER } = require("../inventar.js");
 
 const { UI, STATUS, ART, ART_BESCHREIBUNG, WIRKUNG, LADEART, KANTE, QUELLE, GIT,
         NOTIZ, ZUTUN_ART, SEITEN, fuellen, zahl, bytes, datum } = W;
@@ -588,7 +589,7 @@ function daten(m, regelDaten) {
     });
   }
 
-  return {
+  return sicherung({
     schema: m.schema,
     gemessenAm: m.gemessenAm,
     gemessenText: datum(m.gemessenAm),
@@ -610,7 +611,44 @@ function daten(m, regelDaten) {
     messfehler: m.messfehler || [],
     kantenFehler: (m.verwandt && m.verwandt.fehler) || [],
     roh: { messung: m, regeln: regelDaten || null },
-  };
+  }, false);
+}
+
+// ---------------------------------------------------------------------------
+// DIE ENGSTELLE -- der letzte Riegel vor der Seite
+//
+// inventar.js sichert DATEIINHALTE zeilenweise. Aber nicht jeder Text im
+// Datensatz kommt von dort: rules.js zieht Kernzeilen aus Regeldateien,
+// hooks-detail.js Kopfkommentare, zutun-docs.js ganze Fundzeilen, verwandt.js
+// Belegzeilen. Keines dieser Module ruft textSichern -- und jedes neue Modul
+// wuerde die Pflicht erneut vergessen. Am 23.08.2026 gemessen: ein Zugang in
+// einer Regeldatei erreichte die Seite und wurde erst vom Ausgabe-Waechter in
+// index.js gestoppt, also vom LETZTEN Riegel.
+//
+// Deshalb wird hier gesichert, wo alles zusammenlaeuft. Der Ausgabe-Waechter
+// bleibt trotzdem -- er prueft, was WIRKLICH auf die Platte geht, und faengt
+// den Fall, dass jemand diese Stelle umgeht.
+//
+// AUSNAHME mit Grund: die bereits zeilenweise gesicherten Dateiinhalte. Sie
+// hier noch einmal als GANZES zu maskieren wuerde eine ganze Datei
+// unlesbar machen, sobald sie eine einzige verdaechtige Zeile traegt -- und
+// die Zeile ist dort laengst ersetzt.
+function sicherung(wert, imInhalt) {
+  if (typeof wert === "string") {
+    if (imInhalt) return wert;
+    return ZUGANGS_MUSTER.some((m) => m.test(wert)) ? "[ausgeblendet:zugang]" : wert;
+  }
+  if (Array.isArray(wert)) return wert.map((v) => sicherung(v, imInhalt));
+  if (wert && typeof wert === "object") {
+    const raus = {};
+    for (const k of Object.keys(wert)) {
+      // inhalt.text ist zeilenweise gesichert; roh traegt die Messung, die
+      // ihrerseits aus inventar.js kommt.
+      raus[k] = sicherung(wert[k], imInhalt || k === "inhalt" || k === "markdown");
+    }
+    return raus;
+  }
+  return wert;
 }
 
 // Was dieser Harness NICHT hat -- gemessen, nicht behauptet. Ohne diesen

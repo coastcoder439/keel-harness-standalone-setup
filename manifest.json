@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-23T03:00:10.385Z",
-  "posten": 75,
+  "gebautAm": "2026-08-23T04:07:09.042Z",
+  "posten": 77,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 75244,
-      "sha256": "0607b30f77526752"
+      "bytes": 75418,
+      "sha256": "5249e14c067b2fad"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -356,8 +356,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 28059,
-      "sha256": "313546eeacb6789a"
+      "bytes": 25813,
+      "sha256": "52062950f5960991"
     },
     {
       "datei": "payload/dashboard/inventory.js",
@@ -412,8 +412,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 27175,
-      "sha256": "f08c9857b654157f"
+      "bytes": 28977,
+      "sha256": "5a0738cc6650e639"
     },
     {
       "datei": "payload/dashboard/render/icons.js",
@@ -500,8 +500,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 21548,
-      "sha256": "c45815c1b6363800"
+      "bytes": 22335,
+      "sha256": "b27c1890c59f89a4"
     },
     {
       "datei": "payload/dashboard/test/markdown.test.js",
@@ -552,6 +552,14 @@
       "sha256": "6f4728595b099a79"
     },
     {
+      "datei": "payload/dashboard/test/zugangsfilter.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 8032,
+      "sha256": "509ae355b3e1c229"
+    },
+    {
       "datei": "payload/dashboard/test/zutun-docs.test.js",
       "herkunft": null,
       "quellordner": "bausatz",
@@ -566,6 +574,14 @@
       "gesaeubert": 0,
       "bytes": 15186,
       "sha256": "6738fc507e8a30dc"
+    },
+    {
+      "datei": "payload/dashboard/zugangsfilter.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 10240,
+      "sha256": "e5bbd9f473fc0a1b"
     },
     {
       "datei": "payload/dashboard/zutun-docs.js",

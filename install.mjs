@@ -190,6 +190,9 @@ const DASHBOARD = [
   "rules.js",
   // Messung v2 -- je ein eigener, pruefbarer Baustein
   "inventar.js",
+  // Der Geheimnis-Filter: eigenes Modul seit dem 23.08.2026 -- eigene
+  // Aufgabe, eigene Gegenproben, drei Aufrufer.
+  "zugangsfilter.js",
   "hooks-detail.js",
   "zutun-docs.js",
   "verwandt.js",
@@ -217,6 +220,7 @@ const DASHBOARD = [
   "test/icons.test.js",
   "test/markdown.test.js",
   "test/data.test.js",
+  "test/zugangsfilter.test.js",
   "test/shell.test.js",
   "test/client.test.js",
   // Der Meta-Test: haelt fest, dass jedes Modul einen Test hat, keins zu gross
