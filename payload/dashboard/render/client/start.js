@@ -27,8 +27,12 @@ document.addEventListener("click", function (ev) {
 
   var kopieInhalt = nah("[data-kopieinhalt]");
   if (kopieInhalt) {
-    var e0 = HD.eintragMit(kopieInhalt.dataset.kopieinhalt);
-    if (e0 && e0.inhalt && e0.inhalt.text) HD.kopieren(e0.inhalt.text);
+    // Inhalt steht nicht mehr im Datensatz -- erst holen, dann kopieren.
+    var pfadK = kopieInhalt.dataset.kopieinhalt;
+    HD.dateiHolen(pfadK, function (fehler, d) {
+      if (fehler) { HD.melden(HD.fuellen(HD.W.inhaltFehler, { grund: fehler })); return; }
+      HD.kopieren(d.text);
+    });
     return;
   }
 
@@ -78,12 +82,26 @@ document.addEventListener("click", function (ev) {
   // erreichbar, waehrend aria-pressed einen Schalter vortaeuschte).
   var bearb = nah("[data-bearbeiten]");
   if (bearb) {
-    HD.S.bearbeitet = bearb.dataset.bearbeiten;
-    HD.S.entwurf = null;
-    HD.zeichnen();
-    var neuesFeld = document.getElementById("editor-feld");
-    if (neuesFeld) neuesFeld.focus();
     ev.preventDefault();
+    var pfadB = bearb.dataset.bearbeiten;
+    // Rohtext FRISCH holen (frisch=true, Cache umgehen) -- der Datensatz traegt
+    // ihn nicht mehr, und ein veralteter Cache-Eintrag koennte ein inzwischen
+    // hinzugekommenes Geheimnis uebersehen. Erst wenn er da ist, den Editor
+    // oeffnen. Enthaelt die Datei maskierte Zugangszeilen, NICHT oeffnen: ein
+    // Speichern schriebe sonst eine Fassung ohne das echte Geheimnis zurueck.
+    HD.dateiHolen(pfadB, function (fehler, d) {
+      if (fehler) { HD.melden(HD.fuellen(HD.W.inhaltFehler, { grund: fehler })); return; }
+      if (d.ausgeblendeteZeilen && d.ausgeblendeteZeilen.length) {
+        HD.melden(HD.W.bearbeitenGesperrt);
+        return;
+      }
+      HD.S.bearbeitet = pfadB;
+      HD.S.entwurf = d.text;
+      HD.S.entwurfStart = d.text;
+      HD.zeichnen();
+      var neuesFeld = document.getElementById("editor-feld");
+      if (neuesFeld) neuesFeld.focus();
+    }, true);
     return;
   }
 
@@ -176,6 +194,11 @@ document.addEventListener("input", function (ev) {
   }
   if (ev.target.id === "palette-feld") HD.paletteZeichnen(ev.target.value);
 });
+
+// Ein Abschnitt (details) klappt NATIV auf, ohne Neuzeichnen -- deshalb muss der
+// Inhalt auf Abruf hier ausgeloest werden. "toggle" bubbelt nicht, darum capture.
+// So laedt ein Dokumentblock erst dann, wenn man ihn wirklich aufklappt (lazy).
+document.addEventListener("toggle", function () { if (HD.inhaltLaden) HD.inhaltLaden(); }, true);
 
 // --- Tastatur ------------------------------------------------------------
 document.addEventListener("keydown", function (ev) {

@@ -33,7 +33,7 @@ const CLAUDE_MD = "CLAUDE.md";
 const GITIGNORE = ".gitignore";
 const COMMANDS = ".claude/commands";
 const SKILLS = ".claude/skills";
-const RULES = ".claude/rules/keel";
+const RULES = ".claude/rules";
 const LIZENZ_ORDNER = "licenses";
 
 // Wo ein blosser Skriptname stehen kann. Reihenfolge = Suchreihenfolge.
@@ -66,6 +66,31 @@ function dateienIm(wurzel, relOrdner, endung) {
   } catch {
     return null;
   }
+}
+
+// Alle .md unter einem Ordner, REKURSIV und ordner-agnostisch: Regeln koennen in
+// jedem Unterordner von .claude/rules/ liegen (keel, common, ein eigener Name).
+// Frueher war hier fest .claude/rules/keel verdrahtet -- eine fremde Installation
+// mit Regeln unter anderem Namen bekam keine Verwandtschaftskanten und einen
+// falschen "quelle-fehlt"-Fehler. Gibt null zurueck, wenn der Ordner ganz fehlt.
+function mdRekursiv(wurzel, relOrdner) {
+  const wurzelAbs = path.join(wurzel, relOrdner);
+  if (!fs.existsSync(wurzelAbs)) return null;
+  const raus = [];
+  (function lauf(relDir) {
+    let eintraege;
+    try {
+      eintraege = fs.readdirSync(path.join(wurzel, relDir), { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of eintraege.sort((a, b) => a.name.localeCompare(b.name))) {
+      const rel = relDir + "/" + e.name;
+      if (e.isDirectory()) lauf(rel);
+      else if (e.isFile() && e.name.endsWith(".md")) raus.push(rel);
+    }
+  })(relOrdner);
+  return raus;
 }
 
 // ---------------------------------------------------------------------------
@@ -200,34 +225,23 @@ function ausSettings(wurzel, sammler, nachschlag) {
 // ---------------------------------------------------------------------------
 // Quelle 2 -- CLAUDE.md Abschnitt 3: jeder Skriptname (beschrieben-in).
 // ---------------------------------------------------------------------------
-function abschnittGrenzen(zeilen, nummer) {
-  const start = zeilen.findIndex((z) => new RegExp("^##\\s+" + nummer + "\\.").test(z));
-  if (start === -1) return null;
-  let ende = zeilen.length;
-  for (let i = start + 1; i < zeilen.length; i++) {
-    if (/^##\s+\d+\./.test(zeilen[i])) {
-      ende = i;
-      break;
-    }
-  }
-  return { start, ende };
-}
-
 function ausClaudeMd(wurzel, sammler, nachschlag) {
   const gelesen = zeilenLesen(wurzel, CLAUDE_MD);
   if (gelesen.fehler) return sammler.fehlerMelden(gelesen.fehler);
-  const grenzen = abschnittGrenzen(gelesen.zeilen, 3);
-  if (!grenzen) {
-    return sammler.fehlerMelden({ code: "abschnitt-fehlt", datei: CLAUDE_MD, grund: "3" });
-  }
   const von = "datei:" + CLAUDE_MD;
   const muster = /(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+\.js\b/g;
-  for (let i = grenzen.start; i < grenzen.ende; i++) {
-    for (const name of new Set(gelesen.zeilen[i].match(muster) || [])) {
+  // Die Werkzeuge stehen in CLAUDE.md als TABELLE. Frueher war fest "Abschnitt 3"
+  // vorausgesetzt -- eine fremde CLAUDE.md hat den nicht (der Installer
+  // ueberschreibt keine vorhandene). Deshalb abschnittsfrei: jede Tabellenzeile
+  // (beginnt mit |) wird nach .js-Verweisen durchsucht, genau wie
+  // hooks-detail.js:claudeMdZeileFinden. Kein "abschnitt-fehlt"-Fehler mehr.
+  gelesen.zeilen.forEach((z, i) => {
+    if (!/^\s*\|/.test(z)) return;
+    for (const name of new Set(z.match(muster) || [])) {
       const ziel = dateiIdFinden(nachschlag, skriptKandidaten(name));
       sammler.anlegen(von, ziel, "beschrieben-in", beleg(CLAUDE_MD, i + 1), name);
     }
-  }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -328,7 +342,7 @@ function verweiseDerZeile(zeile, imBlock, relPfad) {
 }
 
 function ausRules(wurzel, sammler, nachschlag) {
-  const dateien = dateienIm(wurzel, RULES, ".md");
+  const dateien = mdRekursiv(wurzel, RULES);
   if (dateien === null) {
     return sammler.fehlerMelden({ code: "quelle-fehlt", datei: RULES, grund: null });
   }

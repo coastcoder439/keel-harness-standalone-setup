@@ -1,7 +1,11 @@
 #!/usr/bin/env node
-// INVENTAR -- der Dateibaum des Harness, mit Rolle, Beschreibung und Inhalt.
+// INVENTAR -- der Dateibaum des Harness, mit Rolle und Beschreibung (Metadaten).
 // Spezifikation v2, Abschnitte 7.1 (Baum + Schema), 7.2 (Beschreibungs-Rangfolge),
-// 7.3 (Inhalt + Geheimnis-Schutz).
+// 7.3 (Geheimnis-Schutz).
+//
+// SERVER-ZUERST (D1): der Dateiinhalt wird NICHT mehr eingebettet -- inhalt.text
+// ist immer null, serve.js liefert den Rumpf auf Klick. Dieses Modul misst nur
+// noch Auskuenfte ueber die Datei (Zeilenzahl, Sprache, ausgeblendete Zeilen).
 //
 // Dieses Modul erzeugt AUSSCHLIESSLICH Daten. Es kennt kein HTML, keine Farbe und
 // keinen deutschen Satz fuer die Oberflaeche. Wo eine Formulierung noetig waere,
@@ -10,8 +14,10 @@
 // Trennung auf, an der die Anzeige spaeter haengt.
 //
 // DREI RIEGEL GEGEN ZUGAENGE (7.3):
-//   1. git-ignoriert  => Inhalt wird NIE eingebettet, nur Metadaten (gesperrt:"ignoriert").
-//   2. textSichern()  => laeuft ueber JEDEN String, der in den Datensatz geht.
+//   1. Inhalt verlaesst den Datensatz (D1)  => kein Dateikoerper wird eingebettet;
+//      git-ignorierte Dateien werden gar nicht erst gelesen (gesperrt:"ignoriert").
+//   2. textSichern()  => laeuft ueber JEDEN String, der in den Datensatz geht
+//      (auch Beschreibung und Frontmatter, aus dem GESICHERTEN Text gezogen).
 //   3. Ausgabe-Waechter in index.js  => prueft die fertige HTML gegen ZUGANGS_MUSTER.
 //      Riegel 3 liegt bewusst NICHT hier; dafuer wird ZUGANGS_MUSTER exportiert,
 //      damit index.js dieselbe Liste benutzt und keine Kopie pflegt.
@@ -55,9 +61,12 @@ const {
 // erkannt, wenn der WERT wie ein Geheimnis aussieht -- nicht, wenn er ein
 // Verweis darauf ist (Umgebungsvariable, Platzhalter, CSS-Eigenschaft).
 
-const GRENZE_BYTES = 512 * 1024; // darunter wird voll eingebettet
-const GRENZE_ZEILEN = 5000; // darunter wird voll eingebettet
-const KAPPUNG_ZEILEN = 400; // darueber: nur so viele Zeilen
+// SERVER-ZUERST (D1): der Rumpf wird nicht mehr eingebettet, also gibt es auch
+// keine Einbettungs-Kappung (frueher GRENZE_BYTES/GRENZE_ZEILEN/KAPPUNG_ZEILEN)
+// mehr -- serve.js liefert die ganze Datei auf Klick, gedeckelt nur von der
+// harten Obergrenze. Eine Kappung im Datensatz waere jetzt eine falsche Auskunft
+// (die Datei kaeme trotzdem ganz), und ein gekapptes Bearbeiten hiesse
+// Datenverlust beim Speichern.
 const BINAER_FENSTER = 8192; // NUL-Byte-Suche in den ersten 8 KB
 const HART_MAX_BYTES = 8 * 1024 * 1024; // darueber wird gar nicht erst gelesen
 const MAX_TIEFE = 12; // Schutz gegen Verweis-Schleifen
@@ -240,7 +249,7 @@ function claudeMdZeile(zeilen, name) {
 // ---------------------------------------------------------------------------
 // ROLLE -- die 15 Codes aus 7.1 (das UI-Wort dazu setzt render/data.js, 5.3)
 // ---------------------------------------------------------------------------
-function rolleFuer(relPosix, verdrahtung) {
+function rolleFuer(relPosix, verdrahtung, hatFrontmatter) {
   const name = dateiname(relPosix);
   if (relPosix === "CLAUDE.md") return "wurzel-kontext";
   if (relPosix === ".gitignore") return "gitignore";
@@ -248,7 +257,12 @@ function rolleFuer(relPosix, verdrahtung) {
   if (relPosix === ".claude/launch.json") return "launch";
   if (relPosix.startsWith(".claude/commands/")) return "command";
   if (relPosix.startsWith(".claude/skills/")) return name === "SKILL.md" ? "skill" : "skill-datei";
-  if (relPosix.startsWith(".claude/rules/")) return "dauer-regel";
+  // Eine Regel MIT Frontmatter (---) laedt auf Abruf, eine OHNE laedt in jeder
+  // Sitzung (Dauer-Kontext). Das ist die echte Eigenschaft -- nicht der Ordner
+  // (keel/ vs common/ vs ecc/). Ein Sprachpaket unter .claude/rules/ecc/ traegt
+  // Frontmatter und darf NICHT als Dauer-Regel gezaehlt werden (sonst zaehlt die
+  // Kontext-Kostenrechnung abrufbare Pakete als immer geladen mit).
+  if (relPosix.startsWith(".claude/rules/")) return hatFrontmatter ? "abruf-regel" : "dauer-regel";
   if (relPosix.startsWith(".claude/") && /\.(js|mjs|cjs)$/.test(name)) return rolleSkript(name, verdrahtung);
   if (relPosix.startsWith("dashboard/")) return /\.md$/i.test(name) ? "dashboard-doku" : "dashboard-modul";
   if (relPosix.startsWith("docs/")) return "doku";
@@ -294,6 +308,25 @@ function frontmatterLesen(text) {
   return null; // ohne schliessendes --- ist es kein Frontmatter, sondern Fliesstext
 }
 
+// Frontmatter-WERTE sichern, ohne die STRUKTUR anzutasten. Zwei Gruende, beide
+// aus der Nachpruefung (23.08.2026):
+//   - textSichern auf den ganzen Rohtext konnte die schliessende ---Zeile
+//     maskieren (WERT_FOLGT nach einem leeren Geheimnis-Schluessel) -- dann fand
+//     frontmatterLesen das Ende nicht mehr und die Regel wurde fehlklassifiziert.
+//   - Ein blosser WERT ohne Schluessel trifft ZUGANGS_MUSTER nie; die Engstelle
+//     in data.js koennte ihn also nicht fangen.
+// Deshalb: Struktur aus dem ROHTEXT lesen (frontmatterLesen), und je Feld die
+// Zeile "schluessel: wert" pruefen -- schlaegt der Filter an, kommt der Wert
+// maskiert in den Datensatz.
+function frontmatterSichern(felder) {
+  const raus = {};
+  for (const [k, v] of Object.entries(felder)) {
+    const zeile = k + ": " + (v == null ? "" : String(v));
+    raus[k] = textSichern(zeile).ausgeblendeteZeilen.length ? AUSGEBLENDET : v;
+  }
+  return raus;
+}
+
 // Erster Kommentarblock: //-Zeilen ab Zeile 2, Shebang uebersprungen, bis zur
 // ersten leeren //-Zeile. Genau der Block, den 7.1 als Beleg ".../x.js:2-3" zeigt.
 function kopfkommentar(text) {
@@ -312,47 +345,129 @@ function kopfkommentar(text) {
   return stuecke.length ? { text: stuecke.join(" "), von, bis: i } : null;
 }
 
-// Erster Absatz oder erste Blockquote einer .md -- Ueberschriften und Trennlinien
-// werden uebersprungen, nicht mitgenommen.
+// Erster ECHTER Beschreibungs-Absatz einer .md. Der erste Absatz einer Datei ist
+// oft KEINE Beschreibung, sondern eine Notiz -- darum wird absatzweise geprueft
+// und uebersprungen, was keine Beschreibung ist (belegt an mehreren Dateien,
+// 23.08.2026, verschaerft nach dem Review):
+//   - Ueberschrift, Trennlinie, Leerzeile, Code-Zaun samt Inhalt (S3)
+//   - Meta-/Anreisser-Absatz "Anlass:", "Stand 23.08.", "Quelle:" (S2) -- auch
+//     wenn er als "**Anlass:**" oder "> Anlass:" getarnt ist (Review-Fund)
+//   - eine Tabellenzeile "| ... | ... |" (Review-Fund)
+//   - ein blosser Pfad oder Dateiname
+// Eine Blockquote wird NICHT mehr pauschal verworfen: ihre Marke wird entfernt
+// und der Inhalt auf Meta geprueft -- so faellt "> Anlass:" weg, aber ein echter
+// Einleitungssatz im Zitat (z. B. in CLAUDE.md) bleibt erhalten.
+// Der genommene Text wird als KLARTEXT geliefert (Marken und **/*/`-Auszeichnung
+// entfernt) und in beschreibungFuer auf MAX_BESCHREIBUNG_ZEICHEN gekappt.
+// Trenner-Klasse ueber Unicode-ESCAPES, damit die Quelle ASCII bleibt (Test A79):
+// en-dash 2013, em-dash 2014, Mittelpunkt 00b7, Umlaut-a 00e4.
+const META_ANFANG = /^(Anlass|Quelle|Datum|Autor|Status|Siehe|Verwandt|Update)\b\s*[:\u2013\u2014-]/i;
+const STAND_ANFANG = /^Stand\b\s*[:\u00b7\u2013\u2014-]?\s*(?:v?\d|Phase\b|[A-Z][a-z\u00e4]+\s+\d)/i;
+const MAX_BESCHREIBUNG_ZEICHEN = 240;
+
+// Fuehrende Zitat-/Ueberschrift-/Listenmarke einer Zeile weg (fuer die erste
+// Zeile eines Absatzes bzw. jede Zeile eines Blockquotes).
+function markenWeg(zeile, auchListe) {
+  let s = zeile.replace(/^\s*>+\s?/, "").replace(/^\s*#+\s+/, "");
+  if (auchListe) s = s.replace(/^\s*(?:[-*+]\s+|\d+[.)]\s+)/, "");
+  return s;
+}
+
+// Markdown-Auszeichnung entfernen -- die Beschreibung wird als Klartext gezeigt,
+// **fett**, *kursiv* und `code` erschienen sonst als blosse Zeichen.
+function auszeichnungWeg(s) {
+  return s
+    .replace(/`+([^`]*)`+/g, "$1")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/(^|[\s(])_([^_]+)_(?=[\s).,;:!?]|$)/g, "$1$2");
+}
+
+// Ein Absatz -> sauberer Klartext: Marken der ersten Zeile und Zitatmarken aller
+// Zeilen weg, verbinden, Auszeichnung weg, Leerraum normalisieren.
+function absatzText(stuecke) {
+  const zeilen = stuecke.map((z, i) => markenWeg(z, i === 0));
+  return auszeichnungWeg(zeilen.join(" ")).replace(/\s+/g, " ").trim();
+}
+
+// Eine Beschreibung ist eine Zeile Auskunft, kein Ausschnitt. Ueberlaeuft sie
+// MAX_BESCHREIBUNG_ZEICHEN, wird an einer Wortgrenze gekappt (Review-Fund: sonst
+// standen 2455-Zeichen-Bloecke mehrfach im Datensatz).
+function kappen(text) {
+  if (!text || text.length <= MAX_BESCHREIBUNG_ZEICHEN) return text;
+  let kurz = text.slice(0, MAX_BESCHREIBUNG_ZEICHEN);
+  const luecke = kurz.lastIndexOf(" ");
+  if (luecke > MAX_BESCHREIBUNG_ZEICHEN * 0.6) kurz = kurz.slice(0, luecke);
+  return kurz.replace(/[\s.,;:\u2013\u2014-]+$/, "") + " \u2026";
+}
+
+function nurPfad(text) {
+  const s = text.trim();
+  return !/\s/.test(s) && /[./]/.test(s) && !/[.!?]$/.test(s);
+}
+
+function istBeschreibungsAbsatz(stuecke) {
+  if (!stuecke.length) return false;
+  // Tabellenzeile ist keine Beschreibung.
+  if ((stuecke[0].match(/\|/g) || []).length >= 2) return false;
+  // Marken + Auszeichnung der ersten Zeile weg, DANN auf Meta pruefen -- sonst
+  // rutscht "**Anlass:**" oder "> Anlass:" am Filter vorbei.
+  const erste = auszeichnungWeg(markenWeg(stuecke[0], true)).trim();
+  if (!erste) return false;
+  if (META_ANFANG.test(erste) || STAND_ANFANG.test(erste)) return false;
+  if (nurPfad(absatzText(stuecke))) return false;
+  return true;
+}
+
 function ersterAbsatz(text, abZeile) {
   const zeilen = zeilenAufteilen(text);
-  const stuecke = [];
-  let von = null;
-  for (let i = abZeile || 0; i < zeilen.length; i++) {
+  const trenner = (z) => !z || /^#{1,6}\s/.test(z) || /^(-{3,}|={3,}|\*{3,})$/.test(z) || /^(```|~~~)/.test(z);
+  let i = abZeile || 0;
+  let imZaun = false;
+  while (i < zeilen.length) {
     const z = zeilen[i].trim();
-    const sprung = !z || /^#{1,6}\s/.test(z) || /^(-{3,}|={3,}|\*{3,})$/.test(z);
-    if (sprung) {
-      if (stuecke.length) break;
-      continue;
+    if (/^(```|~~~)/.test(z)) { imZaun = !imZaun; i++; continue; }
+    if (imZaun) { i++; continue; }
+    if (trenner(z)) { i++; continue; }
+    // Ein Absatz beginnt. Ganz einsammeln (bis Trenner/Zaun).
+    const von = i + 1;
+    const stuecke = [];
+    while (i < zeilen.length && !trenner(zeilen[i].trim())) {
+      stuecke.push(zeilen[i].trim());
+      i++;
     }
-    if (von === null) von = i + 1;
-    stuecke.push(z.replace(/^>\s?/, ""));
+    if (istBeschreibungsAbsatz(stuecke)) {
+      return { text: absatzText(stuecke), von, bis: von + stuecke.length - 1 };
+    }
+    // sonst: naechsten Absatz versuchen
   }
-  return stuecke.length ? { text: stuecke.join(" "), von, bis: von + stuecke.length - 1 } : null;
+  return null;
 }
 
 // ---------------------------------------------------------------------------
 // BESCHREIBUNGS-RANGFOLGE (7.2)
 // ---------------------------------------------------------------------------
-// ABWEICHUNG, bewusst und belegt: 7.2 nennt als Reihenfolge
-//   Frontmatter -> statusMessage -> CLAUDE.md-Tabelle -> Kopfkommentar -> ...
-// Das Beispiel-Schema in 7.1 verlangt fuer .claude/danger-guard.js aber
-//   "quelle":"kopfkommentar", "beleg":".claude/danger-guard.js:2-3",
-// und die Skizze in 3.3 zeigt dieselbe Quelle. Gemessen an settings.json sind alle
-// acht statusMessage-Werte Fortschrittsetiketten der Statusleiste (10 bis 52 Zeichen,
-// kein Satz, z. B. "danger-guard (zerstoerende Befehle)"). Deshalb steht hier der
-// Kopfkommentar VOR statusMessage und CLAUDE.md-Zeile. Verloren geht dabei nichts:
-// beide Fundstellen bleiben in `weitereQuellen` am Ergebnis stehen.
-// Reihenfolge nach dem, was einem LESER hilft -- nicht nach dem, was zum
-// Beispielschema der Spezifikation passt.
+// Reihenfolge nach LESER-NUTZEN, nicht nach dem Beispielschema der Spezifikation
+// (7.2 nannte Frontmatter -> statusMessage -> CLAUDE.md -> Kopfkommentar). Der
+// TATSAECHLICHE Rang, den dieses Array setzt:
 //
-// Die vorige Fassung stellte den Kopfkommentar vor die CLAUDE.md-Tabelle, mit
-// einer langen Begruendung aus dem Spezifikationsbeispiel. Ergebnis: fuer
-// danger-guard.js stand "PreToolUse-Hook fuer Bash. Schwester von git-guard.js
-// -- aber dieser hier BLOCKIERT" in der Liste, waehrend zwei Ordner weiter in
-// CLAUDE.md der Satz "blockiert zerstoerende Befehle ausserhalb der erlaubten
-// Schreibziele" stand. Geschrieben fuer Menschen, ungenutzt.
-const STUFEN = [stufeFrontmatter, stufeClaudeMd, stufeAnsage, stufeKopfkommentar, stufeAbsatz, stufeRolle];
+//   Frontmatter -> CLAUDE.md-Zeile -> Kopf-/#-Kommentar -> statusMessage
+//   -> erster Absatz -> Rolle/Typ
+//
+// Zwei bewusste Abweichungen, beide am Code belegt (23.08.2026):
+//   A) Ein echter SATZ schlaegt ein Statusleisten-ETIKETT. Die acht
+//      statusMessage-Werte in settings.json sind Fortschrittsetiketten (10-52
+//      Zeichen, kein Satz, z. B. "danger-guard (zerstoerende Befehle)"). Darum
+//      steht stufeAnsage HINTER stufeKopfkommentar/stufeRaute -- ein echter
+//      Kopfkommentar gewinnt gegen das Etikett (A1).
+//   B) Die CLAUDE.md-Zeile steht VOR dem Kopfkommentar: fuer danger-guard.js
+//      trug CLAUDE.md den besseren Satz ("blockiert zerstoerende Befehle
+//      ausserhalb der erlaubten Schreibziele"), der Kopfkommentar nur
+//      "PreToolUse-Hook fuer Bash. Schwester von git-guard.js -- aber dieser
+//      hier BLOCKIERT".
+//
+// Verloren geht nichts: jede weitere Fundstelle bleibt in `weitereQuellen`.
+const STUFEN = [stufeFrontmatter, stufeClaudeMd, stufeKopfkommentar, stufeRaute, stufeAnsage, stufeAbsatz, stufeRolle];
 
 function stufeFrontmatter(lage) {
   if (lage.ext !== "md" || !lage.text) return null;
@@ -365,6 +480,35 @@ function stufeFrontmatter(lage) {
 function stufeKopfkommentar(lage) {
   if (!/^(js|mjs|cjs)$/.test(lage.ext) || !lage.text) return null;
   const k = kopfkommentar(lage.text);
+  if (!k) return null;
+  return { text: textSichern(k.text).text, quelle: "kopfkommentar", beleg: beleg(lage.pfad, k.von, k.bis) };
+}
+
+// Erster #-Kommentarblock einer Skript-/Konfigurationsdatei (Shebang wird
+// uebersprungen). In .md ist "#" eine Ueberschrift und in JS ist "//" der
+// Kommentar -- deshalb greift diese Stufe nur, wo "#" wirklich Kommentar heisst.
+// Damit bekommt z. B. ein Python-Skript mit "# Baut ..." eine echte Beschreibung
+// statt nur "Python-Skript" aus dem Typ-Fallback.
+const RAUTE_TYPEN = /^(py|sh|bash|zsh|rb|toml|ya?ml|ini|cfg|conf|ps1|pl|r)$/;
+function rauteKommentar(text) {
+  const zeilen = zeilenAufteilen(text);
+  let i = zeilen[0] && zeilen[0].startsWith("#!") ? 1 : 0;
+  while (i < zeilen.length && zeilen[i].trim() === "") i++;
+  if (i >= zeilen.length || !/^\s*#/.test(zeilen[i]) || /^\s*#!/.test(zeilen[i])) return null;
+  const von = i + 1;
+  const stuecke = [];
+  while (i < zeilen.length && /^\s*#/.test(zeilen[i])) {
+    const kern = zeilen[i].replace(/^\s*#+\s?/, "").trim();
+    if (!kern) break;
+    stuecke.push(kern);
+    i++;
+  }
+  return stuecke.length ? { text: stuecke.join(" "), von, bis: i } : null;
+}
+
+function stufeRaute(lage) {
+  if (!RAUTE_TYPEN.test(lage.ext) || !lage.text) return null;
+  const k = rauteKommentar(lage.text);
   if (!k) return null;
   return { text: textSichern(k.text).text, quelle: "kopfkommentar", beleg: beleg(lage.pfad, k.von, k.bis) };
 }
@@ -419,11 +563,17 @@ function beschreibungFuer(pfad, inhalt, kontext) {
     else if (fund.quelle !== "rolle") weitereQuellen.push({ quelle: fund.quelle, beleg: fund.beleg });
   }
   if (!treffer) return null;
+  // Klartext + Kappung fuer JEDE Quelle an EINER Stelle: eine claude-md-Tabellen-
+  // zelle kann **fett** tragen, ein Absatz kann lang sein. So ist die angezeigte
+  // Beschreibung ueberall Klartext und hoechstens MAX_BESCHREIBUNG_ZEICHEN lang.
+  if (typeof treffer.text === "string") {
+    treffer = { ...treffer, text: kappen(auszeichnungWeg(treffer.text).replace(/\s+/g, " ").trim()) };
+  }
   return { ...treffer, weitereQuellen };
 }
 
 function dateiInhalt(abs, relPosix, ext, git, gitVorhanden, bytes) {
-  const leer = { text: null, sprache: spracheVon(ext), gekuerzt: false, gesperrt: null, ausgeblendeteZeilen: [] };
+  const leer = { text: null, sprache: spracheVon(ext), gesperrt: null, ausgeblendeteZeilen: [] };
   const gesperrt = sperrgrund(relPosix, git, gitVorhanden) || (bytes > HART_MAX_BYTES ? "zu-gross" : null);
   if (gesperrt) return { inhalt: { ...leer, gesperrt }, zeilen: null, zeilenende: null };
   let roh;
@@ -440,13 +590,23 @@ function dateiInhalt(abs, relPosix, ext, git, gitVorhanden, bytes) {
   if (roh.subarray(0, BINAER_FENSTER).includes(0)) return { inhalt: { ...leer, gesperrt: "binaer" }, zeilen: null, zeilenende: null };
   const text = roh.toString("utf8");
   const zeilen = zeilenZaehlen(text);
-  const gekuerzt = bytes > GRENZE_BYTES || zeilen > GRENZE_ZEILEN;
-  const alle = zeilenAufteilen(text);
-  const gesichert = textSichern((gekuerzt ? alle.slice(0, KAPPUNG_ZEILEN) : alle).join("\n"));
+  // SERVER-ZUERST (Entscheidung D1, 23.08.2026): der TEXT verlaesst den
+  // Datensatz. Gemessen wird er trotzdem -- Zeilenzahl, Zeilenende und die
+  // ausgeblendeten Zugangszeilen sind Auskuenfte ueber die Datei -- aber der
+  // Inhalt kommt auf Klick von serve.js (GET /datei), nicht aus der Seite.
+  // Das spart ~1,1 MB und ist der Grund, aus dem es serve.js gibt. Der
+  // Zeilenfilter laeuft hier nur noch, um die AUSGEBLENDETEN Zeilen zu zaehlen;
+  // serve.js filtert beim Ausliefern erneut.
+  //
+  // rohtext wird als SEITENFELD zurueckgegeben (nicht in inhalt), damit die
+  // Messung Frontmatter und Beschreibung daraus ziehen kann. Der dateiKnoten
+  // nimmt es NICHT in den Knoten auf -- es verlaesst die Messung nicht.
+  const gesichert = textSichern(text);
   return {
-    inhalt: { ...leer, text: gesichert.text, gekuerzt, ausgeblendeteZeilen: gesichert.ausgeblendeteZeilen },
+    inhalt: { ...leer, text: null, ausgeblendeteZeilen: gesichert.ausgeblendeteZeilen },
     zeilen,
     zeilenende: zeilenendeArt(text),
+    rohtext: text,
   };
 }
 
@@ -464,13 +624,23 @@ function dateiKnoten(abs, relPosix, umgebung) {
     daten = null;
   }
   const git = gitFuer(relPosix, umgebung.git);
-  const rolle = rolleFuer(relPosix, umgebung.verdrahtung.hooks);
   const bytes = daten ? daten.size : null;
   const g = daten
     ? dateiInhalt(abs, relPosix, ext, git, umgebung.git.vorhanden, bytes)
-    : { inhalt: { text: null, sprache: spracheVon(ext), gekuerzt: false, gesperrt: "unlesbar", ausgeblendeteZeilen: [] }, zeilen: null, zeilenende: null };
+    : { inhalt: { text: null, sprache: spracheVon(ext), gesperrt: "unlesbar", ausgeblendeteZeilen: [] }, zeilen: null, zeilenende: null, rohtext: null };
   if (g.fehler) umgebung.fehler.push(g.fehler);
-  const fm = ext === "md" && g.inhalt.text ? frontmatterLesen(g.inhalt.text) : null;
+  // SICHERHEIT (Sicherheits-Review + Nachpruefung, 23.08.2026): die STRUKTUR des
+  // Frontmatters kommt aus dem ROHTEXT (frontmatterLesen findet so das
+  // schliessende ---, auch wenn eine Wertzeile ein Zugang waere), die WERTE
+  // werden einzeln gesichert (frontmatterSichern). So leckt kein Zugang ueber das
+  // frontmatter-Feld, und die Regel wird korrekt als Dauer/Abruf klassifiziert.
+  // Die Beschreibung laeuft ueber g.rohtext: jede Stufe sichert ihren eigenen
+  // Ausgabetext (textSichern), und data.js sichert den Datensatz als Ganzes.
+  // (inhalt.text ist seit D1 null; g.rohtext verlaesst die Messung nicht.)
+  const fm = ext === "md" && g.rohtext ? frontmatterLesen(g.rohtext) : null;
+  // Die rolle wird NACH dem Frontmatter bestimmt: eine Regel mit Frontmatter
+  // laedt auf Abruf, ohne laedt dauerhaft (siehe rolleFuer). Darum erst hier.
+  const rolle = rolleFuer(relPosix, umgebung.verdrahtung.hooks, !!fm);
   const knoten = {
     id: "datei:" + relPosix,
     pfad: relPosix,
@@ -483,14 +653,14 @@ function dateiKnoten(abs, relPosix, umgebung) {
     geaendert: daten ? daten.mtime.toISOString() : null,
     git,
     rolle,
-    beschreibung: beschreibungFuer(relPosix, g.inhalt.text, {
+    beschreibung: beschreibungFuer(relPosix, g.rohtext, {
       rolle,
       ext,
       ansagen: umgebung.verdrahtung.ansagen,
       claudeMd: umgebung.claudeMd,
     }),
     inhalt: g.inhalt,
-    frontmatter: fm ? fm.felder : null,
+    frontmatter: fm ? frontmatterSichern(fm.felder) : null,
   };
   const v = umgebung.verdrahtung.hooks.get(name);
   if (v && relPosix.startsWith(".claude/")) knoten.verdrahtung = v;
@@ -612,4 +782,4 @@ function inventar(wurzel) {
   };
 }
 
-module.exports = { inventar, ZUGANGS_MUSTER, textSichern, beschreibungFuer };
+module.exports = { inventar, ZUGANGS_MUSTER, textSichern, beschreibungFuer, HART_MAX_BYTES };

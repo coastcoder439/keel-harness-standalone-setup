@@ -116,6 +116,26 @@ test("Lesen ist weiter gefasst als Schreiben -- aber nicht ueber die Wurzel hina
   assert.ok(pfadPruefen(WURZEL, "../oben.png", "lesen").fehler, "Lesen ausserhalb erlaubt");
 });
 
+test("Zugangsdateien werden auch beim LESEN verweigert -- nicht nur beim Schreiben", () => {
+  // Sonst liefe der generische Datei-Fallback (fs.readFile, ungefiltert) als
+  // Leseweg an der Sperrliste vorbei: GET /.env laege im Klartext offen.
+  for (const p of [".env", ".env.local", ".claude/settings.local.json", "privat.key", "server.pem", "secrets.json", "credentials.json"]) {
+    assert.ok(pfadPruefen(WURZEL, p, "lesen").fehler, "Lesen durchgelassen: " + p);
+  }
+  // Case-INSENSITIV: das Windows-Dateisystem trifft dieselbe Datei, egal wie
+  // geschrieben. .GIT/config und .Env muessen genauso verweigert werden.
+  for (const p of [".git/config", ".GIT/config", ".Git/config", ".ENV", ".claude/SETTINGS.LOCAL.JSON"]) {
+    assert.ok(pfadPruefen(WURZEL, p, "lesen").fehler, "Case-Variante durchgelassen: " + p);
+  }
+  // VERSCHACHTELTES .git/ ist genauso tabu wie das Wurzel-.git: jedes Projekt
+  // unter user-projects/ traegt in .git/config seine Remote-URL (ggf. mit Token).
+  for (const p of ["user-projects/repo/.git/config", "x/.GIT/config", "a/b/.git/HEAD"]) {
+    assert.ok(pfadPruefen(WURZEL, p, "lesen").fehler, "verschachteltes .git durchgelassen: " + p);
+  }
+  // Gegenprobe: .gitignore ist KEIN .git/-Innenleben und bleibt lesbar.
+  assert.ok(!pfadPruefen(WURZEL, ".gitignore", "lesen").fehler, ".gitignore faelschlich gesperrt");
+});
+
 test("ein leerer oder fehlender Pfad ist ein Fehler, kein Standardwert", () => {
   for (const p of [undefined, null, ""]) {
     const r = pfadPruefen(WURZEL, p, "lesen");
@@ -215,12 +235,50 @@ test("der Server liefert die Seite und setzt Kopfzeilen gegen Fremdinhalte", asy
   });
 });
 
-test("eine Datei mit etwas, das wie ein Zugang aussieht, wird nicht ausgeliefert", async () => {
+test("eine Zugangszeile wird beim Ausliefern maskiert, der Rest bleibt lesbar", async () => {
+  // SERVER-ZUERST (D1): eine einzelne Schluesselzeile verweigert nicht mehr die
+  // ganze Datei -- sie wird MASKIERT, genau wie frueher beim Einbetten und wie
+  // in der Messung. Der Klartext darf trotzdem NIE in der Antwort stehen.
   await mitServer(async ({ wb, url }) => {
-    fs.writeFileSync(path.join(wb, "docs", "zugang.md"), '# Zugang\n\npassword: "Qx7Zephir-Nordlicht"\n');
+    fs.writeFileSync(
+      path.join(wb, "docs", "zugang.md"),
+      '# Zugang\n\nEin harmloser Absatz.\n\npassword: "Qx7Zephir-Nordlicht"\n'
+    );
     const a = await fetch(url("/datei?pfad=docs%2Fzugang.md"));
-    assert.strictEqual(a.status, 403, "der Rohtext wurde ausgeliefert");
+    assert.strictEqual(a.status, 200, "die Datei wurde ganz verweigert statt zeilenweise maskiert");
     const j = await a.json();
-    assert.match(j.fehler, /Zugang/);
+    assert.ok(!j.text.includes("Qx7Zephir-Nordlicht"), "der Zugang steht im Klartext in der Antwort");
+    assert.ok(j.text.includes("[ausgeblendet:zugang]"), "die Maskierung fehlt");
+    assert.ok(j.text.includes("Ein harmloser Absatz."), "der harmlose Teil wurde mitverschluckt");
+    assert.ok(Array.isArray(j.ausgeblendeteZeilen) && j.ausgeblendeteZeilen.length >= 1, "ausgeblendeteZeilen fehlt");
+    // Auch die gerenderte .md-Fassung darf den Klartext nicht tragen.
+    assert.ok(typeof j.html === "string" && !j.html.includes("Qx7Zephir-Nordlicht"), "der Zugang steht im gerenderten HTML");
+  });
+});
+
+test("beim Ausliefern werden CRLF und LF gleich normalisiert (kein CR)", async () => {
+  // Diese Eigenschaft pruefte frueher die Messung am eingebetteten Text. Seit
+  // SERVER-ZUERST (D1) liefert serve.js den Rumpf -- also gehoert die Pruefung
+  // hierher: crlf.md und lf.md muessen denselben, CR-freien Text ergeben.
+  await mitServer(async ({ wb, url }) => {
+    const zeilen = ["# Titel", "", "Erste.", "Zweite."];
+    fs.writeFileSync(path.join(wb, "docs", "crlf.md"), zeilen.join("\r\n") + "\r\n");
+    fs.writeFileSync(path.join(wb, "docs", "lf.md"), zeilen.join("\n") + "\n");
+    const crlf = await (await fetch(url("/datei?pfad=docs%2Fcrlf.md"))).json();
+    const lf = await (await fetch(url("/datei?pfad=docs%2Flf.md"))).json();
+    assert.strictEqual(crlf.text.includes("\r"), false, "CR im ausgelieferten Text");
+    assert.strictEqual(crlf.text, lf.text, "CRLF und LF ergeben verschiedenen Text");
+  });
+});
+
+test("der generische Datei-Fallback liefert eine Zugangsdatei NICHT aus", async () => {
+  // Der Fallback liest roh (fs.readFile, ohne textSichern). Ohne die Sperrliste
+  // auf dem Leseweg laege GET /.env im Klartext offen.
+  await mitServer(async ({ wb, url }) => {
+    fs.writeFileSync(path.join(wb, ".env"), "API_KEY=Qx7-streng-geheim\n");
+    const a = await fetch(url("/.env"));
+    assert.notStrictEqual(a.status, 200, "die .env wurde ausgeliefert");
+    const roh = await a.text();
+    assert.ok(!roh.includes("Qx7-streng-geheim"), "der Zugang steht im Klartext in der Antwort");
   });
 });

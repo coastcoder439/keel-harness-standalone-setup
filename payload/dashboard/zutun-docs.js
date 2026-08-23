@@ -24,13 +24,40 @@ const path = require("path");
 //   bisZeile   > 0 begrenzt den gelesenen Kopf (rebuild-guide.md: 60)
 //   platzhalter true sucht zusaetzlich die Ausfuell-Marken (nur CLAUDE.md)
 // ---------------------------------------------------------------------------
+// Feste Quellen: docs/-Konventionen des Bausatzes und CLAUDE.md. Die
+// output-shape-Regel steht NICHT fest hier -- sie kann in jedem Unterordner von
+// .claude/rules/ liegen (keel, common, eigen) und wird zur Laufzeit gesucht
+// (regelDateiFinden), sonst meldete ein fremder Workspace einen falschen
+// "quelle-fehlt" und uebersaehe die echte Regel. [Review-Fund W]
 const QUELLEN = [
   { pfad: "docs/harness-issues.md", bisZeile: 0, platzhalter: false },
   { pfad: "docs/kit-backport.md", bisZeile: 0, platzhalter: false },
   { pfad: "docs/rebuild-guide.md", bisZeile: 60, platzhalter: false },
-  { pfad: ".claude/rules/keel/output-shape.md", bisZeile: 0, platzhalter: false },
   { pfad: "CLAUDE.md", bisZeile: 0, platzhalter: true },
 ];
+
+// output-shape.md irgendwo unter .claude/rules/ finden (rekursiv). Gibt den
+// rel. POSIX-Pfad zurueck oder null.
+function regelDateiFinden(wurzel, name) {
+  const start = path.join(wurzel, ".claude", "rules");
+  let treffer = null;
+  (function lauf(dir) {
+    if (treffer) return;
+    let eintraege;
+    try {
+      eintraege = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of eintraege.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (treffer) return;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) lauf(p);
+      else if (e.name === name) treffer = p;
+    }
+  })(start);
+  return treffer ? String(path.relative(wurzel, treffer)).split(path.sep).join("/") : null;
+}
 
 // Die leere Vorlage ist eine eigene Quelle: hier zaehlt nicht eine Zeile, sondern
 // dass die Tabellen NICHTS tragen.
@@ -137,7 +164,14 @@ function zuTunDoku(wurzel) {
     eintraege.push({ id: "zutundoku:" + laufend, text, datei, zeile, artCode });
   };
 
-  for (const q of QUELLEN) {
+  // Die feste Liste plus die zur Laufzeit gefundene output-shape-Regel (falls es
+  // sie gibt -- fehlt sie, wird sie NICHT als Fehler gemeldet, denn sie ist nicht
+  // in jedem Workspace vorhanden).
+  const outputShape = regelDateiFinden(wurzel, "output-shape.md");
+  const quellen = outputShape
+    ? [...QUELLEN, { pfad: outputShape, bisZeile: 0, platzhalter: false }]
+    : QUELLEN;
+  for (const q of quellen) {
     const gelesen = zeilenLesen(wurzel, q.pfad);
     if (gelesen.fehler) {
       fehler.push(gelesen.fehler);

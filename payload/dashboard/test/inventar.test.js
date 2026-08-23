@@ -334,7 +334,7 @@ test("verdrahtete Skripte tragen Ereignis und settings.json-Zeile", () => {
 // ---------------------------------------------------------------------------
 const ATTRAPPE = path.join(os.tmpdir(), "harness-tmp-inventar-" + process.pid);
 
-test("Attrappe: CRLF und LF, Kappung, Binaerdatei, Ausschluesse", (t) => {
+test("Attrappe: CRLF und LF, grosse Datei, Binaerdatei, Ausschluesse", (t) => {
   const zeilenText = ["# Titel", "", "Erste Zeile.", "Zweite Zeile."];
   fs.mkdirSync(path.join(ATTRAPPE, "node_modules"), { recursive: true });
   try {
@@ -348,12 +348,14 @@ test("Attrappe: CRLF und LF, Kappung, Binaerdatei, Ausschluesse", (t) => {
     const r = inventar(ATTRAPPE);
     const hol = (n) => r.dateien.find((d) => d.pfad === n);
 
-    // 1. CRLF und LF muessen DIESELBE Zeilenzahl und denselben eingebetteten Text ergeben.
+    // 1. CRLF und LF ergeben DIESELBE Zeilenzahl. Der Text selbst steht seit
+    //    SERVER-ZUERST (D1) NICHT mehr im Datensatz (inhalt.text ist null); die
+    //    CRLF/LF-Normalisierung beim Ausliefern prueft serve.test.js.
     assert.strictEqual(hol("crlf.md").zeilen, 4);
     assert.strictEqual(hol("lf.md").zeilen, 4);
     assert.strictEqual(hol("crlf.md").zeilen, hol("lf.md").zeilen);
-    assert.strictEqual(hol("crlf.md").inhalt.text, hol("lf.md").inhalt.text);
-    assert.strictEqual(hol("crlf.md").inhalt.text.includes("\r"), false, "kein CR im Datensatz");
+    assert.strictEqual(hol("crlf.md").inhalt.text, null, "kein Rumpf im Datensatz (D1)");
+    assert.strictEqual(hol("lf.md").inhalt.text, null, "kein Rumpf im Datensatz (D1)");
     assert.strictEqual(hol("crlf.md").zeilenende, "crlf");
     assert.strictEqual(hol("lf.md").zeilenende, "lf");
     assert.strictEqual(hol("crlf.md").bytes > hol("lf.md").bytes, true, "Gegenprobe: die Dateien sind wirklich verschieden gross");
@@ -363,11 +365,12 @@ test("Attrappe: CRLF und LF, Kappung, Binaerdatei, Ausschluesse", (t) => {
     assert.strictEqual(r.dateien.filter((d) => d.pfad.startsWith("node_modules/")).length, 0);
     assert.strictEqual(r.anzahl, 4, "crlf.md, lf.md, gross.txt, binaer.bin");
 
-    // 3. Kappung ueber 5000 Zeilen -- Zeilenzahl bleibt die ECHTE.
+    // 3. Grosse Datei: die Zeilenzahl bleibt die ECHTE, es gibt keinen Rumpf im
+    //    Datensatz und keine Kappung mehr (D1: serve.js liefert die ganze Datei
+    //    auf Klick, gedeckelt erst von der harten Obergrenze). Also NICHT gesperrt.
     assert.strictEqual(hol("gross.txt").zeilen, 5001);
-    assert.strictEqual(hol("gross.txt").inhalt.gekuerzt, true);
-    assert.strictEqual(hol("gross.txt").inhalt.text.split("\n").length, 400);
-    assert.strictEqual(hol("crlf.md").inhalt.gekuerzt, false);
+    assert.strictEqual(hol("gross.txt").inhalt.text, null);
+    assert.strictEqual(hol("gross.txt").inhalt.gesperrt, null, "eine grosse (aber nicht riesige) Datei bleibt abrufbar");
 
     // 4. NUL-Byte in den ersten 8 KB -> binaer, kein Text.
     assert.strictEqual(hol("binaer.bin").inhalt.gesperrt, "binaer");
@@ -392,17 +395,70 @@ test("inventar.js bleibt unter 800 Zeilen und ohne Nicht-ASCII (A75/A79)", () =>
 });
 
 // ---------------------------------------------------------------------------
-// Die Geheimnis-Luecken vom 23.08.2026
+// Frontmatter-Geheimnisse (Nachpruefung 23.08.2026)
 //
-// Diese Faelle stammen aus einer adversarischen Gegenpruefung, die sie
-// end-to-end bewiesen hat: ein echter Bau mit untergeschobenen Zugaengen,
-// danach die Suche im Erzeugnis. Ein Fund war als KRITISCH bestaetigt (der
-// private Schluessel), vier als hoch.
-//
-// Sie stehen hier als Tabelle, damit die naechste Aenderung am Filter sie
-// wieder mitnimmt -- und weil die Gegenprobe (was NICHT maskiert werden darf)
-// hier genauso zaehlt: ein Filter, der Richtiges unkenntlich macht, wird
-// abgeschaltet und schuetzt danach gar nichts.
+// Die zeilenweisen Geheimnis-Faelle (privater Schluessel, YAML-Folgezeile ...)
+// stehen in zugangsfilter.test.js. HIER geht es um das inventar-Eigene: das
+// frontmatter-FELD am Knoten. Es wird aus dem ROHTEXT geparst (damit die
+// Struktur erkannt bleibt) und die WERTE werden einzeln gesichert
+// (frontmatterSichern). Zwei Fallen, beide in der Nachpruefung belegt:
+//   - ein Zugang im Frontmatter-Wert darf nicht im Klartext an den Knoten,
+//   - ein leerer Geheimnis-Schluessel direkt vor --- darf die Struktur nicht
+//     zerstoeren (sonst Fehlklassifikation dauer/abruf).
 // ---------------------------------------------------------------------------
 
-const ZEILENUMBRUCH = String.fromCharCode(10);
+function fmWorkspace(dateien) {
+  const w = fs.mkdtempSync(path.join(os.tmpdir(), "harness-fm-"));
+  fs.writeFileSync(path.join(w, "CLAUDE.md"), "# T\n\nTest.\n");
+  for (const [rel, txt] of Object.entries(dateien)) {
+    const p = path.join(w, rel);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, txt);
+  }
+  return w;
+}
+
+test("ein Zugang im Frontmatter-Wert wird maskiert, nie Klartext am Knoten", () => {
+  const w = fmWorkspace({
+    ".claude/rules/eigen/regel.md": "---\ndescription: Eine Regel.\ndb_password: Sommer2026!Regen\n---\n\n# Regel\n\nText.\n",
+  });
+  try {
+    const knoten = inventar(w).dateien.find((d) => d.pfad === ".claude/rules/eigen/regel.md");
+    assert.ok(knoten, "Regeldatei nicht gefunden");
+    assert.strictEqual(knoten.frontmatter.db_password, "[ausgeblendet:zugang]", "der Zugang steht im Klartext im frontmatter-Feld");
+    assert.strictEqual(JSON.stringify(knoten).includes("Sommer2026!Regen"), false, "der Zugang leckt irgendwo im Knoten");
+    assert.strictEqual(knoten.rolle, "abruf-regel", "eine Regel MIT Frontmatter laedt auf Abruf");
+  } finally {
+    fs.rmSync(w, { recursive: true, force: true });
+  }
+});
+
+test("leerer Geheimnis-Schluessel vor --- zerstoert die Frontmatter-Struktur nicht", () => {
+  // Frueher maskierte textSichern die schliessende ---Zeile (WERT_FOLGT nach
+  // leerem "secret:") -> frontmatterLesen fand das Ende nicht -> Fehlklassifikation.
+  const w = fmWorkspace({
+    ".claude/rules/eigen/regelE.md": "---\nname: Regel E\ndescription: Abrufbar.\nsecret:\n---\n\n# Regel E\n\nInhalt.\n",
+  });
+  try {
+    const knoten = inventar(w).dateien.find((d) => d.pfad === ".claude/rules/eigen/regelE.md");
+    assert.ok(knoten, "Regeldatei nicht gefunden");
+    assert.strictEqual(knoten.rolle, "abruf-regel", "Struktur verloren -> als dauer-regel fehlklassifiziert");
+    assert.strictEqual(knoten.frontmatter.description, "Abrufbar.", "Frontmatter-Feld nicht gelesen");
+  } finally {
+    fs.rmSync(w, { recursive: true, force: true });
+  }
+});
+
+test("eine Regel OHNE Frontmatter bleibt dauer-regel (Gegenprobe)", () => {
+  const w = fmWorkspace({
+    ".claude/rules/eigen/dauer.md": "# Dauerregel\n\nGilt in jeder Sitzung.\n",
+  });
+  try {
+    const knoten = inventar(w).dateien.find((d) => d.pfad === ".claude/rules/eigen/dauer.md");
+    assert.ok(knoten, "Regeldatei nicht gefunden");
+    assert.strictEqual(knoten.rolle, "dauer-regel");
+    assert.strictEqual(knoten.frontmatter, null, "ohne Frontmatter darf kein frontmatter-Feld entstehen");
+  } finally {
+    fs.rmSync(w, { recursive: true, force: true });
+  }
+});

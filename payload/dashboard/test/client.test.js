@@ -264,6 +264,15 @@ test("jeder Datenwert, der in HTML eingesetzt wird, geht durch HD.esc", () => {
       // eine mitten durchgeschnittene Bedingung, kein eigener Ausdruck.
       if (!ausdruck || !ausgeglichen(ausdruck)) continue;
       if (/\besc\s*\(/.test(ausdruck)) continue;
+      // EINE sanktionierte Ausnahme, benannt und begruendet: d.html ist die
+      // Ausgabe von markdownZuHtml (serve.js liefert sie zu einer .md mit).
+      // Dieser Renderer escaped den GESAMTEN Quelltext, BEVOR ein Parser ihn
+      // sieht -- ein <script> aus einer Datei kommt als Text an, nie als Element
+      // (belegt in markdown.test.js, "ein script-Tag erscheint als Text").
+      // Genau diese HTML MUSS roh in innerHTML, sonst erschienen die
+      // Markdown-Tags als Text. Fruehere Fassung: HD.D.markdown[...] (durch die
+      // HD.*-Ausnahme gedeckt); seit Server-zuerst kommt sie als d.html.
+      if (ausdruck === "d.html" && /class="md"/.test(z)) continue;
       // Die UNSICHERE Zuweisung schlaegt die sichere. Derselbe Name kommt in
       // vier Dateien mehrfach vor, und dieses Register kennt keine
       // Gueltigkeitsbereiche: waere die sichere Zuweisung staerker, wuerde ein
