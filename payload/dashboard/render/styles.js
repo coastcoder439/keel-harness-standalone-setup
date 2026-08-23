@@ -559,6 +559,27 @@ const BAUSTEINE = `
   background:linear-gradient(to bottom,transparent,var(--card));pointer-events:none}
 .vorhang-knopf{font-size:var(--text-xs);color:var(--primary);padding:6px 0}
 /* CopyText: Rueckmeldung 1,5 s, vom Skript ueber data-kopiert gesetzt. */
+/* Der Editor. Er ersetzt den Inhalt vollstaendig -- nebeneinander waere in
+   einer 320-px-Spalte unlesbar, und der Vergleich ist nicht der Zweck. */
+.editor{display:flex;flex-direction:column;gap:8px}
+.editor textarea{width:100%;min-height:min(60vh,520px);resize:vertical;
+  padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-md);
+  background:var(--muted);color:var(--foreground);
+  font-family:var(--mono);font-size:var(--text-xs);line-height:1.6;
+  tab-size:2}
+.editor textarea:focus{outline:none;border-color:var(--ring);
+  box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 30%,transparent)}
+.editor textarea:disabled{opacity:.6}
+.editor-leiste{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.editor-leiste button{padding:6px 12px;border:1px solid var(--border);
+  border-radius:var(--radius-md);background:var(--card);color:var(--foreground);
+  font:inherit;font-size:var(--text-xs);cursor:pointer}
+.editor-leiste button:hover{background:var(--accent)}
+.editor-leiste .knopf-haupt{background:var(--primary);color:var(--primary-foreground);
+  border-color:var(--primary);font-weight:500}
+.editor-leiste .knopf-haupt:hover{opacity:.9;background:var(--primary)}
+.editor-pfad{margin-left:auto;color:var(--muted-foreground);font-size:var(--text-xs)}
+
 /* Die Einblendung nach dem Kopieren. Sie trug bis zum 23.08.2026 die
    KNOPF-Klasse .kopieren und eine Klasse .sichtbar, die es im Stylesheet
    ueberhaupt nicht gab: die Bestaetigung erschien als leerer Rahmen am

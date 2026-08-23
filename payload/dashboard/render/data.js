@@ -564,7 +564,11 @@ function daten(m, regelDaten) {
   // Erklaersatz ohne Zahl ist Dekoration; eine Zahl ohne Satz ist ein Raetsel.
   const werte = {
     workspace: String(m.wurzel || "").split(/[\\/]/).filter(Boolean).pop(),
-    zweck: zweckAusClaudeMd(m),
+    // Kein Text aus der CLAUDE.md des Workspace. Das Dashboard gehoert zum
+    // Harness-Bausatz und laeuft in JEDER Installation -- eine Ueberschrift,
+    // die eine bestimmte Zeile in einer bestimmten CLAUDE.md sucht, ist beim
+    // naechsten Empfaenger leer oder falsch.
+    zweck: "",
     gemessen: datum(m.gemessenAm),
     n: null, doku: zahlen.zutunDoku, skripte: zahlen.hookSkripte,
     dateien: zahlen.skillDateien, token: zahl(zahlen.token), offen: zahlen.reposOffen,
@@ -697,16 +701,5 @@ function zahlFuerSeite(id, z) {
   return k[id] != null ? zahl(k[id]) : null;
 }
 
-// Den Zweck des Workspace aus der CLAUDE.md ziehen -- nicht erfinden.
-function zweckAusClaudeMd(m) {
-  const datei = ((m.inventar && m.inventar.dateien) || []).find((d) => d.pfad === "CLAUDE.md");
-  const text = datei && datei.inhalt && datei.inhalt.text;
-  if (!text) return "";
-  const zeile = text.split(/\r?\n/).find((z) => /\*\*Zweck dieses Workspace\*\*/.test(z));
-  if (!zeile) return "";
-  const nach = zeile.split("—").slice(1).join("—").trim();
-  const satz = nach.split(/;|\.\s/)[0].trim();
-  return satz ? satz.charAt(0).toUpperCase() + satz.slice(1) + "." : "";
-}
 
 module.exports = { daten, kantenIndex, beschreibungVon, inhaltVon, spracheVon };

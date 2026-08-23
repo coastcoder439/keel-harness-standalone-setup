@@ -272,6 +272,34 @@ HD.inhaltHTML = function (e, inline) {
       + "</span>"
     : "";
 
+  // Der Bearbeiten-Knopf erscheint NUR, wenn die Seite von einem Server kommt.
+  // Als Datei geoeffnet (file:) kann nichts zurueckgeschrieben werden -- ein
+  // Knopf, der dann nichts tut, waere eine Luege. Wer die Seite weitergibt,
+  // gibt keinen Schreibzugang mit.
+  if (HD.serverModus() && HD.bearbeitbar(e.pfad)) {
+    umschalter += ' <span class="ansicht-umschalter">'
+      + '<button data-bearbeiten="' + HD.esc(e.pfad) + '">' + HD.esc(HD.W.bearbeiten) + "</button>"
+      + "</span>";
+  }
+
+  // Im Bearbeiten-Modus ersetzt das Textfeld den Inhalt vollstaendig.
+  if (HD.S.bearbeitet === e.pfad) {
+    return HD.abschnitt(
+      "inhalt",
+      HD.W.dateiinhalt + " · " + HD.esc(e.pfad),
+      '<div class="editor">'
+        + '<textarea id="editor-feld" spellcheck="false" aria-label="' + HD.esc(e.pfad) + '">'
+        + HD.esc(HD.S.entwurf != null ? HD.S.entwurf : i.text)
+        + "</textarea>"
+        + '<div class="editor-leiste">'
+        + '<button class="knopf-haupt" data-speichern="' + HD.esc(e.pfad) + '">' + HD.esc(HD.W.speichern) + "</button>"
+        + '<button data-bearbeiten-aus="1">' + HD.esc(HD.W.abbrechen) + "</button>"
+        + '<span class="editor-pfad mono">' + HD.esc(e.pfad) + "</span>"
+        + "</div></div>",
+      true
+    );
+  }
+
   var koerper;
   if (istMd && !quelltextAn) {
     koerper = '<div class="md">' + (HD.D.markdown[e.pfad] || HD.esc(i.text)) + "</div>";

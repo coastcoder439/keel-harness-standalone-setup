@@ -161,6 +161,9 @@ test("jede aufgerufene eigene Funktion ist im zusammengesetzten Skript erklaert"
     "decodeURIComponent", "parseInt", "parseFloat", "isNaN", "undefined", "NaN",
     "Infinity", "alert", "getComputedStyle", "matchMedia", "CustomEvent", "Event",
     "IntersectionObserver", "MutationObserver", "URL", "URLSearchParams", "TextDecoder",
+    // Der Editor braucht sie: fetch spricht mit dem Vorschau-Server, confirm
+    // fragt vor dem Verwerfen ungespeicherter Aenderungen nach.
+    "fetch", "confirm", "encodeURI", "escape", "unescape", "structuredClone",
   ]);
 
   const aufgerufen = new Set();
