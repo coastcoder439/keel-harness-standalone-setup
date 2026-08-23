@@ -27,6 +27,16 @@ const path = require("path");
 const url = require("url");
 const { spawnSync } = require("child_process");
 
+// Der Geheimnis-Filter liegt seit dem 23.08.2026 in einem eigenen Modul:
+// eigene Aufgabe, eigene Gegenproben, drei Aufrufer.
+const {
+  ZUGANGS_MUSTER,
+  AUSGEBLENDET,
+  MINI_SPERRLISTE,
+  textSichern,
+  sperrgrund,
+} = require("./zugangsfilter.js");
+
 // ---------------------------------------------------------------------------
 // KONSTANTEN
 // ---------------------------------------------------------------------------
@@ -44,39 +54,6 @@ const { spawnSync } = require("child_process");
 // abgeschaltet und schuetzt danach gar nichts. Deshalb: ein Zugang wird nur
 // erkannt, wenn der WERT wie ein Geheimnis aussieht -- nicht, wenn er ein
 // Verweis darauf ist (Umgebungsvariable, Platzhalter, CSS-Eigenschaft).
-const ZUGANGS_MUSTER = [
-  // Das ["']? vor dem Doppelpunkt faengt den JSON-Fall "secret": "..." -- ohne
-  // es scheiterte der Ausdruck am schliessenden Anfuehrungszeichen des Schluessels.
-  /(api[_-]?key|token|secret|passw(or)?d)["']?\s*[:=]\s*["']?(?!process\.env|os\.environ|getenv|System\.getenv|import\.meta|Deno\.env|ENV\[|\$|\{|<|--|\.\.\.|xxx|XXX|YOUR|DEIN|your-|dein-|null\b|undefined\b|true\b|false\b)[A-Za-z0-9_\-+/=]{12,}/i,
-  /ghp_[A-Za-z0-9]{20,}/,
-  /github_pat_[A-Za-z0-9_]{20,}/,
-  /gho_|ghu_|ghs_|ghr_/,
-  /sk-[A-Za-z0-9]{20,}/,
-  /sk_(live|test)_[A-Za-z0-9]{10,}/,
-  /AKIA[0-9A-Z]{16}/,
-  /xox[baprs]-[A-Za-z0-9-]{10,}/,
-  /AIza[0-9A-Za-z_-]{20,}/,
-  /glpat-[0-9A-Za-z_-]{16,}/,
-  /eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/,
-  /Bearer\s+[A-Za-z0-9._-]{10,}/,
-  /npm_[A-Za-z0-9]{20,}/,
-  /-----BEGIN [A-Z ]*PRIVATE KEY/,
-  /https?:\/\/[^/\s:@]+:[^/\s@]+@/,
-];
-
-// Fallback NUR fuer den Fall, dass git fehlt -- dann greift Riegel 1 nicht, und
-// ohne diese Liste laege settings.local.json im Klartext im Datensatz.
-const MINI_SPERRLISTE = [
-  /(^|\/)settings\.local\.json$/i,
-  /(^|\/)\.env($|\.)/i,
-  /\.key$/i,
-  /\.pem$/i,
-  /(^|\/)secrets\.json$/i,
-  /(^|\/)credentials\.json$/i,
-  /service-account[^/]*\.json$/i,
-];
-
-const AUSGEBLENDET = "[ausgeblendet:zugang]";
 
 const GRENZE_BYTES = 512 * 1024; // darunter wird voll eingebettet
 const GRENZE_ZEILEN = 5000; // darunter wird voll eingebettet
@@ -132,23 +109,6 @@ const zeileFinden = (zeilen, nadel) => {
 };
 
 const beleg = (datei, von, bis) => (bis && bis !== von ? `${datei}:${von}-${bis}` : `${datei}:${von}`);
-
-// ---------------------------------------------------------------------------
-// RIEGEL 2 -- textSichern
-// ---------------------------------------------------------------------------
-// Ersetzt jede Zeile, die ein Zugangsmuster trifft, durch einen CODE und merkt
-// sich die Zeilennummer. Kein Prosatext: was der Leser sieht, setzt render/data.js.
-function textSichern(str) {
-  if (str === null || str === undefined) return { text: "", ausgeblendeteZeilen: [] };
-  const zeilen = zeilenAufteilen(typeof str === "string" ? str : String(str));
-  const ausgeblendeteZeilen = [];
-  for (let i = 0; i < zeilen.length; i++) {
-    if (!ZUGANGS_MUSTER.some((m) => m.test(zeilen[i]))) continue;
-    zeilen[i] = AUSGEBLENDET;
-    ausgeblendeteZeilen.push(i + 1);
-  }
-  return { text: zeilen.join("\n"), ausgeblendeteZeilen };
-}
 
 // ---------------------------------------------------------------------------
 // GIT-STATUS -- genau zwei Laeufe, wie in 7.1 festgelegt
@@ -451,15 +411,6 @@ function beschreibungFuer(pfad, inhalt, kontext) {
   }
   if (!treffer) return null;
   return { ...treffer, weitereQuellen };
-}
-
-// ---------------------------------------------------------------------------
-// INHALT + RIEGEL 1 (7.3)
-// ---------------------------------------------------------------------------
-function sperrgrund(relPosix, git, gitVorhanden) {
-  if (git === "ignoriert") return "ignoriert";
-  if (!gitVorhanden && MINI_SPERRLISTE.some((m) => m.test(relPosix))) return "sperrliste";
-  return null;
 }
 
 function dateiInhalt(abs, relPosix, ext, git, gitVorhanden, bytes) {
