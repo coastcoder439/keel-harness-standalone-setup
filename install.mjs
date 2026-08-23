@@ -216,6 +216,14 @@ const DASHBOARD = [
   "test/styles.test.js",
   "test/icons.test.js",
   "test/markdown.test.js",
+  "test/data.test.js",
+  "test/shell.test.js",
+  "test/client.test.js",
+  // Der Meta-Test: haelt fest, dass jedes Modul einen Test hat, keins zu gross
+  // ist und nichts geladen wird, was es nicht gibt. Er prueft den Bestand,
+  // nicht das Verhalten -- und faengt damit genau die Luecke ab, die diese
+  // Liste hier erzeugt, wenn sie nicht gepflegt wird.
+  "test/vollstaendigkeit.test.js",
   "README.md",
 ];
 

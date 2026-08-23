@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-23T00:55:24.957Z",
-  "posten": 70,
+  "gebautAm": "2026-08-23T03:00:10.385Z",
+  "posten": 75,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -72,12 +72,20 @@
       "sha256": "6cd123ffa8637b45"
     },
     {
+      "datei": "checks/dashboard-liste.mjs",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 4470,
+      "sha256": "e524381b3f07c880"
+    },
+    {
       "datei": "checks/frisch-geklont.mjs",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 10830,
-      "sha256": "2701a8aa64c88906"
+      "bytes": 15424,
+      "sha256": "32f542f464daada2"
     },
     {
       "datei": "checks/paket-manifest.mjs",
@@ -92,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 74850,
-      "sha256": "761bf0ba704ea0ba"
+      "bytes": 75244,
+      "sha256": "0607b30f77526752"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -364,8 +372,8 @@
       "herkunft": "zustand/messen.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 54749,
-      "sha256": "abd66ee525db9ba3"
+      "bytes": 54750,
+      "sha256": "43e0573c7de2640a"
     },
     {
       "datei": "payload/dashboard/render/client/core.js",
@@ -380,8 +388,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15835,
-      "sha256": "4a23dfd8fdd80f85"
+      "bytes": 15843,
+      "sha256": "7c9130e7344e7d56"
     },
     {
       "datei": "payload/dashboard/render/client/pages.js",
@@ -436,8 +444,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 39011,
-      "sha256": "653034d78e405dd6"
+      "bytes": 39004,
+      "sha256": "0932891d942af95d"
     },
     {
       "datei": "payload/dashboard/render/worte.js",
@@ -454,6 +462,22 @@
       "gesaeubert": 2,
       "bytes": 15070,
       "sha256": "7070b2287c439550"
+    },
+    {
+      "datei": "payload/dashboard/test/client.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 14426,
+      "sha256": "942d3ca114166b86"
+    },
+    {
+      "datei": "payload/dashboard/test/data.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 11302,
+      "sha256": "305100b516f6a642"
     },
     {
       "datei": "payload/dashboard/test/hooks-detail.test.js",
@@ -488,6 +512,14 @@
       "sha256": "694d87ae7f868777"
     },
     {
+      "datei": "payload/dashboard/test/shell.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 11055,
+      "sha256": "d5784be447fe554c"
+    },
+    {
       "datei": "payload/dashboard/test/styles.test.js",
       "herkunft": null,
       "quellordner": "bausatz",
@@ -502,6 +534,14 @@
       "gesaeubert": 0,
       "bytes": 15617,
       "sha256": "0fd512ce6a5c2805"
+    },
+    {
+      "datei": "payload/dashboard/test/vollstaendigkeit.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 11729,
+      "sha256": "ee6032fb5daa91d6"
     },
     {
       "datei": "payload/dashboard/test/worte.test.js",
