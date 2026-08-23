@@ -25,10 +25,19 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
+
+// Die vier Erweiterungen von v2. Sie liegen bewusst in eigenen Dateien: measure.js
+// ist mit ueber tausend Zeilen schon am Rand des Zumutbaren, und der Dateibaum,
+// die Hook-Einzelheiten, die Offenpunkte aus Dokumenten und die Kanten sind je
+// fuer sich pruefbar. Hier werden sie nur eingehaengt.
+const { inventar } = require("./inventar.js");
+const { hooksDetail } = require("./hooks-detail.js");
+const { zuTunDoku } = require("./zutun-docs.js");
+const { verwandt } = require("./verwandt.js");
 const { hookSkripte, kontrollprobe, gruppeEinordnen, dauerRegelBeleg } = require("./classify");
 const bordmittel = require("./inventory");
 
-const SCHEMA = "harness.zustand.v1";
+const SCHEMA = "harness.zustand.v2";
 const MAX_BESCHREIBUNG = 200; // Zeichen je Posten -- die Seite zeigt Bestand, nicht Handbuecher
 
 // ---------------------------------------------------------------------------
@@ -45,7 +54,13 @@ function wurzelSuchen(start) {
   return null;
 }
 
-const rel = (wurzel, p) => path.relative(wurzel, p) || ".";
+// POSIX, immer. path.relative liefert unter Windows Backslashes, und die landeten
+// bisher in 31 Pfadfeldern des Datensatzes -- gemessen am 23.08.2026. Folge: die
+// Kennung ".claude\rules\keel\tools.md" aus diesem Bereich passte nie zu
+// "datei:.claude/rules/keel/tools.md" aus dem Dateibaum, also fand keine
+// Verknuepfung ihr Ziel. Ein Trennzeichen, zwei Wahrheiten -- das repariert man
+// an der Quelle, nicht an jeder Vergleichsstelle.
+const rel = (wurzel, p) => (path.relative(wurzel, p) || ".").split(path.sep).join("/");
 
 // ---------------------------------------------------------------------------
 // ECC-Loader holen. Sein Modulrumpf liest process.argv[2] als Port -- wuerde also
@@ -198,7 +213,10 @@ function gruppe({ id, titel, ordner, art, laden, notiz, wurzel, hooks }) {
   return {
     id,
     titel,
-    ordner,
+    // Der Ordner wird ANGEZEIGT, also relativ und in POSIX-Schreibweise. Ein
+    // absoluter Windows-Pfad in der Oberflaeche verraet den Benutzernamen und
+    // hilft niemandem -- die Wurzel steht ohnehin einmal im Kopf der Seite.
+    ordner: wurzel ? rel(wurzel, ordner) : String(ordner).split("\\").join("/"),
     anzahl: posten.length,
     plattenzaehlung: platte,
     status,
@@ -338,7 +356,9 @@ function werkzeugGruppe(wurzel) {
   const datei = path.join(wurzel, rel);
   const leer = {
     id: "werkzeuge", titel: "Werkzeug-Landschaft",
-    ordner: datei, anzahl: 0, plattenzaehlung: null, einordnung: null, posten: [],
+    // rel, nicht der absolute Pfad: die Oberflaeche zeigt "docs/tool-landscape.md",
+    // nicht den halben Benutzerordner.
+    ordner: rel, anzahl: 0, plattenzaehlung: null, einordnung: null, posten: [],
   };
   if (!fs.existsSync(datei)) {
     return { ...leer, status: "fehlt", grund: `${rel} fehlt -- die Vorlage kommt mit dem Bausatz.`,
@@ -654,12 +674,17 @@ function waechterMessen(wurzel, harness) {
 // Werkbank steht -- den Ordner gibt es dort nicht.
 const repoPfad = (wurzel, name) => (name === path.basename(wurzel) ? "." : name);
 
-function repoStatusMessen(wurzel) {
+function repoStatusMessen(wurzel, mitGithub) {
   const skript = path.join(wurzel, ".claude", "repo-status.js");
   if (!fs.existsSync(skript)) {
     return { status: "fehlt", grund: "repo-status.js nicht vorhanden", quelle: null, repos: [] };
   }
-  const lauf = spawnSync(process.execPath, [skript], { cwd: wurzel, encoding: "utf8", timeout: 120000 });
+  // Vorgabe ist der lokale Lauf. Gemessen am 23.08.2026: mit Netzabfrage 51,8 s,
+  // ohne 10,0 s -- der Unterschied sind zwanzig serielle Rundreisen zu GitHub.
+  // Ein Bedienpult, das eine knappe Minute laedt, wird nicht benutzt. Der
+  // Fernstand steht dann ehrlich als "nicht abgefragt" da, statt geraten zu werden.
+  const argumente = mitGithub === true ? [skript] : [skript, "--lokal"];
+  const lauf = spawnSync(process.execPath, argumente, { cwd: wurzel, encoding: "utf8", timeout: 120000 });
   if (lauf.error || lauf.status !== 0) {
     return {
       status: "unlesbar",
@@ -679,7 +704,12 @@ function repoStatusMessen(wurzel) {
     }
     const kopf = zeile.match(/^ {2}(\S.*)$/);
     if (kopf && !kopf[1].startsWith("(")) {
-      aktuell = { name: kopf[1].split("  <-")[0].trim(), felder: {} };
+      // POSIX, nicht Windows-Schreibweise. repo-status.js gibt "user-projects\enerbolt"
+      // aus; unnormalisiert landeten so Backslash-Pfade im Datensatz UND die
+      // Kennung passte nicht zu der aus dem Dateibaum ("repo:enerbolt"), worauf
+      // neunzehn Kanten als tot verworfen wurden, obwohl ihr Ziel existiert.
+      const roh = kopf[1].split("  <-")[0].trim().split("\\").join("/");
+      aktuell = { name: roh, kurzname: roh.split("/").filter(Boolean).pop(), felder: {} };
       repos.push(aktuell);
     }
   }
@@ -724,12 +754,22 @@ function repoStatusMessen(wurzel) {
     const sync = r.felder["Sync"] || "";
     const unges = parseInt((r.felder["Ungesichert"] || "").replace(/\D.*$/, ""), 10);
     const ungesichert = Number.isNaN(unges) ? null : unges;
-    const gesichert = /synchron -- alles gepusht/.test(sync);
+    // Zwei Wortlaute bedeuten "gesichert": der mit Netzabfrage ("alles gepusht")
+    // und der ohne ("synchron zum zuletzt bekannten Fernstand"). Ohne die zweite
+    // Form meldete das Dashboard nach der Umstellung auf den lokalen Lauf
+    // neunzehn Repos als ungesichert, die nachweislich synchron sind -- weil
+    // "(nicht abgefragt)" nun einmal das Wort "nicht" enthaelt. Ein Alarm, der
+    // grundlos schlaegt, wird weggeklickt; danach wird auch der echte weggeklickt.
+    const gesichert = /synchron -- alles gepusht/.test(sync) || /^synchron zum zuletzt bekannten/.test(sync);
+    // Wurde der Fernstand ueberhaupt abgefragt? Das ist eine eigene Auskunft und
+    // kein Mangel -- sie gehoert an die Oberflaeche, nicht in den Status.
+    const fernAbgefragt = !/nicht abgefragt/.test(sync);
     return {
       name: r.name,
       git,
       github: r.felder["GitHub-Repo"] || null,
       sync,
+      fernAbgefragt,
       ungesichert,
       // DREI Lagen, nicht zwei. Bis 02.08.2026 fielen "gar kein Git" und
       // "Commits nicht gepusht" in denselben Topf -- und die abgeleitete
@@ -1001,7 +1041,7 @@ function messen(optionen = {}) {
       kontext: kontextMessen(wurzel, harness),
       bestand: bestandMessen(wurzel, harness),
       waechter: waechterMessen(wurzel, harness),
-      sicherung: repoStatusMessen(wurzel),
+      sicherung: repoStatusMessen(wurzel, optionen.mitGithub === true),
       pruefer: { status: "ok", laeufe: prueferMessen(wurzel) },
       rollen: rollenMessen(wurzel),
       readiness: readinessMessen(wurzel, optionen.mitGithub === true),
@@ -1009,6 +1049,45 @@ function messen(optionen = {}) {
   };
 
   daten.bereiche.verlauf = verlaufMessen(wurzel, daten.bereiche.sicherung.repos || []);
+
+  // --------------------------------------------------------------------------
+  // v2 — der Dateibaum, die Hook-Einzelheiten, die Offenpunkte aus Dokumenten
+  // und die Kanten.
+  //
+  // Alles vier liefert CODES, keine deutschen Saetze: die Oberflaeche formuliert,
+  // die Messung misst. Wer hier einen fertigen Satz einbaut, hat ihn danach an
+  // zwei Orten zu pflegen -- und genau daraus entstand die alte Wortliste, die
+  // niemand mehr pruefen konnte.
+  // --------------------------------------------------------------------------
+  daten.inventar = inventar(wurzel);
+  daten.hooks = hooksDetail(wurzel, { proben: optionen.proben === true });
+  daten.zuTunDoku = zuTunDoku(wurzel);
+
+  // Die Kanten zuletzt: sie pruefen jede Ziel-Kennung gegen den echten Bestand,
+  // also muss der Bestand vorher stehen. Eine Kante ins Leere ist ein Befund und
+  // landet in fehler[], nicht in kanten[] -- sonst zeigt die Oberflaeche einen
+  // Sprung an, der nirgendwohin fuehrt.
+  // Die Repo-Kennungen kommen aus ZWEI Quellen, die dasselbe Repo verschieden
+  // benennen: der Dateibaum kennt es als Blatt ("repo:enerbolt"), der
+  // Sicherungsbericht als Pfad ("user-projects/enerbolt"). Beide Formen gelten,
+  // sonst faellt die Haelfte der Kanten durch.
+  const repoKennungen = [];
+  for (const r of daten.bereiche.sicherung.repos || []) {
+    repoKennungen.push("repo:" + r.name);
+    if (r.kurzname) repoKennungen.push("repo:" + r.kurzname);
+  }
+  (function blaetter(knoten) {
+    if (!knoten) return;
+    if (knoten.typ === "repo" && knoten.id) repoKennungen.push(knoten.id);
+    for (const k of knoten.kinder || []) blaetter(k);
+  })(daten.inventar.baum);
+
+  daten.verwandt = verwandt(wurzel, {
+    dateiIds: new Set((daten.inventar.dateien || []).map((d) => d.id)),
+    hookIds: (daten.hooks.eintraege || []).map((h) => h.id),
+    repoIds: [...new Set(repoKennungen)],
+    commitIds: (daten.bereiche.verlauf.eintraege || []).map((e) => "commit:" + e.hash),
+  });
 
   // Der Bereich erbt den schlechtesten Lauf -- UND dessen Begruendung.
   // Ohne die zweite Haelfte stand hier "befund" ohne ein Wort dazu; die
