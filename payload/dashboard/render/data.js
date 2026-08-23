@@ -124,6 +124,35 @@ function kantenIndex(verwandtDaten) {
 }
 
 // ---------------------------------------------------------------------------
+// EINE DATEI, EINE BESCHREIBUNG
+//
+// Vorher leitete jede Seite ihre eigene ab: "Dateien" die gerankte aus
+// inventar.js, "Hooks" die statusMessage aus settings.json, "Session-Kontext"
+// einen Satz ueber die Ladeart. Wer danger-guard.js auf drei Seiten sah, las
+// dreimal etwas anderes und musste raten, welche Fassung stimmt -- gemessen am
+// 23.08.2026: 15 von 25 mehrfach gezeigten Dateien wichen ab.
+//
+// Jetzt gibt es EINEN Ort. Wer einen Pfad hat, schlaegt hier nach. Was eine
+// Seite sonst noch weiss, ist eine ANDERE Frage und bekommt ein eigenes Feld
+// mit eigenem Label -- "Ansage in der Statusleiste" ist keine Beschreibung des
+// Skripts, sondern eine Eigenschaft seiner Verdrahtung.
+function beschreibungsIndex(m) {
+  const nachPfad = new Map();
+  for (const d of ((m.inventar && m.inventar.dateien) || [])) {
+    nachPfad.set(d.pfad, beschreibungVon(d.beschreibung, d.rolle));
+  }
+  return {
+    // Ohne Pfad oder ohne Datei im Baum: null. KEIN Ersatz aus der aufrufenden
+    // Seite -- sonst entstuende genau die Abweichung wieder, die dieser Index
+    // beseitigt.
+    fuer(pfad) {
+      if (!pfad) return null;
+      return nachPfad.get(pfad) || null;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Die Seiten. Jede Funktion nimmt die Messung und gibt Eintraege zurueck.
 // ---------------------------------------------------------------------------
 
@@ -157,11 +186,15 @@ function dateiEintraege(m, kanten) {
   });
 }
 
-function hookEintraege(m, kanten) {
+function hookEintraege(m, kanten, beschreibungen) {
   const h = m.hooks || { eintraege: [] };
   const raus = (h.eintraege || []).map((e) => {
     const wirkung = WIRKUNG[e.wirkung] || { wort: e.wirkung, erklaerung: null };
-    const beschr = e.ansage || (e.kopfkommentar && e.kopfkommentar.text) || null;
+    // Die Beschreibung kommt von der DATEI, nicht aus settings.json. Die
+    // statusMessage ist eine Fortschrittsanzeige ("danger-guard (zerstoerende
+    // Befehle)"), kein Satz darueber, was das Skript tut.
+    const ausDatei = beschreibungen.fuer(e.pfad);
+    const beschr = (ausDatei && ausDatei.text) || (e.kopfkommentar && e.kopfkommentar.text) || null;
     return {
       id: e.id,
       seite: "hooks",
@@ -186,11 +219,14 @@ function hookEintraege(m, kanten) {
           : e.probe && typeof e.probe.exit === "number" && e.probe.exit !== 0
             ? "befund"
             : "ok",
-      beschreibung: {
+      // Die Beschreibung kommt von der DATEI, ueber den Index -- nicht aus
+      // settings.json. Die statusMessage dort ist eine Fortschrittsanzeige
+      // ("danger-guard (zerstoerende Befehle)"), kein Satz darueber, was das
+      // Skript tut. Sie steht jetzt als eigene Eigenschaft in der Liste.
+      beschreibung: ausDatei || {
         text: beschr,
-        quelle: e.ansage ? QUELLE.statusmessage : (e.kopfkommentar ? QUELLE.kopfkommentar : null),
-        beleg: e.ansage ? ".claude/settings.json:" + e.settingsZeile
-             : (e.kopfkommentar ? e.pfad + ":" + e.kopfkommentar.von + "-" + e.kopfkommentar.bis : null),
+        quelle: e.kopfkommentar ? QUELLE.kopfkommentar : null,
+        beleg: e.kopfkommentar ? e.pfad + ":" + e.kopfkommentar.von + "-" + e.kopfkommentar.bis : null,
       },
       // Die Liste zeigt fuenf Spalten; alles Weitere steht im Detail. Neun
       // Spalten auf schmaler Flaeche sind keine Uebersicht, sondern eine Wand.
@@ -210,6 +246,13 @@ function hookEintraege(m, kanten) {
         feld(UI.timeout, e.timeout != null ? e.timeout + " s" : null, { mono: true }),
         feld(UI.asynchron, e.asynchron === true ? "ja" : null),
         feld(UI.wirkung, wirkung.wort, { beleg: e.wirkungBeleg, hinweis: wirkung.erklaerung }),
+        // Eigene Zeile mit eigenem Label. Die statusMessage aus settings.json
+        // ist eine Fortschrittsanzeige ("danger-guard (zerstoerende Befehle)"),
+        // keine Beschreibung des Skripts -- sie stand bis zum 23.08.2026 im
+        // Beschreibungs-Feld und wich dadurch von der Dateiseite ab.
+        feld(UI.ansageStatusleiste, e.ansage, {
+          beleg: e.settingsZeile ? ".claude/settings.json:" + e.settingsZeile : null,
+        }),
         feld(UI.ausloeser, (e.ausloeser || []).map((a) => a.wort).join(" · ") || null, { mono: true }),
         feld(UI.settingsZeile, e.settingsZeile ? ".claude/settings.json:" + e.settingsZeile : null,
              { mono: true, sprung: "datei:.claude/settings.json" }),
@@ -363,19 +406,25 @@ function aufgabentitel(roh) {
   return t || String(roh || "").trim();
 }
 
-function kontextEintraege(m) {
+function kontextEintraege(m, beschreibungen) {
   const k = (m.bereiche && m.bereiche.kontext) || {};
-  return (k.stuecke || []).map((s, i) => ({
+  return (k.stuecke || []).map((s, i) => {
+    // "warum" beantwortet eine ANDERE Frage als die Beschreibung: nicht "was
+    // ist das", sondern "warum liegt es im Kontext". Beides in ein Feld zu
+    // pressen war der Fehler -- jetzt steht die Beschreibung der Datei hier
+    // und der Grund eine Zeile darunter.
+    const ausDatei = beschreibungen.fuer(s.pfad);
+    return {
     id: "kontext:" + i,
     seite: "kontext",
     name: s.pfad,
     pfad: s.pfad,
-    unter: s.warum || null,
+    unter: (ausDatei && ausDatei.text) || s.warum || null,
     art: "doku",
     artWort: s.art || null,
     status: null,
     gruppe: s.art || null,
-    beschreibung: { text: s.warum || null, quelle: null, beleg: null },
+    beschreibung: ausDatei || { text: null, quelle: null, beleg: null },
     liste: [
       { label: UI.pfad, wert: s.pfad, stark: true, mono: true },
       { label: UI.groesse, wert: bytes(s.bytes), mono: true },
@@ -386,11 +435,20 @@ function kontextEintraege(m) {
       feld(UI.pfad, s.pfad, { mono: true, sprung: "datei:" + s.pfad }),
       feld(UI.groesse, bytes(s.bytes), { mono: true }),
       feld("Token", zahl(s.tokenSchaetzung), { mono: true }),
-      feld(UI.beleg, s.warum)
+      feld(UI.laedt, LADEART[s.ladeart] || null),
+      // Eigene Zeile mit eigenem Label: das ist NICHT die Beschreibung der
+      // Datei, sondern der Grund, warum sie im Kontext liegt. Beides in ein
+      // Feld zu pressen war der Fehler.
+      feld(UI.warumImKontext, s.warum),
+      feld(UI.quelle, (ausDatei && ausDatei.quelle) || null, {
+        klein: true,
+        beleg: (ausDatei && ausDatei.beleg) || null,
+      })
     ),
     verwandt: [],
     roh: s,
-  }));
+    };
+  });
 }
 
 function backupEintraege(m) {
@@ -522,14 +580,17 @@ function werkzeugEintraege(m) {
 
 function daten(m, regelDaten) {
   const kanten = kantenIndex(m.verwandt);
+  // EIN Ort fuer die Beschreibung. Jede Seite, deren Eintrag einen Pfad hat,
+  // schlaegt hier nach -- keine leitet mehr ihre eigene ab.
+  const beschreibungen = beschreibungsIndex(m);
   const eintraege = [].concat(
     zuTunEintraege(m),
     dateiEintraege(m, kanten),
-    hookEintraege(m, kanten),
+    hookEintraege(m, kanten, beschreibungen),
     ausInventar(m, kanten, ["command"], "commands"),
     ausInventar(m, kanten, ["skill", "skill-datei"], "skills"),
     ausInventar(m, kanten, ["dauer-regel"], "rules"),
-    kontextEintraege(m),
+    kontextEintraege(m, beschreibungen),
     werkzeugEintraege(m),
     backupEintraege(m),
     commitEintraege(m)

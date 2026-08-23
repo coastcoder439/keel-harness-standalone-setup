@@ -295,3 +295,79 @@ test("gleich benannte Repos bekommen verschiedene Kennungen", () => {
   assert.strictEqual(ids.length, 2, "beide Repos stehen im Index");
   assert.strictEqual(new Set(ids).size, 2, "beide tragen dieselbe Kennung: " + ids.join(" · "));
 });
+
+// ---------------------------------------------------------------------------
+// EINE DATEI, EINE BESCHREIBUNG
+//
+// Der Fund, der diese Prüfung erzwungen hat: dieselbe Datei trug je nach Seite
+// einen anderen Text. "Dateien" zeigte die gerankte Beschreibung, "Hooks" die
+// statusMessage aus settings.json, "Session-Kontext" einen Satz über die
+// Ladeart. 15 von 25 mehrfach gezeigten Dateien wichen ab -- wer
+// danger-guard.js auf drei Seiten sah, las dreimal etwas anderes und musste
+// raten, welche Fassung stimmt.
+// ---------------------------------------------------------------------------
+
+test("dieselbe Datei traegt auf jeder Seite dieselbe Beschreibung", () => {
+  const nachPfad = new Map();
+  for (const e of d.eintraege) {
+    if (!e.pfad) continue;
+    if (!nachPfad.has(e.pfad)) nachPfad.set(e.pfad, []);
+    nachPfad.get(e.pfad).push(e);
+  }
+
+  const mehrfach = [...nachPfad.entries()].filter(([, l]) => l.length > 1);
+  assert.ok(mehrfach.length > 5, "es gibt ueberhaupt Dateien auf mehreren Seiten -- sonst prueft das nichts");
+
+  const abweichend = [];
+  for (const [pfad, liste] of mehrfach) {
+    const texte = new Set(liste.map((e) => String((e.beschreibung && e.beschreibung.text) || "").trim()));
+    if (texte.size > 1) {
+      abweichend.push(
+        pfad + ": " + liste.map((e) => e.seite + '="' + String((e.beschreibung && e.beschreibung.text) || "").slice(0, 30) + '"').join(" | ")
+      );
+    }
+  }
+  assert.deepStrictEqual(abweichend.slice(0, 5), [], "dieselbe Datei, verschiedene Beschreibungen");
+});
+
+test("die Beschreibung stammt ueberall aus derselben Quelle", () => {
+  // Nicht nur der Text muss gleich sein, auch die Herkunft: sonst behauptet
+  // eine Seite "aus CLAUDE.md" und eine andere "aus dem Kopfkommentar",
+  // waehrend beide denselben Satz zeigen -- und der Beleg fuehrt in die Irre.
+  const nachPfad = new Map();
+  for (const e of d.eintraege) {
+    if (!e.pfad || !e.beschreibung || !e.beschreibung.text) continue;
+    if (!nachPfad.has(e.pfad)) nachPfad.set(e.pfad, []);
+    nachPfad.get(e.pfad).push(e);
+  }
+  const abweichend = [];
+  for (const [pfad, liste] of nachPfad) {
+    if (liste.length < 2) continue;
+    const quellen = new Set(liste.map((e) => String(e.beschreibung.quelle || "")));
+    const belege = new Set(liste.map((e) => String(e.beschreibung.beleg || "")));
+    if (quellen.size > 1 || belege.size > 1) {
+      abweichend.push(pfad + ": " + [...quellen].join(" / ") + "  " + [...belege].join(" / "));
+    }
+  }
+  assert.deepStrictEqual(abweichend.slice(0, 5), [], "dieselbe Datei, verschiedene Herkunft");
+});
+
+test("was eine andere Frage beantwortet, steht in einem eigenen Feld", () => {
+  // Die Gegenprobe zur Vereinheitlichung: der Text darf nicht einfach
+  // VERSCHWUNDEN sein. Was vorher faelschlich im Beschreibungs-Feld stand, muss
+  // jetzt als eigene Eigenschaft mit eigenem Label auftauchen.
+  const hooks = d.eintraege.filter((e) => e.seite === "hooks" && e.roh && e.roh.ansage);
+  assert.ok(hooks.length > 3, "es gibt Hooks mit einer statusMessage");
+  for (const e of hooks) {
+    const zeile = (e.felder || []).find((f) => f.label === UI.ansageStatusleiste);
+    assert.ok(zeile, e.name + ": die statusMessage ist ersatzlos verschwunden");
+    assert.strictEqual(zeile.wert, e.roh.ansage, e.name + ": die Zeile zeigt etwas anderes als settings.json");
+  }
+
+  const kontext = d.eintraege.filter((e) => e.seite === "kontext" && e.roh && e.roh.warum);
+  assert.ok(kontext.length > 3, "es gibt Kontext-Stuecke mit einem Grund");
+  for (const e of kontext) {
+    const zeile = (e.felder || []).find((f) => f.label === UI.warumImKontext);
+    assert.ok(zeile, e.name + ": der Grund ist ersatzlos verschwunden");
+  }
+});
