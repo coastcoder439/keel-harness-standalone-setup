@@ -305,7 +305,7 @@ test("fehlende Quellen werden gemeldet, nicht verschluckt", () => {
     const dateien = fehler.map((f) => f.datei).sort();
     assert.deepStrictEqual(dateien, [
       ".claude/commands",
-      ".claude/rules/keel",
+      ".claude/rules",
       ".claude/settings.json",
       ".claude/skills",
       ".gitignore",

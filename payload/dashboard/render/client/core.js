@@ -282,6 +282,10 @@ HD.zeichnen = function () {
   HD.seiteZeichnen();
   HD.detailZeichnen();
   HD.zaehlerZeichnen();
+  // Dateirumpf steht nicht mehr im Datensatz -- die eben gezeichneten
+  // Platzhalter holen ihn jetzt beim Server nach. Ohne Server bleibt der
+  // Platzhalter mit seinem Hinweis stehen.
+  if (HD.inhaltLaden) HD.inhaltLaden();
 };
 
 HD.navZeichnen = function () {

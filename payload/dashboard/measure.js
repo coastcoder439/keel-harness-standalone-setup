@@ -34,7 +34,9 @@ const { inventar } = require("./inventar.js");
 const { hooksDetail } = require("./hooks-detail.js");
 const { zuTunDoku } = require("./zutun-docs.js");
 const { verwandt } = require("./verwandt.js");
-const { hookSkripte, kontrollprobe, gruppeEinordnen, dauerRegelBeleg } = require("./classify");
+const { projekte } = require("./projekte.js");
+const { verlaufMessen } = require("./verlauf.js");
+const { hookSkripte, kontrollprobe, gruppeEinordnen, dauerRegelBeleg, dauerRegelDateien } = require("./classify");
 const bordmittel = require("./inventory");
 
 const SCHEMA = "harness.zustand.v2";
@@ -259,38 +261,6 @@ function regelsaetze(modul, harness) {
 }
 
 // ---------------------------------------------------------------------------
-// VERLAUF — die letzten Commits je Repo, als Zeitleiste.
-//
-// Beantwortet "was hat sich veraendert" mit Daten statt mit Gefuehl. Bewusst
-// ohne Wertung: die Seite zeigt, WAS passiert ist, nicht ob es gut war.
-// ---------------------------------------------------------------------------
-function verlaufMessen(wurzel, repos, jeRepo = 4) {
-  const eintraege = [];
-  for (const r of repos) {
-    const ordner = r.name === path.basename(wurzel) ? wurzel : path.join(wurzel, r.name);
-    if (!fs.existsSync(path.join(ordner, ".git"))) continue;
-    const p = spawnSync("git", ["-C", ordner, "log", `-${jeRepo}`, "--date=iso-strict", "--format=%H%x1f%ad%x1f%s%x1f%an"], {
-      encoding: "utf8",
-      timeout: 10000,
-    });
-    if (p.status !== 0 || !p.stdout) continue;
-    for (const zeile of p.stdout.trim().split("\n")) {
-      const [hash, datum, betreff, autor] = zeile.split("");
-      if (!hash) continue;
-      eintraege.push({ repo: r.name, hash: hash.slice(0, 7), datum, betreff, autor });
-    }
-  }
-  eintraege.sort((a, b) => (a.datum < b.datum ? 1 : -1));
-  return {
-    status: eintraege.length ? "ok" : "fehlt",
-    grund: eintraege.length ? null : "Kein Git-Verlauf lesbar",
-    massnahme: eintraege.length ? null : { text: "Ohne Git gibt es keine Historie — ein Repo anlegen.", befehl: "git init" },
-    quelle: "git log je Repo",
-    eintraege: eintraege.slice(0, 40),
-  };
-}
-
-// ---------------------------------------------------------------------------
 // KONTEXT — was in JEDER Sitzung geladen wird, bevor jemand etwas tippt.
 //
 // Das ist die teuerste Gruppe und die einzige, die man nicht umgehen kann. Die
@@ -318,11 +288,9 @@ function kontextMessen(wurzel, harness) {
 
   nimm(path.join(wurzel, "CLAUDE.md"), "Wurzel-Kontext", "Claude Code liest CLAUDE.md bei jedem Sitzungsstart");
 
-  // Derselbe gemessene Beleg wie in der Einordnung -- nicht eine zweite,
-  // fest verdrahtete Formulierung. Hier stand „CLAUDE.md §5: common immer“ und
-  // damit eine Abschnittsnummer, die es nur in der Ursprungs-Werkbank gibt.
-  const common = path.join(harness, "rules", "keel");
-  for (const f of dateienListe(common, "md")) nimm(f, "Dauer-Regel", dauerRegelBeleg(wurzel, f));
+  // Dauer-Regeln = alle Regel-.md OHNE Frontmatter, in JEDEM Unterordner von
+  // rules/ (dauerRegelDateien, classify.js) -- nicht fest verdrahtet rules/keel/.
+  for (const f of dauerRegelDateien(path.join(harness, "rules"))) nimm(f, "Dauer-Regel", dauerRegelBeleg(wurzel, f));
 
   // Hook-Skripte: was bei SessionStart laeuft, wirkt auf jede Sitzung -- seine
   // AUSGABE landet im Kontext, nicht seine Quelle. Deshalb getrennt ausgewiesen.
@@ -335,10 +303,10 @@ function kontextMessen(wurzel, harness) {
   const bytes = stuecke.filter((s) => s.art !== "Hook-Skript").reduce((a, s) => a + s.bytes, 0);
   return {
     status: stuecke.length ? "ok" : "fehlt",
-    grund: stuecke.length ? null : "Keine dauerhaft geladenen Dateien gefunden — CLAUDE.md und rules/keel/ fehlen",
+    grund: stuecke.length ? null : "Keine dauerhaft geladenen Dateien gefunden — CLAUDE.md und Dauer-Regeln unter .claude/rules/ fehlen",
     massnahme: stuecke.length
       ? null
-      : { text: "Ohne CLAUDE.md und die Dauer-Regeln ist es ein leerer Claude Code, kein Harness.", befehl: "ls CLAUDE.md .claude/rules/keel/" },
+      : { text: "Ohne CLAUDE.md und die Dauer-Regeln ist es ein leerer Claude Code, kein Harness.", befehl: "ls CLAUDE.md .claude/rules/" },
     faktor: ZEICHEN_JE_TOKEN,
     faktorHinweis: `Schätzung: Bytes ÷ ${ZEICHEN_JE_TOKEN}. Keine Messung — der echte Wert hängt am Tokenisierer.`,
     bytesJeSitzung: bytes,
@@ -1062,6 +1030,10 @@ function messen(optionen = {}) {
   daten.inventar = inventar(wurzel);
   daten.hooks = hooksDetail(wurzel, { proben: optionen.proben === true });
   daten.zuTunDoku = zuTunDoku(wurzel);
+  // Die Projekte unter user-projects/: was jedes IST und welche Dokumente es
+  // hat. Der Dateibaum laesst den Ordner bewusst zu (ein Projekt hat tausende
+  // Dateien); hier kommen die Wegweiser dazu, damit die Plaene lesbar sind.
+  daten.projekte = projekte(wurzel);
 
   // Die Kanten zuletzt: sie pruefen jede Ziel-Kennung gegen den echten Bestand,
   // also muss der Bestand vorher stehen. Eine Kante ins Leere ist ein Befund und

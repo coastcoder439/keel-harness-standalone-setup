@@ -155,8 +155,11 @@ test("CRLF-Quellen liefern dieselben Zeilennummern und keinen Wagenruecklauf", (
       ["docs/harness-issues.md", 5, "offen-ueberschrift"],
       ["docs/kit-backport.md", 2, "offen-inline"],
       ["docs/rebuild-guide.md", 60, "checkbox"], // Zeile 60 gehoert noch zum Lesefenster
-      [".claude/rules/keel/output-shape.md", 1, "offen-inline"],
+      // output-shape.md wird jetzt zur Laufzeit unter .claude/rules/ gefunden
+      // (ordner-agnostisch) und der festen Liste ANGEHAENGT -- daher nach
+      // CLAUDE.md statt davor. Reihenfolge der Eintraege ist nicht bedeutsam.
       ["CLAUDE.md", 2, "platzhalter"],
+      [".claude/rules/keel/output-shape.md", 1, "offen-inline"],
       ["docs/tool-landscape.md", 3, "leere-vorlage"],
     ]);
     for (const e of eintraege) assert.ok(!e.text.includes("\r"), "kein \\r trotz CRLF: " + e.id);
@@ -184,7 +187,9 @@ test("fehlende Quelle wird gemeldet, nicht verschluckt", () => {
     const { eintraege, fehler } = zuTunDoku(wurzel);
     assert.strictEqual(eintraege.length, 0);
     // vier Dokumente plus die Vorlagen-Quelle fehlen -- jedes einzeln gemeldet
-    assert.strictEqual(fehler.length, 5);
+    // output-shape.md ist NICHT mehr fest verlangt (dynamisch unter .claude/rules/
+    // gesucht; fehlt es, kein Fehler) -- daher 4 statt 5.
+    assert.strictEqual(fehler.length, 4);
     for (const f of fehler) {
       assert.strictEqual(f.code, "quelle-fehlt");
       assert.ok(typeof f.datei === "string" && f.datei.length > 0);

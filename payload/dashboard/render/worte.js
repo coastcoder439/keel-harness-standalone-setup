@@ -85,8 +85,8 @@ const SEITEN = {
   },
   rules: {
     name: "Rules",
-    ort: ".claude/rules/keel/",
-    zweck: "Rules sind Markdown-Dateien in .claude/rules/keel/ — sie laden in jeder Sitzung, ohne dass jemand sie aufruft. {n} Dateien, zusammen etwa {token} Token.",
+    ort: ".claude/rules/",
+    zweck: "Rules sind Markdown-Dateien in .claude/rules/ — ohne Frontmatter laden sie in jeder Sitzung (Dauer-Kontext), mit Frontmatter nur auf Abruf. {n} Dateien, die dauerhaft geladenen zusammen etwa {token} Token.",
     icon: "book-open",
   },
   kontext: {
@@ -100,6 +100,12 @@ const SEITEN = {
     ort: "docs/tool-landscape.md",
     zweck: "CLIs, MCP-Server, APIs und Zugänge dieses Arbeitsplatzes — erhoben vom Onboarding. Zugänge nur als Namen, nie als Werte.",
     icon: "wrench",
+  },
+  projekte: {
+    name: "Projekte",
+    ort: "user-projects/",
+    zweck: "Was unter user-projects/ liegt und was es vorhat — {n} Projekte, {doku} Dokumente. {ohne} ohne Wegweiser.",
+    icon: "folder-open",
   },
   backup: {
     name: "Backup",
@@ -128,7 +134,7 @@ const SEITEN = {
 const NAVIGATION = [
   { gruppe: null, eintraege: ["ueberblick", "zutun", "dateien"] },
   { gruppe: "Claude Code", pfad: ".claude/", eintraege: ["hooks", "commands", "skills", "rules"] },
-  { gruppe: "Workspace", pfad: null, eintraege: ["kontext", "werkzeuge", "backup", "commits"] },
+  { gruppe: "Workspace", pfad: null, eintraege: ["projekte", "kontext", "werkzeuge", "backup", "commits"] },
   { gruppe: "Belege", pfad: null, eintraege: ["rohdaten"] },
 ];
 
@@ -162,6 +168,7 @@ const ART = {
   "skill":           "Skill",
   "skill-datei":     "Skill-Datei",
   "dauer-regel":     "Rule (Dauer-Regel)",
+  "abruf-regel":     "Rule (auf Abruf)",
   "doku":            "Dokumentation",
   "dashboard-modul": "Dashboard-Modul",
   "dashboard-doku":  "Dashboard-Anleitung",
@@ -181,7 +188,33 @@ const ART_BESCHREIBUNG = {
   "lizenz":         "Lizenztext zu einer aus einem fremden Projekt kopierten Datei.",
   "dashboard-modul":"Baustein des Dashboards selbst — Messung oder Anzeige.",
   "repo":           "Ein eigenes Projekt-Repository. Es wird hier nicht begangen; sein Sicherungsstand steht unter Backup.",
+  "dauer-regel":    "Regel, die in jeder Sitzung geladen wird (Dauer-Kontext) — sie trägt kein Frontmatter.",
+  "abruf-regel":    "Regel, die nur auf Abruf geladen wird — ihr Frontmatter kennzeichnet sie als abrufbar, nicht als Dauer-Kontext.",
 };
+
+// Letzter Ausweg (A6): eine Datei ohne eigene Beschreibung und ohne bekannte
+// Rolle bekommt wenigstens eine Aussage ueber ihre ART. Das ist der ehrliche
+// Boden -- besser als eine leere Zeile und besser als der blosse Dateiname,
+// den die Nutzen-Pruefung ohnehin verwirft. Greift z. B. fuer .yaml-/.json-
+// Datendateien, die weder Frontmatter noch Kopfkommentar tragen.
+const DATEITYP = {
+  yaml: "YAML-Datei — strukturierte Konfiguration oder Daten.",
+  yml:  "YAML-Datei — strukturierte Konfiguration oder Daten.",
+  json: "JSON-Datei — strukturierte Daten.",
+  toml: "TOML-Datei — strukturierte Konfiguration.",
+  ini:  "INI-Datei — Konfiguration in Abschnitten.",
+  cfg:  "Konfigurationsdatei.",
+  conf: "Konfigurationsdatei.",
+  txt:  "Textdatei ohne festes Format.",
+  csv:  "CSV-Tabelle — Werte, durch Komma getrennt.",
+  py:   "Python-Skript.",
+  sh:   "Shell-Skript.",
+  css:  "Stylesheet.",
+  html: "HTML-Dokument.",
+  svg:  "SVG-Grafik.",
+};
+// Fuer alles Uebrige: die Endung selbst nennen, statt zu schweigen.
+const DATEITYP_ALLGEMEIN = "Datei vom Typ .{ext}.";
 
 // ---------------------------------------------------------------------------
 // Wirkung eines Hooks -- was er tatsaechlich kann, am Skript belegt.
@@ -223,6 +256,7 @@ const QUELLE = {
   absatz:        "erster Absatz",
   blockquote:    "Einleitungssatz",
   rolle:         "Art der Datei",
+  typ:           "Dateityp",
 };
 
 // Git-Zustand je Datei.
@@ -262,7 +296,7 @@ const LEER = {
   },
   rules: {
     titel: "Keine Rules",
-    text: "Ohne Dauer-Regeln in .claude/rules/keel/ ist das ein leerer Claude Code, kein Harness.",
+    text: "Ohne Dauer-Regeln in .claude/rules/ ist das ein leerer Claude Code, kein Harness.",
     handlung: null,
   },
   werkzeuge: {
@@ -328,11 +362,18 @@ const UI = {
   beschreibung: "Beschreibung",
   ansageStatusleiste: "Ansage in der Statusleiste",
   warumImKontext: "Warum im Kontext",
+  stack: "Technik",
+  dokumente: "Dokumente",
+  plaene: "Pläne und Beschreibungen",
+  weitereDokumente: "Weitere Dokumente",
+  keineWegweiser: "Keine Beschreibung und keine Pläne gefunden.",
+  keineWegweiserHinweis: "Eine README.md oder ZIEL.md an der Wurzel des Projekts würde hier stehen.",
+  inhaltAufAbruf: "Inhalt wird beim Öffnen geladen (nur mit laufendem Server).",
+  dokuGekappt: "Nur die ersten {n} Dokumente gelistet — das Projekt hat mehr.",
   keineBeschreibung: "Keine Beschreibung hinterlegt",
   keineBeschreibungQuelle: "Eine Beschreibung stünde in: {ort}",
   dateiinhalt: "Inhalt",
   inhaltZeigen: "Inhalt · {n} Zeilen · {sprache} — anzeigen",
-  inhaltGekuerzt: "Gekürzt: erste {n} von {gesamt} Zeilen",
   inhaltGesperrt: "Inhalt nicht eingebettet: {grund}",
   inhaltGesperrtIgnoriert: "Diese Datei ist von Git ausgeschlossen. Ihr Inhalt wird nicht in das Dashboard eingebettet — sie könnte Zugangsdaten tragen.",
   inhaltGesperrtBinaer: "Keine Textdatei.",
@@ -384,6 +425,10 @@ const UI = {
   herkunft: "Herkunft",
   herkunftUnbestimmt: "Nicht bestimmt — kein Vergleichsstand vorhanden",
   laedt: "Lädt",
+  laedtInhalt: "Inhalt wird geladen …",
+  inhaltNurServer: "Inhalt nur mit laufendem Server — starten: node dashboard/serve.js",
+  inhaltFehler: "Inhalt konnte nicht geladen werden: {grund}",
+  bearbeitenGesperrt: "Diese Datei enthält etwas wie einen Zugang und lässt sich hier nicht gefahrlos bearbeiten — sonst würde er beim Speichern überschrieben.",
   beleg: "Beleg",
   quelle: "Quelle",
   status: "Status",
@@ -522,6 +567,7 @@ function datum(iso) {
 
 module.exports = {
   VERBOTEN, SEITEN, NAVIGATION, STATUS, ART, ART_BESCHREIBUNG,
+  DATEITYP, DATEITYP_ALLGEMEIN,
   WIRKUNG, LADEART, KANTE, QUELLE, GIT, LEER, UI, NOTIZ, ZUTUN_ART,
   fuellen, zahl, bytes, datum,
 };

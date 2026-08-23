@@ -30,7 +30,11 @@ const os = require("os");
 const http = require("http");
 const { spawnSync } = require("child_process");
 
-const { MINI_SPERRLISTE, ZUGANGS_MUSTER } = require("./zugangsfilter.js");
+const { MINI_SPERRLISTE, ZUGANGS_MUSTER, textSichern } = require("./zugangsfilter.js");
+const { HART_MAX_BYTES } = require("./inventar.js");
+// Markdown rendert der Server auf Abruf (Server-zuerst, D1) -- die Seite traegt
+// kein vorgerendertes HTML mehr.
+const { markdownZuHtml } = require("./render/markdown.js");
 
 // ---------------------------------------------------------------------------
 // KONSTANTEN
@@ -159,11 +163,25 @@ function pfadPruefen(wurzel, roh, zweck) {
   const wurzelMitTrenner = path.resolve(wurzel) + path.sep;
   if (!abs.startsWith(wurzelMitTrenner)) return { fehler: "außerhalb des Workspace" };
 
+  // Sperrliste und Git-Innenleben: NIE ausliefern -- weder schreiben NOCH lesen.
+  // Der zeilenweise Filter in GET /datei faengt nur ERKANNTE Muster, und der
+  // generische Datei-Fallback filtert gar nicht. Eine Zugangsdatei (.env, .key,
+  // settings.local.json, credentials.json ...) darf also auch beim LESEN nicht
+  // heraus -- sonst liefe der 127.0.0.1-Server als Leseweg an allen Riegeln
+  // vorbei. (Fund aus dem Sicherheits-Review, 23.08.2026.)
+  // Vergleiche case-INSENSITIV: das Windows-Dateisystem ist es auch, sonst
+  // umginge ".GIT/config" oder "DASHBOARD.HTML" den Riegel und traefe doch
+  // dieselbe Datei. (MINI_SPERRLISTE traegt bereits /i.) [Nachpruefungs-Fund]
+  const relKlein = rel.toLowerCase();
+  if (MINI_SPERRLISTE.some((m) => m.test(rel))) return { fehler: "Zugangsdatei -- wird nie ausgeliefert" };
+  // Segment-Muster, nicht nur der Anfang: ein .git/ liegt auch VERSCHACHTELT
+  // (user-projects/<repo>/.git/config traegt die Remote-URL mit Token). Der
+  // Wurzel-.git allein zu sperren liesse 19 Projekt-.git offen. [Nachpruefung]
+  if (/(^|\/)\.git\//.test(relKlein)) return { fehler: "Git-Innenleben" };
+
   if (zweck === "schreiben") {
-    if (ERZEUGT.has(rel)) return { fehler: "wird bei jedem Lauf neu erzeugt" };
+    if (ERZEUGT.has(relKlein)) return { fehler: "wird bei jedem Lauf neu erzeugt" };
     if (!SCHREIBBAR.test(rel)) return { fehler: "keine Textdatei, die hier bearbeitet wird" };
-    if (MINI_SPERRLISTE.some((m) => m.test(rel))) return { fehler: "Zugangsdatei -- wird nie angefasst" };
-    if (rel.startsWith(".git/")) return { fehler: "Git-Innenleben" };
   }
 
   return { abs, rel };
@@ -266,13 +284,35 @@ function starten(o) {
       const geprueft = pfadPruefen(wurzel, url.searchParams.get("pfad"), "lesen");
       if (geprueft.fehler) return jsonAntwort(res, 400, { fehler: geprueft.fehler });
       try {
-        const text = fs.readFileSync(geprueft.abs, "utf8");
-        // Auch beim LESEN durch den Filter: der Server soll keinen Weg
-        // eröffnen, der an den drei Riegeln der Seite vorbeiführt.
-        const zeilen = text.split(/\r?\n/);
-        const verdaechtig = zeilen.some((z) => ZUGANGS_MUSTER.some((mm) => mm.test(z)));
-        if (verdaechtig) return jsonAntwort(res, 403, { fehler: "Die Datei enthält etwas, das wie ein Zugang aussieht." });
-        return jsonAntwort(res, 200, { pfad: geprueft.rel, text, bytes: Buffer.byteLength(text) });
+        // Dieselbe harte Obergrenze wie die Messung (gesperrt "zu-gross"):
+        // die Seite bietet einen solchen Rumpf ohnehin nicht zum Abruf an,
+        // aber /datei ist direkt erreichbar -- ohne diese Schranke koennte ein
+        // Aufruf den Server mit einer Riesendatei in den Speicher zwingen.
+        const groesse = fs.statSync(geprueft.abs).size;
+        if (groesse > HART_MAX_BYTES) {
+          return jsonAntwort(res, 413, { fehler: "Datei zu groß zum Anzeigen (" + groesse + " Bytes)." });
+        }
+        const roh = fs.readFileSync(geprueft.abs, "utf8");
+        // Zugangszeilen werden MASKIERT, nicht die ganze Datei verweigert --
+        // dieselbe Behandlung wie frueher beim Einbetten. Eine einzelne
+        // Schluesselzeile darf nicht die ganze Datei unlesbar machen; der Filter
+        // ist derselbe wie in der Messung und im Ausgabe-Waechter.
+        const sicher = textSichern(roh);
+        const antwort = {
+          pfad: geprueft.rel,
+          text: sicher.text,
+          bytes: Buffer.byteLength(sicher.text),
+          ausgeblendeteZeilen: sicher.ausgeblendeteZeilen,
+        };
+        // .md gleich gerendert mitliefern -- der Browser traegt keinen
+        // Markdown-Renderer, und so bleibt die Umwandlung an einem Ort.
+        if (/\.md$/i.test(geprueft.rel)) {
+          antwort.html = markdownZuHtml(sicher.text, {
+            basisPfad: geprueft.rel,
+            dateiExistiert: (p) => fs.existsSync(path.join(wurzel, p)),
+          });
+        }
+        return jsonAntwort(res, 200, antwort);
       } catch (e) {
         return jsonAntwort(res, 404, { fehler: "nicht lesbar: " + e.message });
       }

@@ -180,7 +180,7 @@ HD.detailKoerper = function (e, inline) {
   var aktionen = '<span class="' + (inline ? "datei-aktionen" : "detail-aktionen") + '">'
     + (pfad ? '<button class="ikon-knopf" data-kopie="' + HD.esc(pfad) + '" aria-label="' + HD.esc(HD.W.pfadKopieren)
        + '" title="' + HD.esc(HD.W.pfadKopieren) + '">' + HD.icon("copy") + "</button>" : "")
-    + (e.inhalt && e.inhalt.text ? '<button class="ikon-knopf" data-kopieinhalt="' + HD.esc(e.id)
+    + (pfad && HD.serverModus() && e.inhalt && !e.inhalt.gesperrt ? '<button class="ikon-knopf" data-kopieinhalt="' + HD.esc(pfad)
        + '" aria-label="' + HD.esc(HD.W.inhaltKopieren) + '" title="' + HD.esc(HD.W.inhaltKopieren) + '">' + HD.icon("clipboard") + "</button>" : "")
     + (pfad && HD.D.wurzelUrl ? '<a class="ikon-knopf" href="' + HD.esc(HD.D.wurzelUrl + "/" + pfad)
        + '" target="_blank" rel="noopener" aria-label="' + HD.esc(HD.W.imBrowserOeffnen)
@@ -223,6 +223,8 @@ HD.detailKoerper = function (e, inline) {
   var eigenschaften = felder ? HD.abschnitt("felder", HD.W.eigenschaften, felder, true) : "";
 
   var inhalt = HD.inhaltHTML(e, inline);
+  // Bei einem Projekt: die Dokumente je Projekt (S5). Fuer alles andere leer.
+  var dokumente = HD.projektDokumenteHTML(e);
 
   var kanten = (e.verwandt || []).length
     ? e.verwandt.map(function (k) {
@@ -241,7 +243,7 @@ HD.detailKoerper = function (e, inline) {
   var roh = HD.abschnitt("roh", HD.W.rohobjekt,
     '<div class="code-flaeche"><div class="code-text">' + HD.esc(JSON.stringify(e.roh, null, 1)) + "</div></div>", false);
 
-  return kopf + metaHTML + beschreibung + eigenschaften + inhalt + verknuepft + roh;
+  return kopf + metaHTML + beschreibung + eigenschaften + inhalt + dokumente + verknuepft + roh;
 };
 
 HD.symbolFuer = function (e) {
@@ -256,15 +258,24 @@ HD.symbolFuer = function (e) {
 };
 
 // --- Dateiinhalt ---------------------------------------------------------
+// SERVER-ZUERST (Entscheidung D1): der Rumpf steht NICHT mehr im Datensatz.
+// Diese Funktion zeichnet nur die Huelle -- Ueberschrift, Umschalter und einen
+// leeren Kasten mit data-inhalt. HD.inhaltLaden() (unten) fuellt ihn nach dem
+// Zeichnen aus serve.js. Ohne Server bleibt ein ehrlicher Hinweis stehen.
 HD.inhaltHTML = function (e, inline) {
+  // Nur ECHTE Datei-Eintraege tragen ein inhalt-Objekt. Projekte (ein
+  // Verzeichnis) und abgeleitete Eintraege haben keins -- fuer sie gibt es hier
+  // nichts, sonst wuerde ein Kasten den Ordnerpfad wie eine Datei abrufen.
   var i = e.inhalt;
   if (!i) return "";
+  var pfad = e.pfad || "";
+  if (!pfad) return "";
   if (i.gesperrt) {
     return HD.abschnitt("inhalt", HD.W.dateiinhalt,
       '<p class="leer-kompakt">' + HD.esc(i.grund) + "</p>", true);
   }
-  var istMd = /\\.md$/.test(e.pfad || "");
-  var quelltextAn = HD.S.quelltext[e.pfad] === true;
+  var istMd = /\\.md$/.test(pfad);
+  var quelltextAn = HD.S.quelltext[pfad] === true;
   var umschalter = istMd
     ? ' <span class="ansicht-umschalter">'
       + '<button data-quelltext="0" aria-pressed="' + (!quelltextAn) + '">' + HD.esc(HD.W.gerendert) + "</button>"
@@ -276,44 +287,147 @@ HD.inhaltHTML = function (e, inline) {
   // Als Datei geoeffnet (file:) kann nichts zurueckgeschrieben werden -- ein
   // Knopf, der dann nichts tut, waere eine Luege. Wer die Seite weitergibt,
   // gibt keinen Schreibzugang mit.
-  if (HD.serverModus() && HD.bearbeitbar(e.pfad)) {
+  if (HD.serverModus() && HD.bearbeitbar(pfad)) {
     umschalter += ' <span class="ansicht-umschalter">'
-      + '<button data-bearbeiten="' + HD.esc(e.pfad) + '">' + HD.esc(HD.W.bearbeiten) + "</button>"
+      + '<button data-bearbeiten="' + HD.esc(pfad) + '">' + HD.esc(HD.W.bearbeiten) + "</button>"
       + "</span>";
   }
 
-  // Im Bearbeiten-Modus ersetzt das Textfeld den Inhalt vollstaendig.
-  if (HD.S.bearbeitet === e.pfad) {
+  // Bearbeiten-Modus: das Textfeld zeigt den frisch geholten Rohtext. Er steht
+  // in HD.S.entwurf -- start.js fuellt ihn VOR dem Oeffnen (per serve.js) und
+  // oeffnet gar nicht erst, wenn die Datei maskierte Zugangszeilen enthaelt.
+  if (HD.S.bearbeitet === pfad) {
     return HD.abschnitt(
       "inhalt",
-      HD.W.dateiinhalt + " · " + HD.esc(e.pfad),
+      HD.W.dateiinhalt + " · " + HD.esc(pfad),
       '<div class="editor">'
-        + '<textarea id="editor-feld" spellcheck="false" aria-label="' + HD.esc(e.pfad) + '">'
-        + HD.esc(HD.S.entwurf != null ? HD.S.entwurf : i.text)
+        + '<textarea id="editor-feld" spellcheck="false" aria-label="' + HD.esc(pfad) + '">'
+        + HD.esc(HD.S.entwurf != null ? HD.S.entwurf : "")
         + "</textarea>"
         + '<div class="editor-leiste">'
-        + '<button class="knopf-haupt" data-speichern="' + HD.esc(e.pfad) + '">' + HD.esc(HD.W.speichern) + "</button>"
+        + '<button class="knopf-haupt" data-speichern="' + HD.esc(pfad) + '">' + HD.esc(HD.W.speichern) + "</button>"
         + '<button data-bearbeiten-aus="1">' + HD.esc(HD.W.abbrechen) + "</button>"
-        + '<span class="editor-pfad mono">' + HD.esc(e.pfad) + "</span>"
+        + '<span class="editor-pfad mono">' + HD.esc(pfad) + "</span>"
         + "</div></div>",
       true
     );
   }
 
   var koerper;
-  if (istMd && !quelltextAn) {
-    koerper = '<div class="md">' + (HD.D.markdown[e.pfad] || HD.esc(i.text)) + "</div>";
+  if (!HD.serverModus()) {
+    // Als Datei geoeffnet gibt es niemanden, der den Rumpf liefern koennte.
+    koerper = '<p class="leer-kompakt">' + HD.esc(HD.W.inhaltNurServer) + "</p>";
   } else {
-    koerper = HD.codeHTML(i.text, i.ausgeblendeteZeilen);
+    // Leerer Kasten -- HD.inhaltLaden() traegt den Rumpf nach dem Zeichnen ein.
+    koerper = '<div class="datei-inhalt" data-inhalt="' + HD.esc(pfad) + '"'
+      + ' data-md="' + (istMd && !quelltextAn ? "1" : "0") + '">'
+      + '<p class="leer-kompakt">' + HD.esc(HD.W.laedtInhalt) + "</p></div>";
   }
-  if (i.gekuerzt) koerper = '<p class="leer-kompakt">' + HD.esc(i.gekuerztText) + "</p>" + koerper;
-
   // Im schmalen Panel bleibt der Inhalt zu, in der Dateiansicht offen. Ein
   // 400-Zeilen-Block in einer 320-px-Spalte ist keine Information, sondern
   // eine Wand -- aber wer auf "Dateien" geht, will genau ihn sehen.
-  var vorgabe = inline || (i.zeilen != null && i.zeilen <= 80);
-  var titel = HD.W.dateiinhalt + (i.zeilen != null ? " · " + i.zeilen + " Zeilen" : "") + " · " + i.sprache;
+  var vorgabe = inline || (i && i.zeilen != null && i.zeilen <= 80);
+  var titel = HD.W.dateiinhalt
+    + (i && i.zeilen != null ? " · " + i.zeilen + " Zeilen" : "")
+    + (i && i.sprache ? " · " + i.sprache : "");
   return HD.abschnitt("inhalt", titel, koerper, vorgabe, umschalter);
+};
+
+// Rumpf auf Abruf holen -- EINE Stelle fuer Anzeige, Editor und Kopieren. Die
+// Antwort von serve.js traegt {text, html?, ausgeblendeteZeilen, bytes}; text
+// ist bereits zeilenweise gefiltert. Ergebnisse werden gemerkt, damit ein
+// Umschalten (gerendert/Quelltext) nicht erneut ueber das Netz geht.
+HD._inhaltCache = {};
+// frisch=true umgeht den Cache und ueberschreibt ihn mit dem frischen Stand. Der
+// Editor MUSS das tun: der Cache wird sonst nie ungueltig, und mehrere Sitzungen
+// teilen sich hier einen Arbeitsbaum (CLAUDE.md). Ein veralteter Cache-Eintrag
+// mit ausgeblendeteZeilen:[] wuerde sonst die Geheimnis-Sperre beim Oeffnen
+// umgehen -- und ein Speichern schriebe den alten Stand ueber ein inzwischen
+// hinzugekommenes Geheimnis. (Fund aus dem Sicherheits-Review, 23.08.2026.)
+HD.dateiHolen = function (pfad, fertig, frisch) {
+  if (!frisch && HD._inhaltCache[pfad]) { fertig(null, HD._inhaltCache[pfad]); return; }
+  fetch("datei?pfad=" + encodeURIComponent(pfad))
+    .then(function (a) { return a.json().then(function (j) { return { ok: a.ok, j: j }; }); })
+    .then(function (r) {
+      if (!r.ok) throw new Error((r.j && r.j.fehler) || "unbekannt");
+      HD._inhaltCache[pfad] = r.j;
+      fertig(null, r.j);
+    })
+    .catch(function (e) { fertig(e.message || "unbekannt", null); });
+};
+
+// Nach jedem Zeichnen aufgerufen (core.js): jeden leeren Kasten fuellen.
+// Idempotent -- ein bereits gefuellter Kasten (data-geladen) wird uebersprungen.
+HD.inhaltLaden = function () {
+  if (!HD.serverModus()) return;
+  var kaesten = document.querySelectorAll(".datei-inhalt[data-inhalt]");
+  for (var k = 0; k < kaesten.length; k++) {
+    (function (kasten) {
+      if (kasten.getAttribute("data-geladen")) return;
+      // Lazy: ein Kasten in einem ZUGEKLAPPTEN Abschnitt wird noch nicht geholt.
+      // Beim Aufklappen zeichnet die Seite neu (start.js) -- dann greift es. So
+      // laedt ein Projekt mit vielen docs/ nicht auf einen Schlag alle Ruempfe.
+      // (Vorfahren-Durchlauf statt "details:not([open])" -- der CSS-Selektor
+      // saehe im Quelltext aus wie ein Funktionsaufruf "not(".)
+      var vorfahr = kasten.parentElement;
+      while (vorfahr) {
+        if (vorfahr.tagName === "DETAILS" && !vorfahr.open) return;
+        vorfahr = vorfahr.parentElement;
+      }
+      var pfad = kasten.getAttribute("data-inhalt");
+      var md = kasten.getAttribute("data-md") === "1";
+      kasten.setAttribute("data-geladen", "laeuft");
+      HD.dateiHolen(pfad, function (fehler, d) {
+        // Zwischenzeitlich neu gezeichnet? Dann haengt dieser Kasten nicht mehr
+        // im Dokument und darf nichts mehr schreiben.
+        if (!kasten.isConnected) return;
+        if (fehler) {
+          kasten.innerHTML = '<p class="leer-kompakt">'
+            + HD.esc(HD.fuellen(HD.W.inhaltFehler, { grund: fehler })) + "</p>";
+          kasten.setAttribute("data-geladen", "ja");
+          return;
+        }
+        if (md && d.html != null) kasten.innerHTML = '<div class="md">' + d.html + "</div>";
+        else kasten.innerHTML = HD.codeHTML(d.text, d.ausgeblendeteZeilen);
+        kasten.setAttribute("data-geladen", "ja");
+      });
+    })(kaesten[k]);
+  }
+};
+
+// --- Dokumente je Projekt (S5) -------------------------------------------
+// Die Projektansicht zeigte bisher nur die ZAHL der Dokumente. Hier werden sie
+// wirklich angebaut: Wurzel-Dokumente (README/ZIEL) aufgeklappt und lesbar,
+// der docs/-Baum als zugeklappte Liste. Der Inhalt kommt in beiden Faellen auf
+// Klick von serve.js (D1) -- user-projects/ steht nicht im Dateibaum, also ist
+// das hier der einzige Ort, an dem man diese Dateien ueberhaupt liest.
+HD.projektDokBlock = function (dok, offen) {
+  var istMd = /\\.md$/.test(dok.pfad || "");
+  var meta = ' <span class="abschnitt-meta mono">' + HD.esc(HD.groesse(dok.bytes)) + "</span>";
+  var kasten = HD.serverModus()
+    ? '<div class="datei-inhalt" data-inhalt="' + HD.esc(dok.pfad) + '" data-md="' + (istMd ? "1" : "0") + '">'
+      + '<p class="leer-kompakt">' + HD.esc(HD.W.laedtInhalt) + "</p></div>"
+    : '<p class="leer-kompakt">' + HD.esc(HD.W.inhaltNurServer) + "</p>";
+  // Eigener Zustandsschluessel je Datei, sonst teilen sich alle Bloecke einen.
+  return HD.abschnitt("projektdok:" + dok.pfad, dok.name, kasten, offen, meta);
+};
+
+HD.projektDokumenteHTML = function (e) {
+  var d = e.dokumente;
+  if (!d) return "";
+  if (d.leer) {
+    return HD.abschnitt("dokumente", HD.W.dokumente,
+      '<p class="leer-kompakt">' + HD.esc(d.leerText || "") + "</p>"
+      + (d.leerHinweis ? '<p class="leer-kompakt">' + HD.esc(d.leerHinweis) + "</p>" : ""), true);
+  }
+  var teile = "";
+  // Wurzel-Dokumente zuerst und offen -- das ist die Frage, mit der man ein
+  // Projekt aufschlaegt.
+  (d.wurzel || []).forEach(function (dok) { teile += HD.projektDokBlock(dok, true); });
+  // docs/ als zugeklappte Liste -- Inhalt laedt erst beim Aufklappen (lazy).
+  (d.doku || []).forEach(function (dok) { teile += HD.projektDokBlock(dok, false); });
+  if (d.gekappt && d.gekapptText) teile += '<p class="leer-kompakt">' + HD.esc(d.gekapptText) + "</p>";
+  return HD.abschnitt("dokumente", HD.W.dokumente, teile, true);
 };
 
 HD.codeHTML = function (text, ausgeblendet) {

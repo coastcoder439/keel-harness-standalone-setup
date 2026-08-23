@@ -53,6 +53,32 @@ function testdateien() {
   return fs.readdirSync(path.join(DASH, "test")).filter((f) => f.endsWith(".test.js")).sort();
 }
 
+// Prueft, ob der Kopf einer Datei ein ECHTER erklaerender Satz ist -- nicht an
+// der Buchstabenzahl (die besteht auch ein Buchstabensalat), sondern an der
+// Eigenschaft: es gibt einen //-Kommentarblock, er hat mehrere Woerter, und er
+// ist nicht bloss der Dateiname. GRENZE, ausdruecklich: ob der Satz WIRKLICH
+// erklaert, kann ein statischer Test nicht entscheiden -- er faengt das Fehlen
+// und die offensichtliche Attrappe, den Rest muss das Auge finden. Gibt null
+// zurueck, wenn der Kopf in Ordnung ist, sonst den Grund.
+function kopfMangel(dateiInhalt, basisname) {
+  const zeilen = dateiInhalt.split(/\r?\n/);
+  let i = zeilen[0] && zeilen[0].startsWith("#!") ? 1 : 0;
+  if (!/^\s*\/\//.test(zeilen[i] || "")) return "kein Kopfkommentar";
+  const stuecke = [];
+  for (; i < zeilen.length && /^\s*\/\//.test(zeilen[i]); i++) {
+    const kern = zeilen[i].replace(/^\s*\/\/+\s?/, "").trim();
+    if (!kern) break;
+    stuecke.push(kern);
+  }
+  const satz = stuecke.join(" ");
+  const woerter = satz.split(/\s+/).filter(Boolean);
+  if (woerter.length < 4) return "Kopf zu duenn (" + woerter.length + " Woerter)";
+  const nurBuchstaben = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const basis = nurBuchstaben(String(basisname).replace(/\.[^.]+$/, ""));
+  if (nurBuchstaben(satz) === basis) return "Kopf ist nur der Dateiname";
+  return null;
+}
+
 // Welche Module laedt ueberhaupt ein Test? Der Dateiname allein sagt das nicht:
 // client.test.js prueft vier Module auf einmal, data.test.js laedt measure.js
 // und rules.js mit. Deshalb wird das ECHTE Laden ausgewertet.
@@ -114,7 +140,11 @@ const GROESSE_ALTBESTAND = {
   // Gemessen 23.08.2026. Die Spezifikation legt fest: neue Logik kommt in
   // eigene Module (inventar, hooks-detail, zutun-docs, verwandt), nicht hier
   // hinein. Aufteilen steht als offener Punkt in docs/regelverstoesse-plan.md.
-  "measure.js": 1152,
+  // 23.08.2026 von 1152 auf 1126 verkleinert: verlaufMessen ist nach
+  // dashboard/verlauf.js gewandert, als das Einhaengen der Projekt-Messung
+  // die Klinke ueberschritten haette. Die Grenze wandert mit -- sonst
+  // entstuende wieder Luft, in die die Datei zurueckwachsen kann.
+  "measure.js": 1126,
 };
 
 test("kein Modul ueberschreitet 800 Zeilen", () => {
@@ -143,26 +173,25 @@ test("der Altbestand ueber der Grenze waechst nicht weiter", () => {
   assert.deepStrictEqual(gewachsen, [], "die Sperrklinke haelt nicht mehr");
 });
 
-test("jedes Modul erklaert im Kopf, was es ist", () => {
-  // Wer eine dieser Dateien zum ersten Mal oeffnet, muss in der ersten Zeile
-  // wissen, wo er ist. Bei zwanzig Dateien ist das kein Luxus.
+test("jedes Modul erklaert sich im Kopf mit einem echten Satz", () => {
+  // S6 (Riegel gegen den Surrogat-Fehler): frueher an der BUCHSTABENZAHL
+  // gemessen (>=25 Zeichen) -- das besteht auch ein Buchstabensalat. Jetzt an
+  // der Eigenschaft (siehe kopfMangel): ein //-Block, mehrere Woerter, nicht
+  // bloss der Dateiname.
   const ohne = [];
   for (const m of moduleFinden()) {
-    const zeilen = fs.readFileSync(path.join(DASH, m), "utf8").split(/\r?\n/);
-    const kopf = zeilen.slice(0, 3).join(" ");
-    if (!/^\s*(#!|\/\/)/.test(zeilen[0]) || kopf.replace(/[^A-Za-zÄÖÜäöüß]/g, "").length < 25) {
-      ohne.push(m);
-    }
+    const grund = kopfMangel(fs.readFileSync(path.join(DASH, m), "utf8"), m.split("/").pop());
+    if (grund) ohne.push(m + ": " + grund);
   }
-  assert.deepStrictEqual(ohne, [], "Modul ohne Kopfkommentar");
+  assert.deepStrictEqual(ohne, [], "Modul ohne erklaerenden Kopf");
 });
 
 test("jede Testdatei nennt im Kopf, wozu sie gehoert", () => {
-  const ohne = testdateien().filter((f) => {
-    const kopf = fs.readFileSync(path.join(DASH, "test", f), "utf8").split(/\r?\n/).slice(0, 3).join(" ");
-    return !/\/\//.test(kopf) || kopf.replace(/[^A-Za-zÄÖÜäöüß]/g, "").length < 25;
-  });
-  assert.deepStrictEqual(ohne, [], "Testdatei ohne Kopfkommentar");
+  const ohne = testdateien()
+    .map((f) => ({ f, grund: kopfMangel(fs.readFileSync(path.join(DASH, "test", f), "utf8"), f) }))
+    .filter((x) => x.grund)
+    .map((x) => x.f + ": " + x.grund);
+  assert.deepStrictEqual(ohne, [], "Testdatei ohne erklaerenden Kopf");
 });
 
 // ---------------------------------------------------------------------------
@@ -222,13 +251,38 @@ test("kein liegengebliebener Debug-Ausdruck in einem Modul", () => {
 // ---------------------------------------------------------------------------
 
 test("jede Testdatei enthaelt echte Behauptungen", () => {
+  // S7 (Riegel gegen den Surrogat-Fehler): frueher NUR an der Anzahl gemessen
+  // (assert. >= test()). Das besteht auch eine Sammlung aus assert.ok(true) --
+  // gruen, aber prueft nichts. Nach dem Review verschaerft: eine Behauptung ist
+  // nur ECHT, wenn ihre Argumente einen BERECHNETEN Wert enthalten (einen
+  // Bezeichner oder Aufruf), nicht nur Literale. So fallen assert.ok(true),
+  // assert.strictEqual(2, 2), assert.ok('x'), assert.ok(1 + 1) durch -- egal in
+  // welcher Schreibweise. GRENZE, ausdruecklich: ob eine Behauptung das RICHTIGE
+  // prueft, sieht kein statischer Test -- er faengt die leere Geste, nicht den
+  // Denkfehler.
+  const istKommentar = (z) => /^\s*(\/\/|\*|\/\*)/.test(z);
+  // Bleibt nach dem Abziehen aller Literale (Strings, Zahlen, true/false/null)
+  // noch ein Bezeichner in den Argumenten, prueft die Behauptung einen echten
+  // Wert. Sonst ist sie tautologisch/leer.
+  const istEcht = (zeile) => {
+    const m = zeile.match(/assert[.\w]*\((.*)\)/);
+    if (!m) return true; // keine klar erkennbaren Argumente -> nicht als leer werten
+    const args = m[1]
+      .replace(/(['"`])(?:\\.|(?!\1).)*\1/g, "")
+      .replace(/\b\d+(?:\.\d+)?\b/g, "")
+      .replace(/\b(?:true|false|null|undefined|NaN)\b/g, "");
+    return /[A-Za-z_$]/.test(args);
+  };
   const schwach = [];
   for (const f of testdateien()) {
     const t = fs.readFileSync(path.join(DASH, "test", f), "utf8");
     const tests = (t.match(/^\s*(test|wennDa)\(/gm) || []).length;
-    const behauptungen = (t.match(/assert\./g) || []).length;
+    const behauptungsZeilen = t.split(/\r?\n/).filter((z) => /assert[.(]/.test(z) && !istKommentar(z));
+    const echte = behauptungsZeilen.filter(istEcht);
+    const leere = behauptungsZeilen.filter((z) => !istEcht(z));
     if (tests === 0) schwach.push(f + ": keine Pruefung");
-    else if (behauptungen < tests) schwach.push(f + ": " + tests + " Pruefungen, aber nur " + behauptungen + " Behauptungen");
+    else if (echte.length < tests) schwach.push(f + ": " + tests + " Pruefungen, aber nur " + echte.length + " echte Behauptungen");
+    else if (leere.length) schwach.push(f + ": " + leere.length + " leere/tautologische Behauptung(en), z. B. " + leere[0].trim().slice(0, 40));
   }
   assert.deepStrictEqual(schwach, [], "Testdatei ohne Substanz");
 });

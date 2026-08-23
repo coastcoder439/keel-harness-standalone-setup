@@ -14,7 +14,14 @@ const path = require("path");
 const { messen } = require("../measure.js");
 const { regeln } = require("../rules.js");
 const { daten } = require("../render/data.js");
+const { renderHTML } = require("../render/shell.js");
 const { UI, SEITEN, STATUS } = require("../render/worte.js");
+// Die Seitenbauer und die Helfer liegen seit dem 23.08.2026 in eigenen
+// Modulen. Sie werden hier mitgeladen, damit die Vollstaendigkeits-Pruefung
+// sieht, dass sie geprueft sind -- und weil ein Export-Vertrag, den niemand
+// anfasst, still veralten kann.
+const SEITENBAUER = require("../render/seiten.js");
+const HELFER = require("../render/helfer.js");
 
 const WURZEL = path.resolve(__dirname, "..", "..");
 
@@ -125,6 +132,40 @@ test("jede Datei traegt eine Beschreibung mit genannter Quelle", () => {
   assert.deepStrictEqual(ohneQuelle.slice(0, 8), [], "Beschreibung ohne genannte Quelle");
 });
 
+// S1 (Riegel gegen den Surrogat-Fehler): der Test prueft NUTZEN, nicht blosses
+// Vorhandensein. Dreimal ist eine Fussnote als Beschreibung durchgerutscht
+// (~70 Stueck), weil "hat eine Beschreibung" mit "sagt etwas" verwechselt wurde.
+// Nach dem Review verschaerft: auch getarnte Meta ("**Anlass:**"), Tabellen-
+// zeilen, mit einer Markdown-Marke beginnende und uebermaessig lange (Ausschnitt
+// statt Auskunft) Beschreibungen gelten als FEHLEND. Faellt rot, sobald die
+// Ableitung wieder eine Notiz, ein Listen-Dump oder einen Ausschnitt nimmt.
+test("jede Beschreibung besteht die Nutzen-Pruefung (kein Anlass:/Stand/Zaun/Tabelle/Marke/Ausschnitt)", () => {
+  const dateien = d.eintraege.filter((e) => e.seite === "dateien" && e.art !== "ordner");
+  const nutzlos = (e) => {
+    const t = e.beschreibung && e.beschreibung.text;
+    if (!t) return null; // fehlende Beschreibung faengt der Test darueber
+    const s = t.trim();
+    // Fuehrende Marke + Auszeichnung abziehen, DANN auf Meta pruefen -- sonst
+    // rutscht "**Anlass:**" oder "> Anlass:" durch (Review-Fund). NUR die
+    // eindeutigen Meta-Praefixe Anlass/Stand, jeweils mit Trenner bzw. Datum
+    // (wie der Generator). Bewusst NICHT die volle Label-Liste: "Verwandt",
+    // "Siehe", "Quelle" u. a. koennen einen ECHTEN Kopfkommentar eroeffnen (z. B.
+    // "VERWANDT -- die Kanten ...") -- die traefe der Test sonst falsch
+    // (Nachpruefungs-Fund 4). Die uebrigen Labels deckt der Generator ohnehin ab.
+    const klar = s.replace(/^[>#\s]*(?:[-*+]\s+|\d+[.)]\s+)?/, "").replace(/^[*_`]+/, "");
+    if (/^Anlass\b\s*[:.–—-]/i.test(klar) || /^Stand\b\s*[:·.–—-]?\s*(?:v?\d|Phase\b)/i.test(klar)) return "Meta-/Zitatzeile";
+    if (/^(```|~~~)/.test(s)) return "Code-Zaun";
+    if ((s.match(/\|/g) || []).length >= 2) return "Tabellenzeile";
+    if (/^[-*+>#|]/.test(s)) return "beginnt mit Markdown-Marke";
+    if (s.length > 300) return "zu lang (" + s.length + " Zeichen) -- Ausschnitt statt Auskunft";
+    if (!/\s/.test(s) && /[./]/.test(s)) return "blosser Pfad/Token";
+    if (e.name && s === e.name) return "nur der Dateiname";
+    return null;
+  };
+  const schlecht = dateien.filter((e) => nutzlos(e)).map((e) => e.pfad + " (" + nutzlos(e) + "): " + e.beschreibung.text.slice(0, 50));
+  assert.deepStrictEqual(schlecht.slice(0, 10), [], "Beschreibung ohne Nutzen -- eine Notiz statt einer Aussage");
+});
+
 // ---------------------------------------------------------------------------
 // Verknuepfungen -- eine Kante, die ins Leere zeigt, ist eine kaputte Tuer
 // ---------------------------------------------------------------------------
@@ -212,10 +253,51 @@ test("jedes benutzte Symbol liegt im Datensatz -- nachgeschlagen wie zur Laufzei
   assert.ok(!findet("gibt-es-nicht-xyz"), "der Symbol-Nachschlag findet auch Erfundenes");
 });
 
-test("jeder vorgerenderte Markdown-Eintrag gehoert zu einer Datei im Index", () => {
-  const pfade = new Set(d.eintraege.filter((e) => e.pfad).map((e) => e.pfad));
-  const verwaist = Object.keys(d.markdown).filter((p) => !pfade.has(p));
-  assert.deepStrictEqual(verwaist.slice(0, 5), [], "gerendertes Markdown ohne zugehoerige Datei");
+// Der fruehere Test "jeder vorgerenderte Markdown-Eintrag gehoert zu einer
+// Datei" ist mit SERVER-ZUERST (D1) entfallen: es gibt kein d.markdown mehr im
+// Datensatz. Markdown wird jetzt on demand von serve.js gerendert (siehe
+// serve.test.js). Ein Test auf ein geloeschtes Feld waere eine leere Geste.
+
+// ---------------------------------------------------------------------------
+// Riegel gegen den Einbett-Fehler (E) -- der Grund, aus dem die Seite 6,6 MB war
+// ---------------------------------------------------------------------------
+
+test("kein Dateiinhalt steht im Datensatz -- Server-zuerst (Riegel gegen E)", () => {
+  // Der Rumpf verlaesst den Datensatz (D1); serve.js liefert ihn auf Klick.
+  // Faellt rot, sobald jemand wieder Inhalt einbettet.
+  const mitText = d.eintraege.filter((e) => e.inhalt && e.inhalt.text != null).map((e) => e.pfad);
+  assert.deepStrictEqual(mitText.slice(0, 8), [], "Eintrag mit eingebettetem inhalt.text");
+  assert.strictEqual(d.markdown, undefined, "vorgerendertes Markdown ist wieder im Datensatz");
+
+  // Der Rohtext der Messung (inventar.js) darf NICHT in den Datensatz sickern --
+  // er ist nur ein Seitenfeld fuer Frontmatter/Beschreibung und wird am Knoten
+  // fallengelassen.
+  let rohtextBei = null;
+  (function walk(v, pfad) {
+    if (rohtextBei) return;
+    if (Array.isArray(v)) v.forEach((x, i) => walk(x, pfad + "[" + i + "]"));
+    else if (v && typeof v === "object") {
+      if (Object.prototype.hasOwnProperty.call(v, "rohtext")) { rohtextBei = pfad; return; }
+      for (const k of Object.keys(v)) walk(v[k], pfad + "." + k);
+    }
+  })(d, "d");
+  assert.strictEqual(rohtextBei, null, "rohtext ist in den Datensatz gesickert bei " + rohtextBei);
+
+  // Projekt-Wurzeldokumente im roh-Zweig ohne Inhalt.
+  const liste = (d.roh && d.roh.messung && d.roh.messung.projekte && d.roh.messung.projekte.liste) || [];
+  const mitInhalt = [];
+  for (const p of liste) for (const dok of (p.wurzelDokumente || [])) if (dok.inhalt != null) mitInhalt.push(dok.pfad);
+  assert.deepStrictEqual(mitInhalt.slice(0, 5), [], "Projekt-Wurzeldokument mit Inhalt im roh-Zweig");
+});
+
+test("die gerenderte Seite bleibt klein -- keine wiedereingebetteten Ruempfe (Riegel gegen E)", () => {
+  // GRENZE, ausdruecklich: eine absolute Byte-Schranke haengt an der Zahl der
+  // Dateien im Workspace. Sie ist hier bewusst GROSSZUEGIG (3 MB) -- sie faengt
+  // nicht die letzten Kilobytes, sondern den Rueckfall: wer die Dateiruempfe
+  // wieder einbettet, springt um Megabytes (die Vorfassung lag bei 6,6 MB).
+  const html = renderHTML(d);
+  const mb = Buffer.byteLength(html) / (1024 * 1024);
+  assert.ok(mb < 3, "die Seite ist " + mb.toFixed(2) + " MB gross -- steht wieder Dateiinhalt drin?");
 });
 
 test("die Wortliste der Seite ist die aus worte.js -- kein zweiter Bestand", () => {
@@ -370,4 +452,39 @@ test("was eine andere Frage beantwortet, steht in einem eigenen Feld", () => {
     const zeile = (e.felder || []).find((f) => f.label === UI.warumImKontext);
     assert.ok(zeile, e.name + ": der Grund ist ersatzlos verschwunden");
   }
+});
+
+// ---------------------------------------------------------------------------
+// Die beiden Module, die am 23.08.2026 aus data.js herausgeloest wurden
+// ---------------------------------------------------------------------------
+
+test("seiten.js liefert alle neun Seitenbauer als Funktion", () => {
+  const erwartet = [
+    "dateiEintraege", "hookEintraege", "ausInventar", "zuTunEintraege",
+    "kontextEintraege", "projektEintraege", "backupEintraege", "commitEintraege",
+    "werkzeugEintraege",
+  ];
+  assert.deepStrictEqual(Object.keys(SEITENBAUER).sort(), erwartet.slice().sort());
+  for (const n of erwartet) assert.strictEqual(typeof SEITENBAUER[n], "function", n);
+});
+
+test("helfer.js liefert die fuenf gemeinsamen Helfer", () => {
+  for (const n of ["feld", "felderVon", "spracheVon", "beschreibungVon", "inhaltVon"]) {
+    assert.strictEqual(typeof HELFER[n], "function", n);
+  }
+});
+
+test("feld() laesst eine leere Zeile weg statt einen Strich zu zeigen", () => {
+  // Eine Eigenschaften-Zeile mit "-" ist keine Auskunft, sondern Fuellmaterial.
+  assert.strictEqual(HELFER.feld("Label", null), null);
+  assert.strictEqual(HELFER.feld("Label", undefined), null);
+  assert.strictEqual(HELFER.feld("Label", ""), null);
+  // Die Null ist eine Zahl, kein Nichts.
+  assert.deepStrictEqual(HELFER.feld("Label", 0), { label: "Label", wert: "0" });
+  assert.deepStrictEqual(HELFER.feld("L", "x", { mono: true }), { label: "L", wert: "x", mono: true });
+});
+
+test("projektEintraege liefert ohne Projekte eine leere Liste, keine Ausnahme", () => {
+  assert.deepStrictEqual(SEITENBAUER.projektEintraege({}, { fuer: () => [] }), []);
+  assert.deepStrictEqual(SEITENBAUER.projektEintraege({ projekte: { liste: [] } }, { fuer: () => [] }), []);
 });
