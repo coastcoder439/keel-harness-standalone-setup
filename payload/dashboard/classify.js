@@ -152,11 +152,39 @@ function hatFrontmatter(absPfad) {
   }
 }
 
+// Alle Dauer-Regeln unter einem rules-Ordner, REKURSIV und ordner-agnostisch:
+// jede .md OHNE Frontmatter, egal ob in keel/, common/ oder tiefer. Mit
+// Frontmatter laedt die Datei auf Abruf und gehoert nicht in die Kontext-Kosten.
+// Steht hier statt in measure.js, weil die Frontmatter-Eigenschaft hier zu Hause
+// ist (hatFrontmatter, dauerRegelBeleg) -- und measure.js Altbestand ist, der
+// nicht weiterwachsen soll.
+function dauerRegelDateien(rulesDir) {
+  const raus = [];
+  (function lauf(dir) {
+    let eintraege;
+    try {
+      eintraege = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of eintraege) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) lauf(p);
+      else if (e.isFile() && e.name.endsWith(".md") && hatFrontmatter(p) === false) raus.push(p);
+    }
+  })(rulesDir);
+  return raus.sort();
+}
+
 function dauerRegelBeleg(wurzel, absPfad) {
+  // Den ECHTEN Ordner nennen, nicht fest "rules/keel/": eine Dauer-Regel kann in
+  // jedem Unterordner von .claude/rules/ liegen (keel, common, ...). Was sie zur
+  // Dauer-Regel macht, ist das FEHLENDE Frontmatter, nicht der Ordnername.
+  const relDir = path.dirname(path.relative(wurzel, absPfad)).split(path.sep).join("/");
   const ort =
     hatFrontmatter(absPfad) === false
-      ? "Dauer-Regel — liegt in .claude/rules/keel/ und hat kein Frontmatter (Dauer-Kontext statt Abruf)"
-      : "Dauer-Regel — liegt in .claude/rules/keel/";
+      ? `Dauer-Regel — liegt in ${relDir}/ und hat kein Frontmatter (Dauer-Kontext statt Abruf)`
+      : `Dauer-Regel — liegt in ${relDir}/`;
   const f = claudeMdFundstelle(wurzel, ZUSAGE_DAUER);
   return f ? `${ort} · belegt in ${zitat(f)}` : `${ort} · keine Zusage dazu in der CLAUDE.md dieses Workspace`;
 }
@@ -210,7 +238,9 @@ const DAUERHAFT_ORTE = [
     grund: () => "Wurzel-Kontext — laedt in jeder Sitzung (Claude Code liest CLAUDE.md beim Start)",
   },
   {
-    test: (r) => r.startsWith(path.join(".claude", "rules", "keel") + path.sep) && r.endsWith(".md"),
+    // Ordner-agnostisch: JEDE Regel-.md unter .claude/rules/ -- die gegenprobe
+    // (Frontmatter) entscheidet Dauer vs. Abruf, nicht der Ordnername keel/.
+    test: (r) => r.startsWith(path.join(".claude", "rules") + path.sep) && r.endsWith(".md"),
     grund: dauerRegelBeleg,
     gegenprobe: (absPfad) =>
       hatFrontmatter(absPfad) === true
@@ -319,5 +349,7 @@ module.exports = {
   // denselben Beleg benutzen -- zwei Formulierungen fuer dieselbe Zuordnung
   // waeren ein Widerspruch auf einer Seite.
   dauerRegelBeleg,
+  hatFrontmatter,
+  dauerRegelDateien,
   claudeMdFundstelle,
 };

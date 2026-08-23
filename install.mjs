@@ -199,9 +199,15 @@ const DASHBOARD = [
   "hooks-detail.js",
   "zutun-docs.js",
   "verwandt.js",
+  // Projekte (user-projects/) und Git-Verlauf -- eigene Mess-Bausteine
+  "projekte.js",
+  "verlauf.js",
   // Anzeige: Woerter, Daten, Aussehen, Symbole, Schale
   "render/worte.js",
   "render/data.js",
+  // gemeinsame Anzeige-Helfer und die Seitenbauer
+  "render/helfer.js",
+  "render/seiten.js",
   "render/styles.js",
   "render/icons.js",
   "render/markdown.js",
@@ -227,6 +233,8 @@ const DASHBOARD = [
   "test/serve.test.js",
   "test/shell.test.js",
   "test/client.test.js",
+  "test/projekte.test.js",
+  "test/regeln-ladeart.test.js",
   // Der Meta-Test: haelt fest, dass jedes Modul einen Test hat, keins zu gross
   // ist und nichts geladen wird, was es nicht gibt. Er prueft den Bestand,
   // nicht das Verhalten -- und faengt damit genau die Luecke ab, die diese

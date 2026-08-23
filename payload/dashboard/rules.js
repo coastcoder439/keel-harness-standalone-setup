@@ -19,6 +19,38 @@
 
 const fs = require("fs");
 const path = require("path");
+// Dauer-Regeln werden ueber das FRONTMATTER erkannt (ohne = Dauer, mit = Abruf),
+// ordner-agnostisch und rekursiv -- dieselbe Quelle der Wahrheit wie measure.js
+// und inventar.js. Nicht mehr fest .claude/rules/keel bzw. eine [keel, common]-
+// Kandidatenliste (die uebersah Regeln in eigenen Ordnern und zaehlte
+// Frontmatter-Sprachpakete faelschlich als Dauer-Regel mit). [Review-Fund W]
+const { dauerRegelDateien } = require("./classify");
+
+const posix = (p) => String(p).split("\\").join("/").split(path.sep).join("/");
+
+// Eine benannte Regeldatei irgendwo unter .claude/rules/ finden (rekursiv,
+// ordner-agnostisch) -- nicht fest in keel/ oder common/. Gibt den rel. POSIX-
+// Pfad zurueck oder null.
+function regelDateiFinden(wurzel, name) {
+  const start = path.join(wurzel, ".claude", "rules");
+  let treffer = null;
+  (function lauf(dir) {
+    if (treffer) return;
+    let eintraege;
+    try {
+      eintraege = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of eintraege.sort((a, b) => a.name.localeCompare(b.name))) {
+      if (treffer) return;
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) lauf(p);
+      else if (e.name === name) treffer = p;
+    }
+  })(start);
+  return treffer ? posix(path.relative(wurzel, treffer)) : null;
+}
 
 // ---------------------------------------------------------------------------
 // Werkzeuge zum Ziehen
@@ -107,7 +139,7 @@ const DOC13 = "docs/13-arbeitsweise-standard.md";
 function effortStufen(wurzel) {
   const befehl = `$EDITOR ${DOC13}   # Abschnitt „2a · Modell- und Effort-Wahl“`;
   const zeilen = lesen(wurzel, DOC13);
-  if (!zeilen) return entfaellt("effort", "Denkbudget je Aufgabenform", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Die hier geltende Arbeitsweise steht in .claude/rules/keel/working-method.md.", befehl);
+  if (!zeilen) return entfaellt("effort", "Denkbudget je Aufgabenform", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Die hier geltende Arbeitsweise steht in den Dauer-Regeln unter .claude/rules/.", befehl);
 
   const t = tabelleZiehen(zeilen, ["Stufe", "Überspringen, wenn", "Aufsteigen, wenn"]);
   if (!t) {
@@ -198,24 +230,24 @@ function modellwahl(wurzel) {
 // Unterscheidung wie in eigenbau-ungesichert.js, und aus demselben Grund.
 // ---------------------------------------------------------------------------
 function dauerRegeln(wurzel) {
-  const kandidaten = [
-    { ordner: path.join(wurzel, ".claude", "rules", "keel"), quelle: path.join(wurzel, ".ecc-src", "rules", "common"), rel: ".claude/rules/keel" },
-    { ordner: path.join(wurzel, ".claude", "rules", "common"), quelle: path.join(wurzel, ".ecc-src", "rules", "common"), rel: ".claude/rules/common" },
-  ];
-  const ort = kandidaten.find((k) => fs.existsSync(k.ordner));
-  if (!ort) {
-    return fehlt("dauerregeln", "Dauer-Regeln (jede Sitzung)", ".claude/rules/…/common", "kein common-Regelordner gefunden", "$EDITOR .claude/rules/keel/");
+  const rulesDir = path.join(wurzel, ".claude", "rules");
+  const eccQuelle = path.join(wurzel, ".ecc-src", "rules", "common");
+  // Alle Regel-.md OHNE Frontmatter, in JEDEM Unterordner (keel, common, eigen).
+  const dateien = dauerRegelDateien(rulesDir);
+  if (!dateien.length) {
+    return fehlt("dauerregeln", "Dauer-Regeln (jede Sitzung)", ".claude/rules/", "keine Dauer-Regel (Markdown ohne Frontmatter) unter .claude/rules/ gefunden", "$EDITOR .claude/rules/");
   }
-  // Frueher stieg die Regel hier aus, wenn der Fremd-Klon .ecc-src/ fehlte. In einem
-  // Standalone-Harness gibt es den nie -- die Folge war ein Dauer-Befund "unlesbar"
-  // fuer Regeln, die vollstaendig vorliegen und in jeder Sitzung laden. Unbestimmbar
-  // ist ohne die Quelle nur die HERKUNFT (Eigenbau vs. mitgeliefert), nicht der Bestand.
-  const herkunftBestimmbar = fs.existsSync(ort.quelle);
+  // Frueher stieg die Regel aus, wenn der Fremd-Klon .ecc-src/ fehlte. In einem
+  // Standalone-Harness gibt es den nie -- unbestimmbar ist ohne die Quelle nur die
+  // HERKUNFT (Eigenbau vs. mitgeliefert), nicht der Bestand.
+  const herkunftBestimmbar = fs.existsSync(eccQuelle);
 
   const eintraege = [];
-  for (const name of fs.readdirSync(ort.ordner).filter((f) => f.endsWith(".md")).sort()) {
-    if (fs.existsSync(path.join(ort.quelle, name))) continue; // Fremd-Klon
-    const zeilen = fs.readFileSync(path.join(ort.ordner, name), "utf8").split("\n");
+  for (const abs of dateien) {
+    const name = path.basename(abs);
+    if (fs.existsSync(path.join(eccQuelle, name))) continue; // Fremd-Klon (per Dateiname)
+    const rel = posix(path.relative(wurzel, abs));
+    const zeilen = fs.readFileSync(abs, "utf8").split("\n");
     const titel = (zeilen.find((z) => z.startsWith("# ")) || `# ${name}`).slice(2).trim();
     // Der Kern: der erste Absatz nach der ersten ##-Überschrift, sonst die
     // ersten Aufzählungspunkte. Beides gezogen, nichts formuliert.
@@ -226,30 +258,30 @@ function dauerRegeln(wurzel) {
       .slice(0, 3)
       .map((z) => z.trim());
     eintraege.push({
-      datei: name,
+      datei: rel,
       titel,
       zeilen: zeilen.length,
       abschnitt: abIndex === -1 ? null : zeilen[abIndex].replace(/^#+\s*/, ""),
       kern,
-      befehl: `$EDITOR ${ort.rel}/${name}`,
+      befehl: `$EDITOR ${rel}`,
     });
   }
 
   if (!eintraege.length) {
-    return fehlt("dauerregeln", "Dauer-Regeln (jede Sitzung)", ort.rel, "kein einziger Eigenbau im common-Ordner — bei einem gepflegten Harness ist das ein Verdacht, keine Entwarnung", `$EDITOR ${ort.rel}/`);
+    return fehlt("dauerregeln", "Dauer-Regeln (jede Sitzung)", ".claude/rules/", "nur mitgelieferte Regeln (alle auch im Fremd-Klon) — kein einziger Eigenbau, bei einem gepflegten Harness ein Verdacht", "$EDITOR .claude/rules/");
   }
 
   return {
     id: "dauerregeln",
     titel: "Dauer-Regeln — in jeder Sitzung geladen",
     status: "gezogen",
-    quelle: { datei: ort.rel, zeile: null },
-    befehl: `$EDITOR ${ort.rel}/<datei>.md`,
+    quelle: { datei: ".claude/rules/", zeile: null },
+    befehl: "$EDITOR .claude/rules/<datei>.md",
     art: "regelliste",
     eintraege,
     abgrenzung: herkunftBestimmbar
-      ? `Eigenbau = liegt in ${ort.rel}, aber nicht in .ecc-src/rules/common (Fremd-Klon).`
-      : `Alle ${eintraege.length} Regeln aus ${ort.rel}. Herkunft (Eigenbau vs. mitgeliefert) ist hier nicht bestimmbar — dafuer braeuchte es den Fremd-Klon .ecc-src/, der nicht zu diesem Harness gehoert.`,
+      ? "Eigenbau = liegt unter .claude/rules/, aber nicht in .ecc-src/rules/common (Fremd-Klon)."
+      : `Alle ${eintraege.length} Dauer-Regeln (Markdown ohne Frontmatter) unter .claude/rules/. Herkunft (Eigenbau vs. mitgeliefert) ist hier nicht bestimmbar — dafuer braeuchte es den Fremd-Klon .ecc-src/, der nicht zu diesem Harness gehoert.`,
   };
 }
 
@@ -257,10 +289,9 @@ function dauerRegeln(wurzel) {
 // REGEL 5 — Werkzeug-Rangfolge (CLI vor MCP vor Browser)
 // ---------------------------------------------------------------------------
 function werkzeugrang(wurzel) {
-  const kandidaten = [".claude/rules/keel/tools.md", ".claude/rules/common/tools.md"];
-  const relPfad = kandidaten.find((k) => fs.existsSync(path.join(wurzel, k)));
-  const befehl = `$EDITOR ${relPfad || kandidaten[0]}`;
-  if (!relPfad) return fehlt("werkzeugrang", "Werkzeug-Beschaffung", kandidaten[0], "tools.md nicht gefunden", befehl);
+  const relPfad = regelDateiFinden(wurzel, "tools.md");
+  const befehl = `$EDITOR ${relPfad || ".claude/rules/…/tools.md"}`;
+  if (!relPfad) return fehlt("werkzeugrang", "Werkzeug-Beschaffung", ".claude/rules/", "tools.md unter .claude/rules/ nicht gefunden", befehl);
 
   const zeilen = lesen(wurzel, relPfad);
   const rang = zeileZiehen(zeilen, /CLI\s*→\s*2\.\s*MCP\s*→\s*3\./);
@@ -283,7 +314,9 @@ function werkzeugrang(wurzel) {
 // ---------------------------------------------------------------------------
 function sicherungsregel(wurzel) {
   const DATEI = "CLAUDE.md";
-  const befehl = `$EDITOR ${DATEI}   # Abschnitt 5 · Konventionen`;
+  // Kein fester Abschnitts-Verweis (den gibt es nur in DIESER CLAUDE.md) -- die
+  // Regel wird ohnehin inhaltsbasiert gezogen, nicht ueber eine Abschnittsnummer.
+  const befehl = `$EDITOR ${DATEI}   # Konventionen zum Sichern`;
   const zeilen = lesen(wurzel, DATEI);
   if (!zeilen) return fehlt("sicherung", "Sichern im geteilten Arbeitsbaum", DATEI, "CLAUDE.md nicht gefunden", befehl);
 
