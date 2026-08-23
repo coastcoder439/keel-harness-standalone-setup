@@ -20,7 +20,7 @@
 // ein bestandener Test — dieselbe Falle, gegen die eigenbau-ungesichert.js und
 // anleitung-drift.js ihre Kontrollproben haben.
 //
-// AUFRUF   const { messen } = require('./messen'); messen({ wurzel })
+// AUFRUF   const { messen } = require("./measure"); messen({ wurzel })
 
 const fs = require("fs");
 const path = require("path");

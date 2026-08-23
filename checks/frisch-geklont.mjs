@@ -137,6 +137,27 @@ try {
         `-- angleichen mit: node checks/paket-manifest.mjs --nachziehen`;
     });
 
+    // 1d. Die Dateiliste des Installateurs muss den Dashboard-Inhalt abbilden.
+    //
+    // paket-manifest.mjs faengt das NICHT ab: eine Datei kann im Paket liegen,
+    // im Manifest stehen -- und trotzdem nie installiert werden, weil die Liste
+    // DASHBOARD in install.mjs sie nicht nennt. Genau so geschehen am
+    // 23.08.2026, zweimal am selben Tag.
+    pruefe("dashboard-liste", () => {
+      const lauf = spawnSync("node", [path.join(BAUSATZ, "checks", "dashboard-liste.mjs")], {
+        cwd: BAUSATZ,
+        encoding: "utf8",
+      });
+      if (lauf.status === 0) return null;
+      const letzte = (lauf.stdout || "")
+        .split(String.fromCharCode(10))
+        .filter((z) => /NICHT INSTALLIERT|FEHLT IM PAKET|DOPPELT/.test(z))
+        .slice(0, 4)
+        .join(" | ");
+      return `Dateiliste und Paketinhalt weichen ab (Exitcode ${lauf.status}). ${letzte} ` +
+        `-- nachtragen in install.mjs, Liste DASHBOARD`;
+    });
+
     // 2. Frischer Zielordner + git init.
     ziel = fs.mkdtempSync(path.join(os.tmpdir(), "harness-abnahme-"));
     const gitInit = spawnSync("git", ["init"], { cwd: ziel, encoding: "utf8" });
@@ -234,6 +255,81 @@ try {
     pruefe("claude-md", () =>
       istDatei(path.join(ziel, "CLAUDE.md")) ? null : "CLAUDE.md fehlt im Zielordner",
     );
+
+    // 5f. Das Dashboard muss in der frischen Installation LAUFEN, nicht nur
+    // dort liegen.
+    //
+    // Bis 23.08.2026 hat die Abnahme das Dashboard nie angefasst. Sie war gruen,
+    // waehrend die Dateiliste des Installateurs bei sieben Eintraegen stand und
+    // das Dashboard zwanzig Module hatte -- eine frische Installation haette ein
+    // index.js bekommen, das vier nicht vorhandene Module laedt. Gefunden wurde
+    // das von Hand. Deshalb wird hier wirklich gebaut.
+    pruefe("dashboard-baut", () => {
+      const lauf = spawnSync("node", ["dashboard/index.js", "--html", "dashboard.html"], {
+        cwd: ziel,
+        encoding: "utf8",
+        timeout: 180000,
+      });
+      if (lauf.status !== 0) {
+        const grund = ((lauf.stderr || "") + (lauf.stdout || ""))
+          .split(String.fromCharCode(10))
+          .filter(Boolean)
+          .slice(-3)
+          .join(" | ");
+        return `das Dashboard laesst sich in der frischen Installation nicht bauen (Exitcode ${lauf.status}). ${grund}`;
+      }
+      const seite = path.join(ziel, "dashboard.html");
+      if (!istDatei(seite)) return "der Bau meldet Erfolg, aber dashboard.html fehlt";
+      const groesse = fs.statSync(seite).size;
+      if (groesse < 50000) return `dashboard.html ist mit ${groesse} Bytes zu klein -- vermutlich leer geblieben`;
+      return null;
+    });
+
+    // 5g. Die mitgelieferte Selbstpruefung muss beim Empfaenger gruen sein.
+    //
+    // Rote Tests beim Empfaenger sind schlimmer als keine: sie sagen "kaputt",
+    // wo nur eine Bedingung fehlt. Am 23.08.2026 waren 14 von 140 rot, weil sie
+    // Inhalte eines gewachsenen Workspace voraussetzten. Uebersprungene Tests
+    // sind in Ordnung -- sie tragen ihren Grund im Namen und werden hier
+    // ausdruecklich mitgezaehlt, damit niemand sie fuer bestanden haelt.
+    pruefe("dashboard-tests", () => {
+      // Die Dateien werden ausgeschrieben, nicht als Ordner uebergeben: unter
+      // Windows liest Node "dashboard/test/" als Modulpfad und meldet "Cannot
+      // find module" statt zu pruefen (gemessen 23.08.2026, Node 24). Eine
+      // Glob-Form scheidet aus, weil hier keine Shell laeuft.
+      const testOrdner = path.join(ziel, "dashboard", "test");
+      if (!istOrdner(testOrdner)) return "dashboard/test/ fehlt in der Installation";
+      const dateien = fs
+        .readdirSync(testOrdner)
+        .filter((f) => f.endsWith(".test.js"))
+        .map((f) => path.join("dashboard", "test", f));
+      if (dateien.length === 0) return "keine Testdatei in dashboard/test/ angekommen";
+      const lauf = spawnSync("node", ["--test", ...dateien], {
+        cwd: ziel,
+        encoding: "utf8",
+        timeout: 300000,
+      });
+      const aus = (lauf.stdout || "") + (lauf.stderr || "");
+      const zahl = (name) => {
+        const t = aus.match(new RegExp("^[^A-Za-z0-9]*" + name + "\\s+(\\d+)", "m"));
+        return t ? Number(t[1]) : null;
+      };
+      const gesamt = zahl("tests");
+      const rot = zahl("fail");
+      const durch = zahl("pass");
+      if (gesamt === null) return `die Testausgabe war nicht lesbar (Exitcode ${lauf.status})`;
+      if (gesamt < 50)
+        return `nur ${gesamt} Pruefungen aus ${dateien.length} Testdateien gelaufen -- die Installation ist unvollstaendig`;
+      if (rot) {
+        const welche = aus
+          .split(String.fromCharCode(10))
+          .filter((z) => z.includes("✖"))
+          .slice(0, 3)
+          .join(" | ");
+        return `${rot} von ${gesamt} Pruefungen rot in der frischen Installation. ${welche}`;
+      }
+      return durch > 0 ? null : "keine Pruefung ist durchgelaufen";
+    });
 
     // 6. Optionaler Tiefen-Test: laedt Claude die Dauer-Regeln wirklich?
     const claudeDa =

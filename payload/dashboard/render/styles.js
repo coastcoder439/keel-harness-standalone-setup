@@ -18,7 +18,7 @@
 // Vokabular der Spezifikation Abschnitt 2.2: Pfadleiste statt "Krume",
 // Hauptflaeche statt "Tafel", Detail statt "Einzelansicht".
 //
-// AUFRUF   const { css, TOKENS, oklchZuRgb, kontrast } = require("./render/styles");
+// AUFRUF   const { css, TOKENS, oklchZuRgb, kontrast } = require("./styles");
 
 // ---------------------------------------------------------------------------
 // Die Token-Tabelle als Daten. Einzige Quelle -- der CSS-String unten wird

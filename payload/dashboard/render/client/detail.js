@@ -94,7 +94,7 @@ HD.baumZeilen = function (knoten, tiefe) {
       + '<span class="baum-symbol">' + HD.icon(symbol) + "</span>"
       + '<span class="baum-name">' + HD.markiere(k.name, HD.S.suche) + "</span>"
       + marke
-      + (istOrdner && k.anzahlDateien ? '<span class="baum-zahl">' + k.anzahlDateien + "</span>" : "")
+      + (istOrdner && k.anzahlDateien ? '<span class="baum-zahl">' + HD.esc(k.anzahlDateien) + "</span>" : "")
       + "</button>");
 
     if (istOrdner && offen) raus = raus.concat(HD.baumZeilen(k, tiefe + 1));
