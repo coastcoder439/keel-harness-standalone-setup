@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-23T04:16:37.425Z",
+  "gebautAm": "2026-08-23T04:22:32.153Z",
   "posten": 77,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -324,8 +324,8 @@
       "herkunft": "zustand/README.md",
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 4148,
-      "sha256": "74c816fde0b40e08"
+      "bytes": 5200,
+      "sha256": "2d785e02bd055e43"
     },
     {
       "datei": "payload/dashboard/classify.js",
