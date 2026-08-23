@@ -343,7 +343,16 @@ function ersterAbsatz(text, abZeile) {
 // kein Satz, z. B. "danger-guard (zerstoerende Befehle)"). Deshalb steht hier der
 // Kopfkommentar VOR statusMessage und CLAUDE.md-Zeile. Verloren geht dabei nichts:
 // beide Fundstellen bleiben in `weitereQuellen` am Ergebnis stehen.
-const STUFEN = [stufeFrontmatter, stufeKopfkommentar, stufeAnsage, stufeClaudeMd, stufeAbsatz, stufeRolle];
+// Reihenfolge nach dem, was einem LESER hilft -- nicht nach dem, was zum
+// Beispielschema der Spezifikation passt.
+//
+// Die vorige Fassung stellte den Kopfkommentar vor die CLAUDE.md-Tabelle, mit
+// einer langen Begruendung aus dem Spezifikationsbeispiel. Ergebnis: fuer
+// danger-guard.js stand "PreToolUse-Hook fuer Bash. Schwester von git-guard.js
+// -- aber dieser hier BLOCKIERT" in der Liste, waehrend zwei Ordner weiter in
+// CLAUDE.md der Satz "blockiert zerstoerende Befehle ausserhalb der erlaubten
+// Schreibziele" stand. Geschrieben fuer Menschen, ungenutzt.
+const STUFEN = [stufeFrontmatter, stufeClaudeMd, stufeAnsage, stufeKopfkommentar, stufeAbsatz, stufeRolle];
 
 function stufeFrontmatter(lage) {
   if (lage.ext !== "md" || !lage.text) return null;

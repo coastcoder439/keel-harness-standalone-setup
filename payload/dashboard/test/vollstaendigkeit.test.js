@@ -190,7 +190,7 @@ test("kein Modul verlangt eine Datei, die es nicht gibt", () => {
 test("kein Modul laedt ein fremdes Paket", () => {
   // Der Rahmen ist "Bordmittel, keine Bibliothek". Ein eingeschlichener
   // Fremd-Aufruf faellt erst beim Empfaenger auf, wo kein node_modules liegt.
-  const ERLAUBT = /^(node:)?(fs|path|os|url|util|child_process|crypto|vm|assert|events|readline|zlib|stream|buffer)$/;
+  const ERLAUBT = /^(node:)?(fs|path|os|url|util|child_process|crypto|vm|assert|events|readline|zlib|stream|buffer|http|https|net)$/;
   const fremd = [];
   for (const m of moduleFinden()) {
     const text = fs.readFileSync(path.join(DASH, m), "utf8");
