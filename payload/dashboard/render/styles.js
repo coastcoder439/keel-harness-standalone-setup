@@ -559,6 +559,22 @@ const BAUSTEINE = `
   background:linear-gradient(to bottom,transparent,var(--card));pointer-events:none}
 .vorhang-knopf{font-size:var(--text-xs);color:var(--primary);padding:6px 0}
 /* CopyText: Rueckmeldung 1,5 s, vom Skript ueber data-kopiert gesetzt. */
+/* Die Einblendung nach dem Kopieren. Sie trug bis zum 23.08.2026 die
+   KNOPF-Klasse .kopieren und eine Klasse .sichtbar, die es im Stylesheet
+   ueberhaupt nicht gab: die Bestaetigung erschien als leerer Rahmen am
+   Seitenende und blieb, einmal gefuellt, dauerhaft stehen. */
+.meldung{position:fixed;left:50%;bottom:24px;transform:translate(-50%,8px);
+  z-index:60;padding:8px 14px;border-radius:999px;border:1px solid var(--border);
+  background:var(--card);color:var(--foreground);font-size:var(--text-xs);
+  box-shadow:0 4px 16px rgb(0 0 0 / 0.18);
+  opacity:0;visibility:hidden;pointer-events:none;
+  transition:opacity 160ms ease,transform 160ms ease,visibility 0s linear 160ms}
+.meldung.sichtbar{opacity:1;visibility:visible;transform:translate(-50%,0);
+  transition:opacity 160ms ease,transform 160ms ease,visibility 0s}
+@media (prefers-reduced-motion: reduce){
+  .meldung{transition:none}
+  .meldung.sichtbar{transition:none}
+}
 .kopieren{display:inline-flex;align-items:center;gap:5px;font-size:var(--text-xs);
   color:var(--muted-foreground);border:1px solid var(--border);border-radius:var(--radius-sm);padding:2px 6px}
 .kopieren:hover{color:var(--foreground);background:color-mix(in srgb,var(--accent) 50%,transparent)}
