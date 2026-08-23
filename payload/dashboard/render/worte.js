@@ -326,6 +326,8 @@ const UI = {
   // Detail
   eigenschaften: "Eigenschaften",
   beschreibung: "Beschreibung",
+  ansageStatusleiste: "Ansage in der Statusleiste",
+  warumImKontext: "Warum im Kontext",
   keineBeschreibung: "Keine Beschreibung hinterlegt",
   keineBeschreibungQuelle: "Eine Beschreibung stünde in: {ort}",
   dateiinhalt: "Inhalt",
