@@ -297,7 +297,9 @@ function gruppeEinordnen(wurzel, ordner, dateien, hooks) {
     const abs = path.isAbsolute(d) ? d : path.join(ordner, d);
     const h = herkunftBestimmen(wurzel, abs);
     const l = ladeartBestimmen(wurzel, abs, hooks);
-    return { pfad: path.relative(wurzel, abs), herkunft: h.herkunft, herkunftBeleg: h.beleg, ladeart: l.ladeart, ladeartBeleg: l.beleg };
+    // POSIX -- sonst heisst dieselbe Datei hier ".claude\skills\x" und im
+    // Dateibaum ".claude/skills/x", und keine Verknuepfung findet ihr Ziel.
+    return { pfad: path.relative(wurzel, abs).split(path.sep).join("/"), herkunft: h.herkunft, herkunftBeleg: h.beleg, ladeart: l.ladeart, ladeartBeleg: l.beleg };
   });
 
   const zaehle = (feld) =>

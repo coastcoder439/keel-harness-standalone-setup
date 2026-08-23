@@ -806,6 +806,13 @@ const path = require('path');
 
 const WORKSPACE = path.resolve(__dirname, '..');            // = Wurzel der Werkbank
 
+// --lokal: keine Netzabfrage. Gemessen am 23.08.2026: `git ls-remote` kostet
+// 1,85 s je Repo, bei 20 Repos also rund 37 s -- das ist die GESAMTE Laufzeit
+// dieses Skripts, alles andere sind Millisekunden. Wer nur wissen will, ob
+// ungesicherte Aenderungen herumliegen, soll darauf nicht 37 Sekunden warten.
+// Ohne Netz bleibt der Sync-Stand ehrlich unbekannt -- er wird NICHT geraten.
+const NUR_LOKAL = process.argv.includes('--lokal');
+
 function sh(cmd, cwd) {
   try { return execSync(cmd, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim(); }
   catch (e) { return null; }
@@ -874,6 +881,18 @@ function repoInfo(dir, label) {
     : null;
   let sync;
   if (!remoteUrl) sync = 'KEIN GitHub-Remote -- nur lokal, NICHT gesichert!';
+  else if (NUR_LOKAL) {
+    // Ohne Netz gibt es zwei ehrliche Auskuenfte, aber keine dritte erfundene:
+    // der zuletzt bekannte Fernstand (refs/remotes/origin/<branch> im lokalen
+    // Git) sagt, ob seit dem letzten Abgleich etwas liegengeblieben ist. Ob
+    // jemand ANDERES seither gepusht hat, weiss man ohne Abfrage nicht -- und
+    // genau das steht dann auch da, statt "synchron" zu behaupten.
+    const localHash = sh('git rev-parse HEAD', dir);
+    const bekannteFerne = sh(`git rev-parse refs/remotes/origin/${branch}`, dir);
+    if (!bekannteFerne) sync = `Branch "${branch}" ohne bekannten Fernstand (nicht abgefragt)`;
+    else if (bekannteFerne === localHash) sync = 'synchron zum zuletzt bekannten Fernstand (nicht abgefragt)';
+    else sync = 'NICHT synchron -- lokale Commits noch nicht gepusht (Fernstand nicht abgefragt)';
+  }
   else {
     const localHash = sh('git rev-parse HEAD', dir);
     const ls = sh(`git ls-remote origin refs/heads/${branch}`, dir);
