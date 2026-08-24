@@ -235,31 +235,26 @@ test("kein Zugangsmuster ueberlebt im fertigen Datensatz", () => {
 // ---------------------------------------------------------------------------
 // Beschreibungs-Rangfolge (7.2)
 // ---------------------------------------------------------------------------
-test("beschreibungFuer nimmt fuer .claude/danger-guard.js den Satz aus CLAUDE.md", () => {
-  // WARUM CLAUDE.md UND NICHT DER KOPFKOMMENTAR
-  // Bis zum 23.08.2026 stand der Kopfkommentar vorn, mit einer Begruendung aus
-  // dem Beispielschema der Spezifikation. In der Liste stand dann
-  // "PreToolUse-Hook fuer Bash. Schwester von git-guard.js -- aber dieser hier
-  // BLOCKIERT" -- eine Notiz fuer den, der den Code schreibt. Zwei Ordner
-  // weiter stand in CLAUDE.md der Satz "blockiert zerstoerende Befehle
-  // ausserhalb der erlaubten Schreibziele": geschrieben fuer einen Leser, und
-  // ungenutzt. Die Rangfolge richtet sich jetzt danach, was einem LESER hilft.
+test("beschreibungFuer: fuer .claude/danger-guard.js greift der Kopfkommentar-Fallback", () => {
+  // Die Rangfolge bleibt CLAUDE.md vor Kopfkommentar (was einem LESER hilft,
+  // steht vorn). Seit der CLAUDE.md-Kuerzung (24.08.2026) nennt CLAUDE.md aber
+  // keine Waechter mehr -- am echten Baum greift deshalb der Fallback auf den
+  // Kopfkommentar. Die Stufen selbst prueft "faellt sauber durch die Stufen".
   const d = echt.dateien.find((x) => x.pfad === ".claude/danger-guard.js");
   assert.ok(d);
-  assert.strictEqual(d.beschreibung.quelle, "claude-md");
-  assert.match(d.beschreibung.beleg || "", /^CLAUDE\.md:\d+$/, "Beleg zeigt auf die Zeile in CLAUDE.md");
-  assert.ok(d.beschreibung.text.includes("blockiert"), "der Satz sagt, was das Skript TUT: " + d.beschreibung.text);
+  assert.strictEqual(d.beschreibung.quelle, "kopfkommentar");
+  assert.match(d.beschreibung.beleg || "", /^\.claude\/danger-guard\.js:\d+(-\d+)?$/, "Beleg zeigt in die Datei selbst");
+  assert.ok(/blockiert/i.test(d.beschreibung.text), "der Satz sagt, was das Skript TUT: " + d.beschreibung.text);
 
-  // Gegenprobe an der Quelle: steht der Satz wirklich dort, wo der Beleg sagt?
-  const claudeMd = fs.readFileSync(path.join(WURZEL, "CLAUDE.md"), "utf8").split(/\r?\n/);
-  const zeilenNr = Number(String(d.beschreibung.beleg).split(":")[1]);
-  assert.ok(claudeMd[zeilenNr - 1].includes("danger-guard.js"), "die belegte Zeile nennt das Skript");
+  // Gegenprobe an der Quelle: der Beleg zeigt auf Kommentarzeilen der Datei selbst.
+  const quelle = fs.readFileSync(path.join(WURZEL, ".claude", "danger-guard.js"), "utf8").split(/\r?\n/);
+  const vonZeile = Number(String(d.beschreibung.beleg).split(":")[1].split("-")[0]);
+  assert.match(quelle[vonZeile - 1], /^\s*\/\//, "die belegte Zeile ist ein Kommentar");
 
-  // Und der Kopfkommentar bleibt erreichbar -- verloren geht nichts, er steht
-  // nur nicht mehr vorn.
+  // Direkter Aufruf liefert dieselbe Stufe.
   const text = fs.readFileSync(path.join(WURZEL, ".claude", "danger-guard.js"), "utf8");
   const direkt = beschreibungFuer(".claude/danger-guard.js", text, { rolle: "hook-skript" });
-  assert.strictEqual(direkt.quelle, "kopfkommentar", "ohne CLAUDE.md greift weiterhin der Kopfkommentar");
+  assert.strictEqual(direkt.quelle, "kopfkommentar");
 });
 
 test("beschreibungFuer findet fuer .claude/commands/save-work.md das Frontmatter", () => {

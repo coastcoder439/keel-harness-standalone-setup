@@ -17,7 +17,7 @@ du traegst ein.
    - Was ist noch offen und muss entschieden werden?
    Will der Mensch etwas nicht beantworten: `[AUSFUELLEN]` stehen lassen. NIE raten, NIE
    Platzhalter mit Vermutungen fuellen. (Die spaeteren `[?]`-Platzhalter -- Projekt-Zeile,
-   Abschnitt 6 -- sind KEINE Onboarding-Pflicht und bleiben unangetastet.)
+   Abschnitt „Deine eigenen Regeln" -- sind KEINE Onboarding-Pflicht und bleiben unangetastet.)
 3. **Werkzeug-Landschaft -- "Womit arbeitest du?"** Frage den Menschen, mit welchen
    Programmen und Diensten er arbeitet. Er nennt sie im Klartext, freie Worte
    ("GitHub", "Vercel", "Notion", "Photoshop"). Fuer JEDE Nennung ordnest DU ein, der
@@ -55,7 +55,7 @@ du traegst ein.
      "ANTHROPIC_API_KEY in der Umgebung"), NIE den Wert. Schluessel bleiben im Schluesselbund
      oder in Umgebungsvariablen; ein einmal committeter Schluessel bleibt in der Historie,
      auch nach dem Loeschen der Zeile.
-   - Trag das Ergebnis nach `docs/werkzeug-landschaft.md` ein (liegt als Vorlage bereit) --
+   - Trag das Ergebnis nach `docs/tool-landscape.md` ein (liegt als Vorlage bereit) --
      ergaenzt, nicht ueberschrieben. Nichts, was der Mensch nicht bestaetigt hat.
 4. Danach die Punkte, die nur der Mensch entscheiden kann -- je ein kurzer Absatz mit
    Handlung und Wirkung, dann seine Entscheidung abwarten, nichts selbst annehmen:
@@ -68,9 +68,9 @@ du traegst ein.
      Rechnerpfad). Nur erwaehnen, wenn er absolute Pfade eintragen will.
    - **Sitzungs-Rollen:** `docs/08-sessions-rollen.md` NUR anlegen, wenn mehrere
      Sitzungen parallel laufen -- jede Zeile kostet in jeder Sitzung Kontext.
-   - **Eigene Regeln:** Abschnitt 6 der `CLAUDE.md` -- erst fuellen, wenn ein eigener
-     Fall da ist. Jetzt nur ansagen.
-5. Committen, mit pathspec: `git commit -m "harness: onboarding" -- CLAUDE.md docs/werkzeug-landschaft.md`
+   - **Eigene Regeln:** Abschnitt „Deine eigenen Regeln" der `CLAUDE.md` -- erst fuellen,
+     wenn ein eigener Fall da ist. Jetzt nur ansagen.
+5. Committen, mit pathspec: `git commit -m "harness: onboarding" -- CLAUDE.md docs/tool-landscape.md`
 6. Abschluss in einem Satz: was eingetragen wurde, was als `[AUSFUELLEN]` offen blieb, welche
    Werkzeuge erkannt/vorgemerkt wurden, ob ein Remote fehlt. Dann `/repo-status`.
 
