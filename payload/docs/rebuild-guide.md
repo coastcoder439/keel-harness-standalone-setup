@@ -1335,13 +1335,23 @@ function tokensVon(b) {
   while ((m = re.exec(b))) t.push(m[1] ?? m[2] ?? m[3]);
   return t;
 }
-// Liefert {pfad, projekt} wenn ein Pfad-Argument des Befehls (aufgeloest gegen
-// basis) unter <werkbank>/user-projects/<projekt> liegt UND dieses Projekt ein
-// eigenes .git hat -- sonst null. existiert ist injizierbar (Selbsttest).
+// Nur die SEGMENTE der Befehlskette, die mit git arbeiten -- ein cp/ls im selben
+// Befehl (getrennt durch && ; |) darf keinen git-Block ausloesen. Falsch-Positiv
+// live erlebt 24.08.2026: `git commit ... && cp x user-projects/<repo>/...`
+// wurde geblockt, obwohl der user-projects-Pfad nur das cp-Ziel war.
+function gitSegmente(befehl) {
+  return String(befehl)
+    .split(/&&|\|\||;|\|/)
+    .filter((s) => /\bgit\b/.test(s));
+}
+
+// Liefert {pfad, projekt} wenn ein Pfad-Argument eines GIT-Segments (aufgeloest
+// gegen basis) unter <werkbank>/user-projects/<projekt> liegt UND dieses Projekt
+// ein eigenes .git hat -- sonst null. existiert ist injizierbar (Selbsttest).
 function projektRepoTreffer(befehl, basis, werkbank, existiert) {
   if (!werkbank) return null;
   const up = path.join(werkbank, "user-projects");
-  for (const tok of tokensVon(nachrichtenfrei(befehl))) {
+  for (const tok of tokensVon(nachrichtenfrei(gitSegmente(befehl).join(" ")))) {
     if (!tok || tok.startsWith("-") || tok === "git") continue;
     let abs;
     try {
@@ -1370,6 +1380,10 @@ if (process.argv.includes("--selbsttest")) {
     ["git add user-projects/ohne-repo/a.js", wb, false],
     ["git -C user-projects/keel-light commit -m 'x' -- foo.js", wb, false], // Ziel ist das Projekt selbst -> Block greift nur bei Werkbank-Ziel (siehe Aufrufstelle)
     ["git status", wb, false],
+    // Falsch-Positiv vom 24.08.2026: der user-projects-Pfad ist nur cp-Ziel im Nachbar-Segment.
+    ['git commit -m "x" -- docs/a.md && cp docs/a.md user-projects/keel-light/payload/', wb, false],
+    // Gegenprobe: im GIT-Segment selbst muss der Pfad weiter blocken.
+    ['echo hi && git add user-projects/keel-light/foo.js', wb, true],
   ];
   let fehler = 0;
   for (const [befehl, basis, soll] of faelle) {
