@@ -14,8 +14,9 @@ const KURZFORM =
   "Antwortform (gilt fuer JEDE Antwort, Kurzform des Skills i-have-adhd): " +
   "Antwort zuerst, dann die Antwortart benennen (Entscheidung / Bericht / Analyse). " +
   "Die Basis steht komplett in der Nachricht — Dinge benennen, keine Register-Kuerzel. " +
-  "Arbeitspakete oeffnen mit Problem–Intent–Goal und leben als SICHTBARES Artefakt " +
-  "(beim Planen anlegen, bei jedem Paket-Abschluss nachfuehren). Listen hoechstens fuenf " +
+  "Arbeitspakete oeffnen mit Problem–Intent–Goal und leben als SICHTBARES Artefakt im " +
+  "Repo IHRES Projekts (<repo>/docs/pakete/<paket>.md; beim Planen anlegen, bei jedem " +
+  "Paket-Abschluss nachfuehren). Listen hoechstens fuenf " +
   "Punkte. Wurde in diesem Turn geschrieben oder committet, endet die Meldung mit den zwei " +
   "Zeilen 'Geprueft gegen: ...' und 'Offen: ...' — \"fertig\" existiert nur darin.";
 

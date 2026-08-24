@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-24T14:27:40.984Z",
-  "posten": 88,
+  "gebautAm": "2026-08-24T14:36:00.548Z",
+  "posten": 90,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 76558,
-      "sha256": "a36252b9b461b376"
+      "bytes": 76864,
+      "sha256": "210f4863ee87e6c4"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -212,8 +212,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 2388,
-      "sha256": "663f95d7d9e195cf"
+      "bytes": 2449,
+      "sha256": "d4379587d81d6992"
     },
     {
       "datei": "payload/claude/repo-status.js",
@@ -244,8 +244,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 1432,
-      "sha256": "69a7edd9b6e69dcd"
+      "bytes": 1715,
+      "sha256": "15708e09be156580"
     },
     {
       "datei": "payload/claude/session-roles.js",
@@ -686,6 +686,22 @@
       "gesaeubert": 0,
       "bytes": 2480,
       "sha256": "9be0141b5651786a"
+    },
+    {
+      "datei": "payload/docs/harness-issues.md",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 480,
+      "sha256": "890530cf21b0cda3"
+    },
+    {
+      "datei": "payload/docs/pakete/VORLAGE.md",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 863,
+      "sha256": "385e4c42da331302"
     },
     {
       "datei": "payload/docs/rebuild-guide.md",

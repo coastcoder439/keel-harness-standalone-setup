@@ -261,6 +261,11 @@ const BEILEGER = [
   // Guard-Abdeckungs-Matrix: jede Regel erzwungen oder ehrlich "nur Prosa" --
   // neue Regel ohne Zeile dort ist ein Fund (24.08.2026).
   "guard-abdeckung.md",
+  // Paket-Artefakt-Vorlage: jedes Arbeitspaket lebt sichtbar unter docs/pakete/ (24.08.2026).
+  "pakete/VORLAGE.md",
+  // Leere Issues-Datei mit dem Fertig-Massstab im Kopf (Owner 24.08.2026): leer = fertig;
+  // offene ARBEIT lebt in docs/pakete/. zutun-docs liest sie als Quelle.
+  "harness-issues.md",
   // Ablage-Vorlage fuer den Onboarding-Schritt "Werkzeug-Landschaft" (Schritt 3):
   // vier Rubriken CLI/MCP/API/Zugaenge. Wird nach docs/ kopiert, dort traegt der
   // Onboarding-Befehl die erkannten Werkzeuge ein.
