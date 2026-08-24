@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-24T17:44:32.587Z",
-  "posten": 93,
+  "gebautAm": "2026-08-24T19:25:48.030Z",
+  "posten": 94,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 77021,
-      "sha256": "9e93923cacfeafad"
+      "bytes": 77367,
+      "sha256": "c0e54b416019d76a"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -244,8 +244,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 1724,
-      "sha256": "b559557359e73299"
+      "bytes": 2021,
+      "sha256": "317972364cb17730"
     },
     {
       "datei": "payload/claude/session-roles.js",
@@ -750,6 +750,14 @@
       "gesaeubert": 1,
       "bytes": 4507,
       "sha256": "9f49df5c3e851c00"
+    },
+    {
+      "datei": "payload/docs/ui-standard.md",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 2792,
+      "sha256": "2300ae42adb29118"
     },
     {
       "datei": "templates/CLAUDE.md",

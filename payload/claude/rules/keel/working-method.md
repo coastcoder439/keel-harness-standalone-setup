@@ -3,6 +3,10 @@
 Vor der Arbeit die Zieldefinition in drei Saetzen: **Problem** (was ist konkret kaputt) ·
 **Intent** (warum es getan wird) · **Goal** (der pruefbare Zielzustand). Schleife je
 Arbeitspaket: Zieldefinition → Plan → Bau → Verify → Ship; sichern per Push ist immer erlaubt.
+**Verify bei UI-Code heisst: echter Screenshot im Browser gegen `docs/ui-standard.md`
+geprueft** [Owner, 25.08.2026: "du hast anscheinend keine optische Abnahme gemacht"] —
+DOM-Text lesen ersetzt das Hinsehen nicht; ein fehlgeschlagener Screenshot ist ein
+Blocker, kein uebersprungener Schritt.
 
 **Jedes Arbeitspaket lebt als sichtbares Artefakt IM REPO SEINES PROJEKTS** [Owner,
 24.08.2026]: `<projekt-repo>/docs/packages/<paket>.md` — Projekt-Arbeit unter

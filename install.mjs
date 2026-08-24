@@ -273,6 +273,11 @@ const BEILEGER = [
   // vier Rubriken CLI/MCP/API/Zugaenge. Wird nach docs/ kopiert, dort traegt der
   // Onboarding-Befehl die erkannten Werkzeuge ein.
   "tool-landscape.md",
+  // UI-Standard des Dashboards -- sieben Punkte, gegen die jede Seite gebaut UND
+  // optisch abgenommen wird (Owner 25.08.2026: "es waren bereits regeln fuer ui
+  // festgelegt"). Ohne diese Datei im frischen Klon baut die naechste Sitzung wieder
+  // am Vokabular vorbei -- genau der Fund, der dieses Paket ausgeloest hat.
+  "ui-standard.md",
 ];
 
 const LIZENZEN = ["LICENSE-mattpocock-skills.txt", "LICENSE-i-have-adhd.txt"];
