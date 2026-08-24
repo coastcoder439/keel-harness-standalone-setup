@@ -147,6 +147,7 @@ const WAECHTER = [
   "danger-guard.js",
   "git-guard.js",
   "commit-pathspec-guard.js",
+  "write-guard.js",       // PreToolUse Write/Edit: Schreibziel, Zugaenge, gitignore-Reihenfolge (24.08.2026)
   "sessionpost-guard.js", // PreToolUse: blockt zu lange/menschliche Inter-Session-Nachrichten
   "repo-status.js",
   "session-roles.js",
@@ -255,6 +256,9 @@ const BEILEGER = [
   // Fehlen sie, fuehrt die Regel ins Leere und wird beim ersten Zweifel ignoriert.
   "completeness-check.md",
   "tool-sourcing.md",
+  // Guard-Abdeckungs-Matrix: jede Regel erzwungen oder ehrlich "nur Prosa" --
+  // neue Regel ohne Zeile dort ist ein Fund (24.08.2026).
+  "guard-abdeckung.md",
   // Ablage-Vorlage fuer den Onboarding-Schritt "Werkzeug-Landschaft" (Schritt 3):
   // vier Rubriken CLI/MCP/API/Zugaenge. Wird nach docs/ kopiert, dort traegt der
   // Onboarding-Befehl die erkannten Werkzeuge ein.

@@ -63,6 +63,17 @@
         ]
       },
       {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/write-guard.js\"",
+            "timeout": 10,
+            "statusMessage": "write-guard (Schreibziel, Zugaenge, gitignore-Reihenfolge)"
+          }
+        ]
+      },
+      {
         "matcher": "mcp__ccd_session_mgmt__(send_message|list_sessions)",
         "hooks": [
           {

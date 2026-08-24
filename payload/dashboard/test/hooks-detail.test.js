@@ -41,6 +41,7 @@ const ERWARTETE_REIHENFOLGE = [
   "danger-guard.js",
   "git-guard.js",
   "commit-pathspec-guard.js",
+  "write-guard.js",
   "sessionpost-guard.js",
 ];
 
@@ -54,20 +55,20 @@ const WIRKUNG_MARKER = {
 // ---------------------------------------------------------------------------
 // Bestand und Reihenfolge
 // ---------------------------------------------------------------------------
-test("acht Eintraege, in der Reihenfolge von settings.json", () => {
+test("neun Eintraege, in der Reihenfolge von settings.json", () => {
   assert.deepStrictEqual(ergebnis.fehler, [], "kein Messfehler erwartet");
-  assert.strictEqual(ergebnis.eintraege.length, 8);
+  assert.strictEqual(ergebnis.eintraege.length, 9);
   assert.deepStrictEqual(ergebnis.eintraege.map((e) => e.skript), ERWARTETE_REIHENFOLGE);
   const zeilen = ergebnis.eintraege.map((e) => e.settingsZeile);
   const sortiert = [...zeilen].sort((a, b) => a - b);
   assert.deepStrictEqual(zeilen, sortiert, "settingsZeile muss monoton steigen");
 });
 
-test("Ereignisse: SessionStart 3, Stop 1, PreToolUse 4", () => {
+test("Ereignisse: SessionStart 3, Stop 1, PreToolUse 5", () => {
   const nach = (ev) => ergebnis.eintraege.filter((e) => e.ereignis === ev).length;
   assert.strictEqual(nach("SessionStart"), 3);
   assert.strictEqual(nach("Stop"), 1);
-  assert.strictEqual(nach("PreToolUse"), 4);
+  assert.strictEqual(nach("PreToolUse"), 5);
   assert.strictEqual(nach("SessionStart") + nach("Stop") + nach("PreToolUse"), ergebnis.eintraege.length);
 });
 
@@ -161,14 +162,16 @@ test("jede Wirkung ist ein Code aus der Menge und jeder Beleg haelt an der Quell
   }
 });
 
-test("Wirkung je Skript: vier blockieren, uncommitted-warn meldet nur", () => {
+test("Wirkung je Skript: fuenf blockieren, uncommitted-warn meldet nur", () => {
   // git-guard blockt seit 24.08.2026 EINEN Fall hart (Werkbank-Commit mit
-  // Projekt-Repo-Pfad, Owner-Freigabe) und zaehlt damit zu den Blockierern.
+  // Projekt-Repo-Pfad, Owner-Freigabe); write-guard (Write/Edit: Schreibziel,
+  // Zugaenge, gitignore-Reihenfolge) kam am selben Tag dazu.
   const nach = (name) => ergebnis.eintraege.find((e) => e.skript === name).wirkung;
   assert.strictEqual(nach("danger-guard.js"), "blockiert");
   assert.strictEqual(nach("commit-pathspec-guard.js"), "blockiert");
   assert.strictEqual(nach("sessionpost-guard.js"), "blockiert");
   assert.strictEqual(nach("git-guard.js"), "blockiert");
+  assert.strictEqual(nach("write-guard.js"), "blockiert");
   assert.strictEqual(nach("uncommitted-warn.js"), "meldet");
   for (const name of ["session-roles.js", "onboarding-start.js", "project-context.js"]) {
     assert.strictEqual(nach(name), "kontext");
@@ -226,10 +229,10 @@ test("der Beleg fuer startup zeigt auf die Schaltstelle, nicht auf einen Komment
     const e = ergebnis.eintraege.find((x) => x.skript === name);
     return e.ausloeser.find((a) => a.wort === "startup").zeile;
   };
-  assert.strictEqual(nach("session-roles.js"), 96);
+  assert.strictEqual(nach("session-roles.js"), 98);
   assert.strictEqual(nach("onboarding-start.js"), 47);
   assert.strictEqual(nach("project-context.js"), 33);
-  for (const [name, zeile] of [["session-roles.js", 96], ["onboarding-start.js", 47], ["project-context.js", 33]]) {
+  for (const [name, zeile] of [["session-roles.js", 98], ["onboarding-start.js", 47], ["project-context.js", 33]]) {
     const quelle = zeilenVon(`.claude/${name}`)[zeile - 1];
     assert.ok(!/^\s*\/\//.test(quelle), `${name}:${zeile} ist eine Kommentarzeile: ${quelle}`);
   }

@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-24T11:47:15.175Z",
-  "posten": 84,
+  "gebautAm": "2026-08-24T11:58:36.308Z",
+  "posten": 86,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 76063,
-      "sha256": "64ac694ace624720"
+      "bytes": 76335,
+      "sha256": "67fad2bbc650e7da"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -236,8 +236,8 @@
       "herkunft": ".claude/hooks/session-roles.js",
       "quellordner": "werkbank",
       "gesaeubert": 3,
-      "bytes": 5207,
-      "sha256": "74619221459bcece"
+      "bytes": 5440,
+      "sha256": "19b84c78180f955d"
     },
     {
       "datei": "payload/claude/sessionpost-guard.js",
@@ -310,6 +310,14 @@
       "gesaeubert": 3,
       "bytes": 4920,
       "sha256": "f176607a121967ea"
+    },
+    {
+      "datei": "payload/claude/write-guard.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 7973,
+      "sha256": "15fcc6e1d3eab51f"
     },
     {
       "datei": "payload/dashboard/README.md",
@@ -508,8 +516,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 20807,
-      "sha256": "ec4a79910efdc8ac"
+      "bytes": 20951,
+      "sha256": "d59b64ce99bb0850"
     },
     {
       "datei": "payload/dashboard/test/icons.test.js",
@@ -656,12 +664,20 @@
       "sha256": "1e463158ff88983d"
     },
     {
+      "datei": "payload/docs/guard-abdeckung.md",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 2274,
+      "sha256": "9a1a89e2acc19671"
+    },
+    {
       "datei": "payload/docs/rebuild-guide.md",
       "herkunft": "docs/10-nachbau-anleitung.md",
       "quellordner": "werkbank",
       "gesaeubert": 11,
-      "bytes": 211790,
-      "sha256": "49c5c034ec7772dd"
+      "bytes": 212365,
+      "sha256": "7f336f6bb5f99363"
     },
     {
       "datei": "payload/docs/tool-landscape.md",
@@ -700,8 +716,8 @@
       "herkunft": "erzeugt von paketieren.mjs",
       "quellordner": "erzeugt",
       "gesaeubert": 0,
-      "bytes": 2402,
-      "sha256": "46a596a01662d7b8"
+      "bytes": 2744,
+      "sha256": "edfd9ed2ca59cf39"
     }
   ]
 }
