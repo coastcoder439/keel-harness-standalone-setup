@@ -36,7 +36,7 @@ const { zuTunDoku } = require("./todo-docs.js");
 const { verwandt } = require("./related.js");
 const { projekte } = require("./projects.js");
 const { verlaufMessen } = require("./history.js");
-const { hookSkripte, kontrollprobe, gruppeEinordnen, dauerRegelBeleg, dauerRegelDateien } = require("./classify");
+const { hookSkripte, gruppeEinordnen, dauerRegelBeleg, dauerRegelDateien } = require("./classify");
 const bordmittel = require("./inventory");
 
 const SCHEMA = "harness.zustand.v2";
@@ -64,33 +64,13 @@ function wurzelSuchen(start) {
 // an der Quelle, nicht an jeder Vergleichsstelle.
 const rel = (wurzel, p) => (path.relative(wurzel, p) || ".").split(path.sep).join("/");
 
-// ---------------------------------------------------------------------------
-// ECC-Loader holen. Sein Modulrumpf liest process.argv[2] als Port -- wuerde also
-// unsere CLI-Flags als kaputte Portnummer anmeckern. Deshalb argv kurz wegnehmen.
-// ---------------------------------------------------------------------------
-function eccLaden(wurzel, unterpfad) {
-  const kandidaten = [
-    path.join(wurzel, ".ecc-src", "scripts", unterpfad),
-    path.join(wurzel, ".claude", "scripts", unterpfad),
-    path.join(wurzel, "scripts", unterpfad),
-  ];
-  const treffer = kandidaten.find((p) => fs.existsSync(p));
-  if (!treffer) {
-    return { modul: null, grund: `${unterpfad} nicht gefunden (gesucht in .ecc-src/scripts, .claude/scripts, scripts)` };
-  }
-  const argvAlt = process.argv;
-  process.argv = [argvAlt[0], treffer];
-  try {
-    return { modul: require(treffer), pfad: treffer };
-  } catch (e) {
-    return { modul: null, grund: `${unterpfad} liess sich nicht laden: ${e.message}` };
-  } finally {
-    process.argv = argvAlt;
-  }
-}
+// eccLaden() (holte den dashboard-web.js/operator-readiness-Loader der
+// Ursprungs-Werkbank aus .ecc-src/) ist am 25.08.2026 entfallen [Owner: "tief
+// entkernen"]. Der Bestand wird ausschliesslich mit Bordmitteln gezaehlt
+// (dashboard/inventory.js).
 
 // ---------------------------------------------------------------------------
-// BEREICH 1 — Bestand (ECC-Loader)
+// BEREICH 1 — Bestand (Bordmittel: dashboard/inventory.js)
 // ---------------------------------------------------------------------------
 function plattenZaehlung(ordner, art) {
   try {
@@ -358,14 +338,13 @@ function werkzeugGruppe(wurzel) {
 }
 
 function bestandMessen(wurzel, harness) {
-  // dashboard-web.js gehoert zur Ursprungs-Werkbank und liegt einem Standalone-
-  // Harness nicht bei. Frueher stieg der ganze Bereich dann mit "unlesbar" aus und
-  // meldete einen Defekt, wo nur eine fremde Abhaengigkeit fehlte -- genau die
-  // Uebersicht, wofuer die Seite da ist, blieb leer. Jetzt wird mit Bordmitteln
-  // aufgezaehlt (dashboard/inventory.js), und die Quelle sagt, welcher Weg lief.
-  const ecc = eccLaden(wurzel, "dashboard-web.js");
-  const modul = ecc.modul || bordmittel;
-  const pfad = ecc.pfad || "dashboard/inventory.js";
+  // Aufgezaehlt wird mit Bordmitteln (dashboard/inventory.js). Frueher lief hier
+  // zuerst ein ECC-Loader (dashboard-web.js) aus .ecc-src/ und fiel nur auf die
+  // Bordmittel zurueck -- diese Schicht ist am 25.08.2026 entfernt worden
+  // [Owner: "tief entkernen"]: der Standalone-Harness hat .ecc-src/ nie, der
+  // Fallback lief also immer, und die Wahl davor war toter Ballast.
+  const modul = bordmittel;
+  const pfad = "dashboard/inventory.js";
 
   const hooks = hookSkripte(wurzel);
 
@@ -434,26 +413,16 @@ function bestandMessen(wurzel, harness) {
       return a;
     }, {});
 
-  const probe = kontrollprobe(wurzel);
-  const fremdklon = fs.existsSync(path.join(wurzel, ".ecc-src"));
-
+  // Die Herkunftsbestimmung (Eigenbau vs. mitgeliefert gegen den Fremd-Klon
+  // .ecc-src/) ist am 25.08.2026 entfallen [Owner: "tief entkernen"]: .ecc-src/
+  // gehoert nicht zu diesem Harness, die Frage war hier gegenstandslos und
+  // erzeugte nur einen Dauer-Hinweis, den niemand abstellen konnte.
   return {
-    // Faellt die Kontrollprobe, ist die Einordnung wertlos — dann NICHT "ok" melden.
-    // Die Herkunftsbestimmung (Eigenbau vs. mitgeliefert) vergleicht gegen den
-    // Fremd-Klon .ecc-src/. Den gibt es in einem Standalone-Harness nicht -- dann ist
-    // die Frage nicht offen, sondern gegenstandslos. Sie als fehlgeschlagene Probe zu
-    // melden erzeugte einen Dauer-Hinweis, den niemand abstellen kann.
-    status: gruppen.some((g) => g.status === "unlesbar") ? "unlesbar" : probe.bestanden || !fremdklon ? "ok" : "hinweis",
-    grund: probe.bestanden || !fremdklon ? null : "Kontrollprobe der Herkunftsbestimmung fehlgeschlagen — Eigenbau/Mitgeliefert ist nicht belastbar",
-    notiz: fremdklon ? null : "Herkunft (Eigenbau vs. mitgeliefert) wird gegen den Fremd-Klon .ecc-src/ bestimmt. Der gehoert nicht zu diesem Harness -- die Spalte bleibt daher leer.",
-    massnahme: probe.bestanden || !fremdklon
-      ? null
-      : { text: "Prüfen, ob .ecc-src/ vollständig ausgecheckt ist — ohne die Quelle gilt alles als Eigenbau.", befehl: "ls .ecc-src/rules" },
+    status: gruppen.some((g) => g.status === "unlesbar") ? "unlesbar" : "ok",
+    grund: null,
     quelle: rel(wurzel, pfad),
     gruppen,
-    nachHerkunft: summe("nachHerkunft"),
     nachLadeart: summe("nachLadeart"),
-    kontrollprobe: probe,
     regelsaetze: r.saetze,
     regelEbene: r.ebene,
   };
@@ -575,9 +544,15 @@ function waechterMessen(wurzel, harness) {
   // Kontrollprobe der Blockwirkung: zwei Fälle mit bekannter Antwort. Ohne sie
   // wäre „0 blockend" von „alles nur Ansagen" nicht zu unterscheiden — und genau
   // dieser Fehler stand schon einmal auf der Seite.
+  // Zwei Faelle mit bekannter Antwort, EINER blockt, EINER nicht -- so faellt
+  // sowohl "alles blockt" als auch "nichts blockt" auf. danger-guard blockt
+  // (exit 2). Als Nicht-Blocker NICHT mehr git-guard: der wurde 24.08.2026 zum
+  // Blocker gehaertet (exit 2, Ziel in ein user-projects-Repo). session-roles
+  // ist ein SessionStart-Hook -- er laeuft nach dem Aufruf und kann per Bauart
+  // nichts verhindern, ist also der stabile negative Kontrollfall.
   const probe = [
     { name: "danger-guard blockt", skript: "danger-guard.js", erwartet: true },
-    { name: "git-guard sagt nur an", skript: "git-guard.js", erwartet: false },
+    { name: "session-roles sagt nur an", skript: "session-roles.js", erwartet: false },
   ].map((f) => {
     const e = eintraege.find((x) => x.skript === f.skript);
     return { ...f, gemessen: e ? e.blockt : null, bestanden: e ? e.blockt === f.erwartet : null };
@@ -928,62 +903,10 @@ function rollenMessen(wurzel) {
   return { ...grundlage, status: rollen.length ? "ok" : "hinweis", grund: null, rollen };
 }
 
-// ---------------------------------------------------------------------------
-// BEREICH 6 — Betriebsbereitschaft (operator-readiness-dashboard, buildReport)
-// ---------------------------------------------------------------------------
-function readinessMessen(wurzel, mitGithub) {
-  const { modul, pfad, grund } = eccLaden(wurzel, "operator-readiness-dashboard.js");
-  if (!modul)
-    // Der Betriebsbericht ist ein Werkzeug der Ursprungs-Werkbank und gehoert nicht
-    // zum Standalone-Harness. Ihn als "fehlt" zu melden macht aus einer bewussten
-    // Auslassung einen Defekt -- und eine Seite, die Nicht-Defekte rot faerbt, wird
-    // nicht mehr gelesen. Gemeldet wird, dass hier nichts zu messen ist.
-    return {
-      status: "ok",
-      grund: null,
-      quelle: null,
-      notiz: "Nicht Teil dieses Harness: der ECC-Betriebsbericht (operator-readiness-dashboard.js) gehoert zur Ursprungs-Werkbank. Hier gibt es dazu nichts zu messen.",
-    };
-  try {
-    const argv = ["node", pfad, "--json", "--root", wurzel];
-    if (!mitGithub) argv.push("--skip-github");
-    const bericht = modul.buildReport(modul.parseArgs(argv));
-    const zaehlung = {};
-    for (const a of bericht.requirements || []) zaehlung[a.status] = (zaehlung[a.status] || 0) + 1;
-    return {
-      status: bericht.ready ? "ok" : "hinweis",
-      grund: bericht.ready ? null : "Der ECC-Betriebsbericht meldet offene Punkte",
-      quelle: rel(wurzel, pfad),
-      befehl: `node ${rel(wurzel, pfad)} --json --write bericht.json${mitGithub ? "" : " --skip-github"}`,
-      githubUebersprungen: !mitGithub,
-      bereit: bericht.ready === true,
-      branch: (bericht.platform || {}).branch || null,
-      ungesichert: (bericht.platform || {}).blockingDirtyCount,
-      zaehlung,
-      anforderungen: (bericht.requirements || []).map((a) => ({
-        id: a.id,
-        anforderung: a.requirement,
-        status: a.status,
-        beleg: kurz(a.evidence),
-        luecke: kurz(a.gap),
-      })),
-      naechsteSchritte: (bericht.top_actions || []).slice(0, 6).map(kurz).filter(Boolean),
-      massnahme: bericht.ready
-        ? null
-        : {
-            text:
-              (bericht.top_actions || []).length
-                ? `Offene Punkte des Betriebsberichts abarbeiten: ${kurz(bericht.top_actions[0])}`
-                : "Betriebsbericht meldet offene Anforderungen — im Reiter „Vier Knoten“ steht, welche.",
-            // Der GEMESSENE Fundort, nicht der der Ursprungs-Werkbank:
-            // eccLaden() sucht in drei Ordnern, hier stand fest .ecc-src/.
-            befehl: `node ${rel(wurzel, pfad)}`,
-          },
-    };
-  } catch (e) {
-    return { status: "unlesbar", grund: e.message, quelle: rel(wurzel, pfad) };
-  }
-}
+// BEREICH 6 (Betriebsbereitschaft) ENTFERNT [Owner 25.08.2026: "tief entkernen"].
+// Er las den operator-readiness-dashboard.js der Ursprungs-Werkbank aus .ecc-src/;
+// im Standalone-Harness gibt es den nicht, also meldete er dauerhaft nur "Nicht
+// Teil dieses Harness". Ein Bereich, der nie etwas misst, ist kein Bereich.
 
 // ---------------------------------------------------------------------------
 // Zusammenführung
@@ -1012,7 +935,6 @@ function messen(optionen = {}) {
       sicherung: repoStatusMessen(wurzel, optionen.mitGithub === true),
       pruefer: { status: "ok", laeufe: prueferMessen(wurzel) },
       rollen: rollenMessen(wurzel),
-      readiness: readinessMessen(wurzel, optionen.mitGithub === true),
     },
   };
 
@@ -1114,7 +1036,6 @@ function messen(optionen = {}) {
   }
 
   daten.kontrolle = {
-    herkunft: daten.bereiche.bestand?.kontrollprobe || null,
     zuTunVollstaendig: daten.messfehler.length === 0,
   };
   return daten;

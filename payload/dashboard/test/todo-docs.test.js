@@ -154,7 +154,10 @@ test("CRLF-Quellen liefern dieselben Zeilennummern und keinen Wagenruecklauf", (
     "docs/kit-backport.md": "Zeile eins\r\nDas ist noch offen und bleibt es\r\n",
     "docs/rebuild-guide.md": "x\r\n".repeat(59) + "- [ ] genau auf Zeile 60\r\n",
     ".claude/rules/keel/output-shape.md": "Offen: ein Name fehlt\r\n",
-    "CLAUDE.md": "# Kopf\r\n## 5. `[?]` Deine eigenen Regeln\r\n",
+    // Zeile 2 ist eine Ueberschrift MIT `[?]` -- die zaehlt NICHT (25.08.2026:
+    // eine Ueberschrift ist keine auszufuellende Feldmarke). Zeile 3 ist ein
+    // echtes offenes Feld -- die zaehlt.
+    "CLAUDE.md": "# Kopf\r\n## 5. `[?]` Deine eigenen Regeln\r\nGitHub-Konto: [AUSFUELLEN]\r\n",
     "docs/tool-landscape.md": "| A | B |\r\n|---|---|\r\n| _(noch nichts erhoben)_ | |\r\n",
   });
   try {
@@ -169,7 +172,7 @@ test("CRLF-Quellen liefern dieselben Zeilennummern und keinen Wagenruecklauf", (
       // output-shape.md wird jetzt zur Laufzeit unter .claude/rules/ gefunden
       // (ordner-agnostisch) und der festen Liste ANGEHAENGT -- daher nach
       // CLAUDE.md statt davor. Reihenfolge der Eintraege ist nicht bedeutsam.
-      ["CLAUDE.md", 2, "platzhalter"],
+      ["CLAUDE.md", 3, "platzhalter"], // Zeile 2 (Ueberschrift mit `[?]`) zaehlt NICHT
       [".claude/rules/keel/output-shape.md", 1, "offen-inline"],
       ["docs/tool-landscape.md", 3, "leere-vorlage"],
     ]);

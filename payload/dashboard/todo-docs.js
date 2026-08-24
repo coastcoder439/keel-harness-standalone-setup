@@ -67,7 +67,11 @@ const VORLAGE_QUELLE = "docs/tool-landscape.md";
 // artCode bekommt ("# Offen: ..." ist eine Ueberschrift, keine Inline-Stelle).
 const MUSTER = [
   { artCode: "checkbox", muster: /^\s*[-*]\s*\[ \]/ },
-  { artCode: "offen-ueberschrift", muster: /^#+\s*Offen/ },
+  // Ab Ebene 2 (##...), NICHT die H1: der Dokumenttitel ist kein Offenpunkt.
+  // "# Offene Harness-Baustellen" ist der Titel der bewusst LEEREN Massstab-
+  // Datei -- mit /^#+/ zog der Scraper genau diesen Titel als Todo (25.08.2026
+  // behoben, Owner: "harness-issues muss leer sein").
+  { artCode: "offen-ueberschrift", muster: /^#{2,}\s*Offen/ },
   { artCode: "offen-inline", muster: /\bOffen:/ },
   { artCode: "offen-inline", muster: /noch offen/ },
 ];
@@ -111,7 +115,11 @@ function artBestimmen(zeile, platzhalter) {
   for (const m of MUSTER) {
     if (m.muster.test(zeile)) return m.artCode;
   }
-  if (platzhalter && PLATZHALTER_MUSTER.test(zeile) && !IST_ZITAT.test(zeile)) return "platzhalter";
+  // Eine Ueberschrift ist keine auszufuellende Stelle: CLAUDE.md §4 heisst
+  // "## 4. `[?]` Eigene Regeln" -- ein Dauer-Abschnitt, der zum Ergaenzen
+  // einlaedt, keine leere Feldmarke. Mit /^#/ ausschliessen (25.08.2026 behoben,
+  // sonst stand diese Ueberschrift jede Sitzung als Todo).
+  if (platzhalter && PLATZHALTER_MUSTER.test(zeile) && !IST_ZITAT.test(zeile) && !/^\s*#/.test(zeile)) return "platzhalter";
   return null;
 }
 

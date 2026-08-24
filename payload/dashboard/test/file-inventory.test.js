@@ -308,12 +308,15 @@ wennDa(echt.dateien.some((d) => d.rolle === "launch"), "keine Vorschau-Konfigura
   assert.strictEqual(rolleVon(".claude/statusline.js"), "skript", "statusLine ist kein Hook (Spezifikation 4.4)");
   assert.strictEqual(rolleVon(".claude/commands/save-work.md"), "command");
   assert.strictEqual(rolleVon(".claude/skills/i-have-adhd/SKILL.md"), "skill");
-  assert.strictEqual(rolleVon(".claude/skills/domain-modeling/ADR-FORMAT.md"), "skill-datei");
+  // "skill-datei" (Nicht-SKILL.md in einem Skill-Ordner) hat seit dem Entfernen
+  // von domain-modeling (25.08.2026) keine Instanz mehr -- die Rolle bleibt im
+  // Klassifikator fuer kuenftige mehrteilige Skills, wird hier aber nicht mehr
+  // gegen eine echte Datei geprueft.
   assert.strictEqual(rolleVon(".claude/rules/keel/tools.md"), "dauer-regel");
   assert.strictEqual(rolleVon("docs/tool-landscape.md"), "doku");
   assert.strictEqual(rolleVon("dashboard/measure.js"), "dashboard-modul");
   assert.strictEqual(rolleVon("dashboard/README.md"), "dashboard-doku");
-  assert.strictEqual(rolleVon("licenses/LICENSE-mattpocock-skills.txt"), "lizenz");
+  assert.strictEqual(rolleVon("licenses/LICENSE-i-have-adhd.txt"), "lizenz");
 });
 
 test("verdrahtete Skripte tragen Ereignis und settings.json-Zeile", () => {

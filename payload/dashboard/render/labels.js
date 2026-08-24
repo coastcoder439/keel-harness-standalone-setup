@@ -320,6 +320,16 @@ const LEER = {
     text: "Kein Eintrag passt zu den gesetzten Filtern.",
     handlung: { wort: "Filter zurücksetzen", ziel: "filter:leeren" },
   },
+  "bridge-pakete": {
+    titel: "Keine Arbeitspakete gefunden",
+    text: "Arbeitspakete stehen als docs/packages/*.md je Repo — angelegt beim Planen, nachgeführt bei jedem Abschluss.",
+    handlung: null,
+  },
+  "bridge-sitzungen": {
+    titel: "Keine Sitzung sichtbar",
+    text: "Sitzungen erscheinen hier, sobald sie Nachrichten mit diesem Workspace-Pfad geschrieben haben.",
+    handlung: null,
+  },
   verknuepft: {
     titel: null,
     text: "Keine Verknüpfung gefunden — geprüft: settings.json, CLAUDE.md, Commands, Rules-Verweise, Commits.",

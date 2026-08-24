@@ -210,7 +210,12 @@ wennDa(fs.existsSync(WURZEL + "/.gitignore") && fs.readFileSync(WURZEL + "/.giti
   assert.strictEqual(jeArt["ignoriert-in"], ignoriert,
     "je Projektzeile in .gitignore eine Kante (" + ignoriert + " gezaehlt)");
 
-  assert.ok(jeArt["lizenz"] >= 2, "mindestens die beiden mattpocock-Herkuenfte");
+  // Die beiden "lizenz"-Herkunftskanten stammten aus den mattpocock-Skills
+  // (SKILL.md-Kopf "mattpocock/skills" -> licenses/). Beide Skills sind am
+  // 25.08.2026 entfernt [Owner], damit auch ihre Herkunftskanten -- es bleibt
+  // keine "lizenz"-Kante, weil kein verbleibender Skill eine Herkunft im Kopf
+  // deklariert.
+  assert.strictEqual(jeArt["lizenz"] || 0, 0, "keine Herkunftskante mehr, seit die mattpocock-Skills weg sind");
   assert.strictEqual(kanten.length, Object.values(jeArt).reduce((a, b) => a + b, 0),
     "die Summe je Art ergibt die Gesamtzahl");
 
