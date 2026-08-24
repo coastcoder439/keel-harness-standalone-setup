@@ -382,7 +382,7 @@ function starten(o) {
     }
 
     // --- Die Seite und alles daneben --------------------------------------
-    const ziel = weg === "/" ? "dashboard.html" : weg === "/bridge" ? "dashboard/bridge.html" : weg.replace(/^\//, "");
+    const ziel = weg === "/" ? "dashboard.html" : weg.replace(/^\//, "");
     const geprueft = pfadPruefen(wurzel, ziel, "lesen");
     if (geprueft.fehler) {
       res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });

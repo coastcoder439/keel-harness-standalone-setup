@@ -1,4 +1,4 @@
-// BROWSER-TEIL 4 von 4: Ereignisse und Start.
+// BROWSER-TEIL 5 von 5: Ereignisse und Start.
 //
 // EIN Klick-Zuhoerer fuer die ganze Seite statt Zuhoerer je Element. Grund: die
 // Seite wird bei jeder Aenderung neu gezeichnet -- einzeln angeheftete Zuhoerer
@@ -14,6 +14,8 @@ document.addEventListener("click", function (ev) {
 
   var nav = nah("[data-ziel]");
   if (nav) { HD.zurSeite(nav.dataset.ziel); return; }
+
+  if (HD.bridgeClick && HD.bridgeClick(ev)) return;
 
   var pfad = nah("[data-pfadziel]");
   if (pfad) {
