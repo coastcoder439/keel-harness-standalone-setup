@@ -1,13 +1,10 @@
 # CLAUDE.md — <WORKSPACE>
 
-> Diese Datei laedt in JEDER Sitzung, in diesem Ordner und in allen Unterordnern.
-> Was hier steht, wird als Wahrheit gelesen. Deshalb sind offene Pflichtangaben mit einer
-> **Ausfuell-Marke** gekennzeichnet: lieber die offene Marke als eine geratene Angabe.
-> (Ein blosses `[?]` ist dagegen ein spaeterer Platzhalter, kein Onboarding-Ausloeser.)
->
-> Angelegt von der Harness-Installation. Die Abschnitte 1-2 und 5 gehoeren dir, 3-4
-> beschreiben, was installiert ist und hier gilt. Solange eine Ausfuell-Pflichtmarke offen
-> steht, startet jede neue Sitzung von selbst `/onboarding` und fuellt sie mit dir aus.
+> Laedt in jeder Sitzung und wird als Wahrheit gelesen. Offene Pflichtangaben tragen
+> die **Ausfuell-Marke** `[AUSFUELLEN]` — lieber die offene Marke als eine geratene
+> Angabe; ein blosses `[?]` ist ein spaeterer Platzhalter, kein Onboarding-Ausloeser.
+> Solange eine Pflichtmarke offen steht, startet jede neue Sitzung von selbst
+> `/onboarding` und fuellt sie mit dir aus.
 
 ## 1. Was das hier ist
 
@@ -15,61 +12,35 @@
 - **`[AUSFUELLEN]` Wer arbeitet daran** — Rollen und Zustaendigkeiten.
 - **`[AUSFUELLEN]` Projektsprache** — Vorgabe dieses Harness: Deutsch.
 
-## 2. Ebenen und Repo-Struktur
+## 2. Repo-Struktur
 
-Regel: **Ordnername == Repo-Name.** Jedes separat gebaute Teil bekommt ein
-eigenes Repo; die Projekt-Repos liegen als Geschwister unter `user-projects/`,
-nicht ineinander.
+**Ordnername == Repo-Name.** Jedes separat gebaute Teil bekommt ein eigenes Repo;
+Projekt-Repos liegen als Geschwister unter `user-projects/<name>`, nie ineinander.
 
 | Ebene | Ordner | Repo |
 |---|---|---|
 | Workspace | `.` (dieser Ordner) | `[AUSFUELLEN]` |
 | Projekt | `user-projects/[?]` | `[?]` |
 
-**Reihenfolge bei einem neuen Projekt, nicht vertauschbar:** erst eigenes Repo
-anlegen und **verifiziert pushen**, DANN die Ignorier-Zeile in die `.gitignore`
-eintragen. Andersherum wird das Projekt unsichtbar und ungesichert zugleich.
+**Neues Projekt, Reihenfolge nicht vertauschbar:** erst eigenes Repo anlegen und
+verifiziert pushen, DANN die Ignorier-Zeile in die `.gitignore` — andersherum wird
+das Projekt unsichtbar und ungesichert zugleich.
 
-## 3. Was installiert ist (vom Onboarding gesetzt)
+## 3. Konventionen
 
-**Waechter — laufen automatisch, ohne dass jemand etwas tippt:**
+- **Workspace-Repo: nur `git commit -m "…" -- <pfad>`** (nie `add`+`commit`, nie `-a`) —
+  mehrere Sitzungen teilen einen Index; das Pruefkommando ist `git diff HEAD -- <pfad>`,
+  nicht `--cached`. Der `commit-pathspec-guard` erzwingt das.
+- **Verschachtelte Repos via `git -C <repo>`** committen — nie ins falsche Repo.
+- **Keine Zugaenge in Dateien** — Schluesselbund oder Umgebungsvariablen.
 
-| Werkzeug | Wann | Was es tut |
-|---|---|---|
-| `danger-guard.js` | vor jedem Bash-Befehl | blockiert zerstoerende Befehle ausserhalb der erlaubten Schreibziele |
-| `git-guard.js` | vor jedem git-Befehl | sagt das ZIEL-Repo an und raeumt verwaiste `index.lock` |
-| `commit-pathspec-guard.js` | vor jedem git-Befehl | erzwingt `git commit -- <pfad>` im Workspace-Repo |
-| `uncommitted-warn.js` | am Sitzungsende | warnt bei ungesicherter Arbeit (nur Hinweis, blockiert nie) |
-| `session-roles.js` | bei Sitzungsstart | laedt die Rollen aus `docs/08-sessions-rollen.md`, falls vorhanden |
-| `onboarding-start.js` | bei Sitzungsstart | startet `/onboarding`, solange eine Ausfuell-Marke offen ist — danach still |
-| `project-context.js` | bei Sitzungsstart | fragt beim Start nach Projekt/Rolle dieser Sitzung (AskUserQuestion) |
-| `statusline.js` | dauerhaft | Repo · Branch · Sicherungsstand in der Statusleiste |
-| `repo-status.js` | auf Aufruf (`/repo-status`) | lokales Git vs. GitHub vs. Sync, rekursiv |
+Waechter und Hooks laufen automatisch; Verdrahtung in `.claude/settings.json`, Befehle in
+`.claude/commands/`, Dauer-Regeln in `.claude/rules/keel/`. Dashboard:
+`node dashboard/index.js --html dashboard.html` (Messung `measure.js` und Anzeige
+`render/` bleiben getrennt).
 
-**Befehle:** `/repo-status` · `/save-work` · `/session-map` · `/tell-session` · `/onboarding` (einmalig)
+## 4. `[?]` Deine eigenen Regeln
 
-**Dashboard:** `node zustand/zustand.js --json --daten dashboard.json` misst,
-`node oberflaeche/befuellen.mjs oberflaeche/dist/index.html dashboard.json dashboard.html`
-zeigt an. Die Messung kennt keine Darstellung — die Anzeige laesst sich
-austauschen, ohne die Messung anzufassen.
-
-## 4. Konventionen, die hier gelten
-
-- **Im Workspace-Repo NIE `git add` + `git commit` und nie `git commit -a`** —
-  sondern `git commit -m "…" -- <pfad>`. Grund: mehrere Sitzungen teilen einen
-  Arbeitsbaum UND einen Index; `git commit` committet den Index, nicht deine
-  Auswahl. Das Pruefkommando dazu ist `git diff HEAD -- <pfad>`, **nicht**
-  `git diff --cached` — die pathspec-Form committet die Arbeitsbaum-Fassung.
-  Der `commit-pathspec-guard` erzwingt das.
-- **Verschachtelte Repos immer via `git -C <repo>`** committen — nie ins falsche Repo.
-- **Keine Zugaenge in Dateien.** Schluesselbund oder Umgebungsvariablen.
-- **Werkzeuge: CLI vor MCP vor Browser** — Begruendung in `.claude/rules/keel/tools.md`.
-- **Automatisch geladene Regeln:** `.claude/rules/keel/` — fuenf Dateien,
-  bewusst ohne Frontmatter, damit sie Dauer-Kontext sind und nicht nur abrufbar.
-
-## 5. `[?]` Deine eigenen Regeln
-
-Die mitgelieferten Regeln **gelten und werden befolgt** — aber ihre Beweislage
-stammt aus der Ursprungs-Werkbank, ist also fremd. Verlass dich nicht auf geerbte
-Autoritaet: erlebst du hier eigene Faelle, schreib sie in die Regel hinein — mit
-Datum und Messwert, damit sie hier verankert ist.
+Die mitgelieferten Regeln gelten — aber ihre Beweislage stammt aus der
+Ursprungs-Werkbank, ist also fremd. Erlebst du hier eigene Faelle, schreib sie mit
+Datum und Messwert in die Regel hinein, damit sie hier verankert sind.

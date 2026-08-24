@@ -227,12 +227,15 @@ try {
         : `${kaputt.length} von ${einmalig.length} Pfaden zeigen ins Leere: ${kaputt.join(", ")}`;
     });
 
-    // 5c. Dauer-Regeln: mindestens 4 .md-Dateien, keine mit Frontmatter.
+    // 5c. Dauer-Regeln: genau die drei aus install.mjs REGELN, keine mit Frontmatter.
+    // (24.08.2026: von 5 auf 3 gekuerzt -- completeness wurde on-demand-Skill,
+    // output-shape gestrichen. Eine Mindestzahl ueber 3 wuerde die gewollte
+    // Kuerzung als Fehler melden.)
     pruefe("dauer-regeln", () => {
       const regelOrdner = path.join(ziel, ".claude", "rules", "keel");
       if (!istOrdner(regelOrdner)) return `${regelOrdner} fehlt`;
       const mds = fs.readdirSync(regelOrdner).filter((n) => n.endsWith(".md"));
-      if (mds.length < 4) return `nur ${mds.length} .md-Dateien, mindestens 4 erwartet`;
+      if (mds.length < 3) return `nur ${mds.length} .md-Dateien, mindestens 3 erwartet`;
       const mitFrontmatter = mds.filter((n) =>
         fs.readFileSync(path.join(regelOrdner, n), "utf8").startsWith("---"),
       );

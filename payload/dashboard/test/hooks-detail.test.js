@@ -190,18 +190,14 @@ test("kopfkommentar beginnt hinter der Shebang-Zeile und deckt echte Kommentarze
 // ---------------------------------------------------------------------------
 // CLAUDE.md-Abgleich (daraus entsteht spaeter der Drift-Eintrag)
 // ---------------------------------------------------------------------------
-test("claudeMdZeile trifft die Tabellenzeile -- ausser bei sessionpost-guard", () => {
-  const zeilen = zeilenVon("CLAUDE.md");
+test("claudeMdZeile ist fuer alle Hooks null -- CLAUDE.md fuehrt keine Waechter-Tabelle mehr", () => {
+  // Bis 24.08.2026 stand in CLAUDE.md eine Tabelle aller Waechter, und dieser
+  // Test prueft den Abgleich Zeile fuer Zeile (Drift-Sonderfall: sessionpost-guard
+  // fehlte). Mit der Regel-Kuerzung ist die Tabelle bewusst raus -- die Verdrahtung
+  // in settings.json ist die einzige Wahrheit. claudeMdZeile bleibt als Faehigkeit
+  // erhalten (greift, sobald jemand wieder eine Tabelle anlegt), liefert hier null.
   for (const e of ergebnis.eintraege) {
-    if (e.skript === "sessionpost-guard.js") {
-      assert.strictEqual(e.claudeMdZeile, null, "sessionpost-guard fehlt in CLAUDE.md -> Drift");
-      continue;
-    }
-    assert.ok(e.claudeMdZeile, `keine CLAUDE.md-Zeile fuer ${e.skript}`);
-    const zeile = zeilen[e.claudeMdZeile.zeile - 1];
-    assert.ok(zeile.includes(e.skript), `CLAUDE.md:${e.claudeMdZeile.zeile} nennt ${e.skript} nicht`);
-    assert.match(zeile, /^\s*\|/, "nur Tabellenzeilen zaehlen");
-    assert.strictEqual(e.claudeMdZeile.text, zeile.trim());
+    assert.strictEqual(e.claudeMdZeile, null, `${e.skript}: CLAUDE.md fuehrt keine Tabelle mehr`);
   }
 });
 
@@ -261,7 +257,8 @@ test("weitereSkripte enthaelt genau repo-status.js", () => {
   assert.strictEqual(rs.pfad, ".claude/repo-status.js");
   assert.strictEqual(rs.vorhanden, true);
   assert.ok(rs.kopfkommentar.text.length > 0);
-  assert.ok(rs.claudeMdZeile && rs.claudeMdZeile.text.includes("repo-status.js"));
+  // Seit der CLAUDE.md-Kuerzung (24.08.2026) nennt CLAUDE.md keine Skripte mehr.
+  assert.strictEqual(rs.claudeMdZeile, null);
 });
 
 test("kein Skript steht zugleich in weitereSkripte und in einem Hook", () => {

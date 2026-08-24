@@ -90,6 +90,9 @@ wennDa(fs.existsSync(WURZEL + "/docs/harness-issues.md"), "Werkstatt-Dokumente n
   ];
   let erwartet = 0;
   for (const [rel, grenze] of fenster) {
+    // Wie das Modul selbst: fehlende Quellen sind kein Fehler (output-shape.md
+    // wird seit 24.08.2026 dynamisch gesucht und kann fehlen).
+    if (!fs.existsSync(path.join(WURZEL, rel))) continue;
     const zeilen = fs.readFileSync(path.join(WURZEL, rel), "utf8").split(/\r?\n/);
     const bis = grenze > 0 ? Math.min(grenze, zeilen.length) : zeilen.length;
     for (let i = 0; i < bis; i++) if (/^\s*[-*]\s*\[ \]/.test(zeilen[i])) erwartet += 1;

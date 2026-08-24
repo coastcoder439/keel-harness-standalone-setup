@@ -158,16 +158,20 @@ const WAECHTER = [
 
 const BEFEHLE = ["repo-status.md", "save-work.md", "session-map.md", "tell-session.md", "onboarding.md"];
 
-// Diese fuenf laden bei JEDEM Sitzungsstart. Sie kosten dauerhaft Kontext und
-// sind genau deshalb bewusst kurz gehalten.
-const REGELN = ["no-oneshot.md", "completeness.md", "tools.md", "output-shape.md", "working-method.md"];
+// Diese drei laden bei JEDEM Sitzungsstart. Sie kosten dauerhaft Kontext und
+// sind genau deshalb bewusst kurz gehalten. (24.08.2026: completeness.md wurde
+// zum on-demand-Skill, output-shape.md ersatzlos gestrichen -- Neubau-Grundsatz
+// "Dauer-Kontext minimal, Situatives on-demand".)
+const REGELN = ["no-oneshot.md", "tools.md", "working-method.md"];
 
 const SKILLS = [
   ["domain-modeling", ["SKILL.md", "ADR-FORMAT.md", "CONTEXT-FORMAT.md"]],
   ["resolving-merge-conflicts", ["SKILL.md"]],
-  // Bis 18.08.2026 fehlte dieser Eintrag: die Dauer-Regel output-shape.md und der
-  // Start-Hook session-roles.js verwiesen auf einen Skill, den der Installer nie kopierte.
+  // Bis 18.08.2026 fehlte dieser Eintrag: der Start-Hook session-roles.js verwies
+  // auf einen Skill, den der Installer nie kopierte.
   ["i-have-adhd", ["SKILL.md"]],
+  // Seit 24.08.2026: das Vollstaendigkeits-Audit laedt auf Abruf statt dauerhaft.
+  ["completeness", ["SKILL.md"]],
 ];
 
 // Die Dateien des Dashboards. Unterordner sind erlaubt -- schreiben() legt sie an.

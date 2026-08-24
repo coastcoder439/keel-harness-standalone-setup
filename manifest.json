@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-23T19:05:49.873Z",
-  "posten": 85,
+  "gebautAm": "2026-08-24T11:39:08.501Z",
+  "posten": 84,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -84,8 +84,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15424,
-      "sha256": "32f542f464daada2"
+      "bytes": 15630,
+      "sha256": "f66e15ec4aeb5068"
     },
     {
       "datei": "checks/paket-manifest.mjs",
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 75856,
-      "sha256": "9fa23f9e7aeb6a97"
+      "bytes": 76063,
+      "sha256": "64ac694ace624720"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -124,8 +124,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 6065,
-      "sha256": "e3b3cef8762dcfa5"
+      "bytes": 6101,
+      "sha256": "e67dc72933261fe2"
     },
     {
       "datei": "payload/claude/commands/repo-status.md",
@@ -156,8 +156,8 @@
       "herkunft": ".claude/commands/tell-session.md",
       "quellordner": "werkbank",
       "gesaeubert": 2,
-      "bytes": 3205,
-      "sha256": "8297c0f9b01ef3ce"
+      "bytes": 1498,
+      "sha256": "83dc5f141efb1e54"
     },
     {
       "datei": "payload/claude/commit-pathspec-guard.js",
@@ -196,8 +196,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 2348,
-      "sha256": "6875910ee1b98c30"
+      "bytes": 2311,
+      "sha256": "bed03749c3fe9e04"
     },
     {
       "datei": "payload/claude/repo-status.js",
@@ -208,44 +208,28 @@
       "sha256": "7aab5ee23b22c48b"
     },
     {
-      "datei": "payload/claude/rules/keel/completeness.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 5014,
-      "sha256": "ee7399b32ca1ffeb"
-    },
-    {
       "datei": "payload/claude/rules/keel/no-oneshot.md",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 4587,
-      "sha256": "5b411eb3d57e79b7"
-    },
-    {
-      "datei": "payload/claude/rules/keel/output-shape.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 747,
-      "sha256": "799023d07a1217fc"
+      "bytes": 459,
+      "sha256": "1c7629e729cb227d"
     },
     {
       "datei": "payload/claude/rules/keel/tools.md",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 1919,
-      "sha256": "851cc0e441f360e9"
+      "bytes": 385,
+      "sha256": "dfcc25c85af249f8"
     },
     {
       "datei": "payload/claude/rules/keel/working-method.md",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 2403,
-      "sha256": "83776d31df4c2233"
+      "bytes": 899,
+      "sha256": "5bbdd55d963294cd"
     },
     {
       "datei": "payload/claude/session-roles.js",
@@ -262,6 +246,14 @@
       "gesaeubert": 0,
       "bytes": 4943,
       "sha256": "0971cdfd82f42b52"
+    },
+    {
+      "datei": "payload/claude/skills/completeness/SKILL.md",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 3222,
+      "sha256": "da13633cb53cd126"
     },
     {
       "datei": "payload/claude/skills/domain-modeling/ADR-FORMAT.md",
@@ -292,8 +284,8 @@
       "herkunft": ".claude/skills/i-have-adhd/SKILL.md",
       "quellordner": "werkbank",
       "gesaeubert": 0,
-      "bytes": 12867,
-      "sha256": "29e2848fcee49dba"
+      "bytes": 2692,
+      "sha256": "1fbc11cb54ae9afb"
     },
     {
       "datei": "payload/claude/skills/resolving-merge-conflicts/SKILL.md",
@@ -516,8 +508,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 20631,
-      "sha256": "159fa0faae0b0020"
+      "bytes": 20645,
+      "sha256": "3f660d41c09570e2"
     },
     {
       "datei": "payload/dashboard/test/icons.test.js",
@@ -532,8 +524,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 26230,
-      "sha256": "31465e5fdeaf31d2"
+      "bytes": 25894,
+      "sha256": "5f2b0f8411f5c633"
     },
     {
       "datei": "payload/dashboard/test/markdown.test.js",
@@ -588,8 +580,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15612,
-      "sha256": "8de0318dff91b3d2"
+      "bytes": 15552,
+      "sha256": "415d2178d30bbff7"
     },
     {
       "datei": "payload/dashboard/test/vollstaendigkeit.test.js",
@@ -620,8 +612,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 10557,
-      "sha256": "5fdcfc13a1cc64f6"
+      "bytes": 10759,
+      "sha256": "c9268ba51150b0bb"
     },
     {
       "datei": "payload/dashboard/verlauf.js",
@@ -668,8 +660,8 @@
       "herkunft": "docs/10-nachbau-anleitung.md",
       "quellordner": "werkbank",
       "gesaeubert": 11,
-      "bytes": 209451,
-      "sha256": "fdb6d04cb874c674"
+      "bytes": 207744,
+      "sha256": "dc1ae3c215d971f0"
     },
     {
       "datei": "payload/docs/tool-landscape.md",
@@ -692,16 +684,16 @@
       "herkunft": "erzeugt von paketieren.mjs",
       "quellordner": "erzeugt",
       "gesaeubert": 0,
-      "bytes": 4216,
-      "sha256": "06241a8756078dfe"
+      "bytes": 2157,
+      "sha256": "2727f031a59b5a8f"
     },
     {
       "datei": "templates/gitignore-block.txt",
       "herkunft": "erzeugt von paketieren.mjs",
       "quellordner": "erzeugt",
       "gesaeubert": 0,
-      "bytes": 1683,
-      "sha256": "abb934116d806bcd"
+      "bytes": 1641,
+      "sha256": "beb95b52fae80b3b"
     },
     {
       "datei": "templates/settings.json",
