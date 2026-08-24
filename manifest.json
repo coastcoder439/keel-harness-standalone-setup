@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-24T13:32:15.266Z",
-  "posten": 88,
+  "gebautAm": "2026-08-24T13:32:57.737Z",
+  "posten": 87,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -254,14 +254,6 @@
       "gesaeubert": 0,
       "bytes": 4943,
       "sha256": "0971cdfd82f42b52"
-    },
-    {
-      "datei": "payload/claude/settings.json",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 2986,
-      "sha256": "97252013f6acc9f1"
     },
     {
       "datei": "payload/claude/skills/completeness/SKILL.md",
