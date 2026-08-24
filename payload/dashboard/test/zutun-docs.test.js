@@ -100,12 +100,20 @@ wennDa(fs.existsSync(WURZEL + "/docs/harness-issues.md"), "Werkstatt-Dokumente n
   assert.strictEqual(gefunden.length, erwartet, "Modul und Nachmessung muessen dieselbe Zahl liefern");
 
   if (erwartet === 0) {
-    // Die Null ist kein leerer Baum, sondern eine Grenze: rebuild-guide.md traegt
-    // Kaestchen, aber alle liegen hinter Zeile 60.
-    const zeilen = fs.readFileSync(path.join(WURZEL, "docs/rebuild-guide.md"), "utf8").split(/\r?\n/);
-    const alle = zeilen.map((z, i) => (/^\s*[-*]\s*\[ \]/.test(z) ? i + 1 : 0)).filter(Boolean);
-    assert.ok(alle.length > 0, "Beleg: die Datei traegt ueberhaupt Kaestchen");
-    assert.ok(Math.min(...alle) > 60, "Beleg: das erste Kaestchen steht hinter dem Lesefenster");
+    // Die Null braucht einen Beleg. In der WERKBANK: rebuild-guide.md traegt
+    // Kaestchen, aber alle liegen hinter Zeile 60 (Lesefenster-Grenze). In einer
+    // FRISCHEN Installation ist rebuild-guide.md bewusst nicht dabei (seit
+    // 24.08.2026 liegt aber harness-issues.md bei, wodurch dieser Test dort
+    // ueberhaupt laeuft) -- dann IST die Null der Beleg: keine vorhandene
+    // Quelle traegt ein Kaestchen, und genau das wurde oben Zeile fuer Zeile
+    // nachgemessen.
+    const rg = path.join(WURZEL, "docs/rebuild-guide.md");
+    if (fs.existsSync(rg)) {
+      const zeilen = fs.readFileSync(rg, "utf8").split(/\r?\n/);
+      const alle = zeilen.map((z, i) => (/^\s*[-*]\s*\[ \]/.test(z) ? i + 1 : 0)).filter(Boolean);
+      assert.ok(alle.length > 0, "Beleg: die Datei traegt ueberhaupt Kaestchen");
+      assert.ok(Math.min(...alle) > 60, "Beleg: das erste Kaestchen steht hinter dem Lesefenster");
+    }
   }
 });
 

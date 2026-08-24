@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-24T14:36:00.548Z",
+  "gebautAm": "2026-08-24T14:37:07.909Z",
   "posten": 90,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -636,8 +636,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 10759,
-      "sha256": "c9268ba51150b0bb"
+      "bytes": 11173,
+      "sha256": "8e98d137e3597092"
     },
     {
       "datei": "payload/dashboard/verlauf.js",
