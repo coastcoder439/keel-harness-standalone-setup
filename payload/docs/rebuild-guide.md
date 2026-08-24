@@ -502,6 +502,17 @@ Sitzungs-Nachrichten) plus die Statusleiste. **Nichts von Hand anzupassen** — 
         ]
       },
       {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/write-guard.js\"",
+            "timeout": 10,
+            "statusMessage": "write-guard (Schreibziel, Zugaenge, gitignore-Reihenfolge)"
+          }
+        ]
+      },
+      {
         "matcher": "mcp__ccd_session_mgmt__(send_message|list_sessions)",
         "hooks": [
           {
@@ -1732,8 +1743,11 @@ const rollenText = rollen
 // WARUM NICHT DEN SKILL-TEXT EINBLENDEN: der Aufruf kostet 14 Zeichen, der Volltext
 // 6.848 -- und nur der Aufruf hat das Gewicht einer Nutzer-Anweisung.
 const ausgabe = { hookEventName: "SessionStart" };
-if (rollenText) ausgabe.additionalContext = rollenText;
+// Feld-Reihenfolge bewusst: der kurze Skill-Aufruf VOR der (wachsenden)
+// Rollen-Tabelle, damit er im gekappten stdoutKopf der Dashboard-Probe sichtbar
+// bleibt -- der Beweis, dass source=startup ankam. Fuers Parsen ist sie egal.
 if (anlass() === "startup") ausgabe.initialUserMessage = "/i-have-adhd";
+if (rollenText) ausgabe.additionalContext = rollenText;
 
 // Weder Rollen noch startup (z.B. resume/compact ohne docs/08) -> still bleiben.
 if (!ausgabe.additionalContext && !ausgabe.initialUserMessage) process.exit(0);
