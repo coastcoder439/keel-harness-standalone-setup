@@ -161,12 +161,14 @@ test("jede Wirkung ist ein Code aus der Menge und jeder Beleg haelt an der Quell
   }
 });
 
-test("Wirkung je Skript: drei blockieren, git-guard meldet nur", () => {
+test("Wirkung je Skript: vier blockieren, uncommitted-warn meldet nur", () => {
+  // git-guard blockt seit 24.08.2026 EINEN Fall hart (Werkbank-Commit mit
+  // Projekt-Repo-Pfad, Owner-Freigabe) und zaehlt damit zu den Blockierern.
   const nach = (name) => ergebnis.eintraege.find((e) => e.skript === name).wirkung;
   assert.strictEqual(nach("danger-guard.js"), "blockiert");
   assert.strictEqual(nach("commit-pathspec-guard.js"), "blockiert");
   assert.strictEqual(nach("sessionpost-guard.js"), "blockiert");
-  assert.strictEqual(nach("git-guard.js"), "meldet");
+  assert.strictEqual(nach("git-guard.js"), "blockiert");
   assert.strictEqual(nach("uncommitted-warn.js"), "meldet");
   for (const name of ["session-roles.js", "onboarding-start.js", "project-context.js"]) {
     assert.strictEqual(nach(name), "kontext");

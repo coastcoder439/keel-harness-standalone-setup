@@ -1271,7 +1271,12 @@ falschen Repo, und verwaiste `.git/index.lock`-Dateien blockieren jeden Commit
 // Loest zwei reale Probleme dieses Workspace:
 //   1) Commit landet im falschen Repo (7 verschachtelte Repos, Regel war nur Prosa)
 //   2) verwaiste .git/index.lock blockieren jeden Commit (an einem Tag 3x passiert)
-// Blockiert nichts, sondern raeumt und meldet -- Sichtbarkeit statt Bevormundung.
+// Grundsatz: Sichtbarkeit statt Bevormundung -- mit EINER harten Ausnahme
+// [Owner-Freigabe 24.08.2026]: add/commit/rm/mv in der WERKBANK, deren
+// Pfad-Argument in ein user-projects-Repo mit eigenem .git zeigt, wird geblockt
+// (exit 2). Grund: der Pfad ist in der Werkbank ignoriert -- der Commit wuerde
+// die Arbeit dort NICHT sichern; sie gehoert via git -C ins Projekt-Repo.
+// Selbsttest: node git-guard.js --selbsttest
 
 const { execSync } = require("child_process");
 const fs = require("fs");
@@ -1294,6 +1299,69 @@ function sh(cmd, cwd) {
   } catch {
     return null;
   }
+}
+
+// --- Werkbank-Commit mit Projekt-Repo-Pfaden erkennen (der eine Block-Fall) ---
+// Nachrichtentext (-m "...") wird maskiert, damit ein Commit-TEXT, der
+// "user-projects/x" nur erwaehnt, keinen Fehlalarm gibt (Muster: danger-guard).
+function nachrichtenfrei(b) {
+  return String(b).replace(/(-m|--message(?:=)?)\s*("[^"]*"|'[^']*')/g, '$1 ""');
+}
+function tokensVon(b) {
+  const t = [];
+  const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
+  let m;
+  while ((m = re.exec(b))) t.push(m[1] ?? m[2] ?? m[3]);
+  return t;
+}
+// Liefert {pfad, projekt} wenn ein Pfad-Argument des Befehls (aufgeloest gegen
+// basis) unter <werkbank>/user-projects/<projekt> liegt UND dieses Projekt ein
+// eigenes .git hat -- sonst null. existiert ist injizierbar (Selbsttest).
+function projektRepoTreffer(befehl, basis, werkbank, existiert) {
+  if (!werkbank) return null;
+  const up = path.join(werkbank, "user-projects");
+  for (const tok of tokensVon(nachrichtenfrei(befehl))) {
+    if (!tok || tok.startsWith("-") || tok === "git") continue;
+    let abs;
+    try {
+      abs = path.resolve(basis, msysPfad(tok));
+    } catch {
+      continue;
+    }
+    const rel = path.relative(up, abs);
+    if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) continue;
+    const projekt = rel.split(path.sep)[0];
+    if (projekt && existiert(path.join(up, projekt, ".git"))) return { pfad: tok, projekt };
+  }
+  return null;
+}
+
+// --- Selbsttest: Analyse pur, ohne echtes git (existiert wird gefaked) ---
+if (process.argv.includes("--selbsttest")) {
+  const wb = path.resolve("/werkbank");
+  const mitGit = new Set([path.join(wb, "user-projects", "keel-light", ".git")]);
+  const ex = (p) => mitGit.has(p);
+  const faelle = [
+    // [befehl, basis, erwartetBlock]
+    ['git commit -m "x" -- user-projects/keel-light/foo.js', wb, true],
+    ["git add user-projects/keel-light/src/a.js", wb, true],
+    ['git commit -m "doku nennt user-projects/keel-light" -- CLAUDE.md', wb, false],
+    ["git add user-projects/ohne-repo/a.js", wb, false],
+    ["git -C user-projects/keel-light commit -m 'x' -- foo.js", wb, false], // Ziel ist das Projekt selbst -> Block greift nur bei Werkbank-Ziel (siehe Aufrufstelle)
+    ["git status", wb, false],
+  ];
+  let fehler = 0;
+  for (const [befehl, basis, soll] of faelle) {
+    // Fall 5 simuliert die Aufrufstelle: bei -C ist das Ziel nicht die Werkbank,
+    // projektRepoTreffer wird dort gar nicht erst gefragt.
+    const hatC = /git\s+-C\s/.test(befehl);
+    const ist = hatC ? false : projektRepoTreffer(befehl, basis, wb, ex) !== null;
+    const ok = ist === soll;
+    if (!ok) fehler++;
+    console.log(`${ok ? "ok  " : "FEHL"} ${soll ? "BLOCK" : "frei "} <- ${befehl}`);
+  }
+  console.log(`${faelle.length - fehler} von ${faelle.length} Faellen richtig.`);
+  process.exit(fehler ? 1 : 0);
 }
 
 function laeuftGit() {
@@ -1400,6 +1468,23 @@ process.stdin.on("end", () => {
         ? sh("git rev-parse --show-toplevel", process.env.CLAUDE_PROJECT_DIR)
         : null;
       const istWerkbank = werkbank ? top === werkbank : false;
+
+      // --- 3) Der eine Block-Fall [Owner-Freigabe 24.08.2026] ---
+      // Ziel ist die Werkbank, aber ein Pfad-Argument zeigt in ein Projekt-Repo
+      // mit eigenem .git: der Pfad ist hier ignoriert, der Commit sichert NICHTS.
+      if (istWerkbank && /\b(add|commit|rm|mv)\b/.test(befehl)) {
+        const treffer = projektRepoTreffer(befehl, basis, werkbank, fs.existsSync);
+        if (treffer) {
+          process.stderr.write(
+            `git-guard hat den Befehl NICHT ausgefuehrt.\n\n` +
+              `  "${treffer.pfad}" gehoert ins Projekt-Repo "${treffer.projekt}" (eigenes .git).\n` +
+              `  In der Werkbank ist der Pfad ignoriert -- der Befehl wuerde die Arbeit dort\n` +
+              `  NICHT sichern oder sie dem falschen Repo zuordnen.\n` +
+              `  -> git -C user-projects/${treffer.projekt} ...\n`
+          );
+          process.exit(2);
+        }
+      }
       const hinweis =
         !mC && werkbank && !istWerkbank
           ? cdPfad
