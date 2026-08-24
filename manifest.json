@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-24T15:29:28.359Z",
+  "gebautAm": "2026-08-24T15:35:27.826Z",
   "posten": 90,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -732,8 +732,8 @@
       "herkunft": "erzeugt von paketieren.mjs",
       "quellordner": "erzeugt",
       "gesaeubert": 0,
-      "bytes": 2157,
-      "sha256": "2727f031a59b5a8f"
+      "bytes": 2737,
+      "sha256": "46d5e77d14d84892"
     },
     {
       "datei": "templates/gitignore-block.txt",
