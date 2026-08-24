@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-24T11:58:36.308Z",
+  "gebautAm": "2026-08-24T12:40:16.525Z",
   "posten": 86,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -228,8 +228,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 899,
-      "sha256": "5bbdd55d963294cd"
+      "bytes": 1019,
+      "sha256": "6cb3693f9c60bbe1"
     },
     {
       "datei": "payload/claude/session-roles.js",
@@ -284,8 +284,8 @@
       "herkunft": ".claude/skills/i-have-adhd/SKILL.md",
       "quellordner": "werkbank",
       "gesaeubert": 0,
-      "bytes": 2692,
-      "sha256": "1fbc11cb54ae9afb"
+      "bytes": 6158,
+      "sha256": "d3e974aaf5eac6d6"
     },
     {
       "datei": "payload/claude/skills/resolving-merge-conflicts/SKILL.md",

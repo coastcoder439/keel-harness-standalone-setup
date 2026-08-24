@@ -9,6 +9,7 @@ und Uebergaben als Vollstaendigkeits-Audit ueber den Skill `completeness`) und
 **Fulfillment** (ist das ZIEL erfuellt, nicht nur Arbeit geleistet?). Coverage findet
 Luecken, Fulfillment findet Frame-Fehler — keins ersetzt das andere.
 
-**„fertig" als Selbstauskunft ist verboten** — stattdessen: „Geprueft gegen ⟨Quellen⟩,
-offen ist ⟨Liste⟩." Zahlen beim Schreiben messen, nicht erinnern, und den Befehl
-danebenschreiben, der die Zahl erzeugt hat.
+Jede Abschluss-Meldung endet im Format: „Geprueft gegen: ⟨Quellen⟩ · Offen: ⟨Liste
+oder nichts⟩" — „fertig" existiert nur innerhalb dieses Formats. Zahlen beim Schreiben
+messen, nicht erinnern, und den Befehl danebenschreiben, der die Zahl erzeugt hat.
+Jeder Fix landet SYNCHRON in Werkbank, Bausatz und Doku — nie nur in einem.
