@@ -1,4 +1,4 @@
-// Test zu dashboard/zutun-docs.js -- Bordmittel, node:test.
+// Test zu dashboard/todo-docs.js -- Bordmittel, node:test.
 //
 // Geprueft wird gegen ZWEI Lagen:
 //   echt      der Baum dieses Workspace (die Zahlen, die spaeter im Dashboard stehen)
@@ -14,7 +14,7 @@ const path = require("path");
 const os = require("os");
 
 
-const { zuTunDoku } = require("../zutun-docs.js");
+const { zuTunDoku } = require("../todo-docs.js");
 
 const WURZEL = path.resolve(__dirname, "..", "..");
 

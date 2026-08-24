@@ -1,4 +1,4 @@
-// Test zu dashboard/verwandt.js -- Bordmittel, node:test.
+// Test zu dashboard/related.js -- Bordmittel, node:test.
 //
 // Die scharfe Frage dieses Moduls ist nicht "findet es Kanten", sondern
 // "traegt jede Kante einen Beleg, und zeigt keine ins Leere". Beides wird hier
@@ -11,7 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-const { verwandt } = require("../verwandt.js");
+const { verwandt } = require("../related.js");
 
 const WURZEL = path.resolve(__dirname, "..", "..");
 

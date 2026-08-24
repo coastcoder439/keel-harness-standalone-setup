@@ -418,9 +418,9 @@ test("stdoutKopf laeuft durch textSichern -- eigene Fassung ersetzbar", () => {
   for (const e of gelaufen) assert.strictEqual(e.probe.stdoutKopf, "[geprueft]");
 });
 
-// inventar.js gibt aus textSichern ein Objekt zurueck, nicht eine Zeichenkette
-// (inventar.js:131-141). Ohne diesen Test faellt die Verdrahtung erst im Browser auf.
-test("textSichern darf auch die Objekt-Form von inventar.js liefern", () => {
+// file-inventory.js gibt aus textSichern ein Objekt zurueck, nicht eine Zeichenkette
+// (file-inventory.js:131-141). Ohne diesen Test faellt die Verdrahtung erst im Browser auf.
+test("textSichern darf auch die Objekt-Form von file-inventory.js liefern", () => {
   const r = hooksDetail(WURZEL, {
     proben: true,
     textSichern: (s) => ({ text: `${s.slice(0, 4)}<gesichert>`, ausgeblendeteZeilen: [] }),

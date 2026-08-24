@@ -4,7 +4,7 @@
 
 const { test } = require("node:test");
 const assert = require("node:assert");
-const W = require("../render/worte.js");
+const W = require("../render/labels.js");
 
 // Alle Zeichenketten aus der Wortliste einsammeln, mit ihrem Ort -- damit ein
 // Fehlschlag sagt, WO das Wort steht, nicht nur DASS es da ist.
@@ -82,7 +82,7 @@ test("jeder Status hat Wort, eigene Glyphe und Farbtoken", () => {
 });
 
 test("jede Art aus der Messung hat genau ein Wort", () => {
-  // Die Rollen-Codes aus inventar.js (Spezifikation 7.1).
+  // Die Rollen-Codes aus file-inventory.js (Spezifikation 7.1).
   const rollen = ["hook-skript", "skript", "settings", "launch", "wurzel-kontext",
                   "gitignore", "command", "skill", "skill-datei", "dauer-regel",
                   "doku", "dashboard-modul", "dashboard-doku", "lizenz", "sonstiges"];

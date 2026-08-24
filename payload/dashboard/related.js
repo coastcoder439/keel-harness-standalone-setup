@@ -22,7 +22,7 @@
 // Alle Pfade POSIX, alle Zeilen normalisiert (split auf \r?\n). Vergleiche gegen
 // den Bestand case-insensitiv (Windows-Dateisystem).
 //
-// AUFRUF   const { verwandt } = require("./verwandt");
+// AUFRUF   const { verwandt } = require("./related");
 //          verwandt(wurzel, { dateiIds, hookIds, repoIds, commitIds })
 
 const fs = require("fs");

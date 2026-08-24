@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-24T14:37:07.909Z",
+  "gebautAm": "2026-08-24T15:29:28.359Z",
   "posten": 90,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 76864,
-      "sha256": "210f4863ee87e6c4"
+      "bytes": 76875,
+      "sha256": "92ae3577722ff34f"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -212,8 +212,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 2449,
-      "sha256": "d4379587d81d6992"
+      "bytes": 2451,
+      "sha256": "46244ea9eb4f07e2"
     },
     {
       "datei": "payload/claude/repo-status.js",
@@ -244,8 +244,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 1715,
-      "sha256": "15708e09be156580"
+      "bytes": 1724,
+      "sha256": "b559557359e73299"
     },
     {
       "datei": "payload/claude/session-roles.js",
@@ -344,6 +344,14 @@
       "sha256": "2d785e02bd055e43"
     },
     {
+      "datei": "payload/dashboard/access-filter.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 10258,
+      "sha256": "69e165f3cd4b9376"
+    },
+    {
       "datei": "payload/dashboard/classify.js",
       "herkunft": "zustand/einordnen.js",
       "quellordner": "bausatz",
@@ -352,28 +360,36 @@
       "sha256": "c5eb1fccae341e2d"
     },
     {
+      "datei": "payload/dashboard/file-inventory.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 35181,
+      "sha256": "f6edd199df48237a"
+    },
+    {
+      "datei": "payload/dashboard/history.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 2198,
+      "sha256": "998990089eb1ea04"
+    },
+    {
       "datei": "payload/dashboard/hooks-detail.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 20979,
-      "sha256": "90b69c85996114c1"
+      "bytes": 20997,
+      "sha256": "9ccbfbb07348c549"
     },
     {
       "datei": "payload/dashboard/index.js",
       "herkunft": "zustand/zustand.js",
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 6843,
-      "sha256": "be623c8c575350d6"
-    },
-    {
-      "datei": "payload/dashboard/inventar.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 35175,
-      "sha256": "bbec2d97c00e739b"
+      "bytes": 6862,
+      "sha256": "bdf672fa5caa4f1a"
     },
     {
       "datei": "payload/dashboard/inventory.js",
@@ -388,24 +404,32 @@
       "herkunft": "zustand/messen.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 53566,
-      "sha256": "064bccea759a63b9"
+      "bytes": 53570,
+      "sha256": "486d2b872bc08357"
     },
     {
-      "datei": "payload/dashboard/projekte.js",
+      "datei": "payload/dashboard/projects.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
       "bytes": 11970,
-      "sha256": "e57ebf80915be3af"
+      "sha256": "9d20578235fb70f1"
+    },
+    {
+      "datei": "payload/dashboard/related.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 16040,
+      "sha256": "a578e92169e594af"
     },
     {
       "datei": "payload/dashboard/render/client/core.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15036,
-      "sha256": "b24885f096aa988d"
+      "bytes": 15037,
+      "sha256": "bf2865aff4d5da12"
     },
     {
       "datei": "payload/dashboard/render/client/detail.js",
@@ -436,16 +460,16 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 14940,
-      "sha256": "11285d1026118d99"
+      "bytes": 14964,
+      "sha256": "c4253b920a313175"
     },
     {
-      "datei": "payload/dashboard/render/helfer.js",
+      "datei": "payload/dashboard/render/helpers.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
       "bytes": 3383,
-      "sha256": "da9b5870c7ca8cab"
+      "sha256": "828dea5bd46da5b3"
     },
     {
       "datei": "payload/dashboard/render/icons.js",
@@ -456,6 +480,14 @@
       "sha256": "ed9a2a88d16c6dc9"
     },
     {
+      "datei": "payload/dashboard/render/labels.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 23544,
+      "sha256": "6903201668a5752b"
+    },
+    {
       "datei": "payload/dashboard/render/markdown.js",
       "herkunft": null,
       "quellordner": "bausatz",
@@ -464,20 +496,12 @@
       "sha256": "c3008186375f274b"
     },
     {
-      "datei": "payload/dashboard/render/seiten.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 24017,
-      "sha256": "eb14e21b0b3b5657"
-    },
-    {
       "datei": "payload/dashboard/render/shell.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 6263,
-      "sha256": "c3b993c352adbd44"
+      "bytes": 6264,
+      "sha256": "4779e90dcc7aef9f"
     },
     {
       "datei": "payload/dashboard/render/styles.js",
@@ -488,28 +512,36 @@
       "sha256": "997895e23bce3400"
     },
     {
-      "datei": "payload/dashboard/render/worte.js",
+      "datei": "payload/dashboard/render/views.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 23544,
-      "sha256": "6903201668a5752b"
+      "bytes": 24019,
+      "sha256": "9c7b17c18fb0daf5"
     },
     {
       "datei": "payload/dashboard/rules.js",
       "herkunft": "zustand/regeln.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 16349,
-      "sha256": "2d86df6ca259fa78"
+      "bytes": 16355,
+      "sha256": "cf19c5184a04504b"
     },
     {
       "datei": "payload/dashboard/serve.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 16950,
-      "sha256": "63a239f4d7e0b9c7"
+      "bytes": 16956,
+      "sha256": "c92b93627d2ef69a"
+    },
+    {
+      "datei": "payload/dashboard/test/access-filter.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 8032,
+      "sha256": "ef0612a99522138e"
     },
     {
       "datei": "payload/dashboard/test/client.test.js",
@@ -520,20 +552,36 @@
       "sha256": "f92cfce807562a80"
     },
     {
+      "datei": "payload/dashboard/test/completeness.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 14966,
+      "sha256": "a69130fd2cdb17a0"
+    },
+    {
       "datei": "payload/dashboard/test/data.test.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 25082,
-      "sha256": "a8e9b49069512878"
+      "bytes": 25095,
+      "sha256": "857f9e0ac9d957a4"
+    },
+    {
+      "datei": "payload/dashboard/test/file-inventory.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 25923,
+      "sha256": "41df7d539bf38db2"
     },
     {
       "datei": "payload/dashboard/test/hooks-detail.test.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 21398,
-      "sha256": "130d8889aa714408"
+      "bytes": 21416,
+      "sha256": "c7be9d291d8c2c9d"
     },
     {
       "datei": "payload/dashboard/test/icons.test.js",
@@ -544,12 +592,12 @@
       "sha256": "67e6b05cf4ef15a5"
     },
     {
-      "datei": "payload/dashboard/test/inventar.test.js",
+      "datei": "payload/dashboard/test/labels.test.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 25894,
-      "sha256": "7fa60d4c97e35e15"
+      "bytes": 7428,
+      "sha256": "c30215aebc1d8290"
     },
     {
       "datei": "payload/dashboard/test/markdown.test.js",
@@ -560,28 +608,36 @@
       "sha256": "694d87ae7f868777"
     },
     {
-      "datei": "payload/dashboard/test/projekte.test.js",
+      "datei": "payload/dashboard/test/projects.test.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
       "bytes": 12729,
-      "sha256": "3242051f4cb93e2c"
+      "sha256": "2ed31dc234ef6b85"
     },
     {
-      "datei": "payload/dashboard/test/regeln-ladeart.test.js",
+      "datei": "payload/dashboard/test/related.test.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 4608,
-      "sha256": "faabf9aff254345d"
+      "bytes": 15550,
+      "sha256": "4a22420884f0c74c"
+    },
+    {
+      "datei": "payload/dashboard/test/rule-loading.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 4614,
+      "sha256": "1b609205fb68fcb4"
     },
     {
       "datei": "payload/dashboard/test/serve.test.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 13507,
-      "sha256": "743cebc111fa5d30"
+      "bytes": 13508,
+      "sha256": "3584efe83285154b"
     },
     {
       "datei": "payload/dashboard/test/shell.test.js",
@@ -600,76 +656,20 @@
       "sha256": "fb854d42ad2fdf1d"
     },
     {
-      "datei": "payload/dashboard/test/verwandt.test.js",
+      "datei": "payload/dashboard/test/todo-docs.test.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15552,
-      "sha256": "415d2178d30bbff7"
+      "bytes": 11171,
+      "sha256": "d74359ca1cb7e43f"
     },
     {
-      "datei": "payload/dashboard/test/vollstaendigkeit.test.js",
+      "datei": "payload/dashboard/todo-docs.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 14966,
-      "sha256": "8e731cc458d8a710"
-    },
-    {
-      "datei": "payload/dashboard/test/worte.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 7421,
-      "sha256": "6f4728595b099a79"
-    },
-    {
-      "datei": "payload/dashboard/test/zugangsfilter.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 8032,
-      "sha256": "509ae355b3e1c229"
-    },
-    {
-      "datei": "payload/dashboard/test/zutun-docs.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 11173,
-      "sha256": "8e98d137e3597092"
-    },
-    {
-      "datei": "payload/dashboard/verlauf.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 2198,
-      "sha256": "92d4cec79b100f0e"
-    },
-    {
-      "datei": "payload/dashboard/verwandt.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 16041,
-      "sha256": "1c46addcfdd25d5b"
-    },
-    {
-      "datei": "payload/dashboard/zugangsfilter.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 10240,
-      "sha256": "e5bbd9f473fc0a1b"
-    },
-    {
-      "datei": "payload/dashboard/zutun-docs.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 8666,
-      "sha256": "a0f03f7d26a0aca5"
+      "bytes": 8665,
+      "sha256": "aa099f3945679b97"
     },
     {
       "datei": "payload/docs/completeness-check.md",
@@ -696,12 +696,12 @@
       "sha256": "890530cf21b0cda3"
     },
     {
-      "datei": "payload/docs/pakete/VORLAGE.md",
+      "datei": "payload/docs/packages/TEMPLATE.md",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 863,
-      "sha256": "385e4c42da331302"
+      "bytes": 846,
+      "sha256": "1fa6a786174be5aa"
     },
     {
       "datei": "payload/docs/rebuild-guide.md",

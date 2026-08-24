@@ -1,4 +1,4 @@
-// Test zu dashboard/zugangsfilter.js -- Bordmittel, node:test.
+// Test zu dashboard/access-filter.js -- Bordmittel, node:test.
 //
 // DIE MESSLATTE DIESER DATEI
 // Ein Filter, der Richtiges unkenntlich macht, wird abgeschaltet und schuetzt
@@ -23,7 +23,7 @@ const {
   MINI_SPERRLISTE,
   textSichern,
   sperrgrund,
-} = require("../zugangsfilter.js");
+} = require("../access-filter.js");
 
 const ZEILENUMBRUCH = String.fromCharCode(10);
 

@@ -16,7 +16,7 @@
 
 const { css } = require("./styles.js");
 const { icon } = require("./icons.js");
-const W = require("./worte.js");
+const W = require("./labels.js");
 
 const esc = (s) =>
   String(s == null ? "" : s)

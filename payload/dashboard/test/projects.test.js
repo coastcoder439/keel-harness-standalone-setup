@@ -1,4 +1,4 @@
-// Test zu dashboard/projekte.js und dashboard/verlauf.js -- Bordmittel, node:test.
+// Test zu dashboard/projects.js und dashboard/history.js -- Bordmittel, node:test.
 //
 // WORUM ES GEHT
 // user-projects/ war im Dashboard ein geschlossener Knoten mit einer Zahl. Man
@@ -18,8 +18,8 @@ const path = require("path");
 const os = require("os");
 
 const { spawnSync } = require("child_process");
-const { projekte, ersterAbsatz, WURZEL_DOKUMENT } = require("../projekte.js");
-const { verlaufMessen } = require("../verlauf.js");
+const { projekte, ersterAbsatz, WURZEL_DOKUMENT } = require("../projects.js");
+const { verlaufMessen } = require("../history.js");
 
 // Ein Git-ORDNER allein genuegt nicht: eine frische Installation macht `git init`
 // OHNE Commit (belegt in checks/frisch-geklont.mjs). verlaufMessen liefert dann
@@ -255,7 +255,7 @@ wennDa(hatProjekte, "kein user-projects/ in diesem Workspace",
 });
 
 // ---------------------------------------------------------------------------
-// verlauf.js -- beim Herausloesen aus measure.js nicht kaputtgegangen
+// history.js -- beim Herausloesen aus measure.js nicht kaputtgegangen
 // ---------------------------------------------------------------------------
 
 test("verlaufMessen ohne Repos: ein ehrliches Ergebnis, keine Ausnahme", () => {

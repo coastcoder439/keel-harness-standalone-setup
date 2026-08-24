@@ -15,13 +15,13 @@ const { messen } = require("../measure.js");
 const { regeln } = require("../rules.js");
 const { daten } = require("../render/data.js");
 const { renderHTML } = require("../render/shell.js");
-const { UI, SEITEN, STATUS } = require("../render/worte.js");
+const { UI, SEITEN, STATUS } = require("../render/labels.js");
 // Die Seitenbauer und die Helfer liegen seit dem 23.08.2026 in eigenen
 // Modulen. Sie werden hier mitgeladen, damit die Vollstaendigkeits-Pruefung
 // sieht, dass sie geprueft sind -- und weil ein Export-Vertrag, den niemand
 // anfasst, still veralten kann.
-const SEITENBAUER = require("../render/seiten.js");
-const HELFER = require("../render/helfer.js");
+const SEITENBAUER = require("../render/views.js");
+const HELFER = require("../render/helpers.js");
 
 const WURZEL = path.resolve(__dirname, "..", "..");
 
@@ -103,7 +103,7 @@ test("jeder Eintrag traegt einen Namen -- keine leere Zeile", () => {
 test("jeder Status stammt aus dem festen Satz -- kein erfundener Zustand", () => {
   const erlaubt = new Set(Object.keys(STATUS));
   const fremd = [...new Set(d.eintraege.map((e) => e.status).filter((s) => s && !erlaubt.has(s)))];
-  assert.deepStrictEqual(fremd, [], "Status, den worte.js nicht kennt -- er haette kein Wort und keine Glyphe");
+  assert.deepStrictEqual(fremd, [], "Status, den labels.js nicht kennt -- er haette kein Wort und keine Glyphe");
 });
 
 test("ein Eintrag ohne gemessenen Zustand bekommt keinen erfundenen", () => {
@@ -269,7 +269,7 @@ test("kein Dateiinhalt steht im Datensatz -- Server-zuerst (Riegel gegen E)", ()
   assert.deepStrictEqual(mitText.slice(0, 8), [], "Eintrag mit eingebettetem inhalt.text");
   assert.strictEqual(d.markdown, undefined, "vorgerendertes Markdown ist wieder im Datensatz");
 
-  // Der Rohtext der Messung (inventar.js) darf NICHT in den Datensatz sickern --
+  // Der Rohtext der Messung (file-inventory.js) darf NICHT in den Datensatz sickern --
   // er ist nur ein Seitenfeld fuer Frontmatter/Beschreibung und wird am Knoten
   // fallengelassen.
   let rohtextBei = null;
@@ -300,17 +300,17 @@ test("die gerenderte Seite bleibt klein -- keine wiedereingebetteten Ruempfe (Ri
   assert.ok(mb < 3, "die Seite ist " + mb.toFixed(2) + " MB gross -- steht wieder Dateiinhalt drin?");
 });
 
-test("die Wortliste der Seite ist die aus worte.js -- kein zweiter Bestand", () => {
+test("die Wortliste der Seite ist die aus labels.js -- kein zweiter Bestand", () => {
   // Wenn data.js eigene Woerter mitgibt, gibt es zwei Orte fuer dieselbe
   // Beschriftung, und einer davon veraltet.
   for (const [k, v] of Object.entries(d.worte)) {
-    assert.ok(k in UI, "das Wort '" + k + "' steht im Datensatz, aber nicht in worte.js");
-    assert.strictEqual(v, UI[k], "das Wort '" + k + "' weicht von worte.js ab");
+    assert.ok(k in UI, "das Wort '" + k + "' steht im Datensatz, aber nicht in labels.js");
+    assert.strictEqual(v, UI[k], "das Wort '" + k + "' weicht von labels.js ab");
   }
 });
 
-test("die Seitenliste des Datensatzes deckt sich mit worte.js", () => {
-  assert.deepStrictEqual(Object.keys(d.seiten).sort(), Object.keys(SEITEN).sort(), "Seiten in worte.js und im Datensatz weichen ab");
+test("die Seitenliste des Datensatzes deckt sich mit labels.js", () => {
+  assert.deepStrictEqual(Object.keys(d.seiten).sort(), Object.keys(SEITEN).sort(), "Seiten in labels.js und im Datensatz weichen ab");
 });
 
 // ---------------------------------------------------------------------------
@@ -458,7 +458,7 @@ test("was eine andere Frage beantwortet, steht in einem eigenen Feld", () => {
 // Die beiden Module, die am 23.08.2026 aus data.js herausgeloest wurden
 // ---------------------------------------------------------------------------
 
-test("seiten.js liefert alle neun Seitenbauer als Funktion", () => {
+test("views.js liefert alle neun Seitenbauer als Funktion", () => {
   const erwartet = [
     "dateiEintraege", "hookEintraege", "ausInventar", "zuTunEintraege",
     "kontextEintraege", "projektEintraege", "backupEintraege", "commitEintraege",
@@ -468,7 +468,7 @@ test("seiten.js liefert alle neun Seitenbauer als Funktion", () => {
   for (const n of erwartet) assert.strictEqual(typeof SEITENBAUER[n], "function", n);
 });
 
-test("helfer.js liefert die fuenf gemeinsamen Helfer", () => {
+test("helpers.js liefert die fuenf gemeinsamen Helfer", () => {
   for (const n of ["feld", "felderVon", "spracheVon", "beschreibungVon", "inhaltVon"]) {
     assert.strictEqual(typeof HELFER[n], "function", n);
   }
