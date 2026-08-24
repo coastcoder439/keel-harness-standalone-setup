@@ -468,6 +468,12 @@ Sitzungs-Nachrichten) plus die Statusleiste. **Nichts von Hand anzupassen** — 
         "hooks": [
           {
             "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/dod-guard.js\"",
+            "timeout": 10,
+            "statusMessage": "dod-guard (Abschluss-Format bei geleisteter Arbeit)"
+          },
+          {
+            "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/uncommitted-warn.js\"",
             "async": true,
             "statusMessage": "Backup-Check (ungesicherte Arbeit)"
