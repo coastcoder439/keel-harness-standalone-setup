@@ -15,6 +15,7 @@ per Grundsatz 5 bewusst NICHT erzwingbar — reiner Text hat H4 als Maximum).
 | Erst Repo gepusht, dann .gitignore-Zeile | **Code** | `write-guard.js` W3 | `--selbsttest` 8/8 |
 | Inter-Session-Nachrichten knapp (3 Zeilen) | **Code** | `sessionpost-guard.js` | settings.json Matcher |
 | Sicherungs-Warnung am Sitzungsende | **Code** (meldet) | `uncommitted-warn.js` | Stop-Hook, blockt nie (Design) |
+| Abschluss nur im DoD-Format (Geprueft gegen / Offen) bei geleisteter Arbeit | **Code** | `dod-guard.js` (Stop, Format-Check statt Wortmuster) | `--selbsttest` 6/6; Realprobe am echten Transcript exit 2 |
 | Kontext-Check als erste Handlung | **Prosa** | `project-context.js` (Injektion) | Text ≠ Tool-Aufruf, nicht gate-bar |
 | Kein One-Shot, erst pruefen | **Prosa** | `rules/keel/no-oneshot.md` | Aussagen sind nicht gate-bar (03.08.) |
 | Zieldefinition + zwei Abschluss-Messungen | **Prosa** | `rules/keel/working-method.md` | Urteils-Verhalten |

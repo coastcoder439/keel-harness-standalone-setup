@@ -37,6 +37,7 @@ const ERWARTETE_REIHENFOLGE = [
   "session-roles.js",
   "onboarding-start.js",
   "project-context.js",
+  "dod-guard.js",
   "uncommitted-warn.js",
   "danger-guard.js",
   "git-guard.js",
@@ -55,19 +56,19 @@ const WIRKUNG_MARKER = {
 // ---------------------------------------------------------------------------
 // Bestand und Reihenfolge
 // ---------------------------------------------------------------------------
-test("neun Eintraege, in der Reihenfolge von settings.json", () => {
+test("zehn Eintraege, in der Reihenfolge von settings.json", () => {
   assert.deepStrictEqual(ergebnis.fehler, [], "kein Messfehler erwartet");
-  assert.strictEqual(ergebnis.eintraege.length, 9);
+  assert.strictEqual(ergebnis.eintraege.length, 10);
   assert.deepStrictEqual(ergebnis.eintraege.map((e) => e.skript), ERWARTETE_REIHENFOLGE);
   const zeilen = ergebnis.eintraege.map((e) => e.settingsZeile);
   const sortiert = [...zeilen].sort((a, b) => a - b);
   assert.deepStrictEqual(zeilen, sortiert, "settingsZeile muss monoton steigen");
 });
 
-test("Ereignisse: SessionStart 3, Stop 1, PreToolUse 5", () => {
+test("Ereignisse: SessionStart 3, Stop 2, PreToolUse 5", () => {
   const nach = (ev) => ergebnis.eintraege.filter((e) => e.ereignis === ev).length;
   assert.strictEqual(nach("SessionStart"), 3);
-  assert.strictEqual(nach("Stop"), 1);
+  assert.strictEqual(nach("Stop"), 2);
   assert.strictEqual(nach("PreToolUse"), 5);
   assert.strictEqual(nach("SessionStart") + nach("Stop") + nach("PreToolUse"), ergebnis.eintraege.length);
 });
@@ -117,7 +118,8 @@ test("reihenfolge zaehlt innerhalb der Matcher-Gruppe ab 1", () => {
   assert.strictEqual(nach("git-guard.js"), 2);
   assert.strictEqual(nach("commit-pathspec-guard.js"), 3);
   assert.strictEqual(nach("sessionpost-guard.js"), 1, "eigene Matcher-Gruppe, also wieder 1");
-  assert.strictEqual(nach("uncommitted-warn.js"), 1);
+  assert.strictEqual(nach("dod-guard.js"), 1);
+  assert.strictEqual(nach("uncommitted-warn.js"), 2);
 });
 
 test("ansage kommt woertlich aus statusMessage", () => {
@@ -172,6 +174,7 @@ test("Wirkung je Skript: fuenf blockieren, uncommitted-warn meldet nur", () => {
   assert.strictEqual(nach("sessionpost-guard.js"), "blockiert");
   assert.strictEqual(nach("git-guard.js"), "blockiert");
   assert.strictEqual(nach("write-guard.js"), "blockiert");
+  assert.strictEqual(nach("dod-guard.js"), "blockiert");
   assert.strictEqual(nach("uncommitted-warn.js"), "meldet");
   for (const name of ["session-roles.js", "onboarding-start.js", "project-context.js"]) {
     assert.strictEqual(nach(name), "kontext");
