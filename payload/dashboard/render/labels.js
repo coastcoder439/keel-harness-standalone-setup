@@ -59,6 +59,12 @@ const SEITEN = {
     zweck: "Was offen ist — mit Grund, Quelle und dem Befehl dazu. {n} aus der Messung, {doku} aus Dokumenten gezogen.",
     icon: "list-checks",
   },
+  bridge: {
+    name: "Kommandobrücke",
+    ort: "dashboard/serve.js",
+    zweck: "Arbeitspakete sehen und abhaken, Sitzungen prüfen, Guard-Selbsttests starten, Aufträge schicken — liest und schreibt live, darum nur im Server-Betrieb.",
+    icon: "command",
+  },
   dateien: {
     name: "Dateien",
     ort: null,
@@ -132,7 +138,7 @@ const SEITEN = {
 // Schrei und bricht die Mono-Regel), sondern Ueberschriften; der Pfad steht im
 // title jedes Eintrags.
 const NAVIGATION = [
-  { gruppe: null, eintraege: ["ueberblick", "zutun", "dateien"] },
+  { gruppe: null, eintraege: ["ueberblick", "zutun", "bridge", "dateien"] },
   { gruppe: "Claude Code", pfad: ".claude/", eintraege: ["hooks", "commands", "skills", "rules"] },
   { gruppe: "Workspace", pfad: null, eintraege: ["projekte", "kontext", "werkzeuge", "backup", "commits"] },
   { gruppe: "Belege", pfad: null, eintraege: ["rohdaten"] },

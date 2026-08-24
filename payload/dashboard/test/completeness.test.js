@@ -91,7 +91,7 @@ function geladeneModule() {
     }
     // client.test.js laedt die Browser-Teile ueber einen zusammengesetzten Pfad.
     if (/require\(path\.join\(CLIENT/.test(t)) {
-      for (const n of ["core", "pages", "detail", "start"]) geladen.add("render/client/" + n + ".js");
+      for (const n of ["core", "pages", "detail", "bridge", "start"]) geladen.add("render/client/" + n + ".js");
     }
   }
   return geladen;

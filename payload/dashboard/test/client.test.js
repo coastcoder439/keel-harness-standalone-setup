@@ -22,7 +22,7 @@ const CLIENT = path.join(WURZEL, "dashboard", "render", "client");
 
 // Die Reihenfolge ist die aus shell.js. Sie wird unten gegen die Quelle
 // geprueft, damit diese Liste nicht schweigend veraltet.
-const TEILE = ["core", "pages", "detail", "start"];
+const TEILE = ["core", "pages", "detail", "bridge", "start"];
 
 const quelltextVon = (name) => require(path.join(CLIENT, name + ".js")).quelltext;
 const alles = () => TEILE.map(quelltextVon).join("\n");

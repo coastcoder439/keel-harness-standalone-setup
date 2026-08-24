@@ -1,4 +1,4 @@
-// BROWSER-TEIL 1 von 4: Zustand, Adresse, Ereignisse, Werkzeuge.
+// BROWSER-TEIL 1 von 5: Zustand, Adresse, Ereignisse, Werkzeuge.
 //
 // Der Inhalt dieser Datei laeuft NICHT in Node -- er wird als Zeichenkette in
 // die erzeugte Seite geschrieben. Deshalb: kein require, kein module, keine

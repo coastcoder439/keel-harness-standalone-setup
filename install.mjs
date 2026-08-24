@@ -195,7 +195,6 @@ const DASHBOARD = [
   // Ohne ihn ist sie nur lesbar -- ein Doppelklick genuegt dafuer.
   "serve.js",
   "bridge.js",            // Kommandobruecken-Logik (Pakete/Sessions/Selbsttests/Auftraege)
-  "bridge.html",          // die Kommandobruecken-Seite unter /bridge
   "test/bridge.test.js",
   "measure.js",
   "classify.js",
@@ -226,6 +225,7 @@ const DASHBOARD = [
   "render/client/core.js",
   "render/client/pages.js",
   "render/client/detail.js",
+  "render/client/bridge.js",
   "render/client/start.js",
   // Die Selbstpruefung wandert mit. Ein Harness, das seine eigenen Zusagen
   // nachweisen kann, ist der Zweck dieses Bausatzes -- ohne die Tests waere

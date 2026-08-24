@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-24T16:42:38.605Z",
+  "gebautAm": "2026-08-24T17:44:32.587Z",
   "posten": 93,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 77062,
-      "sha256": "71f3b7da731dcc2c"
+      "bytes": 77021,
+      "sha256": "9e93923cacfeafad"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -352,14 +352,6 @@
       "sha256": "69e165f3cd4b9376"
     },
     {
-      "datei": "payload/dashboard/bridge.html",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 8317,
-      "sha256": "913db1269969de53"
-    },
-    {
       "datei": "payload/dashboard/bridge.js",
       "herkunft": null,
       "quellordner": "bausatz",
@@ -440,12 +432,20 @@
       "sha256": "a578e92169e594af"
     },
     {
+      "datei": "payload/dashboard/render/client/bridge.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 8060,
+      "sha256": "f70a50b8f36e90b7"
+    },
+    {
       "datei": "payload/dashboard/render/client/core.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
       "bytes": 15037,
-      "sha256": "bf2865aff4d5da12"
+      "sha256": "791c921aedfff49a"
     },
     {
       "datei": "payload/dashboard/render/client/detail.js",
@@ -453,23 +453,23 @@
       "quellordner": "bausatz",
       "gesaeubert": 0,
       "bytes": 23447,
-      "sha256": "19e076618c610daa"
+      "sha256": "4e7b50553fa4325e"
     },
     {
       "datei": "payload/dashboard/render/client/pages.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15733,
-      "sha256": "5e34fcfadb0f80d1"
+      "bytes": 15793,
+      "sha256": "2c96bd2cca9c85cd"
     },
     {
       "datei": "payload/dashboard/render/client/start.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15876,
-      "sha256": "f686c70ef76da238"
+      "bytes": 15929,
+      "sha256": "d5539e58ca95cdfa"
     },
     {
       "datei": "payload/dashboard/render/data.js",
@@ -500,8 +500,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 23544,
-      "sha256": "6903201668a5752b"
+      "bytes": 23822,
+      "sha256": "f40de10fd880ec3c"
     },
     {
       "datei": "payload/dashboard/render/markdown.js",
@@ -516,8 +516,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 6264,
-      "sha256": "4779e90dcc7aef9f"
+      "bytes": 6307,
+      "sha256": "db36c63d93e6eb26"
     },
     {
       "datei": "payload/dashboard/render/styles.js",
@@ -548,8 +548,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 19990,
-      "sha256": "1c9da21a3f801940"
+      "bytes": 19944,
+      "sha256": "97e42e296d2d8eae"
     },
     {
       "datei": "payload/dashboard/test/access-filter.test.js",
@@ -572,16 +572,16 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15329,
-      "sha256": "f92cfce807562a80"
+      "bytes": 15339,
+      "sha256": "39a13cd9837498e9"
     },
     {
       "datei": "payload/dashboard/test/completeness.test.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 14966,
-      "sha256": "a69130fd2cdb17a0"
+      "bytes": 14976,
+      "sha256": "c93a1181bb950c45"
     },
     {
       "datei": "payload/dashboard/test/data.test.js",

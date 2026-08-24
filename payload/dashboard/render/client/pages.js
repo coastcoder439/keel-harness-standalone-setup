@@ -1,4 +1,4 @@
-// BROWSER-TEIL 2 von 4: die Seiten.
+// BROWSER-TEIL 2 von 5: die Seiten.
 //
 // Drei Formen, mehr braucht es nicht: Ueberblick (Kennzahlen und Abschnitte),
 // Listenseite (EIN Zeilenrezept fuer alles) und Dateien (Baum plus Ansicht).
@@ -300,6 +300,7 @@ HD.seiteZeichnen = function () {
   if (HD.S.seite === "ueberblick") html = HD.ueberblickSeite();
   else if (HD.S.seite === "dateien") html = HD.dateienSeite();
   else if (HD.S.seite === "rohdaten") html = HD.rohdatenSeite();
+  else if (HD.S.seite === "bridge") html = HD.bridgePage();
   else html = HD.listenSeite(HD.S.seite);
   ziel.innerHTML = html;
 };
