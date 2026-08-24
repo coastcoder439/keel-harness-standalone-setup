@@ -3020,6 +3020,27 @@ Die Kurzform sitzt damit am WIRKZEITPUNKT: direkt vor der Antwort. Kosten ~330 Z
 Verdrahtung: settings-Kopie §5 (UserPromptSubmit). Quelltext: `payload/claude/prompt-form.js`
 — keine Volltext-Kopie, siehe §6.8.11b.
 
+### 6.8.11e Die holistischen Arbeitsregeln (Stand 25.08.2026) — ein Kasten, eine Wahrheit
+
+Diese Regeln sind je EIN Satz mit Grund (Neubau-Grundsätze, Revision 2 nach Quellen-Review)
+und leben an den genannten Orten — die Anleitung referenziert sie nur:
+
+- **Ordnung heißt Zugehörigkeit** — jede Datei im Repo ihres Projekts bei ihrem Thema;
+  Zugehörigkeitsloses ins Session-Scratchpad; Prüfsatz „wozu gehört diese Datei — ein Satz".
+  Coding-Namen englisch, Deutsch nur Prosa/Anzeigetexte. → `CLAUDE.md` §2 (auch in
+  `templates/CLAUDE.md`).
+- **Jedes Arbeitspaket lebt als sichtbares Artefakt im Repo seines Projekts** —
+  `<repo>/docs/packages/<package>.md` (Vorlage `TEMPLATE.md`: PIG · Plan · Status · DoD);
+  „ein Plan, den der Owner nicht sehen kann, existiert nicht". → `working-method.md`.
+- **Problem–Intent–Goal** trägt jede Arbeit UND jede substanzielle Antwort. →
+  `working-method.md` + Skill `i-have-adhd` + `prompt-form.js` (jede Runde).
+- **Definition of Done als Format** — Abschluss nur mit „Geprueft gegen: … / Offen: …";
+  hart erzwungen durch `dod-guard.js` (§6.8.11c). **Coverage** (completeness-Skill bei
+  Übergaben) und **Fulfillment** sind getrennte Abschluss-Messungen.
+- **Synchron** — jeder Fix landet in Werkbank, Bausatz UND Doku, nie nur in einem;
+  **Fertig-Maßstab**: `docs/harness-issues.md` ist leer, offene Arbeit lebt in Paketen.
+  → `working-method.md` + Kopf von `harness-issues.md`.
+
 ### 6.8.12 Die drei Dauer-Regeln (Ordner .claude/rules/keel/) — was in **jeder** Sitzung mitlädt
 
 > **Stand 24.08.2026 — von fünf auf drei:** Nach den fünf Neubau-Grundsätzen (Quellen-Review im
