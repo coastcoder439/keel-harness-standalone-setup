@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-24T15:49:15.524Z",
+  "gebautAm": "2026-08-24T16:42:38.605Z",
   "posten": 93,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -732,8 +732,8 @@
       "herkunft": "docs/10-nachbau-anleitung.md",
       "quellordner": "werkbank",
       "gesaeubert": 11,
-      "bytes": 217716,
-      "sha256": "545f261f061e400a"
+      "bytes": 219193,
+      "sha256": "71f91c041b7ff17a"
     },
     {
       "datei": "payload/docs/tool-landscape.md",
