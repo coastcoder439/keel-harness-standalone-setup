@@ -24,6 +24,18 @@
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/prompt-form.js\"",
+            "timeout": 10,
+            "statusMessage": "Antwortform-Kurzform (jede Runde)"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [

@@ -318,7 +318,7 @@ wennDa(echt.dateien.some((d) => d.rolle === "launch"), "keine Vorschau-Konfigura
 
 test("verdrahtete Skripte tragen Ereignis und settings.json-Zeile", () => {
   const dg = echt.dateien.find((d) => d.pfad === ".claude/danger-guard.js");
-  assert.deepStrictEqual(dg.verdrahtung, [{ ereignis: "PreToolUse", matcher: "Bash", datei: ".claude/settings.json", zeile: 51 }]);
+  assert.deepStrictEqual(dg.verdrahtung, [{ ereignis: "PreToolUse", matcher: "Bash", datei: ".claude/settings.json", zeile: 63 }]);
   const sl = echt.dateien.find((d) => d.pfad === ".claude/statusline.js");
   assert.strictEqual(sl.verdrahtung[0].ereignis, "statusLine");
   assert.strictEqual(echt.dateien.find((d) => d.pfad === ".claude/repo-status.js").verdrahtung, undefined);
