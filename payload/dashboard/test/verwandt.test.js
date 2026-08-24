@@ -140,38 +140,34 @@ test("jeder Beleg zeigt auf eine reale Zeile, die den Namen wirklich nennt", () 
   }
 });
 
-test("Rule-Verweis auf docs/: erst Existenz, dann Kante oder Befund", () => {
-  const bestand = bestandEcht();
-  const { kanten, fehler } = verwandt(WURZEL, bestand);
-  const quelle = ".claude/rules/keel/tools.md";
-  const ziel = "docs/tool-sourcing.md";
-
-  // Was steht wirklich in der Regel, und in welcher Zeile?
-  const zeilen = fs.readFileSync(path.join(WURZEL, quelle), "utf8").split(/\r?\n/);
-  const zeile = zeilen.findIndex((z) => z.includes(ziel)) + 1;
-  assert.ok(zeile > 0, "tools.md verweist ueberhaupt auf " + ziel);
-
-  const kante = kanten.find((k) => k.von === "datei:" + quelle && k.nach === "datei:" + ziel);
-  const befund = fehler.find((f) => f.von === "datei:" + quelle && f.name === ziel);
-  if (fs.existsSync(path.join(WURZEL, ziel))) {
-    assert.ok(kante, "Ziel existiert -> Kante");
-    assert.strictEqual(kante.art, "verweist-auf");
-    assert.strictEqual(kante.beleg, quelle + ":" + zeile);
-    assert.strictEqual(befund, undefined);
-  } else {
-    assert.strictEqual(kante, undefined, "Ziel fehlt -> keine Kante");
-    assert.ok(befund, "Ziel fehlt -> Befund");
-  }
-});
+// Der Test "Rule-Verweis auf docs/: erst Existenz, dann Kante oder Befund" prüfte
+// die Existenz-Weiche am gewachsenen Inhalt von tools.md; dessen docs-Verweis fiel
+// bei der Regel-Kuerzung am 24.08.2026 weg. Beide Zweige sind an Vorlagen-Baeumen
+// abgedeckt: Kante-bei-existierendem-Ziel im Test "umbrochener Verwandt-Block",
+// Befund-bei-fehlendem-Ziel im Vorlagen-Baum mit "docs/gibt-es-nicht.md".
 
 test("umbrochener Verwandt-Block wird ganz gelesen", () => {
-  const { kanten } = verwandt(WURZEL, bestandEcht());
-  const aus = kanten.filter((k) => k.von === "datei:.claude/rules/keel/working-method.md");
-  const ziele = aus.map((k) => k.nach).sort();
-  assert.deepStrictEqual(ziele, [
-    "datei:.claude/rules/keel/completeness.md",
-    "datei:.claude/rules/keel/no-oneshot.md",
-  ]);
+  // Bis 24.08.2026 am echten working-method.md geprueft; dessen Verwandt-Block
+  // fiel bei der Regel-Kuerzung weg -- das VERHALTEN (Block ueber zwei Zeilen)
+  // wird seither an einem Vorlagen-Baum geprueft, nicht am gewachsenen Inhalt.
+  const wurzel = baumBauen({
+    ".claude\\rules\\keel\\a.md": "# A\r\n",
+    ".claude\\rules\\keel\\b.md": "# B\r\n",
+    ".claude\\rules\\keel\\regel.md":
+      "# Regel\r\n\r\nRumpf.\r\n\r\nVerwandt: [`a.md`](a.md) (eins) ·\r\n[`b.md`](b.md) (zwei).\r\n",
+  });
+  try {
+    const bestand = { dateiIds: dateiIdsSammeln(wurzel), hookIds: [], repoIds: [], commitIds: [] };
+    const { kanten } = verwandt(wurzel, bestand);
+    const aus = kanten.filter((k) => k.von === "datei:.claude/rules/keel/regel.md");
+    const ziele = aus.map((k) => k.nach).sort();
+    assert.deepStrictEqual(ziele, [
+      "datei:.claude/rules/keel/a.md",
+      "datei:.claude/rules/keel/b.md",
+    ]);
+  } finally {
+    baumWeg(wurzel);
+  }
 });
 
 test("erfundene nach-ID landet in fehler, nicht in kanten", () => {

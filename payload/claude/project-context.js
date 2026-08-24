@@ -32,17 +32,15 @@ function anlass() {
 const a = anlass();
 if (a !== "startup" && a !== "clear") process.exit(0);
 
+// Kurzfassung 24.08.2026: Injektion von ~700 auf ~440 Zeichen, Ueberspring-Klausel
+// geschaerft — am 23.08. wurde der Check umgangen, weil "/skill + Begruessung" als
+// eindeutiger Kontext gewertet wurde. Optionen-Details stehen in CLAUDE.md Abschnitt 2.
 const text =
-  "Projekt-Kontext-Check (Session-Start): Bevor du die erste Aufgabe angehst, klaere kurz " +
-  "per AskUserQuestion den Projekt-Kontext dieser Session. Optionen: " +
-  "a) NEUES Projekt -- eigener Ordner in user-projects/ plus eigenes privates GitHub-Repo, " +
-  "Ordnername == Repo-Name (Reihenfolge: erst Repo anlegen und verifiziert pushen, DANN die " +
-  ".gitignore-Zeile). " +
-  "b) gehoert zu einem BESTEHENDEN user-projects-Ordner -- zu welchem. " +
-  "c) reine Random-/Frage-/Recherche-Session -- kein Repo noetig. " +
-  "d) Arbeit am Harness selbst -- das Workspace-Repo. " +
-  "Macht die erste User-Nachricht den Kontext schon eindeutig, ueberspring den Dialog. " +
-  "Laufen mehrere Sitzungen parallel, trag die geklaerte Rolle in docs/08-sessions-rollen.md ein.";
+  "Projekt-Kontext-Check: Klaere als ALLERERSTE Handlung per AskUserQuestion, woran diese " +
+  "Session arbeitet (neues Projekt / bestehender user-projects-Ordner / reine Recherche / " +
+  "Harness selbst). Eine Begruessung, ein Skill-Aufruf oder eine allgemeine Frage sind KEIN " +
+  "eindeutiger Kontext -- dann fragst du. Ueberspringen nur, wenn die erste Nachricht ein " +
+  "Projekt woertlich benennt. Bei Parallel-Betrieb die Rolle in docs/08-sessions-rollen.md eintragen.";
 
 process.stdout.write(
   JSON.stringify({
