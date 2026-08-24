@@ -1,9 +1,9 @@
-// KLEINE HELFER der Anzeige -- von data.js und seiten.js gemeinsam benutzt.
+// KLEINE HELFER der Anzeige -- von data.js und views.js gemeinsam benutzt.
 //
 // Sie stehen hier, weil beide sie brauchen und keiner sie besitzt. Eine Kopie
 // in jedem waere zwei Staende.
 
-const W = require("./worte.js");
+const W = require("./labels.js");
 const { UI, ART_BESCHREIBUNG, DATEITYP, DATEITYP_ALLGEMEIN, QUELLE, fuellen } = W;
 
 // Letzter Ausweg (A6): eine Aussage ueber die ART der Datei, wenn es weder eine

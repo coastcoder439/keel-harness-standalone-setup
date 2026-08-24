@@ -14,7 +14,7 @@
 // Grund in fehler[]. Eine fehlende Quelle stumm als "nichts offen" zu zeigen waere
 // dieselbe Falle wie ein Werkzeugausfall, der aussieht wie ein bestandener Test.
 //
-// AUFRUF   const { zuTunDoku } = require("./zutun-docs"); zuTunDoku(wurzel)
+// AUFRUF   const { zuTunDoku } = require("./todo-docs"); zuTunDoku(wurzel)
 
 const fs = require("fs");
 const path = require("path");

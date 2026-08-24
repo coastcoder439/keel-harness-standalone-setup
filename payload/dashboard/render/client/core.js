@@ -88,7 +88,7 @@ HD.icon = function (name) {
   return HD.D.icons[name] || HD.D.icons[k] || HD.D.icons.circle || "";
 };
 
-// Platzhalter in einem Wort ersetzen. Dieselbe Regel wie in worte.js: ein
+// Platzhalter in einem Wort ersetzen. Dieselbe Regel wie in labels.js: ein
 // Platzhalter, der nicht gefuellt wird, bleibt SICHTBAR stehen -- er verraet
 // dem Leser, dass hier etwas fehlt, statt es zu verschweigen.
 HD.fuellen = function (vorlage, werte) {

@@ -7,19 +7,19 @@
 //
 // WAS HIER PASSIERT UND WAS NICHT
 // Hier entstehen die deutschen Saetze -- aus Codes der Messung und den Woertern
-// aus worte.js. Die Messung bleibt sprachneutral. Umgekehrt wird hier NICHTS
+// aus labels.js. Die Messung bleibt sprachneutral. Umgekehrt wird hier NICHTS
 // gemessen: keine Datei gelesen, kein Befehl ausgefuehrt. Kommt eine Zahl nicht
 // aus der Messung, steht hier ein ehrliches Zeichen und keine Schaetzung.
 
-const W = require("./worte.js");
+const W = require("./labels.js");
 const { icon, NAMEN, ZWEITNAMEN } = require("./icons.js");
 // markdownZuHtml wird hier nicht mehr gebraucht -- Markdown rendert serve.js
 // auf Abruf (Server-zuerst, D1), nicht der Bau.
 // Die Helfer und die neun Seitenbauer liegen seit dem 23.08.2026 in eigenen
 // Modulen -- data.js hatte mit der Projekt-Seite die Hausgrenze erreicht.
-const { feld, felderVon, spracheVon, beschreibungVon, inhaltVon } = require("./helfer.js");
-const S = require("./seiten.js");
-const { ZUGANGS_MUSTER } = require("../inventar.js");
+const { feld, felderVon, spracheVon, beschreibungVon, inhaltVon } = require("./helpers.js");
+const S = require("./views.js");
+const { ZUGANGS_MUSTER } = require("../file-inventory.js");
 
 const { UI, STATUS, ART, ART_BESCHREIBUNG, WIRKUNG, LADEART, KANTE, QUELLE, GIT,
         NOTIZ, ZUTUN_ART, SEITEN, fuellen, zahl, bytes, datum } = W;
@@ -73,7 +73,7 @@ function kantenIndex(verwandtDaten) {
 // EINE DATEI, EINE BESCHREIBUNG
 //
 // Vorher leitete jede Seite ihre eigene ab: "Dateien" die gerankte aus
-// inventar.js, "Hooks" die statusMessage aus settings.json, "Session-Kontext"
+// file-inventory.js, "Hooks" die statusMessage aus settings.json, "Session-Kontext"
 // einen Satz ueber die Ladeart. Wer danger-guard.js auf drei Seiten sah, las
 // dreimal etwas anderes und musste raten, welche Fassung stimmt -- gemessen am
 // 23.08.2026: 15 von 25 mehrfach gezeigten Dateien wichen ab.
@@ -265,9 +265,9 @@ function daten(m, regelDaten) {
 // ---------------------------------------------------------------------------
 // DIE ENGSTELLE -- der letzte Riegel vor der Seite
 //
-// inventar.js sichert DATEIINHALTE zeilenweise. Aber nicht jeder Text im
+// file-inventory.js sichert DATEIINHALTE zeilenweise. Aber nicht jeder Text im
 // Datensatz kommt von dort: rules.js zieht Kernzeilen aus Regeldateien,
-// hooks-detail.js Kopfkommentare, zutun-docs.js ganze Fundzeilen, verwandt.js
+// hooks-detail.js Kopfkommentare, todo-docs.js ganze Fundzeilen, related.js
 // Belegzeilen. Keines dieser Module ruft textSichern -- und jedes neue Modul
 // wuerde die Pflicht erneut vergessen. Am 23.08.2026 gemessen: ein Zugang in
 // einer Regeldatei erreichte die Seite und wurde erst vom Ausgabe-Waechter in
@@ -292,7 +292,7 @@ function sicherung(wert, imInhalt) {
     for (const k of Object.keys(wert)) {
       // Seit SERVER-ZUERST (D1) traegt inhalt.text keinen Rumpf mehr (null);
       // der Zweig bleibt stehen, weil inhalt weiter Auskuenfte enthaelt
-      // (Sprache, ausgeblendete Zeilen). roh traegt die Messung aus inventar.js.
+      // (Sprache, ausgeblendete Zeilen). roh traegt die Messung aus file-inventory.js.
       raus[k] = sicherung(wert[k], imInhalt || k === "inhalt");
     }
     return raus;

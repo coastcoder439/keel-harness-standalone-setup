@@ -199,22 +199,22 @@ const DASHBOARD = [
   "inventory.js",
   "rules.js",
   // Messung v2 -- je ein eigener, pruefbarer Baustein
-  "inventar.js",
+  "file-inventory.js",
   // Der Geheimnis-Filter: eigenes Modul seit dem 23.08.2026 -- eigene
   // Aufgabe, eigene Gegenproben, drei Aufrufer.
-  "zugangsfilter.js",
+  "access-filter.js",
   "hooks-detail.js",
-  "zutun-docs.js",
-  "verwandt.js",
+  "todo-docs.js",
+  "related.js",
   // Projekte (user-projects/) und Git-Verlauf -- eigene Mess-Bausteine
-  "projekte.js",
-  "verlauf.js",
+  "projects.js",
+  "history.js",
   // Anzeige: Woerter, Daten, Aussehen, Symbole, Schale
-  "render/worte.js",
+  "render/labels.js",
   "render/data.js",
   // gemeinsame Anzeige-Helfer und die Seitenbauer
-  "render/helfer.js",
-  "render/seiten.js",
+  "render/helpers.js",
+  "render/views.js",
   "render/styles.js",
   "render/icons.js",
   "render/markdown.js",
@@ -227,26 +227,26 @@ const DASHBOARD = [
   // Die Selbstpruefung wandert mit. Ein Harness, das seine eigenen Zusagen
   // nachweisen kann, ist der Zweck dieses Bausatzes -- ohne die Tests waere
   // ein "geprueft" beim Empfaenger nicht nachvollziehbar.
-  "test/worte.test.js",
-  "test/inventar.test.js",
+  "test/labels.test.js",
+  "test/file-inventory.test.js",
   "test/hooks-detail.test.js",
-  "test/zutun-docs.test.js",
-  "test/verwandt.test.js",
+  "test/todo-docs.test.js",
+  "test/related.test.js",
   "test/styles.test.js",
   "test/icons.test.js",
   "test/markdown.test.js",
   "test/data.test.js",
-  "test/zugangsfilter.test.js",
+  "test/access-filter.test.js",
   "test/serve.test.js",
   "test/shell.test.js",
   "test/client.test.js",
-  "test/projekte.test.js",
-  "test/regeln-ladeart.test.js",
+  "test/projects.test.js",
+  "test/rule-loading.test.js",
   // Der Meta-Test: haelt fest, dass jedes Modul einen Test hat, keins zu gross
   // ist und nichts geladen wird, was es nicht gibt. Er prueft den Bestand,
   // nicht das Verhalten -- und faengt damit genau die Luecke ab, die diese
   // Liste hier erzeugt, wenn sie nicht gepflegt wird.
-  "test/vollstaendigkeit.test.js",
+  "test/completeness.test.js",
   "README.md",
 ];
 
@@ -261,10 +261,10 @@ const BEILEGER = [
   // Guard-Abdeckungs-Matrix: jede Regel erzwungen oder ehrlich "nur Prosa" --
   // neue Regel ohne Zeile dort ist ein Fund (24.08.2026).
   "guard-abdeckung.md",
-  // Paket-Artefakt-Vorlage: jedes Arbeitspaket lebt sichtbar unter docs/pakete/ (24.08.2026).
-  "pakete/VORLAGE.md",
+  // Paket-Artefakt-Vorlage: jedes Arbeitspaket lebt sichtbar unter docs/packages/ (24.08.2026).
+  "packages/TEMPLATE.md",
   // Leere Issues-Datei mit dem Fertig-Massstab im Kopf (Owner 24.08.2026): leer = fertig;
-  // offene ARBEIT lebt in docs/pakete/. zutun-docs liest sie als Quelle.
+  // offene ARBEIT lebt in docs/packages/. zutun-docs liest sie als Quelle.
   "harness-issues.md",
   // Ablage-Vorlage fuer den Onboarding-Schritt "Werkzeug-Landschaft" (Schritt 3):
   // vier Rubriken CLI/MCP/API/Zugaenge. Wird nach docs/ kopiert, dort traegt der

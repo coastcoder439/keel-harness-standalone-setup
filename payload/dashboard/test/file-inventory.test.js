@@ -1,6 +1,6 @@
-// Tests zu dashboard/inventar.js -- node:test, Bordmittel, keine Fremdpakete.
+// Tests zu dashboard/file-inventory.js -- node:test, Bordmittel, keine Fremdpakete.
 //
-// Aufruf:  node --test dashboard/test/inventar.test.js   (cwd = Workspace-Wurzel)
+// Aufruf:  node --test dashboard/test/file-inventory.test.js   (cwd = Workspace-Wurzel)
 //
 // Zwei Sorten Pruefung, bewusst getrennt:
 //   1. Gegen den ECHTEN Baum dieses Workspace (Ausschluesse, Dateizahl, POSIX,
@@ -18,7 +18,7 @@ const path = require("path");
 const os = require("os");
 const { spawnSync } = require("child_process");
 
-const { inventar, ZUGANGS_MUSTER, textSichern, beschreibungFuer } = require("../inventar.js");
+const { inventar, ZUGANGS_MUSTER, textSichern, beschreibungFuer } = require("../file-inventory.js");
 
 const WURZEL = path.resolve(__dirname, "..", "..");
 const ROLLEN = new Set([
@@ -141,7 +141,7 @@ test("Dateizahl stimmt mit find ueberein (wird uebersprungen, wenn keine Shell d
 test("kein Backslash in irgendeinem pfad-Feld, keine Ausnahme", () => {
   // Geprueft werden PFAD-Felder, nicht die ganze Serialisierung: eingebettete
   // Dateiinhalte tragen Backslashes voellig zu Recht (gemessen: statusline.js:59
-  // und verwandt.js:333 enthalten den regulaeren Ausdruck /^user-projects\//).
+  // und related.js:333 enthalten den regulaeren Ausdruck /^user-projects\//).
   const alle = allePfade(echt.baum).concat(
     echt.dateien.map((d) => d.pfad),
     echt.dateien.map((d) => d.id),
@@ -380,8 +380,8 @@ test("Attrappe: CRLF und LF, grosse Datei, Binaerdatei, Ausschluesse", (t) => {
 // ---------------------------------------------------------------------------
 // Hausregeln des Moduls
 // ---------------------------------------------------------------------------
-test("inventar.js bleibt unter 800 Zeilen und ohne Nicht-ASCII (A75/A79)", () => {
-  const quelle = fs.readFileSync(path.join(__dirname, "..", "inventar.js"), "utf8");
+test("file-inventory.js bleibt unter 800 Zeilen und ohne Nicht-ASCII (A75/A79)", () => {
+  const quelle = fs.readFileSync(path.join(__dirname, "..", "file-inventory.js"), "utf8");
   const zeilen = quelle.split(/\r?\n/);
   assert.ok(zeilen.length < 800, "Zeilen: " + zeilen.length);
   const schlimm = zeilen.map((z, i) => [i + 1, z]).filter((paar) => /[^\x00-\x7F]/.test(paar[1]));
@@ -393,7 +393,7 @@ test("inventar.js bleibt unter 800 Zeilen und ohne Nicht-ASCII (A75/A79)", () =>
 // Frontmatter-Geheimnisse (Nachpruefung 23.08.2026)
 //
 // Die zeilenweisen Geheimnis-Faelle (privater Schluessel, YAML-Folgezeile ...)
-// stehen in zugangsfilter.test.js. HIER geht es um das inventar-Eigene: das
+// stehen in access-filter.test.js. HIER geht es um das inventar-Eigene: das
 // frontmatter-FELD am Knoten. Es wird aus dem ROHTEXT geparst (damit die
 // Struktur erkannt bleibt) und die WERTE werden einzeln gesichert
 // (frontmatterSichern). Zwei Fallen, beide in der Nachpruefung belegt:

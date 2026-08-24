@@ -16,9 +16,9 @@
 // das aufweicht, erzeugt wieder den Zustand vom 23.08.2026: dieselbe Datei mit
 // drei verschiedenen Beschreibungen, je nachdem wo man hinsieht.
 
-const W = require("./worte.js");
+const W = require("./labels.js");
 const { icon } = require("./icons.js");
-const { feld, felderVon, beschreibungVon, inhaltVon } = require("./helfer.js");
+const { feld, felderVon, beschreibungVon, inhaltVon } = require("./helpers.js");
 
 const { UI, STATUS, ART, ART_BESCHREIBUNG, WIRKUNG, LADEART, KANTE, QUELLE, GIT,
         NOTIZ, ZUTUN_ART, SEITEN, fuellen, zahl, bytes, datum } = W;

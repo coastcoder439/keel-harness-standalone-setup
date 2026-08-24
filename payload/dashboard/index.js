@@ -28,13 +28,13 @@ const path = require("path");
 const { messen } = require("./measure");
 const { regeln } = require("./rules");
 // Anzeige im Keel-Design: Seitenleiste, Ordnerbaum, Dateiansicht, Eigenschaften.
-// Sie zerfaellt in Woerter (render/worte.js), Daten (render/data.js), Aussehen
+// Sie zerfaellt in Woerter (render/labels.js), Daten (render/data.js), Aussehen
 // (render/styles.js), Symbole, Markdown, Schale und vier Browser-Teile.
 // Die Messung kennt keine Darstellung -- deshalb laesst sich die Anzeige
 // austauschen, ohne measure.js anzufassen.
 const { daten } = require("./render/data.js");
 const { renderHTML } = require("./render/shell.js");
-const { ZUGANGS_MUSTER } = require("./inventar.js");
+const { ZUGANGS_MUSTER } = require("./file-inventory.js");
 
 function argumenteLesen(argv) {
   const a = argv.slice(2);
@@ -133,7 +133,7 @@ function main() {
     const seite = renderHTML(daten(messung, regelDaten));
 
     // AUSGABE-WAECHTER -- der dritte Riegel (Spezifikation 7.3).
-    // Die beiden anderen sitzen in inventar.js und koennen umgangen werden, wenn
+    // Die beiden anderen sitzen in file-inventory.js und koennen umgangen werden, wenn
     // ein neues Modul einen String einbaut, ohne ihn durch textSichern zu geben.
     // Dieser hier prueft, was WIRKLICH auf die Platte geht. Bei Verdacht wird
     // KEINE Datei geschrieben: eine halbe Warnung neben einer geschriebenen
@@ -149,7 +149,7 @@ function main() {
       process.stderr.write(
         "ABBRUCH: die erzeugte Seite enthaelt " + verdacht.length + " Zeile(n), die wie ein Zugang aussehen.\n" +
         "  Zeilen: " + verdacht.slice(0, 10).join(", ") + (verdacht.length > 10 ? " …" : "") + "\n" +
-        "  Es wurde KEINE Datei geschrieben. Pruefe die Quelle und den Filter in dashboard/inventar.js.\n"
+        "  Es wurde KEINE Datei geschrieben. Pruefe die Quelle und den Filter in dashboard/file-inventory.js.\n"
       );
       process.exit(2);
     }

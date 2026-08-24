@@ -5,9 +5,9 @@ Vor der Arbeit die Zieldefinition in drei Saetzen: **Problem** (was ist konkret 
 Arbeitspaket: Zieldefinition → Plan → Bau → Verify → Ship; sichern per Push ist immer erlaubt.
 
 **Jedes Arbeitspaket lebt als sichtbares Artefakt IM REPO SEINES PROJEKTS** [Owner,
-24.08.2026]: `<projekt-repo>/docs/pakete/<paket>.md` — Projekt-Arbeit unter
-`user-projects/<name>/docs/pakete/` (landet mit dem Projekt auf GitHub), Werkbank-Arbeit
-in der Werkbank `docs/pakete/`. Format: Vorlage `docs/pakete/VORLAGE.md` (PIG · Plan ·
+24.08.2026]: `<projekt-repo>/docs/packages/<paket>.md` — Projekt-Arbeit unter
+`user-projects/<name>/docs/packages/` (landet mit dem Projekt auf GitHub), Werkbank-Arbeit
+in der Werkbank `docs/packages/`. Format: Vorlage `docs/packages/TEMPLATE.md` (PIG · Plan ·
 Stand · DoD); angelegt beim Planen, nachgefuehrt bei jedem Paket-Abschluss. Ein Plan,
 den der Owner nicht sehen kann, existiert nicht — und die Kommandobruecke liest alle
 Pakete ueber genau diese eine Struktur. **Fertig-Massstab des Harness** [Owner]:

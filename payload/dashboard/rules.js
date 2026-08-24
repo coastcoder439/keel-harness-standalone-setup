@@ -21,7 +21,7 @@ const fs = require("fs");
 const path = require("path");
 // Dauer-Regeln werden ueber das FRONTMATTER erkannt (ohne = Dauer, mit = Abruf),
 // ordner-agnostisch und rekursiv -- dieselbe Quelle der Wahrheit wie measure.js
-// und inventar.js. Nicht mehr fest .claude/rules/keel bzw. eine [keel, common]-
+// und file-inventory.js. Nicht mehr fest .claude/rules/keel bzw. eine [keel, common]-
 // Kandidatenliste (die uebersah Regeln in eigenen Ordnern und zaehlte
 // Frontmatter-Sprachpakete faelschlich als Dauer-Regel mit). [Review-Fund W]
 const { dauerRegelDateien } = require("./classify");
