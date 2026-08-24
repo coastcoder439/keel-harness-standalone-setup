@@ -131,121 +131,27 @@ function zeileZiehen(zeilen, muster) {
   return i === -1 ? null : { zeile: i + 1, text: zeilen[i].trim() };
 }
 
-// ---------------------------------------------------------------------------
-// REGEL 1 — Denkbudget: die Effort-Stufen aus docs/13 §2a
-// ---------------------------------------------------------------------------
-const DOC13 = "docs/13-arbeitsweise-standard.md";
-
-function effortStufen(wurzel) {
-  const befehl = `$EDITOR ${DOC13}   # Abschnitt „2a · Modell- und Effort-Wahl“`;
-  const zeilen = lesen(wurzel, DOC13);
-  if (!zeilen) return entfaellt("effort", "Denkbudget je Aufgabenform", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Die hier geltende Arbeitsweise steht in den Dauer-Regeln unter .claude/rules/.", befehl);
-
-  const t = tabelleZiehen(zeilen, ["Stufe", "Überspringen, wenn", "Aufsteigen, wenn"]);
-  if (!t) {
-    return fehlt("effort", "Denkbudget je Aufgabenform", DOC13, "Effort-Tabelle (Spalten Stufe/Überspringen/Aufsteigen) nicht gefunden", befehl);
-  }
-  const grundsatz = zeileZiehen(zeilen, /Aufsteigen nur auf Beleg/);
-
-  return {
-    id: "effort",
-    titel: "Denkbudget je Aufgabenform",
-    status: "gezogen",
-    quelle: { datei: DOC13, zeile: t.zeile },
-    befehl,
-    art: "tabelle",
-    kopf: t.kopf,
-    reihen: t.reihen,
-    uebersprungen: t.uebersprungen,
-    grundsatz: grundsatz ? { text: grundsatz.text, zeile: grundsatz.zeile } : null,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// REGEL 2 — Wächterkanon aus docs/13 §3
-// ---------------------------------------------------------------------------
-function waechterkanon(wurzel) {
-  const befehl = `$EDITOR .claude/settings.local.json   # hooks.PreToolUse / hooks.Stop / hooks.SessionStart`;
-  const zeilen = lesen(wurzel, DOC13);
-  if (!zeilen) return entfaellt("waechterkanon", "Was ein Wächter tun darf", DOC13, "Gehoert zur Ursprungs-Werkbank: docs/13-arbeitsweise-standard.md wird von diesem Harness nicht mitgeliefert. Was hier verdrahtet ist, misst der Bereich „Wächter“.", befehl);
-
-  const t = tabelleZiehen(zeilen, ["Werkzeug", "Zweck", "Ort / Schalter"]);
-  if (!t) return fehlt("waechterkanon", "Was ein Wächter tun darf", DOC13, "Werkzeugkanon-Tabelle nicht gefunden", befehl);
-
-  return {
-    id: "waechterkanon",
-    titel: "Werkzeugkanon — was live verdrahtet ist",
-    status: "gezogen",
-    quelle: { datei: DOC13, zeile: t.zeile },
-    befehl,
-    art: "tabelle",
-    kopf: t.kopf,
-    reihen: t.reihen,
-    uebersprungen: t.uebersprungen,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// REGEL 3 — Modellwahl je Aufgabentyp (routing-policy.json)
-// ---------------------------------------------------------------------------
-const POLICY = "konfig/routing-policy.json";
-
-function modellwahl(wurzel) {
-  const befehl = `$EDITOR ${POLICY}`;
-  const p = path.join(wurzel, POLICY);
-  if (!fs.existsSync(p)) return entfaellt("modellwahl", "Modellwahl je Aufgabentyp", POLICY, "Gehoert zur Ursprungs-Werkbank: konfig/routing-policy.json wird von diesem Harness nicht mitgeliefert.", befehl);
-  let policy;
-  try {
-    policy = JSON.parse(fs.readFileSync(p, "utf8"));
-  } catch (e) {
-    return fehlt("modellwahl", "Modellwahl je Aufgabentyp", POLICY, `Policy ist kein gültiges JSON: ${e.message}`, befehl);
-  }
-  const typen = Object.entries(policy.aufgabentypen || {});
-  if (!typen.length) return fehlt("modellwahl", "Modellwahl je Aufgabentyp", POLICY, "keine Aufgabentypen in der Policy", befehl);
-
-  return {
-    id: "modellwahl",
-    titel: "Modellwahl je Aufgabentyp",
-    status: "gezogen",
-    quelle: { datei: POLICY, zeile: null },
-    befehl,
-    art: "tabelle",
-    kopf: ["Aufgabentyp", "wofür", "Mensch — erste Wahl", "Agent — erste Wahl"],
-    reihen: typen.map(([name, t]) => [
-      name,
-      t.beschreibung || "",
-      (t.mensch || [])[0] || "—",
-      (t.agent || [])[0] || "—",
-    ]),
-    hinweis: String(policy._kommentar || "").split(".")[0] + ".",
-    vorgabe: `${policy.default_aufgabentyp} / ${policy.default_aufrufer}`,
-  };
-}
+// REGEL 1–3 (Denkbudget/Effort, Wächterkanon, Modellwahl) ENTFERNT am
+// 25.08.2026 [Owner: "tief entkernen"]. Sie zogen aus Dateien der
+// Ursprungs-Werkbank (docs/13-arbeitsweise-standard.md, konfig/routing-policy.json),
+// die es in diesem Harness nicht gibt -- gemeldet wurden sie nur, um sie als
+// "Nicht Teil dieses Harness" durchzustreichen. Die hier geltende Arbeitsweise
+// steht in den Dauer-Regeln (REGEL 4).
 
 // ---------------------------------------------------------------------------
 // REGEL 4 — die Dauer-Regeln: was in JEDER Sitzung geladen wird
-//
-// Welche das sind, wird nicht behauptet, sondern bestimmt: Was es in .ecc-src/
-// gibt, ist Fremd-Klon. Was es dort NICHT gibt, ist Eigenbau — dieselbe
-// Unterscheidung wie in eigenbau-ungesichert.js, und aus demselben Grund.
 // ---------------------------------------------------------------------------
 function dauerRegeln(wurzel) {
   const rulesDir = path.join(wurzel, ".claude", "rules");
-  const eccQuelle = path.join(wurzel, ".ecc-src", "rules", "common");
   // Alle Regel-.md OHNE Frontmatter, in JEDEM Unterordner (keel, common, eigen).
   const dateien = dauerRegelDateien(rulesDir);
   if (!dateien.length) {
     return fehlt("dauerregeln", "Dauer-Regeln (jede Sitzung)", ".claude/rules/", "keine Dauer-Regel (Markdown ohne Frontmatter) unter .claude/rules/ gefunden", "$EDITOR .claude/rules/");
   }
-  // Frueher stieg die Regel aus, wenn der Fremd-Klon .ecc-src/ fehlte. In einem
-  // Standalone-Harness gibt es den nie -- unbestimmbar ist ohne die Quelle nur die
-  // HERKUNFT (Eigenbau vs. mitgeliefert), nicht der Bestand.
-  const herkunftBestimmbar = fs.existsSync(eccQuelle);
 
   const eintraege = [];
   for (const abs of dateien) {
     const name = path.basename(abs);
-    if (fs.existsSync(path.join(eccQuelle, name))) continue; // Fremd-Klon (per Dateiname)
     const rel = posix(path.relative(wurzel, abs));
     const zeilen = fs.readFileSync(abs, "utf8").split("\n");
     const titel = (zeilen.find((z) => z.startsWith("# ")) || `# ${name}`).slice(2).trim();
@@ -268,7 +174,7 @@ function dauerRegeln(wurzel) {
   }
 
   if (!eintraege.length) {
-    return fehlt("dauerregeln", "Dauer-Regeln (jede Sitzung)", ".claude/rules/", "nur mitgelieferte Regeln (alle auch im Fremd-Klon) — kein einziger Eigenbau, bei einem gepflegten Harness ein Verdacht", "$EDITOR .claude/rules/");
+    return fehlt("dauerregeln", "Dauer-Regeln (jede Sitzung)", ".claude/rules/", "keine lesbare Dauer-Regel gefunden", "$EDITOR .claude/rules/");
   }
 
   return {
@@ -279,9 +185,7 @@ function dauerRegeln(wurzel) {
     befehl: "$EDITOR .claude/rules/<datei>.md",
     art: "regelliste",
     eintraege,
-    abgrenzung: herkunftBestimmbar
-      ? "Eigenbau = liegt unter .claude/rules/, aber nicht in .ecc-src/rules/common (Fremd-Klon)."
-      : `Alle ${eintraege.length} Dauer-Regeln (Markdown ohne Frontmatter) unter .claude/rules/. Herkunft (Eigenbau vs. mitgeliefert) ist hier nicht bestimmbar — dafuer braeuchte es den Fremd-Klon .ecc-src/, der nicht zu diesem Harness gehoert.`,
+    abgrenzung: `Alle ${eintraege.length} Dauer-Regeln (Markdown ohne Frontmatter) unter .claude/rules/.`,
   };
 }
 
@@ -294,8 +198,12 @@ function werkzeugrang(wurzel) {
   if (!relPfad) return fehlt("werkzeugrang", "Werkzeug-Beschaffung", ".claude/rules/", "tools.md unter .claude/rules/ nicht gefunden", befehl);
 
   const zeilen = lesen(wurzel, relPfad);
-  const rang = zeileZiehen(zeilen, /CLI\s*→\s*2\.\s*MCP\s*→\s*3\./);
-  const bestand = zeileZiehen(zeilen, /Kein MCP, f(ü|ue)r den eine CLI existiert/);
+  // Wortlaut der aktuellen tools.md: "**CLI vor MCP vor Browser**". Der frueher
+  // gesuchte "CLI → 2. MCP → 3."-Anker stammte aus einer alten Fassung und traf
+  // nach der Neuschrift nichts mehr -- die Regel stand da, das Dashboard meldete
+  // sie trotzdem als "Nicht lesbar" (25.08.2026 behoben).
+  const rang = zeileZiehen(zeilen, /CLI vor MCP vor Browser/);
+  const bestand = zeileZiehen(zeilen, /Fehlt ein Werkzeug/);
   if (!rang) return fehlt("werkzeugrang", "Werkzeug-Beschaffung", relPfad, "Rangfolge-Zeile nicht gefunden", befehl);
 
   return {
@@ -320,7 +228,11 @@ function sicherungsregel(wurzel) {
   const zeilen = lesen(wurzel, DATEI);
   if (!zeilen) return fehlt("sicherung", "Sichern im geteilten Arbeitsbaum", DATEI, "CLAUDE.md nicht gefunden", befehl);
 
-  const anker = zeileZiehen(zeilen, /NIE `git add` \+ `git commit`/);
+  // Wortlaut der aktuellen CLAUDE.md §3: "nur `git commit … -- <pfad>` (nie
+  // `add`+`commit`, nie `-a`)". Der alte Anker "NIE `git add` + `git commit`"
+  // traf das nach der Kurzfassung 24.08. nicht mehr -- die Regel stand da, das
+  // Dashboard meldete "unvollstaendig gezogen" (25.08.2026 behoben).
+  const anker = zeileZiehen(zeilen, /nie `add`\+`commit`/);
   // Ohne Zeilenanfangs-Anker: in der CLAUDE.md stehen die Befehle im Fliesstext
   // ("sondern `git commit ...`"), nicht als eigene Zeile. Mit dem alten Anker meldete
   // die Regel "unvollstaendig gezogen", obwohl beide Befehle dastanden.
@@ -356,20 +268,15 @@ function sicherungsregel(wurzel) {
 // ---------------------------------------------------------------------------
 const ZUORDNUNG = {
   bestand: ["werkzeugrang", "dauerregeln"],
-  waechter: ["waechterkanon"],
   sicherung: ["sicherung"],
   pruefer: ["sicherung"],
   rollen: [],
-  readiness: ["effort", "modellwahl"],
 };
 
 function regeln(wurzel) {
   const alle = [
-    effortStufen(wurzel),
-    modellwahl(wurzel),
     dauerRegeln(wurzel),
     werkzeugrang(wurzel),
-    waechterkanon(wurzel),
     sicherungsregel(wurzel),
   ];
   return {

@@ -305,11 +305,12 @@ function sicherung(wert, imInhalt) {
 // fuer einen Defekt des Dashboards statt fuer eine Eigenschaft des Ordners.
 function fehltListe(m) {
   const pfade = new Set(((m.inventar && m.inventar.dateien) || []).map((d) => d.pfad));
+  // Nur was einem NUTZER etwas sagt. Bausatz- und Ursprungs-Werkbank-Interna
+  // (checks/, .ecc-src/) gehoeren nicht hierher -- fuer den Leser des Dashboards
+  // sind sie kein fehlendes Stueck, sondern ein Wort, das er nicht kennt.
   const kandidaten = [
     { was: ".claude/agents/", grund: "keine eigenen Agenten-Beschreibungen in diesem Workspace", da: [...pfade].some((p) => p.startsWith(".claude/agents/")) },
     { was: ".mcp.json", grund: "keine projekteigenen MCP-Server eingetragen", da: pfade.has(".mcp.json") },
-    { was: "checks/", grund: "die Prüfungen des Bausatzes liegen im Bausatz-Repo, nicht hier", da: [...pfade].some((p) => p.startsWith("checks/")) },
-    { was: ".ecc-src/", grund: "kein Fremd-Klon als Vergleichsstand — deshalb bleibt die Herkunft mancher Datei unbestimmt", da: [...pfade].some((p) => p.startsWith(".ecc-src/")) },
   ];
   return kandidaten.filter((k) => !k.da).map((k) => ({ was: k.was, grund: k.grund }));
 }

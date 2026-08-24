@@ -168,8 +168,9 @@ const BEFEHLE = ["repo-status.md", "save-work.md", "session-map.md", "tell-sessi
 const REGELN = ["no-oneshot.md", "tools.md", "working-method.md"];
 
 const SKILLS = [
-  ["domain-modeling", ["SKILL.md", "ADR-FORMAT.md", "CONTEXT-FORMAT.md"]],
-  ["resolving-merge-conflicts", ["SKILL.md"]],
+  // domain-modeling + resolving-merge-conflicts (generische mattpocock-Skills,
+  // englisch) am 25.08.2026 entfernt [Owner: "Entfernen"]: ohne Bezug zum
+  // Workspace-Zweck, gehoerten nicht in diesen Harness.
   // Bis 18.08.2026 fehlte dieser Eintrag: der Start-Hook session-roles.js verwies
   // auf einen Skill, den der Installer nie kopierte.
   ["i-have-adhd", ["SKILL.md"]],
@@ -280,7 +281,9 @@ const BEILEGER = [
   "ui-standard.md",
 ];
 
-const LIZENZEN = ["LICENSE-mattpocock-skills.txt", "LICENSE-i-have-adhd.txt"];
+// LICENSE-mattpocock-skills.txt am 25.08.2026 entfernt: die zwei mattpocock-
+// Skills, fuer die sie galt, gehoeren nicht mehr zum Harness [Owner: "Entfernen"].
+const LIZENZEN = ["LICENSE-i-have-adhd.txt"];
 
 const GITIGNORE_MARKE_AUF = "# >>> harness-eigenbau (vom Onboarding gesetzt) >>>";
 
@@ -997,12 +1000,11 @@ function dashboardErzeugen(ziel, trocken) {
     status = JSON.parse(fs.readFileSync(daten, "utf8")).messung?.gesamtstatus || "unbekannt";
   } catch { /* die Seite steht trotzdem — der Status ist Beiwerk */ }
 
-  // Den Status NICHT nur als Wort ausgeben. "unlesbar" ist im Auslieferungs-
-  // zustand der Normalfall und liest sich trotzdem wie ein Defekt: die
-  // ECC-Bestandszaehler finden kein .ecc-src/, und ein fehlendes Messwerkzeug
-  // wird bewusst als "nicht pruefbar" gemeldet statt als "alles sauber".
-  // Wer das nicht erklaert, laesst den Empfaenger auf einen Fehler starren,
-  // den es nicht gibt — oder schlimmer: er gewoehnt sich an rote Meldungen.
+  // Den Status NICHT nur als Wort ausgeben. Ein fehlendes oder noch nicht
+  // lesbares Messwerkzeug wird bewusst als "nicht pruefbar" gemeldet statt als
+  // "alles sauber". Wer das nicht erklaert, laesst den Empfaenger auf einen
+  // Fehler starren, den es nicht gibt — oder schlimmer: er gewoehnt sich an
+  // rote Meldungen.
   melden("angelegt", `Dashboard: ${seite}`, `Gesamtstatus der Messung: ${status}${statusErklaeren(status)}`);
   return { ok: true, seite, status };
 }
@@ -1010,11 +1012,10 @@ function dashboardErzeugen(ziel, trocken) {
 function statusErklaeren(status) {
   const texte = {
     unlesbar:
-      "\n                   Im frischen Aufbau erwartet: einzelne Messwerkzeuge fehlen (z. B. der\n" +
-      "                   ECC-Bestandszaehler, der .ecc-src/ braucht). Ein fehlendes Werkzeug wird\n" +
-      "                   bewusst als „nicht pruefbar\" gemeldet und NIE zu „ok\" verkuerzt — sonst\n" +
-      "                   saehe ein Werkzeugausfall aus wie ein bestandener Test. Welche es sind,\n" +
-      "                   steht auf der Seite unter „Zu tun\".",
+      "\n                   Im frischen Aufbau moeglich: ein einzelnes Messwerkzeug ist noch nicht\n" +
+      "                   lesbar. Ein fehlendes Werkzeug wird bewusst als „nicht pruefbar\" gemeldet\n" +
+      "                   und NIE zu „ok\" verkuerzt — sonst saehe ein Werkzeugausfall aus wie ein\n" +
+      "                   bestandener Test. Welche es sind, steht auf der Seite unter „Zu tun\".",
     fehlt:
       "\n                   Einzelne Bestandteile sind nicht vorhanden. Welche, steht auf der Seite\n" +
       "                   unter „Zu tun\" — im frischen Aufbau ist das normal.",
@@ -1104,20 +1105,10 @@ const MENSCHEN_PUNKTE = [
       "dauerhaft Kontext — der Umfang waechst mit jeder Rolle.",
     empfehlung: "Erst anlegen, wenn wirklich mehrere Sitzungen nebeneinander arbeiten. Kurz halten.",
   },
-  {
-    titel: "ECC-Material daneben legen: ja oder nein",
-    handlung:
-      "Optional einen ECC-Harness nach .ecc-src/ klonen und agents/commands/skills/rules " +
-      "nach .claude/ kopieren — hooks/ NICHT (nicht ordner-portabel).",
-    wirkung:
-      "Ohne .ecc-src/ laeuft alles hier Installierte vollstaendig. Mit .ecc-src/ kommen " +
-      "Agenten, Skills und Fremdregeln dazu — und mit ihnen Kontextkosten: ab etwa 70 " +
-      "Skills erscheinen weitere nur noch als nackter Name ohne Beschreibung. Mehr Skills " +
-      "bedeuten dann WENIGER Faehigkeit.",
-    empfehlung:
-      "Erst ohne arbeiten. Wenn doch, die Skill-Liste gegen den tatsaechlichen Stack " +
-      "kuratieren (skillOverrides) statt zu loeschen.",
-  },
+  // Onboarding-Schritt "ECC-Material daneben legen" (Klon nach .ecc-src/)
+  // entfernt am 25.08.2026 [Owner: "tief entkernen"]: dieser Harness laeuft
+  // eigenstaendig, ohne Ursprungs-Werkbank daneben. Das Dashboard misst
+  // ausschliesslich mit Bordmitteln (keine .ecc-src/-Abhaengigkeit mehr).
   {
     titel: "Projekte anlegen — die Reihenfolge ist nicht vertauschbar",
     handlung:
