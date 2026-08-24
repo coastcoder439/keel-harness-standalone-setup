@@ -20,29 +20,114 @@ const KURZFORM =
   "Punkte. Wurde in diesem Turn geschrieben oder committet, endet die Meldung mit den zwei " +
   "Zeilen 'Geprueft gegen: ...' und 'Offen: ...' — \"fertig\" existiert nur darin.";
 
-// --- Selbsttest: Ausgabeform ist gueltiges Hook-JSON mit der Kurzform ---
-if (process.argv.includes("--selbsttest")) {
-  const aus = JSON.parse(ausgabe());
-  const ok =
-    aus.hookSpecificOutput.hookEventName === "UserPromptSubmit" &&
-    aus.hookSpecificOutput.additionalContext.includes("Antwort zuerst") &&
-    aus.hookSpecificOutput.additionalContext.includes("Geprueft gegen");
-  console.log(ok ? "ok   Kurzform-JSON gueltig und vollstaendig" : "FEHL Ausgabe unvollstaendig");
-  console.log(`${ok ? 1 : 0} von 1 Faellen richtig.`);
-  process.exit(ok ? 0 : 1);
+// --- Auftraege der Kommandobruecke zustellen (Wirkzeitpunkt-Zustellung) -----
+// bridge.html schreibt .claude/orders/<ts>.json {target, text}; dieser Hook
+// haengt passende Auftraege an den Kontext der Ziel-Session. target ist eine
+// session_id oder "all". Gezielte Auftraege wandern nach Zustellung in
+// orders/delivered/; "all"-Auftraege bleiben 10 Minuten sichtbar (jede Session
+// soll sie sehen) und werden danach von der naechsten Zustellung wegsortiert.
+const ORDER_ALL_MINUTES = 10;
+
+function ordersHolen(deps, sessionId) {
+  const eintraege = [];
+  let dateien = [];
+  try {
+    dateien = deps.listdir(deps.ordersDir).filter((n) => n.endsWith(".json"));
+  } catch {
+    return eintraege;
+  }
+  for (const name of dateien) {
+    let order;
+    try {
+      order = JSON.parse(deps.read(deps.ordersDir + "/" + name));
+    } catch {
+      continue;
+    }
+    const alterMin = (deps.now() - Date.parse(order.ts || 0)) / 60000;
+    if (order.target === "all") {
+      if (alterMin > ORDER_ALL_MINUTES) deps.deliver(name);
+      else eintraege.push(order.text);
+    } else if (order.target === sessionId) {
+      eintraege.push(order.text);
+      deps.deliver(name);
+    }
+  }
+  return eintraege;
 }
 
-function ausgabe() {
+function ausgabe(orders) {
+  let text = KURZFORM;
+  if (orders && orders.length) {
+    text += " || AUFTRAG von der Kommandobruecke [Owner]: " + orders.join(" | ");
+  }
   return JSON.stringify({
-    hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: KURZFORM },
+    hookSpecificOutput: { hookEventName: "UserPromptSubmit", additionalContext: text },
   });
 }
 
-// Eingabe (die Nutzer-Nachricht) wird gelesen, aber nicht ausgewertet — die
-// Kurzform gilt bedingungslos; jede Sonderlogik waere eine neue Fehlerquelle.
+// --- Selbsttest: Kurzform-JSON + Order-Zustellung (deps gefaked) ---
+if (process.argv.includes("--selbsttest")) {
+  const aus = JSON.parse(ausgabe());
+  const f1 =
+    aus.hookSpecificOutput.hookEventName === "UserPromptSubmit" &&
+    aus.hookSpecificOutput.additionalContext.includes("Antwort zuerst") &&
+    aus.hookSpecificOutput.additionalContext.includes("Geprueft gegen");
+  const zugestellt = [];
+  const deps = {
+    ordersDir: "orders",
+    listdir: () => ["a.json", "b.json", "c.json", "kaputt.json"],
+    read: (p) =>
+      ({
+        "orders/a.json": JSON.stringify({ target: "s1", text: "mach X", ts: new Date().toISOString() }),
+        "orders/b.json": JSON.stringify({ target: "all", text: "an alle", ts: new Date().toISOString() }),
+        "orders/c.json": JSON.stringify({ target: "s2", text: "nicht fuer uns", ts: new Date().toISOString() }),
+        "orders/kaputt.json": "{{{",
+      })[p],
+    deliver: (n) => zugestellt.push(n),
+    now: () => Date.now(),
+  };
+  const orders = ordersHolen(deps, "s1");
+  const f2 = orders.length === 2 && orders.includes("mach X") && orders.includes("an alle");
+  const f3 = zugestellt.length === 1 && zugestellt[0] === "a.json"; // gezielt weg, all bleibt, fremd bleibt
+  const f4 = ausgabe(orders).includes("AUFTRAG von der Kommandobruecke");
+  const faelle = [["Kurzform-JSON", f1], ["Order-Filter (eigene + all)", f2], ["Zustell-Buchung nur gezielt", f3], ["Auftrag im Kontext", f4]];
+  let fehler = 0;
+  for (const [name, ok] of faelle) {
+    if (!ok) fehler++;
+    console.log(`${ok ? "ok  " : "FEHL"} ${name}`);
+  }
+  console.log(`${faelle.length - fehler} von ${faelle.length} Faellen richtig.`);
+  process.exit(fehler ? 1 : 0);
+}
+
+// Eingabe: session_id fuer die Order-Zustellung; die Kurzform gilt bedingungslos.
+const fs = require("fs");
+const path = require("path");
 let eingabe = "";
 process.stdin.on("data", (c) => (eingabe += c));
 process.stdin.on("end", () => {
-  process.stdout.write(ausgabe());
+  let orders = [];
+  try {
+    const daten = JSON.parse(eingabe || "{}");
+    const wurzel = process.env.CLAUDE_PROJECT_DIR;
+    if (wurzel && daten.session_id) {
+      const ordersDir = path.join(wurzel, ".claude", "orders");
+      const deliveredDir = path.join(ordersDir, "delivered");
+      orders = ordersHolen(
+        {
+          ordersDir,
+          listdir: (d) => fs.readdirSync(d),
+          read: (p) => fs.readFileSync(p.split("/").join(path.sep), "utf8"),
+          deliver: (name) => {
+            fs.mkdirSync(deliveredDir, { recursive: true });
+            fs.renameSync(path.join(ordersDir, name), path.join(deliveredDir, name));
+          },
+          now: () => Date.now(),
+        },
+        daten.session_id
+      );
+    }
+  } catch {} // fail-open: die Kurzform kommt immer, Orders sind Zugabe
+  process.stdout.write(ausgabe(orders));
   process.exit(0);
 });

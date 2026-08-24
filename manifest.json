@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-24T15:35:27.826Z",
-  "posten": 90,
+  "gebautAm": "2026-08-24T15:49:15.524Z",
+  "posten": 93,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 76875,
-      "sha256": "92ae3577722ff34f"
+      "bytes": 77062,
+      "sha256": "71f3b7da731dcc2c"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -212,8 +212,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 2451,
-      "sha256": "46244ea9eb4f07e2"
+      "bytes": 5735,
+      "sha256": "1876af633baf290a"
     },
     {
       "datei": "payload/claude/repo-status.js",
@@ -350,6 +350,22 @@
       "gesaeubert": 0,
       "bytes": 10258,
       "sha256": "69e165f3cd4b9376"
+    },
+    {
+      "datei": "payload/dashboard/bridge.html",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 8317,
+      "sha256": "913db1269969de53"
+    },
+    {
+      "datei": "payload/dashboard/bridge.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 8038,
+      "sha256": "50488dc60bd925b3"
     },
     {
       "datei": "payload/dashboard/classify.js",
@@ -532,8 +548,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 16956,
-      "sha256": "c92b93627d2ef69a"
+      "bytes": 19990,
+      "sha256": "1c9da21a3f801940"
     },
     {
       "datei": "payload/dashboard/test/access-filter.test.js",
@@ -542,6 +558,14 @@
       "gesaeubert": 0,
       "bytes": 8032,
       "sha256": "ef0612a99522138e"
+    },
+    {
+      "datei": "payload/dashboard/test/bridge.test.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 4991,
+      "sha256": "669e04cb16c12fb9"
     },
     {
       "datei": "payload/dashboard/test/client.test.js",

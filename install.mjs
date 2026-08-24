@@ -194,6 +194,9 @@ const DASHBOARD = [
   // Der Vorschau-Server: macht aus der Seite ein Werkzeug zum Aendern.
   // Ohne ihn ist sie nur lesbar -- ein Doppelklick genuegt dafuer.
   "serve.js",
+  "bridge.js",            // Kommandobruecken-Logik (Pakete/Sessions/Selbsttests/Auftraege)
+  "bridge.html",          // die Kommandobruecken-Seite unter /bridge
+  "test/bridge.test.js",
   "measure.js",
   "classify.js",
   "inventory.js",
