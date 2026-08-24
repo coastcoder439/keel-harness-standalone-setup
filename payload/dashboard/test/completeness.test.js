@@ -141,7 +141,7 @@ const GROESSE_ALTBESTAND = {
   // eigene Module (inventar, hooks-detail, zutun-docs, verwandt), nicht hier
   // hinein. Aufteilen steht als offener Punkt in docs/regelverstoesse-plan.md.
   // 23.08.2026 von 1152 auf 1126 verkleinert: verlaufMessen ist nach
-  // dashboard/verlauf.js gewandert, als das Einhaengen der Projekt-Messung
+  // dashboard/history.js gewandert, als das Einhaengen der Projekt-Messung
   // die Klinke ueberschritten haette. Die Grenze wandert mit -- sonst
   // entstuende wieder Luft, in die die Datei zurueckwachsen kann.
   "measure.js": 1126,

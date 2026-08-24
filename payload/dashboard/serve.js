@@ -30,8 +30,8 @@ const os = require("os");
 const http = require("http");
 const { spawnSync } = require("child_process");
 
-const { MINI_SPERRLISTE, ZUGANGS_MUSTER, textSichern } = require("./zugangsfilter.js");
-const { HART_MAX_BYTES } = require("./inventar.js");
+const { MINI_SPERRLISTE, ZUGANGS_MUSTER, textSichern } = require("./access-filter.js");
+const { HART_MAX_BYTES } = require("./file-inventory.js");
 // Markdown rendert der Server auf Abruf (Server-zuerst, D1) -- die Seite traegt
 // kein vorgerendertes HTML mehr.
 const { markdownZuHtml } = require("./render/markdown.js");

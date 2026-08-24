@@ -100,7 +100,7 @@ test("die Gegenrichtung: was gebraucht wird, kommt durch", () => {
     ".claude/commands/save-work.md",
     ".claude/settings.json",
     ".gitignore",
-    "dashboard/render/worte.js",
+    "dashboard/render/labels.js",
   ];
   for (const p of erlaubt) {
     const r = pfadPruefen(WURZEL, p, "schreiben");

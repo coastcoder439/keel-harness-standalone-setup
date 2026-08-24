@@ -3,18 +3,18 @@
 // WARUM DIESES MODUL EIGENSTAENDIG IST
 // Es hat eine einzige Frage zu beantworten: sieht diese Zeile aus wie ein
 // Zugang? Diese Frage hat eine eigene Fehlergeschichte, eigene Gegenproben und
-// eine eigene Messlatte -- und sie wird an DREI Stellen gebraucht (inventar.js
+// eine eigene Messlatte -- und sie wird an DREI Stellen gebraucht (file-inventory.js
 // beim Lesen, render/data.js an der Engstelle, index.js vor dem Schreiben).
-// Am 23.08.2026 stand sie noch in inventar.js und trieb die Datei auf genau
+// Am 23.08.2026 stand sie noch in file-inventory.js und trieb die Datei auf genau
 // 800 Zeilen, die Hausgrenze.
 //
 // DIE REGEL, an der sich hier alles messen laesst
 // Ein Filter, der Richtiges unkenntlich macht, wird abgeschaltet und schuetzt
 // danach gar nichts. Deshalb zaehlt jede Verschaerfung nur zusammen mit ihrer
-// Gegenprobe: dashboard/test/inventar.test.js fuehrt beide Tabellen -- was
+// Gegenprobe: dashboard/test/file-inventory.test.js fuehrt beide Tabellen -- was
 // fallen MUSS und was stehen bleiben MUSS.
 //
-// AUFRUF   const { textSichern, ZUGANGS_MUSTER, sperrgrund } = require("./zugangsfilter");
+// AUFRUF   const { textSichern, ZUGANGS_MUSTER, sperrgrund } = require("./access-filter");
 
 // Die Ausschluss-Vorschau: was NICHT als Geheimnis gilt, weil es ein Verweis
 // darauf ist. Sie steht einmal hier und wird in beide Schluesselwort-Muster

@@ -17,7 +17,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 
-const { inventar } = require("../inventar.js");
+const { inventar } = require("../file-inventory.js");
 const { messen } = require("../measure.js");
 const { daten } = require("../render/data.js");
 

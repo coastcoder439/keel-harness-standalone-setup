@@ -30,12 +30,12 @@ const { spawnSync } = require("child_process");
 // ist mit ueber tausend Zeilen schon am Rand des Zumutbaren, und der Dateibaum,
 // die Hook-Einzelheiten, die Offenpunkte aus Dokumenten und die Kanten sind je
 // fuer sich pruefbar. Hier werden sie nur eingehaengt.
-const { inventar } = require("./inventar.js");
+const { inventar } = require("./file-inventory.js");
 const { hooksDetail } = require("./hooks-detail.js");
-const { zuTunDoku } = require("./zutun-docs.js");
-const { verwandt } = require("./verwandt.js");
-const { projekte } = require("./projekte.js");
-const { verlaufMessen } = require("./verlauf.js");
+const { zuTunDoku } = require("./todo-docs.js");
+const { verwandt } = require("./related.js");
+const { projekte } = require("./projects.js");
+const { verlaufMessen } = require("./history.js");
 const { hookSkripte, kontrollprobe, gruppeEinordnen, dauerRegelBeleg, dauerRegelDateien } = require("./classify");
 const bordmittel = require("./inventory");
 

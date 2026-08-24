@@ -26,7 +26,7 @@
 // gegen git-Ausgaben laufen case-insensitiv; Zeilen werden einmal auf \n normalisiert
 // (gemessen 23.08.2026: 27 von 45 Dateien liegen als CRLF auf der Platte).
 //
-// AUFRUF   const { inventar } = require("./inventar"); inventar(wurzel)
+// AUFRUF   const { inventar } = require("./file-inventory"); inventar(wurzel)
 
 const fs = require("fs");
 const path = require("path");
@@ -41,7 +41,7 @@ const {
   MINI_SPERRLISTE,
   textSichern,
   sperrgrund,
-} = require("./zugangsfilter.js");
+} = require("./access-filter.js");
 
 // ---------------------------------------------------------------------------
 // KONSTANTEN

@@ -9,7 +9,7 @@
 //
 // Liefert CODES und Rohwerte, keine deutschen Saetze -- die setzt render/data.js.
 //
-// AUFRUF   const { verlaufMessen } = require("./verlauf"); verlaufMessen(wurzel, repos)
+// AUFRUF   const { verlaufMessen } = require("./history"); verlaufMessen(wurzel, repos)
 
 const fs = require("fs");
 const path = require("path");

@@ -24,12 +24,12 @@
 // Dieses Modul erzeugt AUSSCHLIESSLICH Daten -- Codes, keine deutschen Saetze.
 // Die Formulierung setzt render/data.js.
 //
-// AUFRUF   const { projekte } = require("./projekte"); projekte(wurzel)
+// AUFRUF   const { projekte } = require("./projects"); projekte(wurzel)
 
 const fs = require("fs");
 const path = require("path");
 
-const { textSichern } = require("./zugangsfilter.js");
+const { textSichern } = require("./access-filter.js");
 
 // ---------------------------------------------------------------------------
 // KONSTANTEN

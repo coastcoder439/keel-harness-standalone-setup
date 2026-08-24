@@ -49,7 +49,7 @@ const PROBE_SPERRE = new Map([
   ["git-guard.js", "loescht-index-lock"],
 ]);
 
-// Zugangsmuster aus Spezifikation 7.3. inventar.js fuehrt die kanonische Liste; bis
+// Zugangsmuster aus Spezifikation 7.3. file-inventory.js fuehrt die kanonische Liste; bis
 // sie sie exportiert, haelt dieses Modul eine eigene Fassung und nimmt ueber
 // opts.textSichern jederzeit die fremde entgegen (dann gilt nur noch die fremde).
 const ZUGANGS_MUSTER = [
@@ -116,8 +116,8 @@ function zeileMit(zeilen, muster) {
   return hinterCode || ausKommentarzeile;
 }
 
-// Der Nachbar inventar.js liefert aus textSichern ein Objekt {text, ausgeblendeteZeilen}
-// (inventar.js:131-141, nachgesehen 23.08.2026), die eigene Fassung hier eine
+// Der Nachbar file-inventory.js liefert aus textSichern ein Objekt {text, ausgeblendeteZeilen}
+// (file-inventory.js:131-141, nachgesehen 23.08.2026), die eigene Fassung hier eine
 // Zeichenkette. Beide Formen werden angenommen. Ohne diese Weiche stuende bei einer
 // Verdrahtung ueber opts.textSichern "[object Object]" im Datensatz -- stumm und
 // erst im Browser sichtbar. Eine dritte Form bekommt eine sichtbare Marke, keinen
