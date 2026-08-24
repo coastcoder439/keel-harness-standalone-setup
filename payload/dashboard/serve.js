@@ -32,6 +32,7 @@ const { spawnSync } = require("child_process");
 
 const { MINI_SPERRLISTE, ZUGANGS_MUSTER, textSichern } = require("./access-filter.js");
 const { HART_MAX_BYTES } = require("./file-inventory.js");
+const bridge = require("./bridge.js");
 // Markdown rendert der Server auf Abruf (Server-zuerst, D1) -- die Seite traegt
 // kein vorgerendertes HTML mehr.
 const { markdownZuHtml } = require("./render/markdown.js");
@@ -275,6 +276,68 @@ function starten(o) {
       return jsonAntwort(res, r.ok ? 200 : 500, r.ok ? { ok: true } : { fehler: r.ausgabe });
     }
 
+    // --- Kommandobruecke ---------------------------------------------------
+    // Daten der Bruecke: Pakete aller Repos, Sessions, Waechter-Liste.
+    if (req.method === "GET" && weg === "/bridge/data") {
+      try {
+        return jsonAntwort(res, 200, {
+          packages: bridge.scanPackages(wurzel),
+          sessions: bridge.scanSessions(wurzel),
+          guards: bridge.SELFTEST_GUARDS,
+          readOnly: !!o.nurLesen,
+        });
+      } catch (e) {
+        return jsonAntwort(res, 500, { fehler: e.message });
+      }
+    }
+
+    // Haken in einem Paket-Artefakt kippen. Pfad laeuft durch pfadPruefen
+    // (Schreib-Regeln inkl. Sperrliste) UND muss ein Paket-Artefakt sein.
+    if (req.method === "POST" && weg === "/bridge/toggle") {
+      if (o.nurLesen) return jsonAntwort(res, 403, { fehler: "Der Server läuft mit --nur-lesen." });
+      const geprueft = pfadPruefen(wurzel, url.searchParams.get("pfad"), "schreiben");
+      if (geprueft.fehler) return jsonAntwort(res, 400, { fehler: geprueft.fehler });
+      if (!/(^|\/)docs\/packages\/[^/]+\.md$/.test(geprueft.rel)) {
+        return jsonAntwort(res, 400, { fehler: "kein Paket-Artefakt (docs/packages/*.md)" });
+      }
+      try {
+        const vorher = fs.readFileSync(geprueft.abs, "utf8");
+        const r = bridge.toggleStep(vorher, url.searchParams.get("index"));
+        if (!r.ok) return jsonAntwort(res, 400, { fehler: r.error });
+        const warCrlf = /\r\n/.test(vorher);
+        fs.writeFileSync(geprueft.abs, warCrlf ? r.text.split("\n").join("\r\n") : r.text, "utf8");
+        process.stdout.write("Paket-Haken: " + geprueft.rel + " #" + url.searchParams.get("index") + " -> " + (r.nowDone ? "[x]" : "[ ]") + "\n");
+        return jsonAntwort(res, 200, { ok: true, nowDone: r.nowDone });
+      } catch (e) {
+        return jsonAntwort(res, 500, { fehler: e.message });
+      }
+    }
+
+    // Waechter-Selbsttest -- Name gegen die feste Whitelist, nie ein Pfad.
+    if (req.method === "POST" && weg === "/bridge/selftest") {
+      const r = bridge.runSelftest(wurzel, String(url.searchParams.get("guard") || ""));
+      return jsonAntwort(res, r.ok ? 200 : 400, r);
+    }
+
+    // Auftrag an eine Session (oder alle): prompt-form.js stellt ihn am
+    // Wirkzeitpunkt zu (naechste Nutzer-Nachricht der Ziel-Session).
+    if (req.method === "POST" && weg === "/bridge/order") {
+      if (o.nurLesen) return jsonAntwort(res, 403, { fehler: "Der Server läuft mit --nur-lesen." });
+      let leib = "";
+      req.setEncoding("utf8");
+      req.on("data", (s) => { if ((leib += s).length > 8192) req.destroy(); });
+      req.on("end", () => {
+        try {
+          const b = JSON.parse(leib || "{}");
+          const r = bridge.writeOrder(wurzel, b.target, b.text);
+          jsonAntwort(res, r.ok ? 200 : 400, r);
+        } catch (e) {
+          jsonAntwort(res, 400, { fehler: "kein gueltiges JSON: " + e.message });
+        }
+      });
+      return;
+    }
+
     if (req.method !== "GET" && req.method !== "HEAD") {
       return jsonAntwort(res, 405, { fehler: "Methode nicht vorgesehen" });
     }
@@ -319,7 +382,7 @@ function starten(o) {
     }
 
     // --- Die Seite und alles daneben --------------------------------------
-    const ziel = weg === "/" ? "dashboard.html" : weg.replace(/^\//, "");
+    const ziel = weg === "/" ? "dashboard.html" : weg === "/bridge" ? "dashboard/bridge.html" : weg.replace(/^\//, "");
     const geprueft = pfadPruefen(wurzel, ziel, "lesen");
     if (geprueft.fehler) {
       res.writeHead(400, { "content-type": "text/plain; charset=utf-8" });
