@@ -26,6 +26,14 @@ Projekt-Repos liegen als Geschwister unter `user-projects/<name>`, nie ineinande
 verifiziert pushen, DANN die Ignorier-Zeile in die `.gitignore` — andersherum wird
 das Projekt unsichtbar und ungesichert zugleich.
 
+**Ordnung heisst Zugehoerigkeit:** Jede Datei lebt im Repo ihres Projekts, dort bei
+ihrem Thema — Arbeitspakete gebuendelt unter `docs/packages/`, Doku bei Doku, Tests
+bei Tests, Code bei Code; neue Themen duerfen neue Ordner bilden. Was keinem Projekt
+dient (Versuche, Wegwerf-Dateien), geht ins Session-Scratchpad, nie in ein Repo.
+Pruefsatz: Zu jeder Datei laesst sich in einem Satz sagen, zu welchem Projekt und
+Thema sie gehoert — sonst liegt sie falsch. Coding-Namen (Dateien, Ordner, Felder,
+Identifier) sind englisch; Deutsch nur in Erklaer-Prosa und Anzeige-Texten.
+
 ## 3. Konventionen
 
 - **Workspace-Repo: nur `git commit -m "…" -- <pfad>`** (nie `add`+`commit`, nie `-a`) —
