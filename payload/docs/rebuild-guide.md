@@ -240,13 +240,13 @@ Größenordnung aus dieser Werkbank, gemessen am 02.08.2026: `find .ecc-src -typ
 
 | Was | Wieviel | Wo im Dokument |
 |---|---|---|
-| Wächter- und Helfer-Skripte | 7 | §6.3 · §6.4 · §6.8.3 · §6.8.4 · §6.8.5 · §6.8.9 · §6.8.10 |
+| Wächter- und Helfer-Skripte | 9 | §6.3 · §6.4 · §6.8.3 · §6.8.4 · §6.8.5 · §6.8.9 · §6.8.10 · §6.8.11b · §6.8.11c |
 | eigene Slash-Befehle | 4 | §6.5 · §6.6 · §6.8.6 |
-| eigene Dauer-Regeln | 4 | §6.8.12 |
+| eigene Dauer-Regeln | 3 (seit 24.08.2026) | §6.8.12 |
 
 Der achte Wächter-Volltext, `pruefstand-warn.js` (§6.8.11), zählt **nicht** mit: §6.8.11a legt für jeden Nachbau Weg A fest — *„gar nicht erst anlegen"*, weil seine zwei Prüfer diese Werkbank messen und nicht den Nachbau.
 
-> **Warum keine Zählung per `grep`:** Ein Muster, das nur Pfade in Backticks zählt, übersieht die fuenf Dauer-Regeln (ihr Abschnitt schreibt die Pfade bewusst ohne Backticks) und meldet **12** — die Zahl bliebe grün, während der Satz falsch wird. Ein Muster ohne Backticks zählt **23** und nimmt Beispiele wie `settings.js` mit. Beide Zahlen sind gemessen; keine trägt. Wo ein Suchmuster keine Wahrheit liefert, gehört die Liste hin.
+> **Warum keine Zählung per `grep`:** Ein Muster, das nur Pfade in Backticks zählt, übersieht die Dauer-Regeln (ihr Abschnitt schreibt die Pfade bewusst ohne Backticks) und meldet zu wenig — die Zahl bliebe grün, während der Satz falsch wird. Ein Muster ohne Backticks nimmt Beispiele wie `settings.js` mit und meldet zu viel (beides 2026-08 an der damaligen Fünfer-Fassung gemessen: 12 bzw. 23). Wo ein Suchmuster keine Wahrheit liefert, gehört die Liste hin.
 
 Jede weitere kommt einzeln per `!`-Zeile dazu. Das ist der Unterschied zwischen einem sauberen ersten Commit und einem, der nicht mehr zu reparieren ist, ohne die Historie neu zu schreiben.
 
@@ -659,11 +659,15 @@ bleiben unveraendert daneben stehen:
 !.claude/rules/keel/
 .claude/rules/keel/*
 !.claude/rules/keel/no-oneshot.md
-!.claude/rules/keel/completeness.md
 !.claude/rules/keel/tools.md
-!.claude/rules/keel/output-shape.md
+!.claude/rules/keel/working-method.md
 .ecc-src/
 ```
+
+> Stand 24.08.2026: Die Whitelist-Zeilen für `completeness.md` und `output-shape.md` sind
+> gestrichen (die eine Regel wurde on-demand-Skill `!.claude/skills/completeness/`, die andere
+> ersatzlos entfernt — §6.8.12); `working-method.md` kam dazu. Maßgeblich ist
+> `templates/gitignore-block.txt` im Bausatz.
 
 Vier Lesehilfen — **drei davon beim Uebernehmen gleich mitkorrigieren**, der Kommentarkopf ist
 selbst nicht fehlerfrei:
@@ -2948,7 +2952,42 @@ Volltext** — und das bleibt absichtlich so. Drei gemessene Gründe:
    Stempeldatei `$TMPDIR/<workspace>-pruefstand-warn-<id>.stamp`; für einen zweiten Versuch eine
    andere Kennung einsetzen, sonst ist das Schweigen nur die Drossel.
 
-### 6.8.12 Die fuenf Dauer-Regeln (Ordner .claude/rules/keel/) — was in **jeder** Sitzung mitlädt
+### 6.8.11b write-guard.js — Schreibziel · Zugänge · gitignore-Reihenfolge (24.08.2026)
+
+PreToolUse-Wächter für Write/Edit/NotebookEdit — schließt die Lücke, dass `danger-guard.js` nur
+Bash sieht (über die Editier-Werkzeuge ließ sich außerhalb der erlaubten Wurzeln schreiben,
+am 24.08.2026 live bewiesen). Drei Regeln, ein Node-Start: **W1** Schreibziel außerhalb der
+erlaubten Wurzeln → Block · **W2** Zugangs-WERT-Muster im Inhalt (9 Token-Formate; bloße Wörter
+lösen nichts aus; Ausnahme Testtabellen) → Block · **W3** `.gitignore`-Zeile, die einen
+existierenden `user-projects`-Ordner ohne eigenes `.git`+Remote unsichtbar machen würde → Block.
+
+**Geklappt, wenn:** `node .claude/write-guard.js --selbsttest` → „8 von 8 Faellen richtig."
+Verdrahtung: siehe settings-Kopie in §5 (Matcher `Write|Edit|NotebookEdit`). Quelltext:
+`payload/claude/write-guard.js` — bewusst keine Volltext-Kopie hier: der Bausatz ist die
+Wahrheit, Parallel-Bestand = Drift.
+
+### 6.8.11c dod-guard.js — Abschluss-Format am Turn-Ende (24.08.2026)
+
+Stop-Wächter: Hat der Turn geschrieben oder committet, muss die Schluss-Nachricht das
+Definition-of-Done-Format tragen („Geprueft gegen: …" und „Offen: …") — sonst Block (exit 2)
+und Nacharbeit. Format-Check statt Wortmuster: der Auslöser ist messbar (Write/Edit/git commit
+im Turn), die Pflicht ist Struktur. Evidenz-Hintergrund: Compliance sinkt mit dem
+Session-Fortschritt (arXiv 2605.10039: −5,6 % Odds je generierter Funktion) — diese Schranke
+greift am Ende, wo das Risiko am größten ist.
+
+**Geklappt, wenn:** `node .claude/dod-guard.js --selbsttest` → „6 von 6 Faellen richtig."
+Verdrahtung: settings-Kopie §5, Stop-Block vor `uncommitted-warn.js`. Quelltext:
+`payload/claude/dod-guard.js` — keine Volltext-Kopie, siehe §6.8.11b.
+
+### 6.8.12 Die drei Dauer-Regeln (Ordner .claude/rules/keel/) — was in **jeder** Sitzung mitlädt
+
+> **Stand 24.08.2026 — von fünf auf drei:** Nach den fünf Neubau-Grundsätzen (Quellen-Review im
+> Architektur-Artefakt) bleiben `no-oneshot.md`, `tools.md` und `working-method.md` als
+> Dauer-Regeln — je auf einen Absatz mit Grund gekürzt. `completeness.md` wurde zum
+> **on-demand-Skill** `.claude/skills/completeness/` (lädt nur bei bau-bereit-Aussagen und
+> Übergaben); `output-shape.md` wurde **gestrichen** — die Antwortform lebt im Skill
+> `i-have-adhd` (Kommunikationsdokument, lädt via `session-roles.js` in jeder Sitzung).
+> Die Langbeschreibungen unten dokumentieren den Ursprungs-Stand samt Anlässen; Historie: git.
 
 Eine Regeldatei lädt **unbedingt**, wenn sie **kein** `paths:`-Frontmatter trägt. Das ist die
 ganze Bedingung, und sie hängt an der **Datei**, nicht am Ordner. Der Ordner common/ ist der Ort,
@@ -2975,8 +3014,8 @@ kommen — `<ECC_QUELLE>` ist der Quell-/Update-Klon des Harness-Bundles (in die
 nicht versionierte Ordner .ecc-src/; wer keinen hat, überspringt die Probe):
 
 ```bash
-find "<ECC_QUELLE>" \( -name no-oneshot.md -o -name completeness.md \
-                    -o -name tools.md   -o -name output-shape.md \)   # erwartet: keine Ausgabe
+find "<ECC_QUELLE>" \( -name no-oneshot.md -o -name tools.md \
+                    -o -name working-method.md \)   # erwartet: keine Ausgabe
 ls "<ECC_QUELLE>"/rules/common/ | wc -l                                  # erwartet: 10
 ```
 
@@ -2995,7 +3034,8 @@ einen bestehenden Beschluss, Governance in der falschen Schicht gemessen, Laufor
 Erinnerung wiedergegeben. Die Datei hält außerdem fest, welche Mehr-Modell-Befehle gestrichen
 sind und warum — damit niemand ein Werkzeug plant, dessen Anmeldung nicht herstellbar ist.
 
-**completeness.md (73 Zeilen, angelegt 31.07.2026).**
+**completeness.md (73 Zeilen, angelegt 31.07.2026 — seit 24.08.2026 on-demand-Skill
+`.claude/skills/completeness/SKILL.md`, keine Dauer-Regel mehr).**
 Legt fest, wann etwas fertig ist — und verbietet das Wort als Selbstauskunft: erlaubt ist
 „geprüft gegen ⟨Quellen⟩ — offen ist ⟨Liste⟩". Kern sind acht Fragen (Akteure · Lebenszyklus ·
 Governance je Fähigkeit · Versprechen · Belege · Fehlerfall · Folgepflichten ·
@@ -3019,7 +3059,8 @@ Umgehungsschalter zu prüfen, statt eine Stufe abzusteigen.
 *Anlass:* Browsersteuerung für Daten benutzt, für die eine CLI existierte. Langfassung mit
 Messwerten: [tool-sourcing.md](tool-sourcing.md).
 
-**output-shape.md (59 Zeilen, angelegt 01.08.2026).**
+**output-shape.md (59 Zeilen, angelegt 01.08.2026 — gestrichen 24.08.2026; die Antwortform
+lebt seither im Skill `i-have-adhd`, siehe Stand-Kasten oben).**
 Regelt die **Form** der Antwort an den Menschen — die einzige der vier, die nichts über Prüfung
 sagt: erste Zeile = Ergebnis oder nächste Handlung, kein Vorlauf; Mehrschrittiges nummeriert;
 fester Abschlussblock „Zu tun · Auswirkung · Empfehlung"; Listen höchstens fünf Punkte. Liegt eine
@@ -3049,14 +3090,14 @@ oben neu geschrieben (siehe Kasten am Ende dieses Abschnitts).
 
 ```bash
 mkdir -p .claude/rules/keel
-cp "<REFERENZ>"/.claude/rules/keel/{no-oneshot,completeness,tools,output-shape,working-method}.md \
+cp "<REFERENZ>"/.claude/rules/keel/{no-oneshot,tools,working-method}.md \
    .claude/rules/keel/
 ```
 
 **Geklappt, wenn:** vier Mal „ok" erscheint und kein „FEHLT ODER LEER" —
 
 ```bash
-for f in no-oneshot completeness tools output-shape working-method; do
+for f in no-oneshot tools working-method; do
   test -s .claude/rules/keel/$f.md && echo "$f ok" || echo "$f FEHLT ODER LEER"
 done
 ```
@@ -3066,7 +3107,7 @@ Sprachregel und verschwindet aus Sitzungen ohne passenden Dateityp — das ist d
 still passiert.
 
 ```bash
-grep -L '^---' .claude/rules/keel/{no-oneshot,completeness,tools,output-shape,working-method}.md
+grep -L '^---' .claude/rules/keel/{no-oneshot,tools,working-method}.md
 ```
 
 **Geklappt, wenn:** alle vier Pfade in der Ausgabe stehen (`grep -L` listet Dateien **ohne**
@@ -3076,7 +3117,7 @@ Frontmatter danebenlegen und mitprüfen — sie darf nicht in der Liste auftauch
 
 ```bash
 printf -- '---\npaths:\n  - "**/*.ts"\n---\ntext\n' > .claude/rules/keel/zz-probe.md
-grep -L '^---' .claude/rules/keel/{no-oneshot,completeness,tools,output-shape,working-method,zz-probe}.md
+grep -L '^---' .claude/rules/keel/{no-oneshot,tools,working-method,zz-probe}.md
 rm .claude/rules/keel/zz-probe.md
 ```
 
@@ -3094,7 +3135,7 @@ sie in §6.2a geholt und nicht hier erfunden.
 Erst prüfen, ob die vier Zeilen wirklich stehen — je Datei, nicht als Summe:
 
 ```bash
-for f in no-oneshot completeness tools output-shape working-method; do
+for f in no-oneshot tools working-method; do
   grep -qxF "!.claude/rules/keel/$f.md" .gitignore \
     && echo "negiert          $f" || echo "FEHLT IM BLOCK:  $f"
 done
@@ -3108,10 +3149,10 @@ Dann aufnehmen. Neue Dateien brauchen `git add`; committet wird mit Pathspec und
 diff HEAD` geprüft — Begründung für beides in §6.2a und in CLAUDE.md (Sichern):
 
 ```bash
-git add .claude/rules/keel/{no-oneshot,completeness,tools,output-shape,working-method}.md
+git add .claude/rules/keel/{no-oneshot,tools,working-method}.md
 git diff HEAD --stat -- .claude/rules/keel
 git commit -m "chore: die fuenf Dauer-Regeln versionieren" \
-  -- .claude/rules/keel/{no-oneshot,completeness,tools,output-shape,working-method}.md
+  -- .claude/rules/keel/{no-oneshot,tools,working-method}.md
 git push
 ```
 
@@ -3131,7 +3172,7 @@ Erfolgskriterium aus der **Gesamtzahl** hätte das als Erfolg gemeldet.
 ECC-Regel weiterhin ignoriert ist:
 
 ```bash
-for f in no-oneshot completeness tools output-shape working-method; do
+for f in no-oneshot tools working-method; do
   p=".claude/rules/keel/$f.md"
   git ls-files --error-unmatch "$p" >/dev/null 2>&1 && i="Index ja  " || i="Index NEIN"
   git ls-tree -r --name-only '@{u}' -- "$p" | grep -qxF "$p" && r="Remote ja  " || r="Remote NEIN"
