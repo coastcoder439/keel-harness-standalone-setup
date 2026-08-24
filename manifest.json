@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-24T13:39:19.902Z",
-  "posten": 87,
+  "gebautAm": "2026-08-24T14:05:06.219Z",
+  "posten": 88,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 76448,
-      "sha256": "06a36208a48eaa34"
+      "bytes": 76558,
+      "sha256": "a36252b9b461b376"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -206,6 +206,14 @@
       "gesaeubert": 0,
       "bytes": 2311,
       "sha256": "bed03749c3fe9e04"
+    },
+    {
+      "datei": "payload/claude/prompt-form.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 2286,
+      "sha256": "566673c1245bf2a8"
     },
     {
       "datei": "payload/claude/repo-status.js",
@@ -524,8 +532,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 21074,
-      "sha256": "8d8a52c540be95fc"
+      "bytes": 21398,
+      "sha256": "130d8889aa714408"
     },
     {
       "datei": "payload/dashboard/test/icons.test.js",
@@ -541,7 +549,7 @@
       "quellordner": "bausatz",
       "gesaeubert": 0,
       "bytes": 25894,
-      "sha256": "8fd8290b9e44a6ac"
+      "sha256": "7fa60d4c97e35e15"
     },
     {
       "datei": "payload/dashboard/test/markdown.test.js",
@@ -684,8 +692,8 @@
       "herkunft": "docs/10-nachbau-anleitung.md",
       "quellordner": "werkbank",
       "gesaeubert": 11,
-      "bytes": 216201,
-      "sha256": "bec41328ed526c94"
+      "bytes": 217716,
+      "sha256": "545f261f061e400a"
     },
     {
       "datei": "payload/docs/tool-landscape.md",
@@ -724,8 +732,8 @@
       "herkunft": "erzeugt von paketieren.mjs",
       "quellordner": "erzeugt",
       "gesaeubert": 0,
-      "bytes": 2986,
-      "sha256": "97252013f6acc9f1"
+      "bytes": 3289,
+      "sha256": "6117c5a8835a763c"
     }
   ]
 }

@@ -37,6 +37,7 @@ const ERWARTETE_REIHENFOLGE = [
   "session-roles.js",
   "onboarding-start.js",
   "project-context.js",
+  "prompt-form.js",
   "dod-guard.js",
   "uncommitted-warn.js",
   "danger-guard.js",
@@ -56,21 +57,22 @@ const WIRKUNG_MARKER = {
 // ---------------------------------------------------------------------------
 // Bestand und Reihenfolge
 // ---------------------------------------------------------------------------
-test("zehn Eintraege, in der Reihenfolge von settings.json", () => {
+test("elf Eintraege, in der Reihenfolge von settings.json", () => {
   assert.deepStrictEqual(ergebnis.fehler, [], "kein Messfehler erwartet");
-  assert.strictEqual(ergebnis.eintraege.length, 10);
+  assert.strictEqual(ergebnis.eintraege.length, 11);
   assert.deepStrictEqual(ergebnis.eintraege.map((e) => e.skript), ERWARTETE_REIHENFOLGE);
   const zeilen = ergebnis.eintraege.map((e) => e.settingsZeile);
   const sortiert = [...zeilen].sort((a, b) => a - b);
   assert.deepStrictEqual(zeilen, sortiert, "settingsZeile muss monoton steigen");
 });
 
-test("Ereignisse: SessionStart 3, Stop 2, PreToolUse 5", () => {
+test("Ereignisse: SessionStart 3, UserPromptSubmit 1, Stop 2, PreToolUse 5", () => {
   const nach = (ev) => ergebnis.eintraege.filter((e) => e.ereignis === ev).length;
   assert.strictEqual(nach("SessionStart"), 3);
+  assert.strictEqual(nach("UserPromptSubmit"), 1);
   assert.strictEqual(nach("Stop"), 2);
   assert.strictEqual(nach("PreToolUse"), 5);
-  assert.strictEqual(nach("SessionStart") + nach("Stop") + nach("PreToolUse"), ergebnis.eintraege.length);
+  assert.strictEqual(nach("SessionStart") + nach("UserPromptSubmit") + nach("Stop") + nach("PreToolUse"), ergebnis.eintraege.length);
 });
 
 test("IDs sind eindeutig und tragen Ereignis plus Laufnummer", () => {
@@ -175,6 +177,9 @@ test("Wirkung je Skript: fuenf blockieren, uncommitted-warn meldet nur", () => {
   assert.strictEqual(nach("git-guard.js"), "blockiert");
   assert.strictEqual(nach("write-guard.js"), "blockiert");
   assert.strictEqual(nach("dod-guard.js"), "blockiert");
+  // prompt-form injiziert additionalContext, ist aber kein SessionStart-Hook --
+  // das Modul stuft Nicht-SessionStart-Injektionen als "meldet" ein.
+  assert.strictEqual(nach("prompt-form.js"), "meldet");
   assert.strictEqual(nach("uncommitted-warn.js"), "meldet");
   for (const name of ["session-roles.js", "onboarding-start.js", "project-context.js"]) {
     assert.strictEqual(nach(name), "kontext");

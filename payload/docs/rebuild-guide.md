@@ -1,4 +1,6 @@
-# 10 — Nachbau-Anleitung: AIOS-Workspace mit Projekt-Repos
+# 10 — Nachbau-Anleitung: Keel-Workspace mit Projekt-Repos
+
+> Namensregel [Owner]: Das Produkt heisst **Keel**; „Flowcode AIOS“ ist der Alt-Name und taucht nur noch in historischen Belegen auf.
 
 > ### 🔧 Ist-Abgleich dieser Werkbank (Stand 31.07.2026)
 >
@@ -22,7 +24,7 @@ Komplette Bau- und Betriebsanleitung, um dieses System auf einem **anderen Rechn
 > - `<WORKSPACE>` = Name des Harness-Ordners (Beispiel: `Mein-Agentic-OS`)
 > - `<WORKSPACE_ABS>` = absoluter Pfad dazu (Beispiel: `~/workspaces/mein-agentic-os`)
 > - `<ACCOUNT>` = GitHub-Account (Beispiel: `mein-github-konto`)
-> - `<PLUGIN>` = das Harness/AIOS-Plugin (Beispiel: `ecc@ecc`)
+> - `<PLUGIN>` = das Harness-Plugin (Beispiel: `ecc@ecc`)
 > - `<projekt>` = ein Projektname (kleingeschrieben, Bindestriche)
 
 ---
@@ -35,7 +37,7 @@ Diese Datei ist nicht zum Selberlesen gedacht, sondern **als Auftrag an eine Sit
 2. **Die Sitzung führt das Onboarding**, statt still zu bauen. Sie muss mindestens erfragen:
    - GitHub-Konto (`<ACCOUNT>`) und ob `gh auth login` schon gelaufen ist
    - Name des Workspace-Ordners (`<WORKSPACE>`) — Ordnername == Repo-Name
-   - welches Harness-/AIOS-Plugin geladen wird (`<PLUGIN>`) und ob es lokal vorliegt
+   - welches Harness-Plugin geladen wird (`<PLUGIN>`) und ob es lokal vorliegt
    - welche Projekte es zu Beginn gibt (je Projekt: Ordner + eigenes privates Repo)
    - ob es bereits Inhalte gibt, die migriert werden (dann §9 „gitignore-Backup-Falle" beachten)
    - welche Zugänge/Secrets gebraucht werden — **Namen ja, Werte nein** (Schlüsselbund/Registry)
@@ -57,7 +59,7 @@ Diese Datei ist nicht zum Selberlesen gedacht, sondern **als Auftrag an eine Sit
 
 ## 1. Was das System ist (in drei Sätzen)
 
-Ein **Workspace-Ordner** (`<WORKSPACE>`) trägt den Harness/das AIOS-Plugin (agents, skills, commands, hooks, rules) und ist selbst **ein eigenes Git- + GitHub-Repo**. Darunter liegt `user-projects/`, worin **jedes Projekt ein eigener Ordner mit eigenem Git- + GitHub-Repo** ist (Ordnername == Repo-Name, Branch `main`). Alle Claude-Sessions laufen mit dem Workspace als Arbeitsverzeichnis (cwd), damit das Plugin greift; die **Projekte** werden über eigene Repos (Raum) getrennt, **nicht** über Branches. Branches haben eine andere Aufgabe: Sie trennen **innerhalb** eines Repos die Arbeitspakete (§8a).
+Ein **Workspace-Ordner** (`<WORKSPACE>`) trägt den Harness (agents, skills, commands, hooks, rules) und ist selbst **ein eigenes Git- + GitHub-Repo**. Darunter liegt `user-projects/`, worin **jedes Projekt ein eigener Ordner mit eigenem Git- + GitHub-Repo** ist (Ordnername == Repo-Name, Branch `main`). Alle Claude-Sessions laufen mit dem Workspace als Arbeitsverzeichnis (cwd), damit das Plugin greift; die **Projekte** werden über eigene Repos (Raum) getrennt, **nicht** über Branches. Branches haben eine andere Aufgabe: Sie trennen **innerhalb** eines Repos die Arbeitspakete (§8a).
 
 ---
 
@@ -202,7 +204,7 @@ Erwartet wird ein Eintrag mit `"id": "ecc@ecc"`, `"scope": "project"`, `"enabled
 
 ```
 <WORKSPACE>/                          ← Harness. EIGENES Git- + GitHub-Repo (<ACCOUNT>/<workspace>)
-├── agents/ skills/ commands/         ← das AIOS-Plugin-Material
+├── agents/ skills/ commands/         ← das Harness-Plugin-Material
 │   hooks/ rules/ mcp-configs/
 ├── CLAUDE.md                         ← Architektur-Regeln (wird jede Session geladen)
 ├── .gitignore                        ← schließt jeden Projektordner NAMENTLICH aus
@@ -240,8 +242,8 @@ Größenordnung aus dieser Werkbank, gemessen am 02.08.2026: `find .ecc-src -typ
 
 | Was | Wieviel | Wo im Dokument |
 |---|---|---|
-| Wächter- und Helfer-Skripte | 9 | §6.3 · §6.4 · §6.8.3 · §6.8.4 · §6.8.5 · §6.8.9 · §6.8.10 · §6.8.11b · §6.8.11c |
-| eigene Slash-Befehle | 4 | §6.5 · §6.6 · §6.8.6 |
+| Wächter- und Helfer-Skripte | 10 | §6.3 · §6.4 · §6.8.3 · §6.8.4 · §6.8.5 · §6.8.9 · §6.8.10 · §6.8.11b · §6.8.11c · §6.8.11d |
+| eigene Slash-Befehle | 5 (inkl. `onboarding.md`, laeuft einmalig via `onboarding-start.js`) | §6.5 · §6.6 · §6.8.6 |
 | eigene Dauer-Regeln | 3 (seit 24.08.2026) | §6.8.12 |
 
 Der achte Wächter-Volltext, `pruefstand-warn.js` (§6.8.11), zählt **nicht** mit: §6.8.11a legt für jeden Nachbau Weg A fest — *„gar nicht erst anlegen"*, weil seine zwei Prüfer diese Werkbank messen und nicht den Nachbau.
@@ -463,6 +465,18 @@ Sitzungs-Nachrichten) plus die Statusleiste. **Nichts von Hand anzupassen** — 
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/prompt-form.js\"",
+            "timeout": 10,
+            "statusMessage": "Antwortform-Kurzform (jede Runde)"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
@@ -565,7 +579,7 @@ trennt es:
 |---|---|---|
 | **Fremd-Klon** (ECC-Installation) | `.claude/skills/`, `.claude/agents/` (gemessen 02.08.2026: `ls .claude/skills \| wc -l` → 280, `ls .claude/agents \| wc -l` → 67) | **draussen** — Fremdmaterial, aus der Update-Quelle nachziehbar |
 | **Rechner-Zustand** | `.claude/settings.local.json` (Befehls-Freigabeliste) | **draussen** — pro Rechner verschieden |
-| **Eigenbauten** | die acht Skripte direkt unter `.claude/` (`git-guard.js`, `danger-guard.js`, `commit-pathspec-guard.js`, `statusline.js`, `session-roles.js`, `repo-status.js`, `uncommitted-warn.js`, `pruefstand-warn.js`), die vier `commands/*.md`, die vier eigenen Regeln unter `rules/keel/`, `plan/`, die drei eigenen Skills | **drin** — sonst existieren sie nur auf einer Platte |
+| **Eigenbauten** | die zwoelf Skripte direkt unter `.claude/` (`git-guard.js`, `danger-guard.js`, `commit-pathspec-guard.js`, `write-guard.js`, `dod-guard.js`, `prompt-form.js`, `statusline.js`, `session-roles.js`, `onboarding-start.js`, `project-context.js`, `repo-status.js`, `uncommitted-warn.js`; dazu Werkbank-only `pruefstand-warn.js`), die fuenf `commands/*.md` (inkl. `onboarding.md`), die drei eigenen Regeln unter `rules/keel/`, `plan/`, die vier eigenen Skills (inkl. `completeness`) | **drin** — sonst existieren sie nur auf einer Platte |
 
 **Warum die Eigenbauten hinein muessen** (Anlass, belegt am 01.08.2026): Sie lagen ohne Sicherung
 und ohne Historie nur lokal. Der `git-guard`-Fix vom selben Tag existierte nur auf der Platte,
@@ -2992,6 +3006,19 @@ greift am Ende, wo das Risiko am größten ist.
 **Geklappt, wenn:** `node .claude/dod-guard.js --selbsttest` → „6 von 6 Faellen richtig."
 Verdrahtung: settings-Kopie §5, Stop-Block vor `uncommitted-warn.js`. Quelltext:
 `payload/claude/dod-guard.js` — keine Volltext-Kopie, siehe §6.8.11b.
+
+### 6.8.11d prompt-form.js — Antwortform am Wirkzeitpunkt (24.08.2026)
+
+UserPromptSubmit-Hook: injiziert bei JEDER Nutzer-Nachricht die Antwortform-Kurzform
+(Antwort zuerst + Antwortart · Basis komplett, keine Kuerzel · PIG bei Arbeitspaketen ·
+Listen <=5 · DoD-Zeilen bei geleisteter Arbeit). Grund: Die Start-Injektion des Skills
+verliert in langen Sessions gegen den juengeren Kontext (belegt an Form-Ausfaellen dieser
+Werkbank; deckungsgleich mit arXiv 2605.10039 — Compliance sinkt mit Session-Fortschritt).
+Die Kurzform sitzt damit am WIRKZEITPUNKT: direkt vor der Antwort. Kosten ~330 Zeichen/Turn.
+
+**Geklappt, wenn:** `node .claude/prompt-form.js --selbsttest` → „1 von 1 Faellen richtig."
+Verdrahtung: settings-Kopie §5 (UserPromptSubmit). Quelltext: `payload/claude/prompt-form.js`
+— keine Volltext-Kopie, siehe §6.8.11b.
 
 ### 6.8.12 Die drei Dauer-Regeln (Ordner .claude/rules/keel/) — was in **jeder** Sitzung mitlädt
 
