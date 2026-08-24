@@ -144,7 +144,7 @@ const GROESSE_ALTBESTAND = {
   // dashboard/history.js gewandert, als das Einhaengen der Projekt-Messung
   // die Klinke ueberschritten haette. Die Grenze wandert mit -- sonst
   // entstuende wieder Luft, in die die Datei zurueckwachsen kann.
-  "measure.js": 1126,
+  "measure.js": 1045,
 };
 
 test("kein Modul ueberschreitet 800 Zeilen", () => {

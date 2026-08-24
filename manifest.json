@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-24T19:25:48.030Z",
-  "posten": 94,
+  "gebautAm": "2026-08-24T20:22:10.048Z",
+  "posten": 89,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 77367,
-      "sha256": "c0e54b416019d76a"
+      "bytes": 76952,
+      "sha256": "ddbc6b069df150ef"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -110,14 +110,6 @@
       "gesaeubert": 0,
       "bytes": 1069,
       "sha256": "8acbb618089b7384"
-    },
-    {
-      "datei": "licenses/LICENSE-mattpocock-skills.txt",
-      "herkunft": "user-projects/harness-lab/vendor/LICENSE-mattpocock-skills.txt",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 1068,
-      "sha256": "0e7ac423bf2c6e22"
     },
     {
       "datei": "payload/claude/commands/onboarding.md",
@@ -272,44 +264,12 @@
       "sha256": "da13633cb53cd126"
     },
     {
-      "datei": "payload/claude/skills/domain-modeling/ADR-FORMAT.md",
-      "herkunft": ".claude/skills/domain-modeling/ADR-FORMAT.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 2766,
-      "sha256": "f1f36cd3f8d3b647"
-    },
-    {
-      "datei": "payload/claude/skills/domain-modeling/CONTEXT-FORMAT.md",
-      "herkunft": ".claude/skills/domain-modeling/CONTEXT-FORMAT.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 2299,
-      "sha256": "b8cc318f2a4285b5"
-    },
-    {
-      "datei": "payload/claude/skills/domain-modeling/SKILL.md",
-      "herkunft": ".claude/skills/domain-modeling/SKILL.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 2,
-      "bytes": 3950,
-      "sha256": "4d3c6df5c9ea6c2d"
-    },
-    {
       "datei": "payload/claude/skills/i-have-adhd/SKILL.md",
       "herkunft": ".claude/skills/i-have-adhd/SKILL.md",
       "quellordner": "werkbank",
       "gesaeubert": 0,
       "bytes": 6158,
       "sha256": "d3e974aaf5eac6d6"
-    },
-    {
-      "datei": "payload/claude/skills/resolving-merge-conflicts/SKILL.md",
-      "herkunft": ".claude/skills/resolving-merge-conflicts/SKILL.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 2,
-      "bytes": 1505,
-      "sha256": "6c87a4d5f3d276fd"
     },
     {
       "datei": "payload/claude/statusline.js",
@@ -412,8 +372,8 @@
       "herkunft": "zustand/messen.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 53570,
-      "sha256": "486d2b872bc08357"
+      "bytes": 49780,
+      "sha256": "5394fa5d0be1ca48"
     },
     {
       "datei": "payload/dashboard/projects.js",
@@ -436,8 +396,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 8060,
-      "sha256": "f70a50b8f36e90b7"
+      "bytes": 11834,
+      "sha256": "28c157d6a9db2d25"
     },
     {
       "datei": "payload/dashboard/render/client/core.js",
@@ -476,8 +436,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 14964,
-      "sha256": "c4253b920a313175"
+      "bytes": 14864,
+      "sha256": "5c5bdfaddd7029c9"
     },
     {
       "datei": "payload/dashboard/render/helpers.js",
@@ -500,8 +460,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 23822,
-      "sha256": "f40de10fd880ec3c"
+      "bytes": 24230,
+      "sha256": "35918e75a96303ab"
     },
     {
       "datei": "payload/dashboard/render/markdown.js",
@@ -540,8 +500,8 @@
       "herkunft": "zustand/regeln.js",
       "quellordner": "bausatz",
       "gesaeubert": 2,
-      "bytes": 16355,
-      "sha256": "cf19c5184a04504b"
+      "bytes": 12108,
+      "sha256": "5e90c5a4907fdf00"
     },
     {
       "datei": "payload/dashboard/serve.js",
@@ -581,7 +541,7 @@
       "quellordner": "bausatz",
       "gesaeubert": 0,
       "bytes": 14976,
-      "sha256": "c93a1181bb950c45"
+      "sha256": "1cac180fba9b76b7"
     },
     {
       "datei": "payload/dashboard/test/data.test.js",
@@ -596,8 +556,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 25923,
-      "sha256": "41df7d539bf38db2"
+      "bytes": 26101,
+      "sha256": "8cc57255b20d221d"
     },
     {
       "datei": "payload/dashboard/test/hooks-detail.test.js",
@@ -644,8 +604,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15550,
-      "sha256": "4a22420884f0c74c"
+      "bytes": 15908,
+      "sha256": "e86b992b27f0e15a"
     },
     {
       "datei": "payload/dashboard/test/rule-loading.test.js",
@@ -684,16 +644,16 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 11171,
-      "sha256": "d74359ca1cb7e43f"
+      "bytes": 11450,
+      "sha256": "1c07b34e8294d42c"
     },
     {
       "datei": "payload/dashboard/todo-docs.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 8665,
-      "sha256": "aa099f3945679b97"
+      "bytes": 9277,
+      "sha256": "abc7bb57c89bff64"
     },
     {
       "datei": "payload/docs/completeness-check.md",
