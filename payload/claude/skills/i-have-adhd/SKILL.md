@@ -62,7 +62,9 @@ Every item in "Offen" names its OWNER [Owner-Auftrag, 25.08.2026]: **ICH** (agen
 does it — and only appears here if it cannot be done right now, with the reason),
 **DEINE ENTSCHEIDUNG** (a concrete question with options), or **DEINE HANDLUNG**
 (the exact command or click). Before assigning anything to the reader, check
-whether the agent can do it itself — what the agent can do is DONE, not listed.
+whether the agent can do it itself — what the agent can do is DONE, not listed;
+what is already decided and lies with the agent is EXECUTED, never handed back.
+When more than one step is open, mark the ONE recommended next step explicitly.
 The reader must never have to derive their own next step from prose.
 
 Coverage and Fulfillment are two different checks and both belong in a
