@@ -40,7 +40,9 @@ du traegst ein.
      bewusster Schritt.
    - **MCP notieren, nie als Wahl vorlegen:** Registry `curl.exe -s
      "https://registry.modelcontextprotocol.io/v0/servers?search=<name>"` (PowerShell:
-     `Invoke-RestMethod`), Herkunft Hersteller/Community festhalten. Wo eine CLI belegt
+     `Invoke-RestMethod`) UND Hersteller-Doku/-Website pruefen -- in Apps gebuendelte
+     offizielle MCPs stehen in keinem Registry (Beleg 26.08.2026: Spline V2 Desktop).
+     Herkunft Hersteller/Community festhalten. Wo eine CLI belegt
      ist, entscheidet die Rangfolge CLI vor MCP vor Browser (`tools.md`) -- dem Menschen
      wird dazu KEINE Frage gestellt. Totes Register = Stoerung, nicht Nein.
    - **API:** hat der Dienst eine dokumentierte HTTP-API, eine Zeile mit dem Einstieg --
