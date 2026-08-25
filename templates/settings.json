@@ -20,6 +20,12 @@
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/project-context.js\"",
             "timeout": 10,
             "statusMessage": "Projekt-Kontext-Check"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/pollution-warn.js\"",
+            "timeout": 10,
+            "statusMessage": "User-Scope-Verschmutzung messen"
           }
         ]
       }

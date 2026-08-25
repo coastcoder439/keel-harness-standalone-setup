@@ -295,6 +295,7 @@ cat > .gitignore <<'EOF'
 *.key
 *.pem
 secrets.json
+.secrets/
 credentials.json
 
 # --- Betriebssystem / Editor / Logs ---
@@ -428,7 +429,7 @@ Die Dateien aus §6.3–§6.6 in `<WORKSPACE>/.claude/` anlegen. `settings.json`
 ## 6. Alle Config-Dateien im Volltext
 
 ### 6.1 `.claude/settings.json`
-Verdrahtet alle Wächter: drei bei Sitzungsstart (Rollen · Onboarding-Frage · Projekt-Kontext-Frage),
+Verdrahtet alle Wächter: vier bei Sitzungsstart (Rollen · Onboarding-Frage · Projekt-Kontext-Frage · User-Scope-Verschmutzung),
 einen am Sitzungsende (Backup-Warnung) und vier vor Werkzeugaufrufen (drei an Bash, einer an die
 Sitzungs-Nachrichten) plus die Statusleiste. **Nichts von Hand anzupassen** — alle Pfade laufen über
 `$CLAUDE_PROJECT_DIR`, den Claude Code selbst setzt; absolute Rechnerpfade und ein
@@ -461,6 +462,12 @@ Sitzungs-Nachrichten) plus die Statusleiste. **Nichts von Hand anzupassen** — 
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/project-context.js\"",
             "timeout": 10,
             "statusMessage": "Projekt-Kontext-Check"
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/pollution-warn.js\"",
+            "timeout": 10,
+            "statusMessage": "User-Scope-Verschmutzung messen"
           }
         ]
       }
@@ -579,7 +586,7 @@ trennt es:
 |---|---|---|
 | **Fremd-Klon** (ECC-Installation) | `.claude/skills/`, `.claude/agents/` (gemessen 02.08.2026: `ls .claude/skills \| wc -l` → 280, `ls .claude/agents \| wc -l` → 67) | **draussen** — Fremdmaterial, aus der Update-Quelle nachziehbar |
 | **Rechner-Zustand** | `.claude/settings.local.json` (Befehls-Freigabeliste) | **draussen** — pro Rechner verschieden |
-| **Eigenbauten** | die zwoelf Skripte direkt unter `.claude/` (`git-guard.js`, `danger-guard.js`, `commit-pathspec-guard.js`, `write-guard.js`, `dod-guard.js`, `prompt-form.js`, `statusline.js`, `session-roles.js`, `onboarding-start.js`, `project-context.js`, `repo-status.js`, `uncommitted-warn.js`; dazu Werkbank-only `pruefstand-warn.js`), die fuenf `commands/*.md` (inkl. `onboarding.md`), die drei eigenen Regeln unter `rules/keel/`, `plan/`, die vier eigenen Skills (inkl. `completeness`) | **drin** — sonst existieren sie nur auf einer Platte |
+| **Eigenbauten** | die dreizehn Skripte direkt unter `.claude/` (`git-guard.js`, `danger-guard.js`, `commit-pathspec-guard.js`, `write-guard.js`, `dod-guard.js`, `prompt-form.js`, `statusline.js`, `session-roles.js`, `onboarding-start.js`, `project-context.js`, `repo-status.js`, `uncommitted-warn.js`, `pollution-warn.js`; dazu Werkbank-only `pruefstand-warn.js`), die fuenf `commands/*.md` (inkl. `onboarding.md`), die drei eigenen Regeln unter `rules/keel/`, `plan/`, die vier eigenen Skills (inkl. `completeness`) | **drin** — sonst existieren sie nur auf einer Platte |
 
 **Warum die Eigenbauten hinein muessen** (Anlass, belegt am 01.08.2026): Sie lagen ohne Sicherung
 und ohne Historie nur lokal. Der `git-guard`-Fix vom selben Tag existierte nur auf der Platte,
