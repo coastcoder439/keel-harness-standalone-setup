@@ -231,6 +231,7 @@ function daten(m, regelDaten) {
     fehlt: fehltListe(m),
     seiten,
     navigation: W.NAVIGATION,
+    tabgruppen: W.TABGRUPPEN,
     status: STATUS,
     gesamtstatus: m.gesamtstatus,
     zahlen,

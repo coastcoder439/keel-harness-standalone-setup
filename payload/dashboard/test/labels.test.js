@@ -57,14 +57,37 @@ test("jede Seite hat Name, Zweck-Satz und Symbol", () => {
 });
 
 test("jeder Navigationseintrag zeigt auf eine echte Seite", () => {
+  // Seit dem Neubau 25.08.2026 kennt die Navigation zwei Sorten: eine Seite
+  // direkt, oder "tab:<gruppe>" -- ein Eintrag, der mehrere Seiten als Reiter
+  // buendelt (TABGRUPPEN). Beide muessen auf Echtes zeigen.
   const bekannt = new Set(Object.keys(W.SEITEN));
   for (const gruppe of W.NAVIGATION) {
     for (const e of gruppe.eintraege) {
+      if (e.startsWith("tab:")) {
+        const g = W.TABGRUPPEN[e.slice(4)];
+        assert.ok(g, "Navigationseintrag ohne Tab-Gruppe: " + e);
+        assert.ok(g.name && g.icon && Array.isArray(g.seiten) && g.seiten.length,
+          e + ": Tab-Gruppe ohne Name, Symbol oder Seiten");
+        for (const s of g.seiten) assert.ok(bekannt.has(s), e + ": Reiter ohne Seite: " + s);
+        continue;
+      }
       assert.ok(bekannt.has(e), "Navigationseintrag ohne Seite: " + e);
     }
   }
-  // Und umgekehrt: keine Seite ohne Weg dorthin.
-  const verlinkt = new Set(W.NAVIGATION.flatMap((g) => g.eintraege));
+  // Und umgekehrt: keine Seite ohne Weg dorthin -- direkt, ueber eine
+  // Tab-Gruppe, oder ueber den Fusszeilen-Verweis (rohdaten: Beleg-Seite,
+  // bewusst nicht im Menue [Owner, 25.08.2026: kein Debug in der Navigation]).
+  const verlinkt = new Set();
+  for (const g of W.NAVIGATION) {
+    for (const e of g.eintraege) {
+      if (e.startsWith("tab:")) {
+        for (const s of (W.TABGRUPPEN[e.slice(4)] || { seiten: [] }).seiten) verlinkt.add(s);
+      } else {
+        verlinkt.add(e);
+      }
+    }
+  }
+  verlinkt.add("rohdaten");
   for (const id of bekannt) {
     assert.ok(verlinkt.has(id), "Seite ohne Navigationseintrag (nicht erreichbar): " + id);
   }
