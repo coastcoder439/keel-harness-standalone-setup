@@ -10,8 +10,9 @@
 > - **Rangfolge bei fehlendem Werkzeug: CLI vor MCP vor Browser** (Begruendung:
 >   [`tools.md`](../.claude/rules/keel/tools.md)). Ein lokal gefundenes
 >   Werkzeug ist BELEGT; ein Registertreffer ist nur ein Kandidat.
-> - **Fehlendes wird vermerkt, nicht gebaut.** Eine CLI zu erzeugen ist ein spaeterer,
->   bewusster Schritt ausserhalb des Onboardings.
+> - **Gefundene CLI wird mit Zustimmung installiert und belegt** (`<cli> --version`).
+>   Nur wenn NIRGENDS eine existiert, wird vorgemerkt -- selbst erzeugen ist ein
+>   spaeterer, bewusster Schritt.
 
 ## CLIs
 

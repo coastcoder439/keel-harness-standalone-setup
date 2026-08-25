@@ -18,45 +18,33 @@ du traegst ein.
    Will der Mensch etwas nicht beantworten: `[AUSFUELLEN]` stehen lassen. NIE raten, NIE
    Platzhalter mit Vermutungen fuellen. (Die spaeteren `[?]`-Platzhalter -- Projekt-Zeile,
    Abschnitt „Deine eigenen Regeln" -- sind KEINE Onboarding-Pflicht und bleiben unangetastet.)
-3. **Werkzeug-Landschaft -- "Womit arbeitest du?"** Frage den Menschen, mit welchen
-   Programmen und Diensten er arbeitet. Er nennt sie im Klartext, freie Worte
-   ("GitHub", "Vercel", "Notion", "Photoshop"). Fuer JEDE Nennung ordnest DU ein, der
-   Mensch entscheidet -- nie umgekehrt (der Agent legt vor, der Mensch waehlt):
-   - **Vier Rubriken, jede EINZELN geprueft:** CLIs, MCPs, APIs, Zugaenge. Ein Dienst kann
-     in MEHREREN stehen -- GitHub hat eine CLI (`gh`), eine API UND einen Token. Also nicht
-     beim ersten Treffer aufhoeren: pro Dienst alle vier Fragen stellen und jede zutreffende
-     Rubrik fuellen. (Modelle und Abos NICHT -- das Harness kennt sein Modell, Abos sind ein
-     Produktthema.)
-   - **CLI?** (a) lokal installiert: `command -v <name>` (Bash) bzw. `Get-Command <name>`
-     (PowerShell) -- ein lokaler Fund ist BELEGT. (b) sonst offizielle CLI im Paketregister,
-     aber NUR mit dem Paketmanager, der lokal da ist (vorher `command -v npm pip brew cargo`
-     bzw. `Get-Command` -- `brew`/`cargo` fehlen unter Windows meist): `npm view <name> version`
-     · `pip index versions <name>` · `brew info <name>` · `cargo search <name>`. Registertreffer
-     = Kandidat, nicht Beleg (npm `gh` ist NICHT die GitHub-CLI). Fehlt der Paketmanager selbst,
-     ist das "nicht pruefbar", NICHT "nicht gefunden".
-   - **MCP?** offizielles Registry abfragen -- ueber das Bash-Werkzeug `curl.exe -s
-     "https://registry.modelcontextprotocol.io/v0/servers?search=<name>"`, in PowerShell
-     `Invoke-RestMethod "...?search=<name>"` (das blosse `curl` ist dort ein Alias und scheitert
-     an `-s`). Herkunft festhalten (vom Hersteller oder Community; Community sichtbar markieren).
-     Ein totes Register meldest du als Stoerung, nicht als Nein.
-   - **API?** Hat der genannte Dienst eine dokumentierte HTTP-/REST-API? Dann eine Zeile in
-     *APIs* -- die Methode/den Einstieg festhalten, keinen Schluessel.
-   - **Zugang?** Existiert schon ein Schluessel als Umgebungsvariable? Nur den NAMEN lesen,
-     nie den Wert: `printenv | cut -d= -f1 | grep -i <name>` (Bash) bzw.
-     `Get-ChildItem Env: | Select-Object -ExpandProperty Name | Select-String <name>`
-     (PowerShell). Jeder gefundene oder vom Menschen genannte Zugang: eine Zeile in *Zugaenge*.
-   - **Rangfolge nur als Vorzug, nicht als Abbruch:** CLI vor offiziellem MCP vor Community-MCP
-     vor Browser (`tools.md` -- dort die Begruendung) sagt, welchen Weg der Agent SPAETER
-     bevorzugt nutzt. Sie sagt NICHT, wann man beim Erheben aufhoert -- erhoben wird jede Rubrik.
-   - **"Nicht gefunden" ist ein ehrliches Ergebnis, kein Raten.** Fehlt fuer ein genanntes
-     Programm ueberall ein Werkzeug: nur VORMERKEN, nicht bauen. Eine CLI selbst zu erzeugen
-     ist ein spaeterer, bewusster Schritt -- nicht Teil des Onboardings.
-   - **Zugaenge: Namen ja, Werte nein.** Trag nur den NAMEN eines Zugangs ein (etwa
-     "ANTHROPIC_API_KEY in der Umgebung"), NIE den Wert. Schluessel bleiben im Schluesselbund
-     oder in Umgebungsvariablen; ein einmal committeter Schluessel bleibt in der Historie,
-     auch nach dem Loeschen der Zeile.
-   - Trag das Ergebnis nach `docs/tool-landscape.md` ein (liegt als Vorlage bereit) --
-     ergaenzt, nicht ueberschrieben. Nichts, was der Mensch nicht bestaetigt hat.
+3. **Werkzeug-Landschaft -- "Womit arbeitest du?"** Der Mensch nennt Programme und
+   Dienste in freien Worten ("GitHub", "Vercel", "Photoshop"); fuer JEDE Nennung legst
+   DU die Einordnung vor, er entscheidet. Vier Rubriken, ein Dienst darf in mehreren
+   stehen (GitHub: CLI + API + Token). Abos sind kein Werkzeug, AUSSER sie bringen
+   einen CLI-Login mit (ChatGPT-Abo -> Codex CLI, "Sign in with ChatGPT", kein API-Key).
+   - **CLI zuerst, gesucht bis zum Beleg:** lokal (`Get-Command <name>` bzw.
+     `command -v <name>`) -> Paketregister mit den vorhandenen Managern (`npm view` ·
+     `pip index versions` · `brew info` · `cargo search`) -> GitHub-Releases und
+     offizielle Installer (`gh search repos`, Herstellerseite). Mehrere Namenskandidaten
+     probieren; Treffer auf Hersteller verifizieren (npm `gh` ist NICHT die GitHub-CLI).
+     **Verifizierter Fund: Installation anbieten, auf Ja installieren** (`npm i -g` ·
+     `pip install --user` · offizieller Installer) **und mit `<cli> --version` belegen.**
+     Fehlender Paketmanager = "nicht pruefbar", nicht "nicht gefunden". Existiert
+     NIRGENDS eine CLI: vormerken -- eine selbst zu erzeugen ist ein spaeterer,
+     bewusster Schritt.
+   - **MCP notieren, nie als Wahl vorlegen:** Registry `curl.exe -s
+     "https://registry.modelcontextprotocol.io/v0/servers?search=<name>"` (PowerShell:
+     `Invoke-RestMethod`), Herkunft Hersteller/Community festhalten. Wo eine CLI belegt
+     ist, entscheidet die Rangfolge CLI vor MCP vor Browser (`tools.md`) -- dem Menschen
+     wird dazu KEINE Frage gestellt. Totes Register = Stoerung, nicht Nein.
+   - **API:** hat der Dienst eine dokumentierte HTTP-API, eine Zeile mit dem Einstieg --
+     kein Schluessel.
+   - **Zugaenge: Namen ja, Werte nie.** Nur Variablen-NAMEN lesen (`Get-ChildItem Env: |
+     Select-Object -ExpandProperty Name` bzw. `printenv | cut -d= -f1`); ein einmal
+     committeter Schluessel bleibt fuer immer in der Historie.
+   - Ergebnis nach `docs/tool-landscape.md` (Vorlage liegt bereit), ergaenzt statt
+     ueberschrieben -- nichts, was der Mensch nicht bestaetigt hat.
 4. Danach die Punkte, die nur der Mensch entscheiden kann -- je ein kurzer Absatz mit
    Handlung und Wirkung, dann seine Entscheidung abwarten, nichts selbst annehmen:
    - **Sicherung:** `git -C . remote -v` -- kein Remote? Dann ist Remote anlegen und pushen
