@@ -197,27 +197,41 @@ HD.detailKoerper = function (e, inline) {
     + (pfad ? "<span class=\\"" + (inline ? "datei-pfad" : "detail-pfad") + "\\" title=\\"" + HD.esc(pfad) + "\\">" + HD.esc(pfad) + "</span>" : "")
     + "</span>" + aktionen + "</div>";
 
+  // Metazeile knapp: Art und Aenderungsdatum. Groesse/Zeilen/Git-Zustand
+  // interessieren beim Lesen nicht [Owner, 25.08.2026] -- wer sie braucht,
+  // findet sie unter Rohdaten.
   var meta = [];
   if (e.artWort) meta.push(HD.esc(e.artWort));
   (e.felder || []).forEach(function (f) {
-    if (f.label === HD.W.groesse || f.label === HD.W.zeilen || f.label === HD.W.geaendert || f.label === HD.W.git) {
-      meta.push(HD.esc(f.wert));
-    }
+    if (f.label === HD.W.geaendert) meta.push(HD.esc(f.wert));
   });
   var metaHTML = '<div class="datei-meta">' + meta.map(function (m) { return "<span>" + m + "</span>"; }).join("")
     + (e.status ? HD.statusChip(e.status) : "") + "</div>";
 
+  // Beschreibung als schlichter Absatz -- kein Aufklapper. Ein Satz mit
+  // Quellenangabe ist Information; ein <details> darum herum ist Geruest.
+  // AUSNAHME: stammt die Beschreibung aus dem ERSTEN ABSATZ der Datei und der
+  // Inhalt steht direkt darunter offen, stuende derselbe Satz zweimal
+  // untereinander (Beanstandung A7) -- dann traegt ihn nur der Inhalt.
+  var inhaltOffen = inline && e.inhalt && !e.inhalt.gesperrt;
+  var ausInhalt = e.beschreibung
+    && (e.beschreibung.quelle === HD.W.quelleAbsatz || e.beschreibung.quelle === HD.W.quelleEinleitung);
   var beschreibung = "";
-  if (e.beschreibung && e.beschreibung.text) {
-    beschreibung = HD.abschnitt("beschreibung", HD.W.beschreibung,
-      "<p>" + HD.esc(e.beschreibung.text) + "</p>"
+  if (e.beschreibung && e.beschreibung.text && !(inhaltOffen && ausInhalt)) {
+    beschreibung = '<div class="detail-beschreibung"><p>' + HD.esc(e.beschreibung.text) + "</p>"
       + (e.beschreibung.quelle
         ? '<p class="beschreibung-quelle">' + HD.esc(HD.W.quelle) + ": " + HD.esc(e.beschreibung.quelle)
           + (e.beschreibung.beleg ? ' <span class="pfad">' + HD.esc(e.beschreibung.beleg) + "</span>" : "") + "</p>"
-        : ""), true);
+        : "") + "</div>";
   }
 
-  var felder = (e.felder || []).map(function (f) {
+  // WENIGER IST MEHR [Owner, 25.08.2026]: eine DATEI zeigt Kopf, eine
+  // Metazeile, den Beschreibungssatz und ihren Inhalt mit Bearbeiten-Knopf --
+  // kein Eigenschaften-/Rohobjekt-/Verknuepft-Geruest. Die Feldtabelle bleibt
+  // nur fuer Eintraege OHNE Dateirumpf (Hooks, Repos, Kontext-Stuecke), wo die
+  // Verdrahtung selbst die Information ist.
+  var istDatei = !!e.inhalt;
+  var felder = istDatei ? "" : (e.felder || []).map(function (f) {
     return HD.eigenschaftZeile(f.label, f.wert, f.mono, f);
   }).join("");
   var eigenschaften = felder ? HD.abschnitt("felder", HD.W.eigenschaften, felder, true) : "";
@@ -226,27 +240,13 @@ HD.detailKoerper = function (e, inline) {
   // Bei einem Projekt: die Dokumente je Projekt (S5). Fuer alles andere leer.
   var dokumente = HD.projektDokumenteHTML(e);
 
-  var kanten = (e.verwandt || []).length
-    ? e.verwandt.map(function (k) {
-        var zielId = k.rueckwaerts ? k.von : k.nach;
-        var text = k.name || zielId.replace(/^datei:/, "").replace(/^hook:/, "");
-        var innen = '<span class="verknuepft-art">' + HD.esc((k.rueckwaerts ? "← " : "") + k.art) + "</span>"
-          + '<span class="verknuepft-pille">' + HD.esc(text) + "</span>"
-          + (k.beleg ? '<span class="verknuepft-titel">' + HD.esc(k.beleg) + "</span>" : "");
-        return k.extern
-          ? '<div class="verknuepft-zeile">' + innen + "</div>"
-          : '<button class="verknuepft-zeile" data-id="' + HD.esc(zielId) + '">' + innen + "</button>";
-      }).join("")
-    : '<p class="leer-kompakt">' + HD.esc(HD.D.leer.verknuepft.text) + "</p>";
-  var verknuepft = HD.abschnitt("verwandt", HD.W.verknuepftMit, kanten, true);
-
-  var roh = HD.abschnitt("roh", HD.W.rohobjekt,
-    '<div class="code-flaeche"><div class="code-text">' + HD.esc(JSON.stringify(e.roh, null, 1)) + "</div></div>", false);
-
-  return kopf + metaHTML + beschreibung + eigenschaften + inhalt + dokumente + verknuepft + roh;
+  return kopf + metaHTML + beschreibung + eigenschaften + inhalt + dokumente;
 };
 
 HD.symbolFuer = function (e) {
+  // Hooks: EIN Symbol fuer alle -- die Wirkung kodiert die getoente Pille in
+  // der Zeile; wechselnde Icons je Wirkung lasen sich als System-Bruch
+  // [Kritiker-Befund Gauntlet-Runde 2, revidiert Runde 1].
   if (e.art === "hook-skript" || e.art === "skript") return "terminal";
   if (e.art === "command") return "slash";
   if (e.art === "skill" || e.art === "skill-datei") return "sparkles";
@@ -288,9 +288,10 @@ HD.inhaltHTML = function (e, inline) {
   // Knopf, der dann nichts tut, waere eine Luege. Wer die Seite weitergibt,
   // gibt keinen Schreibzugang mit.
   if (HD.serverModus() && HD.bearbeitbar(pfad)) {
-    umschalter += ' <span class="ansicht-umschalter">'
-      + '<button data-bearbeiten="' + HD.esc(pfad) + '">' + HD.esc(HD.W.bearbeiten) + "</button>"
-      + "</span>";
+    // Bearbeiten ist DIE Handlung dieser Ansicht [Owner: Datei-Klick =
+    // Editier-Fenster] -- ein Haupt-Knopf, kein grauer Umschalter-Rest.
+    umschalter += ' <button class="knopf-haupt" data-bearbeiten="' + HD.esc(pfad) + '">'
+      + HD.esc(HD.W.bearbeiten) + "</button>";
   }
 
   // Bearbeiten-Modus: das Textfeld zeigt den frisch geholten Rohtext. Er steht

@@ -174,7 +174,24 @@ document.addEventListener("click", function (ev) {
   if (nah("#leiste-klapp")) { HD.leisteKlappen(); return; }
   if (nah("#thema")) { HD.themaWechseln(); return; }
   if (nah("#palette-auf")) { HD.paletteAuf(); return; }
-  if (nah("#neu-messen")) { HD.kopieren("node dashboard/index.js --html dashboard.html"); return; }
+  // "Neu messen" MISST -- es kopiert keinen Befehl (Beanstandung A1,
+  // 25.08.2026: der Knopf tat nicht, was er sagte). Ohne Server gibt es
+  // niemanden, der messen koennte: dann wird der Befehl kopiert und das auch
+  // gesagt.
+  if (nah("#neu-messen")) {
+    if (!HD.serverModus()) { HD.kopieren("node dashboard/index.js --html dashboard.html"); return; }
+    HD.melden(HD.W.neuMessenLaeuft, true);
+    fetch("/neu-messen", { method: "POST" })
+      .then(function (a) { return a.json().then(function (j) { return { ok: a.ok, j: j }; }); })
+      .then(function (r) {
+        if (!r.ok) throw new Error((r.j && r.j.fehler) || "unbekannt");
+        location.reload();
+      })
+      .catch(function (e) {
+        HD.melden(HD.fuellen(HD.W.neuMessenFehler, { grund: e.message }));
+      });
+    return;
+  }
 
   var idZeile = nah("[data-id]");
   if (idZeile) { HD.oeffnen(idZeile.dataset.id); return; }

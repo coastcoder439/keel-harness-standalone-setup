@@ -289,12 +289,15 @@ HD.zeichnen = function () {
 };
 
 HD.navZeichnen = function () {
-  var knoepfe = document.querySelectorAll(".navpunkt");
+  var knoepfe = document.querySelectorAll(".nav-pille");
   for (var i = 0; i < knoepfe.length; i++) {
-    var aktiv = knoepfe[i].dataset.ziel === HD.S.seite;
+    // Ein Tab-Gruppen-Knopf (data-seiten) ist aktiv, sobald IRGENDEINE seiner
+    // Seiten offen ist -- der Nutzer sieht dann am Menue, wo er sich befindet,
+    // auch wenn er innerhalb der Reiter wechselt.
+    var seiten = (knoepfe[i].dataset.seiten || knoepfe[i].dataset.ziel || "").split(" ");
+    var aktiv = seiten.indexOf(HD.S.seite) >= 0;
     if (aktiv) knoepfe[i].setAttribute("aria-current", "page");
     else knoepfe[i].removeAttribute("aria-current");
-    knoepfe[i].setAttribute("aria-selected", aktiv ? "true" : "false");
   }
 };
 
@@ -319,10 +322,14 @@ HD.pfadleisteZeichnen = function () {
   document.getElementById("pfadleiste").innerHTML = stuecke.map(function (st, i) {
     var inhalt = HD.esc(st.wort);
     var titel = st.titel ? ' title="' + HD.esc(st.titel) + '"' : "";
+    // Datei- und Ordnernamen sind PFADE: nie versalisiert (aus "CLAUDE.md"
+    // wuerde "CLAUDE.MD" -- ein anderer Name). Nur der Seitenname traegt die
+    // Versalien-Auszeichnung der letzten Krume.
+    var datei = (st.pfad || st.dateiname) ? ' data-datei="ja"' : "";
     var teil = st.letztes
-      ? '<span class="pfad-teil" aria-current="page"' + titel + '>' + inhalt + "</span>"
+      ? '<span class="pfad-teil" aria-current="page"' + datei + titel + '>' + inhalt + "</span>"
       : '<button class="pfad-teil pfad-knopf" data-pfadziel="' + HD.esc(st.ziel || "") + '"'
-        + (st.pfad ? ' data-pfadpfad="' + HD.esc(st.pfad) + '"' : "") + titel + ">" + inhalt + "</button>";
+        + (st.pfad ? ' data-pfadpfad="' + HD.esc(st.pfad) + '"' : "") + datei + titel + ">" + inhalt + "</button>";
     return (i ? '<span class="pfad-pfeil" aria-hidden="true">/</span>' : "") + teil;
   }).join("");
 };

@@ -42,10 +42,24 @@ function navHTML(d) {
       ? `<div class="gruppen-label">${esc(gruppe.gruppe)}</div>`
       : "";
     const punkte = (gruppe.eintraege || []).map((id) => {
+      // "tab:<gruppe>" -- ein Eintrag fuer mehrere Seiten. Der Knopf springt
+      // auf die erste Seite der Gruppe; welche gerade offen ist, markiert der
+      // Browser-Teil (HD.navZeichnen) ueber data-seiten.
+      if (id.indexOf("tab:") === 0) {
+        const g = (d.tabgruppen || {})[id.slice(4)];
+        if (!g) return "";
+        const titel = g.ort ? `${g.name} — ${g.ort}` : g.name;
+        return `<button class="nav-pille" data-ziel="${esc(g.seiten[0])}" data-seiten="${esc(g.seiten.join(" "))}" title="${esc(titel)}">
+        <span class="nav-symbol">${icon(g.icon)}</span>
+        <span class="nav-text">${esc(g.name)}</span>
+      </button>`;
+      }
       const s = d.seiten[id];
       if (!s) return "";
       const titel = s.ort ? `${s.name} — ${s.ort}` : s.name;
-      const zahl = s.anzahl > 0 ? `<span class="nav-zahl">${s.anzahl}</span>` : "";
+      // Nur "Zu tun" traegt eine Zahl: sie ist eine Handlungsaufforderung.
+      // Bestandszahlen (94 Dateien) sind keine -- sie stehen auf der Seite.
+      const zahl = id === "zutun" && s.anzahl > 0 ? `<span class="nav-zahl">${s.anzahl}</span>` : "";
       return `<button class="nav-pille" data-ziel="${esc(id)}" title="${esc(titel)}">
         <span class="nav-symbol">${icon(s.icon)}</span>
         <span class="nav-text">${esc(s.name)}</span>${zahl}
@@ -94,15 +108,11 @@ function renderHTML(daten) {
   </div>
   <nav class="leiste-nav">${navHTML(d)}</nav>
   <div class="leiste-fuss">
-    <div class="mess-zeit">
-      <span>${esc(U.gemessenAm)}</span>
-      <span class="mono">${esc(d.gemessenText)}</span>
-    </div>
-    <button class="leiste-knopf" id="neu-messen" title="node dashboard/index.js --html dashboard.html">
-      ${icon("refresh")}<span>${esc(U.neuMessen)}</span>
-    </button>
     <button class="leiste-knopf" id="thema" aria-label="${esc(U.thema)}">
       <span id="thema-symbol">${icon("monitor")}</span><span id="thema-wort">${esc(U.themaSystem)}</span>
+    </button>
+    <button class="leiste-knopf leiste-leise" data-ziel="rohdaten" title="${esc(d.seiten.rohdaten ? d.seiten.rohdaten.name + " — " + (d.seiten.rohdaten.ort || "") : "")}">
+      ${icon("braces")}<span>${esc(d.seiten.rohdaten ? d.seiten.rohdaten.name : "")}</span>
     </button>
   </div>
 </aside>
@@ -110,7 +120,10 @@ function renderHTML(daten) {
 <div class="arbeitsflaeche">
   <header class="kopfzeile">
     <nav class="pfadleiste" id="pfadleiste" aria-label="${esc(U.pfad)}"></nav>
-    <div class="seiten-aktion"><span class="treffer-zahl" id="zaehler" aria-live="polite"></span></div>
+    <div class="seiten-aktion"><span class="treffer-zahl" id="zaehler" aria-live="polite"></span>
+      <span class="mess-zeit"><span>${esc(U.gemessenAm)}</span> <span class="mono">${esc(d.gemessenText)}</span></span>
+      <button class="knopf-haupt" id="neu-messen" title="${esc(U.neuMessen)}">${icon("refresh")}<span>${esc(U.neuMessen)}</span></button>
+    </div>
   </header>
 
   <div class="buehne">

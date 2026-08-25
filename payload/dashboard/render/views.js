@@ -57,6 +57,21 @@ function dateiEintraege(m, kanten) {
   });
 }
 
+// Fuer die LISTE: nur der erste Satz, hart bei 110 Zeichen -- mehrzeilige
+// Doku-Absaetze mit "..." mitten im Wort sind weder scanbar noch lesbar
+// [Kritiker-Befund Gauntlet-Runde 3]. Das Detail traegt den vollen Text.
+function kurzSatz(text) {
+  if (!text) return text;
+  let s = String(text);
+  // Redundantes Sorten-Praefix weg: "SessionStart-Hook: ..." unter der
+  // Gruppenueberschrift SessionStart sagt es zweimal [Kritiker, Runde 6].
+  s = s.replace(/^[A-Za-z]+-Hook:\s*/, "");
+  const punkt = s.search(/\.\s|\.$/);
+  if (punkt > 20) s = s.slice(0, punkt + 1);
+  if (s.length > 110) s = s.slice(0, 109).replace(/\s+\S*$/, "") + " …";
+  return s;
+}
+
 function hookEintraege(m, kanten, beschreibungen) {
   const h = m.hooks || { eintraege: [] };
   const raus = (h.eintraege || []).map((e) => {
@@ -71,10 +86,13 @@ function hookEintraege(m, kanten, beschreibungen) {
       seite: "hooks",
       name: e.skript || e.ereignis,
       pfad: e.pfad || (e.skript ? ".claude/" + e.skript : null),
-      unter: beschr,
+      unter: kurzSatz(beschr),
       art: "hook-skript",
       artWort: ART["hook-skript"] + " · " + e.ereignis,
       gruppe: e.ereignis,
+      // Ereignisnamen sind Code (settings.json-Schluessel) -- der Gruppenkopf
+      // darf sie nicht versalisieren ("STOP" gibt es nirgends).
+      gruppeCode: true,
       // Eine Probe, die NICHT GELAUFEN ist, ist kein Fehler.
       //
       // Vier Hooks werden bewusst nicht ausgefuehrt (uncommitted-warn.js
@@ -101,11 +119,15 @@ function hookEintraege(m, kanten, beschreibungen) {
       },
       // Die Liste zeigt fuenf Spalten; alles Weitere steht im Detail. Neun
       // Spalten auf schmaler Flaeche sind keine Uebersicht, sondern eine Wand.
+      // KEINE Ereignis-Spalte in der Zeile: die Gruppe darueber HEISST schon
+      // so (SessionStart, Stop, ...) -- dieselbe Angabe zweimal untereinander
+      // war Teil der Zeilen-Wand (Beanstandung A3/A10).
       liste: [
         { label: UI.name, wert: e.skript, stark: true },
-        { label: UI.ereignis, wert: e.ereignis, mono: true },
+        // Als getoente Pille (data-ton je Wirkungsklasse) -- reiner Grautext
+        // war nicht scanbar [Kritiker-Befund Gauntlet-Runde 2].
         { label: UI.wirkung, wert: wirkung.wort, chip: e.wirkung },
-        { label: UI.beschreibung, wert: beschr, weich: true },
+        { label: UI.beschreibung, wert: kurzSatz(beschr), weich: true },
       ],
       felder: felderVon(
         feld(UI.pfad, e.pfad, { mono: true }),
@@ -158,6 +180,7 @@ function hookEintraege(m, kanten, beschreibungen) {
       art: "skript",
       artWort: "statusLine",
       gruppe: "statusLine",
+      gruppeCode: true,
       status: h.statusLine.vorhanden === false ? "fehlt" : "ok",
       beschreibung: {
         text: sText,
@@ -345,7 +368,7 @@ function projektEintraege(m, kanten) {
       pfad: x.pfad,
       // Ohne Beschreibung steht hier NICHTS und kein erfundener Satz. Die
       // Oberflaeche sagt an anderer Stelle, dass Wegweiser fehlen.
-      unter: (x.beschreibung && x.beschreibung.text) || null,
+      unter: kurzSatz((x.beschreibung && x.beschreibung.text) || null),
       art: "repo",
       artWort: ART.repo || "Projekt",
       status: null,
@@ -355,7 +378,7 @@ function projektEintraege(m, kanten) {
         : { text: null, quelle: null, beleg: null },
       liste: [
         { label: UI.name, wert: x.name, stark: true },
-        { label: UI.beschreibung, wert: (x.beschreibung && x.beschreibung.text) || UI.keineWegweiser, weich: true },
+        { label: UI.beschreibung, wert: kurzSatz((x.beschreibung && x.beschreibung.text) || UI.keineWegweiser), weich: true },
         { label: UI.stack, wert: x.stack || null },
         { label: UI.dokumente, wert: x.anzahlDokumente ? zahl(x.anzahlDokumente) : null, mono: true },
       ],
@@ -489,12 +512,24 @@ function backupEintraege(m, projektBeschreibung) {
   });
 }
 
+// Betreff fuer die Zeile: ohne Konventions-Praefix ("feat(dashboard): ") und
+// ohne den " -- "-Detailteil -- volle Commit-Messages ueber die ganze Breite
+// waren ein roher Git-Log-Abzug [Kritiker-Befund Gauntlet-Runde 3]. Der volle
+// Betreff steht im Detail.
+function betreffKurz(betreff) {
+  let s = String(betreff || "").replace(/^[a-z]+(\([^)]*\))?[:!]\s*/, "");
+  const trenner = s.indexOf(" -- ");
+  if (trenner > 10) s = s.slice(0, trenner);
+  if (s.length > 70) s = s.slice(0, 69).replace(/\s+\S*$/, "") + " …";
+  return s;
+}
+
 function commitEintraege(m) {
   const v = (m.bereiche && m.bereiche.verlauf) || {};
   return (v.eintraege || []).map((e) => ({
     id: "commit:" + e.hash,
     seite: "commits",
-    name: e.betreff,
+    name: betreffKurz(e.betreff),
     unter: e.repo,
     art: "sonstiges",
     artWort: UI.commit,
@@ -502,13 +537,16 @@ function commitEintraege(m) {
     gruppe: String(e.datum || "").slice(0, 10),
     datum: e.datum,
     beschreibung: { text: null, quelle: null, beleg: null },
+    // Zeit rechts statt Hash: eine Verlauf-Zeile beantwortet WANN und WO --
+    // der Hash ist Nachschlagewert und steht im Detail (mit Kopierknopf)
+    // [Kritiker-Befund Gauntlet-Runde 2: Datenabzug statt Produkt].
     liste: [
-      { label: UI.commit, wert: String(e.hash || "").slice(0, 7), mono: true },
-      { label: UI.betreff, wert: e.betreff, stark: true },
+      { label: UI.betreff, wert: betreffKurz(e.betreff), stark: true },
       { label: UI.repo, wert: e.repo, weich: true },
-      { label: UI.autor, wert: e.autor, weich: true },
+      { label: UI.geaendert, wert: datum(e.datum), mono: true },
     ],
     felder: felderVon(
+      feld(UI.betreff, e.betreff),
       feld(UI.commit, e.hash, { mono: true, kopieren: true }),
       feld(UI.repo, e.repo),
       feld(UI.autor, e.autor),

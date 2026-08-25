@@ -284,7 +284,9 @@ const SEITENLEISTE = `
 .seitenleiste{grid-row:1/-1;background:var(--sidebar);color:var(--sidebar-foreground);
   border-right:1px solid var(--sidebar-border);display:flex;flex-direction:column;min-height:0;overflow:hidden}
 .leiste-kopf{height:var(--kopfzeile);flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:0 12px}
-.leiste-name{flex:1;min-width:0;font-size:var(--text-sm);font-weight:700;letter-spacing:-.01em;
+/* 13 px statt 14: "keel-harness-live-1" passt dann neben die zwei Knoepfe --
+   ein abgeschnittener Name am Markenplatz war vermeidbar [Kritiker, Runde 4]. */
+.leiste-name{flex:1;min-width:0;font-size:var(--text-compact);font-weight:700;letter-spacing:-.02em;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .leiste-nav{flex:1 1 auto;min-height:0;overflow-y:auto;padding:8px 12px;scrollbar-gutter:stable}
 .nav-gruppe{margin-top:12px}
@@ -309,6 +311,7 @@ const SEITENLEISTE = `
 .leiste-knopf{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:var(--radius-md);
   font-size:var(--text-xs);color:var(--sidebar-foreground);width:100%}
 .leiste-knopf:hover{background:color-mix(in srgb,var(--sidebar-accent) 50%,transparent)}
+.leiste-leise{color:var(--muted-foreground)}
 .ikon-knopf{width:28px;height:28px;flex:0 0 28px;display:grid;place-items:center;
   border-radius:var(--radius-md);color:var(--muted-foreground)}
 .ikon-knopf:hover{background:color-mix(in srgb,var(--accent) 50%,transparent);color:var(--foreground)}
@@ -327,11 +330,25 @@ const GERUEST = `
 .kopfzeile{display:flex;align-items:center;gap:8px;padding:0 16px;
   border-bottom:1px solid var(--border);min-width:0}
 .pfadleiste{display:flex;align-items:center;gap:6px;min-width:0;overflow:hidden}
-.krume{font-size:var(--text-compact);color:var(--muted-foreground);white-space:nowrap}
-.krume:hover{color:var(--foreground)}
-.krume[aria-current="page"]{font-size:var(--text-sm);font-weight:600;text-transform:uppercase;
+/* Pfadleisten-Teile: Klassennamen wie in client/core.js (der Vertrag gilt in
+   beide Richtungen -- "Krume" war zudem ein verbotener Code-Name, Spez. 2.2). */
+.pfad-teil{font-size:var(--text-compact);color:var(--muted-foreground);white-space:nowrap}
+.pfad-knopf:hover{color:var(--foreground)}
+.pfad-teil[aria-current="page"]{font-size:var(--text-sm);font-weight:600;text-transform:uppercase;
   letter-spacing:.05em;color:var(--foreground)}
-.krume-trenner{color:var(--muted-foreground);flex:0 0 auto}
+/* Datei-/Ordner-Segmente sind Pfade: Mono, nie Versalien -- "CLAUDE.MD"
+   waere ein anderer Name als "CLAUDE.md". */
+.pfad-teil[data-datei]{text-transform:none;letter-spacing:0;font-family:var(--mono);
+  font-size:var(--text-compact)}
+.pfad-pfeil{color:var(--muted-foreground);flex:0 0 auto}
+/* Tab-Leiste: Geschwister-Seiten einer Tab-Gruppe als Reiter (Vorbild: die
+   Modul-Reiter in Keel Light). Aktiver Reiter traegt eine Unterstreichung. */
+.tab-leiste{display:flex;align-items:center;gap:4px;border-bottom:1px solid var(--border);
+  margin-bottom:14px;overflow-x:auto}
+.tab{padding:8px 12px;font-size:var(--text-compact);font-weight:500;color:var(--muted-foreground);
+  border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tab:hover{color:var(--foreground)}
+.tab[aria-current="page"]{color:var(--foreground);border-bottom-color:var(--primary)}
 .seiten-aktion{margin-left:auto;display:flex;align-items:center;gap:6px}
 .seiten-aktion:empty{display:none}
 .buehne{display:grid;grid-template-columns:1fr auto;min-width:0;min-height:0}
@@ -382,14 +399,53 @@ const LISTEN = `
 .eintrag-meta > * + *::before{content:"\\00B7";margin-right:8px;color:var(--muted-foreground)}
 .eintrag-herkunft{font-size:var(--text-nano);text-transform:uppercase;letter-spacing:.06em;
   color:var(--muted-foreground);display:flex;align-items:center;gap:4px}
+/* Meta-Pille der Hauptliste: wie die Eigenschafts-Pille, aber OHNE Versalien --
+   ein ganzer Satz ("ergaenzt den Sitzungskontext") darf nicht schreien.
+   data-ton faerbt je Wirkungsklasse, damit die Spalte scanbar wird. */
+.meta-pille{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);
+  border-radius:var(--radius-pille);padding:0 8px;font-size:var(--text-xs);
+  color:var(--muted-foreground)}
+/* "blockiert" ist eine FAEHIGKEIT, kein Zustand -- keine Warnfarbe, und EIN
+   System fuer alle drei: gleiche Form, Unterschied nur im Pillen-Punkt
+   [Kritiker-Befunde Runden 4 und 5]. */
+/* Sammelaussage als ZUSTANDSBANNER, wenn alles traegt -- die wichtigste
+   Information der Seite darf nicht das blasseste Element sein
+   [Kritiker-Befund Gauntlet-Runde 5]. Gegenstueck zur Achtung-Flaeche. */
+.sammel-zeile{display:flex;align-items:center;gap:8px;font-size:var(--text-compact);
+  color:var(--foreground);margin:0 0 12px;padding:10px 14px;
+  border:1px solid color-mix(in srgb,var(--status-ok) 45%,var(--border));
+  border-left:3px solid var(--status-ok);border-radius:var(--radius-lg);
+  background:color-mix(in srgb,var(--status-ok) 8%,var(--card))}
+/* Der farbige Punkt der Wirkungs-Pille -- die EINE Stelle, an der sich die
+   Klassen unterscheiden (Form und Gewicht bleiben gleich). */
+.pillen-punkt{width:7px;height:7px;border-radius:var(--radius-pille);flex:0 0 7px;background:var(--muted-foreground)}
+.meta-pille[data-ton="blockiert"] .pillen-punkt{background:var(--foreground)}
+.meta-pille[data-ton="kontext"] .pillen-punkt{background:var(--primary)}
+/* Achtung-Sektion: der Warnzustand dominiert die Flaeche (amber getoent).
+   Der Status-Chip in der Zeile entfaellt hier -- die Flaeche selbst IST die
+   Statusaussage; dreimal "Hinweis" auf einem Bildschirm war Redundanz
+   [Kritiker-Befund Gauntlet-Runde 3]. */
+.achtung .eintrag-liste{border-color:color-mix(in srgb,var(--status-hinweis) 55%,var(--border));
+  border-left:3px solid var(--status-hinweis);
+  background:color-mix(in srgb,var(--status-hinweis) 10%,var(--card))}
+.achtung .eintrag-schluss{display:none}
+/* Kennzahl in Statusfarbe: Wert und Glyphe tragen den Ton des Zustands. */
+.kennzahl[class*="status-"] .kennzahl-wert{color:var(--sc)}
 .eintrag-schluss{flex:0 0 auto;display:flex;align-items:center;gap:8px}
 /* IssueGroupHeader -- ohne Rahmen, fuer alle Gruppen. */
 .gruppen-kopf{display:flex;align-items:center;gap:8px;padding:12px 4px 6px;width:100%;text-align:left}
 .gruppen-caret{flex:0 0 14px;width:14px;height:14px;color:var(--muted-foreground);transition:transform var(--dauer)}
 .gruppen-kopf[aria-expanded="false"] .gruppen-caret{transform:rotate(-90deg)}
 .gruppen-titel{font-size:var(--text-sm);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
-.gruppen-zahl{margin-left:auto;font-size:var(--text-xs);color:var(--muted-foreground);
-  font-variant-numeric:tabular-nums}
+/* Technische Namen (SessionStart, PreToolUse) in ihrer echten Schreibweise. */
+.gruppen-titel[data-code]{text-transform:none;letter-spacing:0;font-family:var(--mono)}
+.zeilen-pfeil{flex:0 0 16px;width:16px;height:16px;color:var(--muted-foreground);opacity:.75}
+.eintrag-zeile:hover .zeilen-pfeil{opacity:1;color:var(--foreground)}
+/* Als kleines Badge DIREKT neben dem Titel -- nicht meterweit entfernt am
+   rechten Seitenrand [Kritiker-Befund Gauntlet-Runde 2]. */
+.gruppen-zahl{margin-left:4px;font-size:var(--text-xs);color:var(--muted-foreground);
+  font-variant-numeric:tabular-nums;background:var(--muted);
+  border-radius:var(--radius-pille);padding:0 8px;line-height:18px}
 /* Grid-Tabellen mit role-Semantik; jede Spalte mindestens 96 px. */
 .tabelle{display:grid;border:1px solid var(--border);border-radius:var(--radius-lg);
   background:var(--card);overflow:hidden}
@@ -415,6 +471,10 @@ const STATUS = `
   color:color-mix(in srgb,var(--sc) var(--chip-text-anteil),var(--chip-text-basis));
   border-color:color-mix(in srgb,var(--sc) var(--chip-rand-anteil),var(--chip-rand-basis))}
 .status-chip .status-glyphe{color:currentColor}
+/* Stiller Normalzustand: Glyphe behaelt ihren Ton, das Wort wird leise, die
+   Pille verschwindet -- Farbe bleibt den Abweichungen vorbehalten. */
+.status-chip.status-still{background:transparent;border-color:transparent;color:var(--muted-foreground)}
+.status-chip.status-still .status-glyphe{color:var(--sc)}
 /* Freistehende Glyphe (Baum, Karten): der Grundton direkt auf der Flaeche.
    Gemessen mindestens 4,52:1 (hell) / 5,43:1 (dunkel) auf --card. */
 .status-glyphe{flex:0 0 16px;width:16px;height:16px;color:var(--sc)}
@@ -534,15 +594,20 @@ const DETAIL = `
 
 const BAUSTEINE = `
 /* MetricCard: Wert 24 tabular, Label 12 muted, kein Rahmen. */
-.kennzahl-reihe{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:20px}
-@media (min-width:1280px){.kennzahl-reihe{grid-template-columns:repeat(4,minmax(0,1fr))}}
+/* auto-fit statt fester Spaltenzahl: fuenf Karten fuellen die Reihe, keine
+   verwaiste Karte in Zeile zwei [Kritiker-Befund Gauntlet-Runde 1]. */
+.kennzahl-reihe{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px;margin-bottom:20px}
 .kennzahl{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:var(--radius-lg);
   background:var(--card);text-align:left;width:100%;transition:background var(--dauer)}
 .kennzahl[data-klickbar="ja"]:hover{background:color-mix(in srgb,var(--accent) 50%,transparent)}
 .kennzahl-kopf{display:flex;align-items:center;gap:6px;color:var(--muted-foreground)}
 .kennzahl-wert{display:block;font-size:var(--text-2xl);font-weight:600;font-variant-numeric:tabular-nums;line-height:1.15}
 .kennzahl-label{display:block;font-size:var(--text-xs);color:var(--muted-foreground)}
-.kennzahl-notiz{display:block;font-size:var(--text-micro);color:var(--muted-foreground)}
+/* Genau EINE Meta-Zeile je Karte -- gleiche Anatomie, gleiche Hoehe
+   [Kritiker-Befund Gauntlet-Runde 2]. Der volle Text steht im title. */
+.kennzahl-notiz{display:block;font-size:var(--text-micro);color:var(--muted-foreground);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kennzahl{min-height:86px}
 /* EmptyState: Icon 40 in muted-Kasten, Titel 16/600, Text 14 muted, Handlung. */
 .leerzustand{display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;
   padding:40px 16px;border:1px dashed var(--border);border-radius:var(--radius-lg)}
@@ -604,6 +669,37 @@ const BAUSTEINE = `
    chart-Leiter (hell chart-3, dunkel chart-1) und traegt 8,84 / 7,99 auf --card. */
 .balken{height:6px;border-radius:var(--radius-pille);background:var(--muted);overflow:hidden;min-width:64px}
 .balken > span{display:block;height:100%;background:var(--primary)}
+/* Haupt-Knopf: die EINE ausgezeichnete Handlung einer Flaeche (Vorbild: der
+   dunkle Aktionsknopf "Pruefung jetzt ausfuehren" in Keel Light). */
+.knopf-haupt{background:var(--primary);color:var(--primary-foreground);border:1px solid var(--primary);
+  border-radius:var(--radius-md);padding:6px 14px;font-size:var(--text-compact);font-weight:500}
+.knopf-haupt:hover{opacity:.9}
+/* Sitzungs-Karten (Ueberblick, oben): laufende Sitzungen wie die
+   Agenten-Karten des Vorbilds -- Karte, Puls-Punkt, Titel, Rolle, Status. */
+.sitzung-reihe{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;margin-bottom:8px}
+.sitzung-karte{display:flex;align-items:center;gap:10px;padding:12px 14px;
+  border:1px solid color-mix(in srgb,var(--primary) 35%,var(--border));border-radius:var(--radius-lg);
+  background:color-mix(in srgb,var(--primary) 6%,var(--card))}
+.sitzung-punkt{flex:0 0 8px;width:8px;height:8px;border-radius:var(--radius-pille);background:var(--status-ok)}
+.sitzung-haupt{flex:1 1 auto;min-width:0}
+.sitzung-titel{display:block;font-size:var(--text-sm);font-weight:500;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sitzung-rolle{display:block;font-size:var(--text-xs);color:var(--muted-foreground);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sektion-fuss{padding:8px 0}
+/* Auftrag: Ziel, Text und Senden in EINER Zeile -- ein Formular, kein Block. */
+.auftrag-zeile{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap}
+.auftrag-zeile select{height:32px;padding:0 8px;border:1px solid var(--input);border-radius:var(--radius-md);
+  background:var(--card);color:var(--foreground);font:inherit;font-size:var(--text-compact)}
+.auftrag-zeile textarea{flex:1 1 260px;min-height:32px;padding:6px 10px;border:1px solid var(--input);
+  border-radius:var(--radius-md);background:var(--card);color:var(--foreground);
+  font:inherit;font-size:var(--text-compact);resize:vertical}
+/* Paket-Schritte: eingerueckt unter ihrem Paket. */
+.paket-schritte{margin:4px 0 8px 44px}
+.paket-offen{margin:4px 12px 8px 44px}
+.paket-repo{margin-bottom:4px}
+/* Beschreibung im Detail: ein Absatz, kein Aufklapper. */
+.detail-beschreibung{padding:8px 0;font-size:var(--text-compact);max-width:78ch}
 /* Ablaufstreifen "So laeuft eine Sitzung". */
 .ablauf{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap;margin:20px 0}
 .ablauf-station{flex:1 1 160px;min-width:160px;text-align:left;padding:10px 12px;background:var(--card);

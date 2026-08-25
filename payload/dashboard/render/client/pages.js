@@ -26,6 +26,10 @@ HD.statusChip = function (code) {
   var s = HD.D.status[code];
   if (!s) return "";
   var klasse = s.token.replace("--status-", "status-");
+  // Der Normalzustand ist STILL: elfmal ein gruenes "In Ordnung" ist Rauschen,
+  // erst die Abweichung verdient Farbe [Kritiker-Befund Gauntlet-Runde 1].
+  // Glyphe + Wort bleiben (nie Farbe allein) -- nur die Pille verschwindet.
+  if (code === "ok") klasse += " status-still";
   return '<span class="status-chip ' + klasse + '">'
     + '<span class="status-glyphe">' + HD.icon(s.glyphe) + "</span>"
     + "<span>" + HD.esc(s.wort) + "</span></span>";
@@ -41,17 +45,34 @@ HD.zeileHTML = function (e) {
   var unterSpalte = spalten.find(function (s) { return s.weich; }) || { wert: e.unter };
   var meta = spalten.filter(function (s) { return !s.stark && !s.weich && s.wert; });
 
-  var kachel = e.artWort
-    ? '<span class="eintrag-kachel">' + HD.icon(HD.symbolFuer(e)) + "</span>" : "";
+  // KEINE Icon-Kachel: elfmal dasselbe Symbol je Seite traegt null
+  // Information und frisst die wichtigste Spalte [Kritiker-Befund Runde 3] --
+  // das Vorbild (Keel-Light-Fundliste) kommt ohne Zeilen-Icons aus.
+  var kachel = "";
 
   var metaHTML = meta.length
     ? '<span class="eintrag-meta">' + meta.map(function (s) {
         var inhalt = HD.esc(s.wert);
-        if (s.chip) inhalt = '<span class="eigenschaft-pille">' + inhalt + "</span>";
+        // .meta-pille, NICHT .eigenschaft-pille: die Eigenschafts-Pille traegt
+        // Versalien fuer die schmale Detail-Spalte -- in der Hauptliste wird
+        // daraus eine Versalienwand (Beanstandung A3, ui-standard Punkt 2).
+        // EIN Pillen-System: gleiche Form fuer alle, die Klasse traegt nur
+        // der farbige Punkt -- gefuellt neben umrandet las sich als
+        // Logik-Bruch [Kritiker-Befund Gauntlet-Runde 5].
+        if (s.chip) inhalt = '<span class="meta-pille" data-ton="' + HD.esc(s.chip) + '">'
+          + '<span class="pillen-punkt" aria-hidden="true"></span>' + inhalt + "</span>";
         return '<span' + (s.mono ? ' class="mono"' : "") + ' title="' + HD.esc(s.label + ": " + s.wert) + '">' + inhalt + "</span>";
       }).join("") + "</span>"
     : "";
 
+  // Der Normalzustand schweigt in der Zeile: elfmal "In Ordnung" traegt null
+  // Information [Kritiker-Befund Gauntlet-Runde 2]. Die Sammelaussage steht
+  // oben auf der Seite (HD.sammelZeile); die Zeile zeigt nur Abweichungen.
+  var schluss = e.status && e.status !== "ok"
+    ? '<span class="eintrag-schluss">' + HD.statusChip(e.status) + "</span>" : "";
+  // Klick-Affordanz: die Zeile OEFFNET etwas -- ohne Zeichen sah die Liste
+  // aus wie ein Ausdruck [Kritiker-Befund Gauntlet-Runde 3].
+  var pfeil = '<span class="zeilen-pfeil" aria-hidden="true">' + HD.icon("chevron-right") + "</span>";
   return '<button class="eintrag-zeile" data-id="' + HD.esc(e.id) + '"'
     + (HD.S.auswahl === e.id ? ' aria-selected="true"' : "") + ">"
     + kachel
@@ -60,16 +81,35 @@ HD.zeileHTML = function (e) {
     + (unterSpalte.wert ? '<span class="eintrag-unter">' + HD.markiere(unterSpalte.wert, HD.S.suche) + "</span>" : "")
     + "</span>"
     + metaHTML
-    + '<span class="eintrag-schluss">' + HD.statusChip(e.status) + "</span>"
+    + schluss
+    + pfeil
     + "</button>";
 };
 
+// Die EINE Sammelaussage, wenn alles traegt -- statt derselben gruenen
+// Wiederholung an jeder Zeile.
+HD.sammelZeile = function (seite) {
+  var mitStatus = HD.seitenEintraege(seite).filter(function (e) { return e.status; });
+  if (!mitStatus.length) return "";
+  if (!mitStatus.every(function (e) { return e.status === "ok"; })) return "";
+  return '<p class="sammel-zeile"><span class="status-glyphe status-ok">' + HD.icon("circle-check") + "</span>"
+    + HD.esc(HD.fuellen(HD.W.alleInOrdnung, { n: mitStatus.length })) + "</p>";
+};
+
 // --- Gruppenkopf ---------------------------------------------------------
-HD.gruppeHTML = function (titel, anzahl, offen) {
+HD.gruppeHTML = function (titel, anzahl, offen, istCode) {
+  // Ohne Zahl keine Zahl: ein Block wie "Auftrag senden" traegt keinen
+  // Zaehler -- "null" hinzuschreiben waere ein Maschinenwert im UI.
+  var zahl = (anzahl === null || anzahl === undefined) ? "" : '<span class="gruppen-zahl">' + anzahl + "</span>";
+  // Technische Namen (SessionStart, Stop, statusLine) behalten ihre
+  // Schreibweise -- die Versalien-Transformation machte "SESSIONSTART"
+  // daraus, einen Namen, den es nirgends gibt [Kritiker-Befund Runde 3].
+  // istCode kommt vom Aufrufer (Daten wissen es); camelCase faengt den Rest.
+  var code = (istCode || /[a-z][A-Z]/.test(titel)) ? ' data-code="ja"' : "";
   return '<button class="gruppen-kopf" data-gruppe="' + HD.esc(titel) + '" aria-expanded="' + (offen ? "true" : "false") + '">'
     + '<span class="gruppen-caret">' + HD.icon("chevron-down") + "</span>"
-    + '<span class="gruppen-titel">' + HD.esc(titel) + "</span>"
-    + '<span class="gruppen-zahl">' + anzahl + "</span></button>";
+    + '<span class="gruppen-titel"' + code + ">" + HD.esc(titel) + "</span>"
+    + zahl + "</button>";
 };
 
 // --- Werkzeugleiste ------------------------------------------------------
@@ -105,20 +145,84 @@ HD.werkzeugHTML = function (seite) {
     + "</div>";
 };
 
+// --- Tab-Leiste ----------------------------------------------------------
+// Gehoert eine Seite zu einer Tab-Gruppe (labels.js TABGRUPPEN), stehen ihre
+// Geschwister als Reiter ueber dem Inhalt -- die Seitenleiste zeigt nur den
+// einen Gruppen-Eintrag. Reiter-Wort = Seitenname, keine zweite Beschriftung.
+HD.tabGruppeFuer = function (seite) {
+  var g = HD.D.tabgruppen || {};
+  for (var id in g) {
+    if (g[id].seiten && g[id].seiten.indexOf(seite) >= 0) return g[id];
+  }
+  return null;
+};
+
+HD.tabLeisteHTML = function (seite) {
+  var g = HD.tabGruppeFuer(seite);
+  if (!g) return "";
+  return '<nav class="tab-leiste" aria-label="' + HD.esc(g.name) + '">'
+    + g.seiten.map(function (id) {
+        var s = HD.D.seiten[id];
+        if (!s) return "";
+        return '<button class="tab" data-ziel="' + HD.esc(id) + '"'
+          + (id === seite ? ' aria-current="page"' : "") + ">"
+          + HD.esc(s.name) + "</button>";
+      }).join("")
+    + "</nav>";
+};
+
 // --- Listenseite ---------------------------------------------------------
 HD.listenSeite = function (seite) {
   var s = HD.D.seiten[seite];
   var liste = HD.gefiltert(seite);
-  var kopf = '<p class="erklaersatz">' + HD.esc(s.zweck)
+  // Statusaussage VOR der Erklaer-Prosa: die wichtigste Information der
+  // Seite darf nicht die dritte Zeile sein [Kritiker-Befund Runde 4].
+  var kopf = HD.tabLeisteHTML(seite)
+    + HD.sammelZeile(seite)
+    + '<p class="erklaersatz">' + HD.esc(s.zweck)
     + (s.ort ? ' <span class="pfad">' + HD.esc(s.ort) + "</span>" : "") + "</p>";
   var werkzeug = HD.werkzeugHTML(seite);
+  // Live-Anbauten je Seite: "Zu tun" traegt die Arbeitspakete, "Hooks" die
+  // Guard-Selbsttests -- beides liest der Server, beides gehoert zum Thema
+  // der Seite (nicht auf eine eigene Bruecken-Seite ausgelagert).
+  var anbau = "";
+  if (seite === "zutun") anbau = HD.paketeSektion();
+  if (seite === "hooks") anbau = HD.guardSektion();
+
+  // Zustand OBEN in Kacheln, dann die Liste -- das Muster der Vorbild-
+  // Pruefseite [Gauntlet]. Auf Hooks: was der Bestand insgesamt KANN. Die
+  // Woerter kommen aus den Zeilen-Daten (views.js liefert das Wirkung-Wort),
+  // kein deutsches Literal im Browser-Teil.
+  var kacheln = "";
+  if (seite === "hooks") {
+    var alle = HD.seitenEintraege("hooks");
+    var jeWirkung = {};
+    var reihenfolge = [];
+    alle.forEach(function (e) {
+      var code = e.roh && e.roh.wirkung;
+      if (!code) return;
+      var spalte = (e.liste || []).filter(function (sp) { return sp.label === HD.W.wirkung; })[0];
+      if (!jeWirkung[code]) { jeWirkung[code] = { wort: spalte ? spalte.wert : code, anzahl: 0 }; reihenfolge.push(code); }
+      jeWirkung[code].anzahl += 1;
+    });
+    // Keine Summen-Kachel: der Erklaersatz zaehlt bereits ("11 Eintraege auf
+    // 11 Skripte") -- eine Kachel mit abweichender Zaehlung (plus statusLine)
+    // waere der naechste Zahlen-Widerspruch.
+    var symbole = { blockiert: "ban", meldet: "circle-dot", kontext: "layers" };
+    kacheln = '<div class="kennzahl-reihe">'
+      + reihenfolge.map(function (code) {
+          return '<span class="kennzahl"><span class="kennzahl-kopf"><span class="kennzahl-label">'
+            + HD.esc(jeWirkung[code].wort) + "</span>" + HD.icon(symbole[code] || "circle") + "</span>"
+            + '<span class="kennzahl-wert">' + jeWirkung[code].anzahl + "</span></span>";
+        }).join("") + "</div>";
+  }
 
   if (!liste.length) {
     var art = HD.S.suche ? "treffer" : (HD.S.filter.length ? "filter" : (HD.D.leer[seite] ? seite : "allgemein"));
-    return kopf + werkzeug + HD.leerHTML(art);
+    return kopf + kacheln + werkzeug + HD.leerHTML(art) + anbau;
   }
 
-  if (seite === "zutun" && HD.S.ansicht === "board") return kopf + werkzeug + HD.boardHTML(liste);
+  if (seite === "zutun" && HD.S.ansicht === "board") return kopf + kacheln + werkzeug + HD.boardHTML(liste) + anbau;
 
   var mitGruppe = liste.filter(function (e) { return e.gruppe; }).length;
   var koerper;
@@ -131,14 +235,15 @@ HD.listenSeite = function (seite) {
     });
     koerper = ordnung.map(function (g) {
       var offen = HD.S.abschnitt["gruppe:" + g] !== false;
-      return "<section>" + HD.gruppeHTML(g, nach[g].length, offen)
+      var istCode = nach[g][0] && nach[g][0].gruppeCode === true;
+      return "<section>" + HD.gruppeHTML(g, nach[g].length, offen, istCode)
         + (offen ? '<div class="eintrag-liste">' + nach[g].map(HD.zeileHTML).join("") + "</div>" : "")
         + "</section>";
     }).join("");
   } else {
     koerper = '<div class="eintrag-liste">' + liste.map(HD.zeileHTML).join("") + "</div>";
   }
-  return kopf + werkzeug + koerper;
+  return kopf + kacheln + werkzeug + koerper + anbau;
 };
 
 // --- Board (nur "Zu tun") ------------------------------------------------
@@ -172,45 +277,72 @@ HD.boardHTML = function (liste) {
 };
 
 // --- Ueberblick ----------------------------------------------------------
+// Der Ueberblick IST die Bruecke [Owner, 24.08.2026: Dashboard-Zweck =
+// Kommandobruecke]: Sitzungen live oben (wie die Agenten-Karten des
+// Vorbilds), dann Kennzahlen, offene Punkte, Auftrag, letzte Aenderungen.
+// Eine Seite, ein Zweck -- keine zweite "Bruecken"-Seite daneben.
 HD.ueberblickSeite = function () {
   var z = HD.D.zahlen;
   var s = HD.D.seiten.ueberblick;
   var st = HD.D.status[HD.D.gesamtstatus];
+  // Wenige Karten, keine Zweitbeschreibung: das Wort auf der Karte ist der
+  // Seitenname, die Notiz eine ZAHL-Aussage -- die Erklaerung steht auf der
+  // Zielseite selbst (eine Sache, eine Beschreibung).
   var kacheln = [
-    { wert: st ? st.wort : "—", label: HD.W.status, notiz: null, ziel: "zutun", symbol: st ? st.glyphe : "circle" },
+    // Der Gesamtstatus traegt seine Statusfarbe (Glyphe im Status-Ton) --
+    // der wichtigste Wert der Seite darf nicht die schwaechste Gestaltung
+    // haben [Kritiker-Befund Gauntlet-Runde 1].
+    { wert: st ? st.wort : "—", label: HD.W.status, notiz: null, ziel: "zutun",
+      symbol: st ? st.glyphe : "circle", ton: HD.D.gesamtstatus },
     { wert: z.zutun + z.zutunDoku, label: HD.D.seiten.zutun.name,
       notiz: z.zutun + " gemessen, " + z.zutunDoku + " aus Dokumenten", ziel: "zutun", symbol: "list-checks" },
-    { wert: z.hooks, label: HD.D.seiten.hooks.name, notiz: "auf " + z.hookSkripte + " Skripte", ziel: "hooks", symbol: "terminal" },
     { wert: z.dateien, label: HD.D.seiten.dateien.name, notiz: null, ziel: "dateien", symbol: "folder" },
-    { wert: z.commands, label: HD.D.seiten.commands.name, notiz: null, ziel: "commands", symbol: "slash" },
-    { wert: z.skills, label: HD.D.seiten.skills.name, notiz: null, ziel: "skills", symbol: "sparkles" },
-    { wert: z.rules, label: HD.D.seiten.rules.name,
-      notiz: HD.W.tokenSchaetzung.replace("{n}", HD.zahl(z.rulesToken)), ziel: "rules", symbol: "book-open" },
-    { wert: z.repos, label: HD.D.seiten.backup.name,
-      notiz: z.reposOffen === 0 ? "alle gesichert" : z.reposOffen + " mit Lücke", ziel: "backup", symbol: "hard-drive" },
+    // Notiz ohne Zahlenreihe: vier Zahlen passten nie in eine Kachelzeile
+    // ("2 Skills · 3 R...") -- die Zahlen stehen auf der Seite selbst
+    // [Kritiker-Befund Gauntlet-Runde 3].
+    { wert: z.hooks + z.commands + z.skills + z.rules,
+      label: (HD.D.tabgruppen && HD.D.tabgruppen.harness ? HD.D.tabgruppen.harness.name : "Harness"),
+      notiz: "Hooks · Commands · Skills · Rules",
+      ziel: "hooks", symbol: "terminal" },
+    { wert: z.projekte, label: (HD.D.tabgruppen && HD.D.tabgruppen.repos ? HD.D.tabgruppen.repos.name : "Projekte"),
+      notiz: z.reposOffen === 0 ? "alle gesichert" : z.reposOffen + " mit Lücke", ziel: "projekte", symbol: "folder-open" },
   ];
 
   var kachelHTML = '<div class="kennzahl-reihe">' + kacheln.map(function (k) {
-    return '<button class="kennzahl" data-klickbar="ja" data-ziel="' + HD.esc(k.ziel) + '">'
+    var tonKlasse = k.ton && HD.D.status[k.ton]
+      ? " " + HD.D.status[k.ton].token.replace("--status-", "status-") : "";
+    return '<button class="kennzahl' + tonKlasse + '" data-klickbar="ja" data-ziel="' + HD.esc(k.ziel) + '">'
       + '<span class="kennzahl-kopf"><span class="kennzahl-label">' + HD.esc(k.label) + "</span>"
-      + HD.icon(k.symbol) + "</span>"
+      + (k.ton ? '<span class="status-glyphe">' + HD.icon(k.symbol) + "</span>" : HD.icon(k.symbol)) + "</span>"
       + '<span class="kennzahl-wert">' + HD.esc(k.wert) + "</span>"
-      + (k.notiz ? '<span class="kennzahl-notiz">' + HD.esc(k.notiz) + "</span>" : "")
+      + (k.notiz ? '<span class="kennzahl-notiz" title="' + HD.esc(k.notiz) + '">' + HD.esc(k.notiz) + "</span>" : "")
       + "</button>";
   }).join("") + "</div>";
 
+  // Der Warnzustand DOMINIERT: amber getoente Flaeche, direkt unter den
+  // Sitzungen -- das Wichtigste der Seite darf nicht so laut sein wie die
+  // Doku-Sektion [Kritiker-Befund Gauntlet-Runde 2].
   var offene = HD.seitenEintraege("zutun").filter(function (e) { return e.status && e.status !== "ok"; }).slice(0, 5);
-  var aufmerksam = "<section>" + HD.gruppeHTML(HD.W.brauchtAufmerksamkeit, offene.length, true)
+  var aufmerksam = '<section class="achtung">' + HD.gruppeHTML(HD.W.brauchtAufmerksamkeit, offene.length, true)
     + (offene.length
       ? '<div class="eintrag-liste">' + offene.map(HD.zeileHTML).join("") + "</div>"
       : HD.leerHTML("zutun")) + "</section>";
 
+  // Ohne Zaehler-Badge: "5 Commits" ist keine Handlungszahl, und "5 Stationen"
+  // erst recht nicht [Kritiker-Befund Gauntlet-Runde 3].
   var letzte = HD.seitenEintraege("commits").slice(0, 5);
-  var verlauf = "<section>" + HD.gruppeHTML(HD.W.zuletztGeaendert, letzte.length, true)
+  var verlauf = "<section>" + HD.gruppeHTML(HD.W.zuletztGeaendert, null, true)
     + '<div class="eintrag-liste">' + letzte.map(HD.zeileHTML).join("") + "</div></section>";
 
+  // Reihenfolge: erst Zustand (Sitzungen, Warnflaeche, Kennzahlen, Verlauf),
+  // dann Handlung (Auftrag), dann Erklaerung (Ablauf, Was fehlt) -- das
+  // Formular mitten im Lesefluss unterbrach ihn [Kritiker-Befund Runde 3].
+  // Das Wichtigste zuerst: die Warnflaeche VOR den Sitzungen [Kritiker-
+  // Befund Runde 4: die Dringlichkeits-Hierarchie muss auch raeumlich gelten].
   return '<p class="erklaersatz">' + HD.esc(s.zweck) + "</p>"
-    + kachelHTML + HD.ablaufHTML() + aufmerksam + verlauf + HD.fehltHTML();
+    + aufmerksam
+    + HD.sitzungenSektion()
+    + kachelHTML + verlauf + HD.auftragSektion() + HD.ablaufHTML() + HD.fehltHTML();
 };
 
 HD.zahl = function (n) { return typeof n === "number" ? n.toLocaleString("de-DE") : String(n); };
@@ -229,13 +361,16 @@ HD.ablaufHTML = function () {
     { wort: HD.W.ablaufEnde, unter: zaehle("Stop") + " Hooks", ziel: "hooks" },
     { wort: HD.W.ablaufStatusleiste, unter: "statusLine", ziel: "hooks" },
   ];
-  return "<section>" + HD.gruppeHTML(HD.W.soLaeuftEineSitzung, stationen.length, true)
-    + '<div class="ablauf">' + stationen.map(function (st, i) {
+  // Standardmaessig ZU: der Streifen ist Erklaer-Material und aendert sich
+  // nie -- er darf keine Premium-Flaeche belegen [Kritiker-Befund Runde 2].
+  var offen = HD.S.abschnitt["gruppe:" + HD.W.soLaeuftEineSitzung] === true;
+  return "<section>" + HD.gruppeHTML(HD.W.soLaeuftEineSitzung, null, offen)
+    + (offen ? '<div class="ablauf">' + stationen.map(function (st, i) {
         return (i ? '<span class="ablauf-pfeil">' + HD.icon("chevron-right") + "</span>" : "")
           + '<button class="ablauf-station" data-ziel="' + HD.esc(st.ziel) + '">'
           + '<span class="ablauf-titel">' + HD.esc(st.wort) + "</span>"
           + '<span class="ablauf-text">' + HD.esc(st.unter) + "</span></button>";
-      }).join("") + "</div></section>";
+      }).join("") + "</div>" : "") + "</section>";
 };
 
 // Was es hier NICHT gibt. Ohne diesen Abschnitt sucht ein Fremder nach Agents
@@ -300,9 +435,11 @@ HD.seiteZeichnen = function () {
   if (HD.S.seite === "ueberblick") html = HD.ueberblickSeite();
   else if (HD.S.seite === "dateien") html = HD.dateienSeite();
   else if (HD.S.seite === "rohdaten") html = HD.rohdatenSeite();
-  else if (HD.S.seite === "bridge") html = HD.bridgePage();
   else html = HD.listenSeite(HD.S.seite);
   ziel.innerHTML = html;
+  // Live-Sektionen (Sitzungen, Pakete, Guard-Tests) brauchen den Server-Stand
+  // -- einmal holen, dann zeichnet der Rueckruf die Seite erneut.
+  if (HD.bridgeLade) HD.bridgeLade();
 };
 `;
 
