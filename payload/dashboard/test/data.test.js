@@ -213,19 +213,40 @@ test("kein Zweck-Satz traegt einen ungefuellten Platzhalter", () => {
   assert.deepStrictEqual(offen, [], "ungefuellter Platzhalter in einem Zweck-Satz");
 });
 
+// Ein Navigationseintrag ist entweder eine Seite oder "tab:<gruppe>" -- dann
+// zaehlen die Seiten der Tab-Gruppe (d.tabgruppen) als verlinkt.
+function navSeiten(dd) {
+  const raus = [];
+  for (const g of dd.navigation) {
+    for (const id of g.eintraege) {
+      if (String(id).startsWith("tab:")) {
+        const tg = (dd.tabgruppen || {})[id.slice(4)];
+        if (!tg) raus.push({ eintrag: id, fehlt: true });
+        else for (const s of tg.seiten) raus.push({ eintrag: id, seite: s });
+      } else {
+        raus.push({ eintrag: id, seite: id });
+      }
+    }
+  }
+  return raus;
+}
+
 test("jeder Navigationseintrag zeigt auf eine Seite im Datensatz", () => {
   const seiten = new Set(Object.keys(d.seiten));
-  const tot = [];
-  for (const g of d.navigation) {
-    for (const id of g.eintraege) if (!seiten.has(id)) tot.push((g.gruppe || "(ohne Gruppe)") + " -> " + id);
-  }
+  const tot = navSeiten(d)
+    .filter((z) => z.fehlt || !seiten.has(z.seite))
+    .map((z) => z.eintrag + " -> " + (z.seite || "(Tab-Gruppe fehlt)"));
   assert.deepStrictEqual(tot, [], "Navigationseintrag ohne Seite");
 });
 
 test("jede Seite ist von der Navigation aus erreichbar", () => {
   // Gegenprobe zur vorigen Pruefung: eine Seite, die im Datensatz steht, aber
   // in keiner Gruppe auftaucht, ist unerreichbar -- gebaut und unsichtbar.
-  const inNav = new Set(d.navigation.flatMap((g) => g.eintraege));
+  // Ausnahme mit Grund: "rohdaten" haengt am Fusszeilen-Verweis der
+  // Seitenleiste (shell.js), nicht im Menue -- Beleg-Seite, kein Alltag
+  // [Owner, 25.08.2026: kein Debug in der Navigation].
+  const inNav = new Set(navSeiten(d).map((z) => z.seite));
+  inNav.add("rohdaten");
   const unerreichbar = Object.keys(d.seiten).filter((id) => !inNav.has(id));
   assert.deepStrictEqual(unerreichbar, [], "Seite ohne Weg dorthin");
 });

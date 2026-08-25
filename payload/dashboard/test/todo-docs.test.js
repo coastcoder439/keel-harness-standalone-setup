@@ -49,7 +49,14 @@ const baumWeg = (wurzel) => fs.rmSync(wurzel, { recursive: true, force: true });
 // ---------------------------------------------------------------------------
 // Echter Baum
 // ---------------------------------------------------------------------------
-wennDa(fs.existsSync(WURZEL + "/docs/tool-landscape.md"), "docs/tool-landscape.md nicht vorhanden",
+// Umgebungsfest: der Test prueft die ERKENNUNG der leeren Vorlage -- sobald das
+// Onboarding die Datei gefuellt hat (Schritt 3), gibt es hier zu Recht nichts
+// mehr zu erkennen. Dann uebersprungen mit Grund, nicht rot (gemessen
+// 25.08.2026: Onboarding-Session fuellte die Datei, der Test brach).
+wennDa(
+  fs.existsSync(WURZEL + "/docs/tool-landscape.md")
+    && /noch nichts erhoben/.test(fs.readFileSync(WURZEL + "/docs/tool-landscape.md", "utf8")),
+  "docs/tool-landscape.md fehlt oder ist bereits gefuellt",
   "findet die leere Vorlage in docs/tool-landscape.md", () => {
   const { eintraege, fehler } = zuTunDoku(WURZEL);
   // Eine fehlende Quelle ist KEIN Fehler des Moduls: die Werkstatt-Dokumente

@@ -195,6 +195,10 @@ const DASHBOARD = [
   // Der Vorschau-Server: macht aus der Seite ein Werkzeug zum Aendern.
   // Ohne ihn ist sie nur lesbar -- ein Doppelklick genuegt dafuer.
   "serve.js",
+  // Dauerbetrieb (25.08.2026, Beanstandung A2): Doppelklick-Start und der
+  // fensterlose Start fuer den Anmelde-Trigger (schtasks, siehe Kopf der .cmd).
+  "start-server.cmd",
+  "start-server-hidden.vbs",
   "bridge.js",            // Kommandobruecken-Logik (Pakete/Sessions/Selbsttests/Auftraege)
   "test/bridge.test.js",
   "measure.js",

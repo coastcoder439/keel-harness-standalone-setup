@@ -50,20 +50,18 @@ const SEITEN = {
     // Harness-Bausatzes und laeuft in JEDER Installation -- eine Ueberschrift,
     // die eine bestimmte Zeile in einer bestimmten CLAUDE.md sucht, ist beim
     // naechsten Empfaenger leer oder falsch (gefunden 23.08.2026).
-    zweck: "Was in {workspace} installiert ist, wo es liegt und ob es trägt. Gemessen am {gemessen}.",
+    // Seit dem Neubau 25.08.2026 ist der Ueberblick zugleich die Bruecke:
+    // Sitzungen live, Auftraege, offene Punkte -- eine Seite, ein Zweck.
+    // Die Messzeit steht im Seitenleisten-Fuss ("Gemessen am ...") -- hier
+    // noch einmal waere dieselbe Angabe an zwei Orten (Beanstandung A7).
+    zweck: "Was in {workspace} läuft und ob es trägt — Sitzungen, offene Punkte, letzte Änderungen.",
     icon: "layout-dashboard",
   },
   zutun: {
     name: "Zu tun",
     ort: null,
-    zweck: "Was offen ist — mit Grund, Quelle und dem Befehl dazu. {n} aus der Messung, {doku} aus Dokumenten gezogen.",
+    zweck: "Was offen ist — mit Grund, Quelle und dem Befehl dazu. {n} aus der Messung, {doku} aus Dokumenten, dazu die Arbeitspakete aller Repos.",
     icon: "list-checks",
-  },
-  bridge: {
-    name: "Kommandobrücke",
-    ort: "dashboard/serve.js",
-    zweck: "Arbeitspakete sehen und abhaken, Sitzungen prüfen, Guard-Selbsttests starten, Aufträge schicken — liest und schreibt live, darum nur im Server-Betrieb.",
-    icon: "command",
   },
   dateien: {
     name: "Dateien",
@@ -74,7 +72,9 @@ const SEITEN = {
   hooks: {
     name: "Hooks",
     ort: ".claude/settings.json",
-    zweck: "Hooks sind Skripte, die Claude Code bei Ereignissen ausführt — eingetragen in .claude/settings.json. Hier {n} Einträge auf {skripte} Skripte, dazu die statusLine.",
+    // Der Eintragsort steht als Pfad-Chip hinter dem Satz (SEITEN.ort) --
+    // ihn auch im Satz zu nennen hiesse zweimal dasselbe (Beanstandung A7).
+    zweck: "Hooks sind Skripte, die Claude Code bei Ereignissen ausführt. Hier {n} Einträge auf {skripte} Skripte, dazu die statusLine.",
     icon: "terminal",
   },
   commands: {
@@ -133,15 +133,32 @@ const SEITEN = {
   },
 };
 
-// Die Seitenleiste: Gruppen in der Reihenfolge des echten Ordnerbaums.
-// Die Gruppenwoerter sind KEINE Pfade in Versalien (".CLAUDE/" liest sich als
-// Schrei und bricht die Mono-Regel), sondern Ueberschriften; der Pfad steht im
-// title jedes Eintrags.
+// Tab-Gruppen: EIN Eintrag in der Seitenleiste buendelt mehrere Seiten als
+// Reiter -- die Seiten selbst (Kennungen, Adressen, Eintraege) bleiben, nur die
+// Navigation zeigt sie nicht mehr einzeln. Grund [Owner, 25.08.2026]: das
+// Side-Menue darf keine interne Mess-Taxonomie sein; 14 Eintraege waren eine
+// Messkategorien-Liste, kein Nutzer-Menue.
+const TABGRUPPEN = {
+  harness: {
+    name: "Harness",
+    icon: "terminal",
+    ort: ".claude/",
+    seiten: ["hooks", "commands", "skills", "rules", "kontext", "werkzeuge"],
+  },
+  repos: {
+    name: "Projekte",
+    icon: "folder-open",
+    ort: "user-projects/",
+    seiten: ["projekte", "backup", "commits"],
+  },
+};
+
+// Die Seitenleiste: fuenf Nutzer-Eintraege, keine Gruppen-Ueberschriften mehr.
+// "tab:<id>" verweist auf eine Tab-Gruppe. "Rohdaten" steht bewusst NICHT hier
+// -- die Seite bleibt ueber die Befehlspalette und den Fusszeilen-Verweis
+// erreichbar; sie ist Beleg, nicht Alltag.
 const NAVIGATION = [
-  { gruppe: null, eintraege: ["ueberblick", "zutun", "bridge", "dateien"] },
-  { gruppe: "Claude Code", pfad: ".claude/", eintraege: ["hooks", "commands", "skills", "rules"] },
-  { gruppe: "Workspace", pfad: null, eintraege: ["projekte", "kontext", "werkzeuge", "backup", "commits"] },
-  { gruppe: "Belege", pfad: null, eintraege: ["rohdaten"] },
+  { gruppe: null, eintraege: ["ueberblick", "zutun", "dateien", "tab:harness", "tab:repos"] },
 ];
 
 // ---------------------------------------------------------------------------
@@ -227,10 +244,16 @@ const DATEITYP_ALLGEMEIN = "Datei vom Typ .{ext}.";
 // "kann stoppen" / "meldet nur" der Vorfassung war geraten; das hier ist gemessen.
 // ---------------------------------------------------------------------------
 
+// In der LISTE steht nur das Wort -- "(exit 2)" ist Implementierungsdetail
+// und gehoert ins Detail (Beleg-Zeile), nicht in einen Chip [Kritiker-Befund
+// Gauntlet-Runde 1, 25.08.2026].
+// Kurzes, festes Vokabular gleicher Laenge -- ein Satzfragment neben
+// Ein-Wort-Verben war Badge-Chaos [Kritiker-Befund Gauntlet-Runde 3]. Der
+// volle Satz steht in der erklaerung (Detail).
 const WIRKUNG = {
-  blockiert: { wort: "blockiert (exit 2)", erklaerung: "Dieser Hook kann einen Werkzeugaufruf verhindern." },
-  meldet:    { wort: "meldet",             erklaerung: "Dieser Hook schreibt eine Meldung, verhindert aber nichts." },
-  kontext:   { wort: "ergänzt den Sitzungskontext", erklaerung: "Dieser Hook legt der Sitzung Text vor, den sie mitliest." },
+  blockiert: { wort: "blockiert", erklaerung: "Dieser Hook kann einen Werkzeugaufruf verhindern (exit 2)." },
+  meldet:    { wort: "meldet",    erklaerung: "Dieser Hook schreibt eine Meldung, verhindert aber nichts." },
+  kontext:   { wort: "ergänzt Kontext", erklaerung: "Dieser Hook legt der Sitzung Text vor, den sie mitliest (ergänzt den Sitzungskontext)." },
 };
 
 // Wann etwas geladen wird -- ueberall gleich formuliert.
@@ -431,6 +454,11 @@ const UI = {
   dateiWaehlen: "Datei wählen",
   dateiWaehlenText: "Links im Baum eine Datei anklicken — ihr Inhalt erscheint hier.",
 
+  // Quellen-Woerter, die der Browser-Teil vergleichen muss (detail.js:
+  // Beschreibung nicht doppeln, wenn sie der erste Absatz des Inhalts ist).
+  quelleAbsatz: QUELLE.absatz,
+  quelleEinleitung: QUELLE.blockquote,
+
   // Felder
   pfad: "Pfad",
   art: "Art",
@@ -498,6 +526,33 @@ const UI = {
   ausserhalbWorkspace: "Außerhalb dieses Workspace",
   ausserhalbNichtGemessen: "~/.claude/ wird ebenfalls in jede Sitzung geladen, ist hier aber nicht gemessen — die Summe gilt nur für diesen Workspace.",
   ausgabeZaehlt: "Bei diesen Hooks zählt die Ausgabe, nicht die Datei.",
+
+  // Neu messen (Kopfzeilen-Knopf -- misst wirklich, kopiert nicht)
+  neuMessenLaeuft: "Wird neu gemessen — die Seite lädt danach neu.",
+  neuMessenFehler: "Neu messen fehlgeschlagen: {grund}",
+  // Bewusst OHNE Zahl: der Erklaersatz der Seite zaehlt bereits ("{n}
+  // Eintraege auf {skripte} Skripte") -- eine zweite, abweichend gezaehlte
+  // Zahl direkt darunter zwingt den Leser zum Rechnen [Kritiker, Runde 3].
+  alleInOrdnung: "Alle Einträge in Ordnung.",
+  fruehereAnzeigen: "Frühere Sitzungen anzeigen ({n})",
+
+  // Ueberblick / Bruecke (Sitzungen, Auftraege, Arbeitspakete)
+  sitzungen: "Sitzungen",
+  arbeitspakete: "Arbeitspakete",
+  guardTests: "Guard-Selbsttests",
+  auftragKopf: "Auftrag an eine Sitzung — wird bei ihrer nächsten Nachricht zugestellt.",
+  auftragSenden: "Auftrag senden",
+  auftragZugestellt: "Zugestellt beim nächsten Prompt: {datei}",
+  auftragAlle: "alle Sitzungen",
+  auftragFeld: "Was soll die Sitzung tun?",
+  nurLeseBetrieb: "Nur-Lese-Betrieb — Aufträge abgeschaltet.",
+  nurServerTitel: "Nur im Server-Betrieb",
+  nurServerText: "Diese Ansicht liest und schreibt live. Starte: node dashboard/serve.js — dann http://127.0.0.1:8765",
+  schrittVon: "{done} von {total} Schritten",
+  offenPunkt: "Offen",
+  hakenFehler: "Haken konnte nicht gesetzt werden",
+  laedtNoch: "Lädt …",
+  nichtErreichbar: "Nicht erreichbar: {grund}",
 
   // Ueberblick
   brauchtAufmerksamkeit: "Braucht Aufmerksamkeit",
@@ -582,7 +637,7 @@ function datum(iso) {
 }
 
 module.exports = {
-  VERBOTEN, SEITEN, NAVIGATION, STATUS, ART, ART_BESCHREIBUNG,
+  VERBOTEN, SEITEN, NAVIGATION, TABGRUPPEN, STATUS, ART, ART_BESCHREIBUNG,
   DATEITYP, DATEITYP_ALLGEMEIN,
   WIRKUNG, LADEART, KANTE, QUELLE, GIT, LEER, UI, NOTIZ, ZUTUN_ART,
   fuellen, zahl, bytes, datum,
