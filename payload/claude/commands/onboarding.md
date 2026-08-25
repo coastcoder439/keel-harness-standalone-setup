@@ -42,7 +42,9 @@ du traegst ein.
      kein Schluessel.
    - **Zugaenge: Namen ja, Werte nie.** Nur Variablen-NAMEN lesen (`Get-ChildItem Env: |
      Select-Object -ExpandProperty Name` bzw. `printenv | cut -d= -f1`); ein einmal
-     committeter Schluessel bleibt fuer immer in der Historie.
+     committeter Schluessel bleibt fuer immer in der Historie. Die Zugangs-Uebersicht
+     (Konten, Stores, Status -- nur Namen) lebt in `.secrets/AI-ZUGAENGE.md`
+     (gitignoriert; anlegen, falls sie fehlt).
    - Ergebnis nach `docs/tool-landscape.md` (Vorlage liegt bereit), ergaenzt statt
      ueberschrieben -- nichts, was der Mensch nicht bestaetigt hat.
 4. Danach die Punkte, die nur der Mensch entscheiden kann -- je ein kurzer Absatz mit
