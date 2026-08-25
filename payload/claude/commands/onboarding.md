@@ -30,6 +30,11 @@ du traegst ein.
      probieren; Treffer auf Hersteller verifizieren (npm `gh` ist NICHT die GitHub-CLI).
      **Verifizierter Fund: Installation anbieten, auf Ja installieren** (`npm i -g` ·
      `pip install --user` · offizieller Installer) **und mit `<cli> --version` belegen.**
+     **Installiert ist NICHT fertig** [Owner, 25.08.2026]: fertig ist ein Werkzeug erst,
+     wenn der Zugang VERBUNDEN und GEMESSEN ist (Login/Token, per Status-Befehl wie
+     `gh auth status` belegt) -- oder ein "bei Erstnutzung"-Beschluss mit Weg in
+     `.secrets/AI-ZUGAENGE.md` dokumentiert steht. Interaktive Browser-Logins fuehrt
+     der Mensch aus; du nennst den exakten Befehl und misst danach.
      Fehlender Paketmanager = "nicht pruefbar", nicht "nicht gefunden". Existiert
      NIRGENDS eine CLI: vormerken -- eine selbst zu erzeugen ist ein spaeterer,
      bewusster Schritt.
