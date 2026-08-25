@@ -58,6 +58,13 @@ Every message that closes a work package ends with exactly these two lines:
     Geprueft gegen: <sources, tests, commands — what the claim rests on>
     Offen: <list of open points | "nichts">
 
+Every item in "Offen" names its OWNER [Owner-Auftrag, 25.08.2026]: **ICH** (agent
+does it — and only appears here if it cannot be done right now, with the reason),
+**DEINE ENTSCHEIDUNG** (a concrete question with options), or **DEINE HANDLUNG**
+(the exact command or click). Before assigning anything to the reader, check
+whether the agent can do it itself — what the agent can do is DONE, not listed.
+The reader must never have to derive their own next step from prose.
+
 Coverage and Fulfillment are two different checks and both belong in a
 handover: Coverage = everything addressed (run the `completeness` skill on
 bau-bereit claims and handovers); Fulfillment = the GOAL holds, not merely
