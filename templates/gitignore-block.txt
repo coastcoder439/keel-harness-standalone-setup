@@ -50,6 +50,7 @@ dashboard.json
 *.key
 *.pem
 secrets.json
+.secrets/
 credentials.json
 *service-account*.json
 
