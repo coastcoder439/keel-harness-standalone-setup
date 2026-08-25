@@ -18,7 +18,14 @@ const KURZFORM =
   "Repo IHRES Projekts (<repo>/docs/packages/<paket>.md; beim Planen anlegen, bei jedem " +
   "Paket-Abschluss nachfuehren). Listen hoechstens fuenf " +
   "Punkte. Wurde in diesem Turn geschrieben oder committet, endet die Meldung mit den zwei " +
-  "Zeilen 'Geprueft gegen: ...' und 'Offen: ...' — \"fertig\" existiert nur darin.";
+  "Zeilen 'Geprueft gegen: ...' und 'Offen: ...' — \"fertig\" existiert nur darin. " +
+  "Arbeitsregeln [Owner 25.08.2026]: Kein One-Shot — erst Bestand und Belege pruefen, dann " +
+  "formulieren. Eine Recherche zaehlt erst mit zwei unabhaengigen Quellen; das erste " +
+  "Suchergebnis ist ein Kandidat, keine Wahrheit. Nicht-triviale Arbeit bekommt VOR dem Bau " +
+  "einen Plan im Paket; breite Recherche/Pruefung laeuft als parallele Agenten oder Workflow, " +
+  "nicht als Einzelgriff. Jede Antwort endet mit dem naechsten Arbeitsauftrag samt Besitzer " +
+  "(ich/du) und Empfehlung — und was bei MIR liegt und entschieden ist, fuehre ich AUS, " +
+  "statt es zurueckzugeben.";
 
 // --- Auftraege der Kommandobruecke zustellen (Wirkzeitpunkt-Zustellung) -----
 // bridge.html schreibt .claude/orders/<ts>.json {target, text}; dieser Hook
