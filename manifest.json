@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-26T16:20:34.736Z",
-  "posten": 93,
+  "gebautAm": "2026-08-26T16:30:06.731Z",
+  "posten": 94,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 77408,
-      "sha256": "582dee8b02f4e401"
+      "bytes": 77430,
+      "sha256": "ecd55ab7d95dc1ce"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -230,6 +230,14 @@
       "gesaeubert": 0,
       "bytes": 459,
       "sha256": "1c7629e729cb227d"
+    },
+    {
+      "datei": "payload/claude/rules/keel/read-before-act.md",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 1039,
+      "sha256": "608cbd0527d03af0"
     },
     {
       "datei": "payload/claude/rules/keel/tools.md",
@@ -764,8 +772,8 @@
       "herkunft": "erzeugt von paketieren.mjs",
       "quellordner": "erzeugt",
       "gesaeubert": 0,
-      "bytes": 1651,
-      "sha256": "dc2a3164dea77778"
+      "bytes": 1690,
+      "sha256": "5f352a119ca0a93b"
     },
     {
       "datei": "templates/settings.json",
