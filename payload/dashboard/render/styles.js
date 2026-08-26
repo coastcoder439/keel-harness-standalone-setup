@@ -437,6 +437,26 @@ const LISTEN = `
 .gruppen-caret{flex:0 0 14px;width:14px;height:14px;color:var(--muted-foreground);transition:transform var(--dauer)}
 .gruppen-kopf[aria-expanded="false"] .gruppen-caret{transform:rotate(-90deg)}
 .gruppen-titel{font-size:var(--text-sm);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+/* Kanban der Arbeitspakete je Projekt [Owner-Wunsch W7]. Drei Spalten nach
+   ZUSTAND; auf schmalen Flaechen untereinander. */
+.kanban{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:start}
+.kanban-spalte{min-width:0;display:flex;flex-direction:column;gap:8px}
+.kanban-kopf{margin:0 0 2px;font-size:var(--text-xs);font-weight:600;text-transform:uppercase;
+  letter-spacing:.06em;color:var(--muted-foreground);display:flex;align-items:center;gap:6px}
+.kanban-karte{display:flex;flex-direction:column;gap:6px;width:100%;text-align:left;
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:10px 12px;transition:border-color var(--dauer),background var(--dauer)}
+.kanban-karte:hover{border-color:var(--primary);background:color-mix(in srgb,var(--accent) 35%,var(--card))}
+.kanban-titel{font-size:var(--text-compact);font-weight:600;overflow-wrap:anywhere}
+.kanban-balken{display:block;height:4px;border-radius:var(--radius-pille);
+  background:var(--muted);overflow:hidden}
+.kanban-balken-fuell{display:block;height:100%;background:var(--status-ok)}
+.kanban-fuss{font-size:var(--text-micro);color:var(--muted-foreground);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+@media (max-width:900px){.kanban{grid-template-columns:1fr}}
+/* Erklaersatz unter einem technischen Gruppennamen [Owner-Wunsch W14]. */
+.gruppen-erklaersatz{font-size:var(--text-xs);color:var(--muted-foreground);
+  margin:0 0 8px;max-width:80ch}
 /* Technische Namen (SessionStart, PreToolUse) in ihrer echten Schreibweise. */
 .gruppen-titel[data-code]{text-transform:none;letter-spacing:0;font-family:var(--mono)}
 .zeilen-pfeil{flex:0 0 16px;width:16px;height:16px;color:var(--muted-foreground);opacity:.75}

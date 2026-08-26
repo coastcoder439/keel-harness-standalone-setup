@@ -283,6 +283,7 @@ function starten(o) {
         return jsonAntwort(res, 200, {
           packages: bridge.scanPackages(wurzel),
           sessions: bridge.scanSessions(wurzel),
+          automatik: bridge.scanAutomatik(wurzel),
           guards: bridge.SELFTEST_GUARDS,
           readOnly: !!o.nurLesen,
         });

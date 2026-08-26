@@ -193,6 +193,44 @@ function scanSessions(root, opts = {}) {
   return out.sort((a, b) => (a.lastActivity < b.lastActivity ? 1 : -1));
 }
 
+// --- 2b. Automatik: was laeuft ohne Zutun -----------------------------------
+// [Owner 25.08.2026: "was automatisch durchlaeuft, zu welcher Uhrzeit --
+// Conjobs, Loops -- fehlt komplett im Harness als Rubrik"]. Gemessen, nicht
+// behauptet: geplante Aufgaben des Betriebssystems mit Bezug zu diesem
+// Workspace, plus die mitgelieferten Startskripte und ihr Verdrahtungsstand.
+// Findet sich nichts, sagt die Seite das -- mit dem Befehl, der es einrichtet.
+function scanAutomatik(root, opts = {}) {
+  const raus = [];
+  const lauf = opts.spawn || spawnSync;
+
+  // Windows-Aufgabenplanung. Auf anderen Systemen faellt der Aufruf aus --
+  // dann wird nichts behauptet, sondern der Grund vermerkt.
+  let aufgabenGelesen = false;
+  try {
+    const r = lauf("schtasks", ["/query", "/fo", "csv", "/nh"], { encoding: "utf8", timeout: 15000 });
+    if (r && r.status === 0 && r.stdout) {
+      aufgabenGelesen = true;
+      const suchwort = path.basename(root).toLowerCase();
+      for (const zeile of r.stdout.split(/\r?\n/)) {
+        if (!zeile.trim()) continue;
+        const felder = zeile.split('","').map((f) => f.replace(/^"|"$/g, ""));
+        const name = felder[0] || "";
+        if (!name.toLowerCase().includes(suchwort) && !name.toLowerCase().includes("keel")) continue;
+        raus.push({ art: "aufgabe", name: name.replace(/^\\/, ""), naechster: felder[1] || null, status: felder[2] || null });
+      }
+    }
+  } catch (e) { /* kein schtasks: siehe aufgabenGelesen */ }
+
+  // Mitgelieferte Startskripte: vorhanden ja/nein -- der Weg, den der Owner
+  // gehen muesste, damit ueberhaupt etwas automatisch laeuft.
+  const skripte = [];
+  for (const datei of ["dashboard/start-server.cmd", "dashboard/start-server-hidden.vbs"]) {
+    if (fs.existsSync(path.join(root, datei))) skripte.push(datei);
+  }
+
+  return { laeufe: raus, aufgabenGelesen, skripte };
+}
+
 // --- 3. Guard self-tests ----------------------------------------------------
 
 function runSelftest(root, guard) {
@@ -232,6 +270,7 @@ module.exports = {
   parseRoles,
   projectForRole,
   scanSessions,
+  scanAutomatik,
   runSelftest,
   writeOrder,
 };
