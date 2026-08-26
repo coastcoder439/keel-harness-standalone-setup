@@ -99,6 +99,15 @@ const SEITEN = {
     zweck: "Was jede Sitzung automatisch mitliest — und was es kostet. {n} Stücke, zusammen etwa {token} Token je Sitzung.",
     icon: "layers",
   },
+  // [Owner 25.08.2026: "was automatisch durchlaeuft, zu welcher Uhrzeit ...
+  // Conjobs, Loops ... fehlt komplett im Harness als Rubrik"] -- gehoert zum
+  // Harness, weil es dort laeuft, plus Widget im Control Center.
+  automatik: {
+    name: "Automatik",
+    ort: null,
+    zweck: "Was ohne dein Zutun läuft — geplante Aufgaben, Cron-Jobs, Loops. Je Lauf: wann zuletzt, wann wieder.",
+    icon: "refresh",
+  },
   werkzeuge: {
     name: "Tool-Landschaft",
     ort: "docs/tool-landscape.md",
@@ -141,7 +150,7 @@ const TABGRUPPEN = {
     name: "Harness",
     icon: "terminal",
     ort: ".claude/",
-    seiten: ["hooks", "commands", "skills", "rules", "kontext", "werkzeuge"],
+    seiten: ["hooks", "commands", "skills", "rules", "kontext", "werkzeuge", "automatik"],
   },
   repos: {
     // "Zu tun" lebt hier als Reiter [Owner 25.08.2026 abends: der Vollbestand
@@ -251,6 +260,18 @@ const DATEITYP_ALLGEMEIN = "Datei vom Typ .{ext}.";
 // Kurzes, festes Vokabular gleicher Laenge -- ein Satzfragment neben
 // Ein-Wort-Verben war Badge-Chaos [Kritiker-Befund Gauntlet-Runde 3]. Der
 // volle Satz steht in der erklaerung (Detail).
+// Was ein Ereignis BEDEUTET -- ohne diese Saetze steht ueber einer Gruppe nur
+// ein technischer Name, den niemand kennt [Owner 26.08.2026: "Keine
+// Erklaerung, was eine SessionStart, was eine PreToolUse"].
+const EREIGNIS_ERKLAERUNG = {
+  SessionStart: "Läuft einmal, wenn eine neue Sitzung beginnt — hier wird ihr mitgegeben, was sie wissen muss.",
+  UserPromptSubmit: "Läuft bei jeder Nachricht, die du schickst, bevor die Sitzung sie sieht.",
+  PreToolUse: "Läuft vor jedem Werkzeugaufruf — nur hier kann etwas verhindert werden, bevor es passiert.",
+  PostToolUse: "Läuft nach einem Werkzeugaufruf, wenn die Wirkung schon eingetreten ist.",
+  Stop: "Läuft, wenn die Sitzung ihre Antwort abschließt.",
+  statusLine: "Kein Ereignis: dieses Skript zeichnet dauerhaft die Statusleiste.",
+};
+
 const WIRKUNG = {
   blockiert: { wort: "blockiert", erklaerung: "Dieser Hook kann einen Werkzeugaufruf verhindern (exit 2)." },
   meldet:    { wort: "meldet",    erklaerung: "Dieser Hook schreibt eine Meldung, verhindert aber nichts." },
@@ -347,6 +368,11 @@ const LEER = {
   "bridge-pakete": {
     titel: "Keine Arbeitspakete gefunden",
     text: "Arbeitspakete stehen als docs/packages/*.md je Repo — angelegt beim Planen, nachgeführt bei jedem Abschluss.",
+    handlung: null,
+  },
+  automatik: {
+    titel: "Es läuft nichts automatisch",
+    text: "Weder geplante Aufgaben noch Cron-Jobs oder Loops sind für diesen Workspace eingerichtet. Sobald etwas läuft, steht es hier mit seinen Zeiten.",
     handlung: null,
   },
   "bridge-sitzungen": {
@@ -563,6 +589,14 @@ const UI = {
   nichtErreichbarHilfe: "Läuft der Server? Starten mit: node dashboard/serve.js",
   selbsttestLaeuft: "läuft …",
   selbsttestHinweis: "Wähle einen Guard, um seinen Selbsttest zu starten.",
+  kanbanOffen: "Offen",
+  kanbanArbeit: "In Arbeit",
+  kanbanFertig: "Abgeschlossen",
+  kanbanNaechster: "Nächster Schritt",
+  kanbanLeer: "Nichts in dieser Spalte.",
+  automatikArt: "Geplante Aufgabe des Betriebssystems",
+  automatikEinrichten: "Der Dashboard-Server kann bei jeder Anmeldung starten. Dafür liegt bereit:",
+  automatikNichtLesbar: "Die Aufgabenplanung dieses Systems konnte nicht gelesen werden — es kann trotzdem etwas laufen.",
   nurLeseBetrieb: "Nur-Lese-Betrieb — Aufträge abgeschaltet.",
   nurServerTitel: "Nur im Server-Betrieb",
   nurServerText: "Diese Ansicht liest und schreibt live. Starte: node dashboard/serve.js — dann http://127.0.0.1:8765",
@@ -682,6 +716,7 @@ function datum(iso) {
 
 module.exports = {
   VERBOTEN, SEITEN, NAVIGATION, TABGRUPPEN, STATUS, ART, ART_BESCHREIBUNG,
+  EREIGNIS_ERKLAERUNG,
   DATEITYP, DATEITYP_ALLGEMEIN,
   WIRKUNG, LADEART, KANTE, QUELLE, GIT, LEER, UI, NOTIZ, ZUTUN_ART,
   fuellen, zahl, bytes, datum,
