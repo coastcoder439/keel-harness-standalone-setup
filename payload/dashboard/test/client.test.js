@@ -158,7 +158,10 @@ test("jede aufgerufene eigene Funktion ist im zusammengesetzten Skript erklaert"
     "navigator", "console", "setTimeout", "clearTimeout", "setInterval", "clearInterval",
     "requestAnimationFrame", "JSON", "Math", "Object", "Array", "String", "Number",
     "Boolean", "Date", "RegExp", "Error", "Map", "Set", "Promise", "encodeURIComponent",
-    "decodeURIComponent", "parseInt", "parseFloat", "isNaN", "undefined", "NaN",
+    "decodeURIComponent", "parseInt", "parseFloat", "isNaN", "isFinite", "undefined", "NaN",
+    // Intl: fuer Datums-/Zahlformate -- eigene Formate sind verboten (Regel
+    // "Dates/times: use Intl.DateTimeFormat, not hardcoded formats").
+    "Intl",
     "Infinity", "alert", "getComputedStyle", "matchMedia", "CustomEvent", "Event",
     "IntersectionObserver", "MutationObserver", "URL", "URLSearchParams", "TextDecoder",
     // Der Editor braucht sie: fetch spricht mit dem Vorschau-Server, confirm

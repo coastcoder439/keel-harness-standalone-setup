@@ -669,45 +669,6 @@ const BAUSTEINE = `
    chart-Leiter (hell chart-3, dunkel chart-1) und traegt 8,84 / 7,99 auf --card. */
 .balken{height:6px;border-radius:var(--radius-pille);background:var(--muted);overflow:hidden;min-width:64px}
 .balken > span{display:block;height:100%;background:var(--primary)}
-/* Control Center: Widgets verdichten nach oben [Owner 25.08.2026]. */
-.cc-raster{display:grid;grid-template-columns:5fr 7fr;gap:14px;align-items:start}
-.cc-spalte{display:grid;gap:14px;min-width:0}
-/* Jede Stufe der Raster-Kette braucht min-width:0 -- sonst zwingt eine
-   nowrap-Zeile das Widget auf Maximalbreite (gemessen 26.08.: 3382 px). */
-.cc-spalte > *{min-width:0}
-.cc-voll{grid-column:1/-1;min-width:0}
-.widget{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-xl);
-  padding:14px 16px}
-.widget-titel{margin:0 0 10px;font-size:var(--text-xs);font-weight:600;text-transform:uppercase;
-  letter-spacing:.08em;color:var(--muted-foreground);display:flex;align-items:baseline;gap:8px}
-.widget-link{margin-left:auto;font-size:var(--text-micro);font-weight:500;color:var(--primary);
-  text-transform:none;letter-spacing:0;background:none;border:0;padding:0}
-.check-reihe{display:flex;gap:10px;align-items:center;width:100%;text-align:left;
-  padding:6px 0;border-top:1px solid var(--border);font-size:var(--text-sm);font-weight:500}
-.check-reihe:first-of-type{border-top:0}
-.check-zeichen{flex:0 0 18px;text-align:center;font-weight:700}
-.check-ok{color:var(--status-ok)}
-.check-warn{color:var(--status-hinweis)}
-.check-text{flex:1 1 auto;min-width:0}
-.check-wert{flex:0 0 auto;font-size:var(--text-micro);color:var(--muted-foreground);font-weight:400}
-.logbuch{position:relative;margin-left:5px;padding-left:20px}
-.logbuch::before{content:"";position:absolute;left:4px;top:8px;bottom:8px;width:2px;background:var(--border)}
-.logbuch-halt{position:relative;padding:6px 0}
-.logbuch-halt::before{content:"";position:absolute;left:-20px;top:12px;width:10px;height:10px;
-  border-radius:var(--radius-pille);background:var(--primary);
-  border:2px solid var(--card);box-shadow:0 0 0 1px var(--primary)}
-.logbuch-halt.logbuch-leer::before{background:var(--card);box-shadow:0 0 0 1px var(--muted-foreground)}
-.logbuch-halt time{display:block;font-size:var(--text-micro);color:var(--muted-foreground)}
-.logbuch-halt.logbuch-leer span{color:var(--muted-foreground)}
-.widget-drei{border-color:color-mix(in srgb,var(--status-hinweis) 45%,var(--border));
-  background:color-mix(in srgb,var(--status-hinweis) 6%,var(--card))}
-.widget-drei .widget-titel{color:color-mix(in srgb,var(--status-hinweis) 85%,var(--foreground))}
-.drei-zeile{display:flex;gap:11px;align-items:center;width:100%;text-align:left;
-  padding:8px 0;border-top:1px solid var(--border);font-size:var(--text-sm);font-weight:500}
-.drei-zeile:first-of-type{border-top:0}
-.drei-kasten{flex:0 0 15px;width:15px;height:15px;border:1.5px solid var(--muted-foreground);
-  border-radius:var(--radius-sm)}
-.drei-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Haupt-Knopf: die EINE ausgezeichnete Handlung einer Flaeche (Vorbild: der
    dunkle Aktionsknopf "Pruefung jetzt ausfuehren" in Keel Light). */
 .knopf-haupt{background:var(--primary);color:var(--primary-foreground);border:1px solid var(--primary);
@@ -730,17 +691,30 @@ const BAUSTEINE = `
 .auftrag-zeile{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap}
 .auftrag-zeile select{height:32px;padding:0 8px;border:1px solid var(--input);border-radius:var(--radius-md);
   background:var(--card);color:var(--foreground);font:inherit;font-size:var(--text-compact)}
-.auftrag-zeile textarea{flex:1 1 260px;min-height:32px;padding:6px 10px;border:1px solid var(--input);
+/* Feste Hoehe statt flex-Streckung: das Feld wuchs sonst auf die ganze
+   Restseite, weil .auftrag-zeile es dehnte [Abnahme 26.08.2026]. */
+.auftrag-zeile textarea{flex:1 1 260px;height:64px;min-height:44px;max-height:200px;
+  padding:8px 10px;border:1px solid var(--input);
   border-radius:var(--radius-md);background:var(--card);color:var(--foreground);
   font:inherit;font-size:var(--text-compact);resize:vertical}
-/* Projekt->Paket-Ausbau des Komposers [Owner 25.08.2026 abends]. */
-.auftrag-pakete-label{font-size:var(--text-micro);color:var(--muted-foreground);margin:4px 0 6px}
-.auftrag-pakete{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
-.paket-chip{border:1px solid var(--border);border-radius:var(--radius-pille);padding:4px 12px;
-  font-size:var(--text-xs);color:var(--foreground);background:var(--card)}
-.paket-chip:hover{border-color:var(--primary)}
-.paket-chip-an{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 12%,var(--card));
-  color:var(--primary);font-weight:500}
+.auftrag-feld-breit{flex:1 1 260px}
+/* Komposer-Felder: jedes Auswahlfeld traegt ein SICHTBARES Label ueber sich
+   (Regel "Form controls need <label>"), nicht nur ein aria-label. */
+.auftrag-feld{display:flex;flex-direction:column;gap:3px;min-width:0}
+/* Das Textfeld darf NICHT von der Flex-Spalte gestreckt werden -- sonst
+   waechst es bis zur max-height statt auf seiner Hoehe zu bleiben (gemessen
+   26.08.2026: 200 px statt 64) [Abnahme-Befund]. */
+.auftrag-feld > textarea{flex:0 0 auto}
+.auftrag-feld-breit{flex:1 1 260px}
+.auftrag-feld-label{font-size:var(--text-micro);color:var(--muted-foreground)}
+.auftrag-feld select{max-width:22rem}
+/* color-scheme gehoert an die WURZEL und muss dem Themenschalter folgen, nicht
+   der Systemeinstellung -- sonst klappt im dunklen Dashboard ein weisses
+   Auswahlmenue auf, wenn Windows hell laeuft [Befund 26.08.2026]. */
+:root{color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-thema="hell"]){color-scheme:dark}}
+:root[data-thema="dunkel"]{color-scheme:dark}
+.auftrag-zeile select{background:var(--card);color:var(--foreground)}
 /* Paket-Schritte: eingerueckt unter ihrem Paket. */
 .paket-schritte{margin:4px 0 8px 44px}
 .paket-offen{margin:4px 12px 8px 44px}
@@ -757,7 +731,7 @@ const BAUSTEINE = `
 .ablauf-pfeil{align-self:center;color:var(--muted-foreground);flex:0 0 auto}
 `;
 
-const { BOARD_UND_PALETTE, SCHMAL } = require("./styles-extra.js");
+const { BOARD_UND_PALETTE, SCHMAL, CONTROL_CENTER } = require("./styles-extra.js");
 
 const css = [
   themenBloecke(),
@@ -770,6 +744,7 @@ const css = [
   DATEIANSICHT,
   DETAIL,
   BAUSTEINE,
+  CONTROL_CENTER,
   BOARD_UND_PALETTE,
   SCHMAL
 ].join("\n");

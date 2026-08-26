@@ -97,6 +97,25 @@ HD.fuellen = function (vorlage, werte) {
   });
 };
 
+// Zeitpunkt fuer die Anzeige: Uhrzeit wenn heute, sonst Datum -- ueber Intl,
+// nicht ueber String-Zerlegung eines fertigen Datumstextes (die bricht, sobald
+// die Laufzeit das Trennzeichen aendert). Ohne lesbaren Wert: ehrlicher Strich.
+HD.zeitpunkt = function (iso) {
+  if (!iso) return "—";
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  var heute = new Date();
+  var gleicherTag = d.getFullYear() === heute.getFullYear()
+    && d.getMonth() === heute.getMonth() && d.getDate() === heute.getDate();
+  try {
+    return gleicherTag
+      ? new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" }).format(d)
+      : new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit" }).format(d);
+  } catch (e) {
+    return "—";
+  }
+};
+
 // Kommt die Seite von einem Server oder liegt sie als Datei vor? Davon haengt
 // ab, ob ueberhaupt etwas geaendert werden kann: als Datei geoeffnet gibt es
 // niemanden, der zurueckschreiben koennte -- ein Bearbeiten-Knopf waere dann

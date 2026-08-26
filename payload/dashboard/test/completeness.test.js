@@ -34,6 +34,14 @@ const OHNE_TEST = {
   "inventory.js": "Altbestand aus der Vorfassung, wie classify.js. Kein Test -- offen, festgehalten in docs/regelverstoesse-plan.md.",
 };
 
+// Abnahme-WERKZEUGE sind keine Dashboard-Module: sie laufen von Hand gegen
+// die fertige Seite, werden nie ausgeliefert und duerfen deshalb ein
+// Entwicklungs-Paket laden (playwright) und Ergebnisse ausgeben. Die Liste ist
+// klein und benannt -- wer hier etwas eintraegt, muss den Grund verteidigen.
+const WERKZEUGE = {
+  "klickpfad.js": "Abnahme-Werkzeug: klickt jede Zusage der Oberflaeche gegen den laufenden Server. Laeuft von Hand, wird nicht ausgeliefert, braucht playwright und gibt sein Ergebnis aus.",
+};
+
 function moduleFinden() {
   const raus = [];
   (function lauf(ordner) {
@@ -42,12 +50,20 @@ function moduleFinden() {
       if (e.isDirectory()) {
         if (e.name !== "test") lauf(p);
       } else if (e.name.endsWith(".js")) {
-        raus.push(path.relative(DASH, p).split(path.sep).join("/"));
+        const rel = path.relative(DASH, p).split(path.sep).join("/");
+        if (!WERKZEUGE[rel]) raus.push(rel);
       }
     }
   })(DASH);
   return raus.sort();
 }
+
+test("jedes Abnahme-Werkzeug traegt einen Grund und liegt wirklich dort", () => {
+  for (const [datei, grund] of Object.entries(WERKZEUGE)) {
+    assert.ok(fs.existsSync(path.join(DASH, datei)), "Werkzeug fehlt: " + datei);
+    assert.ok(grund.length > 40, datei + ": Grund zu duenn");
+  }
+});
 
 function testdateien() {
   return fs.readdirSync(path.join(DASH, "test")).filter((f) => f.endsWith(".test.js")).sort();

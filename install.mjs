@@ -196,6 +196,10 @@ const DASHBOARD = [
   // Der Vorschau-Server: macht aus der Seite ein Werkzeug zum Aendern.
   // Ohne ihn ist sie nur lesbar -- ein Doppelklick genuegt dafuer.
   "serve.js",
+  // Abnahme-Werkzeug: klickt jede Zusage der Oberflaeche gegen den laufenden
+  // Server (26.08.2026). Braucht playwright -- eine ENTWICKLUNGS-Abhaengigkeit,
+  // das Dashboard selbst laeuft weiter mit Bordmitteln.
+  "klickpfad.js",
   // Dauerbetrieb (25.08.2026, Beanstandung A2): Doppelklick-Start und der
   // fensterlose Start fuer den Anmelde-Trigger (schtasks, siehe Kopf der .cmd).
   "start-server.cmd",
