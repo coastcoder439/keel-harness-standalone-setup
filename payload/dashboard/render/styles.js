@@ -733,6 +733,14 @@ const BAUSTEINE = `
 .auftrag-zeile textarea{flex:1 1 260px;min-height:32px;padding:6px 10px;border:1px solid var(--input);
   border-radius:var(--radius-md);background:var(--card);color:var(--foreground);
   font:inherit;font-size:var(--text-compact);resize:vertical}
+/* Projekt->Paket-Ausbau des Komposers [Owner 25.08.2026 abends]. */
+.auftrag-pakete-label{font-size:var(--text-micro);color:var(--muted-foreground);margin:4px 0 6px}
+.auftrag-pakete{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.paket-chip{border:1px solid var(--border);border-radius:var(--radius-pille);padding:4px 12px;
+  font-size:var(--text-xs);color:var(--foreground);background:var(--card)}
+.paket-chip:hover{border-color:var(--primary)}
+.paket-chip-an{border-color:var(--primary);background:color-mix(in srgb,var(--primary) 12%,var(--card));
+  color:var(--primary);font-weight:500}
 /* Paket-Schritte: eingerueckt unter ihrem Paket. */
 .paket-schritte{margin:4px 0 8px 44px}
 .paket-offen{margin:4px 12px 8px 44px}
