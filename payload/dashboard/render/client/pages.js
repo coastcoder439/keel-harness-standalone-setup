@@ -276,12 +276,87 @@ HD.boardHTML = function (liste) {
   return '<div class="board">' + spalten + "</div>" + ohne;
 };
 
-// --- Ueberblick ----------------------------------------------------------
-// Der Ueberblick IST die Bruecke [Owner, 24.08.2026: Dashboard-Zweck =
-// Kommandobruecke]: Sitzungen live oben (wie die Agenten-Karten des
-// Vorbilds), dann Kennzahlen, offene Punkte, Auftrag, letzte Aenderungen.
-// Eine Seite, ein Zweck -- keine zweite "Bruecken"-Seite daneben.
+// --- Control Center -------------------------------------------------------
+// [Owner 25.08.2026 abends] Widgets verdichten nach oben, die Reiter
+// verbreitern nach unten: Gesundheit (Haekchenliste), Deine drei (die
+// wichtigsten offenen Punkte), Logbuch heute (was lief wann), Sitzungen,
+// Auftrag. Kennung bleibt "ueberblick".
+
+// Gesundheit: vier Haekchen aus ECHTEN Quellen -- Hooks, Messungsalter,
+// Server, Sicherung. Kein Haekchen ohne Messung dahinter.
+HD.wGesundheit = function () {
+  var z = HD.D.zahlen;
+  var hooksOk = HD.seitenEintraege("hooks").filter(function (e) { return e.status === "ok"; }).length;
+  var hooksAlle = HD.seitenEintraege("hooks").length;
+  var alterMin = Math.max(0, Math.round((Date.now() - Date.parse(HD.D.gemessenAm)) / 60000));
+  var zeilen = [
+    { ok: hooksOk === hooksAlle, text: HD.W.ccHooksGeladen, wert: hooksOk + "/" + hooksAlle, ziel: "hooks" },
+    { ok: alterMin <= 60, text: HD.fuellen(HD.W.ccMessungFrisch, { n: alterMin }), wert: HD.D.gemessenText.split(", ")[1] || "", ziel: null },
+    { ok: HD.serverModus(), text: HD.serverModus() ? HD.W.ccServerJa : HD.W.ccServerNein, wert: HD.serverModus() ? location.host : "", ziel: null },
+    { ok: z.reposOffen === 0,
+      text: z.reposOffen === 0 ? HD.W.ccSicherungOk : HD.fuellen(HD.W.ccSicherungLuecke, { n: z.reposOffen }),
+      wert: z.repos + " Repos", ziel: "backup" },
+  ];
+  return '<section class="widget"><h2 class="widget-titel">' + HD.esc(HD.W.ccGesundheit) + "</h2>"
+    + zeilen.map(function (r) {
+        var kern = '<span class="check-zeichen ' + (r.ok ? "check-ok" : "check-warn") + '">' + (r.ok ? "✓" : "!") + "</span>"
+          + '<span class="check-text">' + HD.esc(r.text) + "</span>"
+          + '<span class="check-wert mono">' + HD.esc(r.wert) + "</span>";
+        return r.ziel
+          ? '<button class="check-reihe" data-ziel="' + HD.esc(r.ziel) + '">' + kern + "</button>"
+          : '<div class="check-reihe">' + kern + "</div>";
+      }).join("") + "</section>";
+};
+
+// Logbuch heute: was lief, wann -- heute nur die Messung; der ehrliche Satz
+// zur fehlenden Automatik bleibt stehen, bis es sie gibt.
+HD.wLogbuch = function () {
+  return '<section class="widget"><h2 class="widget-titel">' + HD.esc(HD.W.ccLogbuch) + "</h2>"
+    + '<div class="logbuch">'
+    + '<div class="logbuch-halt"><time class="mono">' + HD.esc((HD.D.gemessenText.split(", ")[1] || HD.D.gemessenText)) + "</time>"
+    + "<b>" + HD.esc(HD.W.ccMessungGelaufen) + "</b></div>"
+    + '<div class="logbuch-halt logbuch-leer"><time class="mono">—</time>'
+    + "<span>" + HD.esc(HD.W.ccKeinLauf) + "</span></div>"
+    + "</div></section>";
+};
+
+// Deine drei: die wichtigsten offenen Punkte -- Abweichungen zuerst, dann
+// Dokument-Punkte. Klick oeffnet den Eintrag; der Fusslink fuehrt zur Breite.
+HD.wDrei = function () {
+  var offene = HD.seitenEintraege("zutun");
+  var rang = { unlesbar: 0, befund: 1, fehlt: 2, hinweis: 3 };
+  offene = offene.slice().sort(function (a, b) {
+    var ra = a.status in rang ? rang[a.status] : 9;
+    var rb = b.status in rang ? rang[b.status] : 9;
+    return ra - rb;
+  }).slice(0, 3);
+  var zeilen = offene.length
+    ? offene.map(function (e) {
+        return '<button class="drei-zeile" data-id="' + HD.esc(e.id) + '">'
+          + '<span class="drei-kasten"></span>'
+          + '<span class="drei-text">' + HD.esc(e.name) + "</span>"
+          + (e.artWort ? '<span class="check-wert mono">' + HD.esc(e.artWort) + "</span>" : "")
+          + "</button>";
+      }).join("")
+    : HD.leerHTML("zutun");
+  return '<section class="widget widget-drei"><h2 class="widget-titel">' + HD.esc(HD.W.ccDrei)
+    + '<button class="widget-link" data-ziel="zutun">' + HD.esc(HD.W.ccAllesOffene) + " →</button></h2>"
+    + zeilen + "</section>";
+};
+
 HD.ueberblickSeite = function () {
+  var s = HD.D.seiten.ueberblick;
+  return '<p class="erklaersatz">' + HD.esc(s.zweck) + "</p>"
+    + '<div class="cc-raster">'
+    + '<div class="cc-spalte">' + HD.wGesundheit() + HD.wLogbuch() + "</div>"
+    + '<div class="cc-spalte">' + HD.wDrei() + HD.sitzungenSektion() + "</div>"
+    + '<div class="cc-voll">' + HD.auftragSektion() + "</div>"
+    + "</div>";
+};
+
+// Die alte Ueberblick-Zusammensetzung -- bleibt als Baustein-Fundus fuer die
+// naechsten Slices (Kennzahlen je Reiter-Seite, Ablaufstreifen im Harness).
+HD.altUeberblickSeite = function () {
   var z = HD.D.zahlen;
   var s = HD.D.seiten.ueberblick;
   var st = HD.D.status[HD.D.gesamtstatus];

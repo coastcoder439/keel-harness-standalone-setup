@@ -37,6 +37,9 @@ const ERWARTETE_REIHENFOLGE = [
   "session-roles.js",
   "onboarding-start.js",
   "project-context.js",
+  // pollution-warn.js seit 25.08.2026 abends (Commit 2bc1469, Harness
+  // Control): misst User-Scope-Fremdmaterial bei Sitzungsstart.
+  "pollution-warn.js",
   "prompt-form.js",
   "dod-guard.js",
   "uncommitted-warn.js",
@@ -57,18 +60,18 @@ const WIRKUNG_MARKER = {
 // ---------------------------------------------------------------------------
 // Bestand und Reihenfolge
 // ---------------------------------------------------------------------------
-test("elf Eintraege, in der Reihenfolge von settings.json", () => {
+test("zwoelf Eintraege, in der Reihenfolge von settings.json", () => {
   assert.deepStrictEqual(ergebnis.fehler, [], "kein Messfehler erwartet");
-  assert.strictEqual(ergebnis.eintraege.length, 11);
+  assert.strictEqual(ergebnis.eintraege.length, 12);
   assert.deepStrictEqual(ergebnis.eintraege.map((e) => e.skript), ERWARTETE_REIHENFOLGE);
   const zeilen = ergebnis.eintraege.map((e) => e.settingsZeile);
   const sortiert = [...zeilen].sort((a, b) => a - b);
   assert.deepStrictEqual(zeilen, sortiert, "settingsZeile muss monoton steigen");
 });
 
-test("Ereignisse: SessionStart 3, UserPromptSubmit 1, Stop 2, PreToolUse 5", () => {
+test("Ereignisse: SessionStart 4, UserPromptSubmit 1, Stop 2, PreToolUse 5", () => {
   const nach = (ev) => ergebnis.eintraege.filter((e) => e.ereignis === ev).length;
-  assert.strictEqual(nach("SessionStart"), 3);
+  assert.strictEqual(nach("SessionStart"), 4);
   assert.strictEqual(nach("UserPromptSubmit"), 1);
   assert.strictEqual(nach("Stop"), 2);
   assert.strictEqual(nach("PreToolUse"), 5);
@@ -223,6 +226,10 @@ test("ausloeser gibt es nur bei SessionStart, und jede Zeile enthaelt das Wort",
       assert.deepStrictEqual(e.ausloeser, [], `${e.skript} darf keine Ausloeser tragen`);
       continue;
     }
+    // Ein SessionStart-Skript OHNE source-Filter (pollution-warn.js: laeuft
+    // bei jedem Start) traegt zu Recht keine Ausloeser -- Pflicht besteht nur
+    // fuer Skripte, die nach source unterscheiden.
+    if (e.skript === "pollution-warn.js") continue;
     assert.ok(e.ausloeser.length > 0, `${e.skript} ohne Ausloeser`);
     const zeilen = zeilenVon(e.pfad);
     for (const a of e.ausloeser) {
@@ -355,7 +362,9 @@ test("mit opts.proben: gestartet wird nur, was gestartet werden darf", () => {
   const gelaufen = alle.filter((e) => e.probe.befehl !== null);
   assert.strictEqual(spawnZaehler - vorher, gelaufen.length, "es wurde mehr gespawnt als berichtet");
   assert.deepStrictEqual(gelaufen.map((e) => e.skript).sort(), [
-    "danger-guard.js", "onboarding-start.js", "project-context.js", "session-roles.js", "statusline.js",
+    // pollution-warn.js: vierter SessionStart-Hook seit 25.08.2026 (2bc1469).
+    "danger-guard.js", "onboarding-start.js", "pollution-warn.js", "project-context.js",
+    "session-roles.js", "statusline.js",
   ]);
   const dg = r.eintraege.find((e) => e.skript === "danger-guard.js");
   assert.strictEqual(dg.probe.befehl, "node .claude/danger-guard.js --selbsttest");

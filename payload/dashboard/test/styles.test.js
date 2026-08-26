@@ -8,8 +8,19 @@
 const test = require("node:test");
 const assert = require("node:assert");
 const { css, TOKENS, oklchZuRgb, kontrast } = require("../render/styles.js");
+// Ausgelagerte Flaechen-Bloecke (25.08.2026: 800-Zeilen-Grenze) -- direkt
+// geladen, damit die Vollstaendigkeits-Pruefung das Modul als getestet sieht,
+// und unten per Gegenprobe im zusammengesetzten css verankert.
+const STYLES_EXTRA = require("../render/styles-extra.js");
 
 const TEXT_MINDEST = 4.5; // WCAG AA, Fliesstext
+
+test("die ausgelagerten Flaechen-Bloecke stehen im zusammengesetzten Stylesheet", () => {
+  for (const [name, block] of Object.entries(STYLES_EXTRA)) {
+    assert.ok(typeof block === "string" && block.length > 200, name + " ist kein CSS-Block");
+    assert.ok(css.includes(block), name + " fehlt im zusammengesetzten css");
+  }
+});
 const MARKE_MINDEST = 3.0; // WCAG 1.4.11, Glyphen und bedeutungstragende Raender
 
 // --- Hilfen: color-mix(in srgb, ...) nachrechnen -------------------------------
