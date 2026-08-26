@@ -73,6 +73,11 @@ const TOKENS = {
     "--chart-5": "oklch(0.16 0.038 238)",
     "--destructive": "oklch(0.577 0.245 27.325)",
     "--status-ok": "oklch(0.52 0.10 165)",
+    // LAUFENDE ARBEIT IST NICHT DASSELBE WIE EIN ZUSTAND IN ORDNUNG
+    // [Kritik-Runde 3, Rueckfall 1]: Gruen trug beides -- ein Balken zu 30 %
+    // und ein Haken "alles gut" sagten dem Auge dasselbe und meinten
+    // Gegenteiliges. Fortschritt bekommt deshalb einen eigenen Ton.
+    "--status-laeuft": "oklch(0.5 0.09 215)",
     "--status-hinweis": "oklch(0.52 0.12 72)",
     "--status-fehler": "oklch(0.52 0.18 25)",
     "--status-fehlt": "oklch(0.55 0.02 235)",
@@ -117,6 +122,7 @@ const TOKENS = {
     "--chart-5": "oklch(0.16 0.038 238)",
     "--destructive": "oklch(0.637 0.237 25.331)",
     "--status-ok": "oklch(0.78 0.11 165)",
+    "--status-laeuft": "oklch(0.72 0.09 215)",
     "--status-hinweis": "oklch(0.82 0.13 78)",
     "--status-fehler": "oklch(0.72 0.16 25)",
     "--status-fehlt": "oklch(0.68 0.02 235)",
@@ -454,8 +460,16 @@ const LISTEN = `
 .kennzahl[class*="status-"] .kennzahl-wert{color:var(--sc)}
 .eintrag-schluss{flex:0 0 auto;display:flex;align-items:center;gap:8px}
 /* IssueGroupHeader -- ohne Rahmen, fuer alle Gruppen. */
-.gruppen-kopf{display:flex;align-items:center;gap:8px;padding:12px 4px 6px;width:100%;text-align:left}
-.gruppen-caret{flex:0 0 14px;width:14px;height:14px;color:var(--muted-foreground);transition:transform var(--dauer)}
+/* EINE INHALTSKANTE [Kritik-Runde 3, Befund 2]. Gemessen im DOM lagen H1,
+   Untertitel, Reiter, Suchfeld, Zeilen, Karten und Spalten alle auf x=264 --
+   nur der Gruppentitel stand bei 290, weil der Aufklapp-Pfeil ihn hineinschob.
+   Eine Ueberschrift, die weiter rechts steht als der Inhalt, den sie
+   beschriftet, nimmt dem Auge die Linie, an der es entlanglaufen kann.
+   Der Pfeil haengt jetzt im Rand (negativer Einzug), der Titel steht auf der
+   Kante. */
+.gruppen-kopf{display:flex;align-items:center;gap:8px;padding:12px 4px 6px 0;width:100%;text-align:left}
+.gruppen-caret{flex:0 0 14px;width:14px;height:14px;margin-left:-22px;
+  color:var(--muted-foreground);transition:transform var(--dauer)}
 .gruppen-kopf[aria-expanded="false"] .gruppen-caret{transform:rotate(-90deg)}
 /* ABSCHNITTE IN NORMALER SCHREIBUNG [Kritik-Runde 2, Problem 5]. Versalien
    waren hier die zweite von VIER Ueberschriften-Sprachen fuer EINE Rangstufe
@@ -491,7 +505,9 @@ const LISTEN = `
 .kanban-titel{font-size:var(--text-compact);font-weight:600;overflow-wrap:anywhere}
 .kanban-balken{display:block;height:4px;border-radius:var(--radius-pille);
   background:var(--muted);overflow:hidden}
-.kanban-balken-fuell{display:block;height:100%;background:var(--status-ok)}
+/* Fortschritt traegt --status-laeuft, NICHT --status-ok [Kritik-Runde 3,
+   Rueckfall 1]. Gruen ist ab hier ausschliesslich "Zustand in Ordnung". */
+.kanban-balken-fuell{display:block;height:100%;background:var(--status-laeuft)}
 .kanban-fuss{font-size:var(--text-micro);color:var(--muted-foreground);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
 /* GRUEN NUR FUER AKTIVEN FORTSCHRITT [Kritik-Runde 2, Problem 10]. Trug beides
@@ -649,6 +665,13 @@ const BAUSTEINE = `
    Ein Fehler bleibt stehen, bis man ihn wegklickt -- also braucht er Platz fuer
    einen ganzen Satz (keine Pille mehr), eine Farbkante, die ihn vom Erfolg
    unterscheidet, und Zeigerereignisse, damit sein Schliessen-Knopf klickbar ist. */
+/* Jede BLEIBENDE Meldung ist anklickbar und hat Platz fuer einen ganzen Satz --
+   nicht nur die Fehler [Kritik-Runde 3, Rueckfall 3]. Die Tastenhilfe ist ein
+   bleibender Hinweis und klebte ohne diese Regel unschliessbar fest. */
+.meldung.meldung-bleibt{display:flex;align-items:flex-start;gap:10px;
+  max-width:min(640px,calc(100vw - 32px));text-align:left;
+  border-radius:var(--radius);padding:12px 12px 12px 14px;
+  font-size:var(--text-sm);line-height:1.45;pointer-events:auto}
 .meldung.meldung-fehler{display:flex;align-items:flex-start;gap:10px;
   max-width:min(560px,calc(100vw - 32px));text-align:left;
   border-radius:var(--radius);padding:12px 12px 12px 14px;
@@ -690,45 +713,13 @@ const BAUSTEINE = `
 .sitzung-karte{display:flex;align-items:center;gap:10px;padding:12px 14px;
   border:1px solid color-mix(in srgb,var(--primary) 35%,var(--border));border-radius:var(--radius-lg);
   background:color-mix(in srgb,var(--primary) 6%,var(--card))}
-.sitzung-punkt{flex:0 0 8px;width:8px;height:8px;border-radius:var(--radius-pille);background:var(--status-ok)}
+.sitzung-punkt{flex:0 0 8px;width:8px;height:8px;border-radius:var(--radius-pille);background:var(--status-laeuft)}
 .sitzung-haupt{flex:1 1 auto;min-width:0}
 .sitzung-titel{display:block;font-size:var(--text-sm);font-weight:500;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sitzung-rolle{display:block;font-size:var(--text-xs);color:var(--muted-foreground);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sektion-fuss{padding:8px 0}
-/* Auftrag: Ziel, Text und Senden in EINER Zeile -- ein Formular, kein Block. */
-.auftrag-zeile{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap}
-.auftrag-zeile select{height:32px;padding:0 8px;border:1px solid var(--input);border-radius:var(--radius-md);
-  background:var(--card);color:var(--foreground);font:inherit;font-size:var(--text-compact)}
-/* Feste Hoehe statt flex-Streckung: das Feld wuchs sonst auf die ganze
-   Restseite, weil .auftrag-zeile es dehnte [Abnahme 26.08.2026]. */
-.auftrag-zeile textarea{flex:1 1 260px;height:64px;min-height:44px;max-height:200px;
-  padding:8px 10px;border:1px solid var(--input);
-  border-radius:var(--radius-md);background:var(--card);color:var(--foreground);
-  font:inherit;font-size:var(--text-compact);resize:vertical}
-.auftrag-feld-breit{flex:1 1 260px}
-/* Der Senden-Knopf steht UNTER der Textflaeche, an ihrer rechten Kante
-   [Kritik-Runde 2, Problem 15] -- neben dem Formular schwebend gehoerte er
-   optisch zu nichts und riss eine dritte rechte Kante auf. Der Verlauf darunter
-   macht nachlesbar, was rausging [Problem 4]. */
-.auftrag-fuss{display:flex;justify-content:flex-end;margin-top:8px}
-.auftrag-verlauf{margin-top:14px;padding-top:10px;border-top:1px solid var(--border)}
-.auftrag-verlauf-kopf{font-size:var(--text-micro);font-weight:600;
-  color:var(--muted-foreground);margin:0 0 4px}
-.auftrag-verlauf-zeile{font-size:var(--text-xs);color:var(--muted-foreground);
-  margin:0;padding:3px 0;display:flex;gap:8px}
-.auftrag-verlauf-zeile time{flex:0 0 auto;font-variant-numeric:tabular-nums}
-/* Komposer-Felder: jedes Auswahlfeld traegt ein SICHTBARES Label ueber sich
-   (Regel "Form controls need <label>"), nicht nur ein aria-label. */
-.auftrag-feld{display:flex;flex-direction:column;gap:3px;min-width:0}
-/* Das Textfeld darf NICHT von der Flex-Spalte gestreckt werden -- sonst
-   waechst es bis zur max-height statt auf seiner Hoehe zu bleiben (gemessen
-   26.08.2026: 200 px statt 64) [Abnahme-Befund]. */
-.auftrag-feld > textarea{flex:0 0 auto}
-.auftrag-feld-breit{flex:1 1 260px}
-.auftrag-feld-label{font-size:var(--text-micro);color:var(--muted-foreground)}
-.auftrag-feld select{max-width:22rem}
 /* color-scheme gehoert an die WURZEL und muss dem Themenschalter folgen, nicht
    der Systemeinstellung -- sonst klappt im dunklen Dashboard ein weisses
    Auswahlmenue auf, wenn Windows hell laeuft [Befund 26.08.2026]. */
@@ -752,7 +743,7 @@ const BAUSTEINE = `
 .ablauf-pfeil{align-self:center;color:var(--muted-foreground);flex:0 0 auto}
 `;
 
-const { BOARD_UND_PALETTE, SCHMAL, CONTROL_CENTER, DATEIANSICHT, DETAIL } = require("./styles-extra.js");
+const { BOARD_UND_PALETTE, SCHMAL, CONTROL_CENTER, DATEIANSICHT, DETAIL, AUFTRAG } = require("./styles-extra.js");
 
 const css = [
   themenBloecke(),
@@ -766,6 +757,7 @@ const css = [
   DETAIL,
   BAUSTEINE,
   CONTROL_CENTER,
+  AUFTRAG,
   BOARD_UND_PALETTE,
   SCHMAL
 ].join("\n");

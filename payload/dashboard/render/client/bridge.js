@@ -138,9 +138,13 @@ HD.sitzungenSektion = function () {
         + '<span class="sitzung-laeuft">' + HD.esc(HD.W.sitzungLaeuft) + "</span>"
         + "</div>";
     }).join("");
+    // HD.leerHTML statt handgeschriebenem Text [Kritik-Runde 3, Rueckfall 6]:
+    // hier stand der Leertext von Hand -- ZWEI Zeilen unter einem korrekten
+    // HD.leerHTML-Aufruf -- und schluckte damit ausgerechnet im haeufigsten
+    // Leerfall den einzigen sinnvollen Knopf ("Jetzt neu abfragen").
     var kartenHTML = laufend.length
       ? '<div class="sitzung-reihe">' + karten + "</div>"
-      : '<p class="leer-kompakt">' + HD.esc(HD.D.leer["bridge-sitzungen"].text) + "</p>";
+      : HD.leerHTML("bridge-sitzungen");
 
     // Fruehere Sitzungen nur als EINE Zeile mit Zahl -- 75 Titel flach
     // auszukippen war Beanstandung B10.
@@ -442,16 +446,29 @@ HD.guardSektion = function () {
   var anzahl = ((HD.bridgeData || {}).guards || []).length;
   return HD.liveSektion(HD.W.guardTests, anzahl, function (d) {
     var laeuft = HD.S.selbsttestLaeuft;
+    // NUR DER LAUFENDE KNOPF IST GESPERRT [Kritik-Runde 2, Problem 2]: vorher
+    // sperrte ein einziger Selbsttest ALLE Guard-Knoepfe -- und weil es weder
+    // Zeitgrenze noch Abbruch gab, blieb die ganze Leiste bei einem haengenden
+    // Server dauerhaft tot, ohne ein Wort der Erklaerung.
     var chips = (d.guards || []).map(function (g) {
       var an = laeuft === g;
-      return '<button class="filter-chip" data-bridge-selftest="' + HD.esc(g) + '"' + (laeuft ? " disabled" : "") + ">"
+      return '<button class="filter-chip" data-bridge-selftest="' + HD.esc(g) + '"' + (an ? " disabled" : "") + ">"
         + HD.esc(g) + (an ? " " + HD.esc(HD.W.selbsttestLaeuft) : "") + "</button>";
     }).join("");
     var e = HD.S.selbsttest;
-    var ergebnis = e
-      ? '<p class="erklaersatz" aria-live="polite">' + HD.statusChip(e.ok ? "ok" : "befund")
-        + " " + HD.esc(e.guard) + " — " + HD.esc(e.text) + "</p>"
-      : '<p class="erklaersatz" aria-live="polite">' + HD.esc(HD.W.selbsttestHinweis) + "</p>";
+    // DAS URTEIL ZUERST [Kritik-Runde 2, Problem 2]: wer einen Selbsttest
+    // startet, will wissen, ob der Waechter greift -- nicht, wie viele
+    // Millisekunden er brauchte. Die Rohausgabe steht darunter in einem
+    // Block, den man lesen kann, wenn man will.
+    var ergebnis;
+    if (e) {
+      ergebnis = '<p class="erklaersatz" aria-live="polite">' + HD.statusChip(e.ok ? "ok" : "befund")
+        + " <strong>" + HD.esc(e.ok ? HD.W.probeBestanden : HD.W.probeDurchgefallen) + "</strong> — "
+        + HD.esc(e.guard) + "</p>"
+        + (e.text ? '<pre class="probe-ausgabe">' + HD.esc(e.text) + "</pre>" : "");
+    } else {
+      ergebnis = '<p class="erklaersatz" aria-live="polite">' + HD.esc(HD.W.selbsttestHinweis) + "</p>";
+    }
     return '<div class="werkzeugleiste">' + chips + "</div>" + ergebnis;
   });
 };
@@ -499,20 +516,43 @@ HD.bridgeClick = function (ev) {
 
   // toggle und selftest tragen ihre Angaben als Frage-Parameter, nur der
   // Auftrag hat einen JSON-Leib -- so erwartet es serve.js.
+  // KEINE ANFRAGE OHNE ZEITGRENZE [Kritik-Runde 2, Problem 2]. Antwortet der
+  // Server nie, blieb die Oberflaeche vorher fuer immer im Laufzustand stehen --
+  // gesperrte Knoepfe, kein Wort, kein Ausweg ausser F5. Nach 30 Sekunden gilt
+  // die Anfrage als gescheitert und sagt das.
   var send = function (weg, fertig) {
-    fetch(weg, { method: "POST" }).then(function (r) { return r.json(); }).then(fertig)
-      .catch(function (e) { fertig({ fehler: String(e) }); });
+    var fertigGemeldet = false;
+    var einmal = function (a) { if (fertigGemeldet) return; fertigGemeldet = true; fertig(a); };
+    var uhr = setTimeout(function () { einmal({ fehler: HD.W.zeitUeberschritten }); }, 30000);
+    fetch(weg, { method: "POST" }).then(function (r) { return r.json(); })
+      .then(function (a) { clearTimeout(uhr); einmal(a); })
+      .catch(function (e) { clearTimeout(uhr); einmal({ fehler: String(e) }); });
   };
   if (t.dataset.bridgeToggle) {
     var datei2 = t.dataset.bridgeToggle;
     var index = Number(t.dataset.bridgeIndex);
+    // EIN KLICK, DER AUF DIE PLATTE SCHREIBT, BRAUCHT EINEN ZWISCHENZUSTAND
+    // [Kritik-Runde 2, Problem 4]: vorher gab es keinen. Bei langsamer Antwort
+    // klickte der Nutzer nach, zwei Umschaltungen hoben sich auf, der Haken
+    // landete im Ausgangszustand -- und er hielt die Oberflaeche fuer kaputt.
+    // Die Zeile ist waehrend der Anfrage gesperrt.
+    HD.S.hakenLaeuft = HD.S.hakenLaeuft || {};
+    var hakenSchluessel = datei2 + "#" + index;
+    if (HD.S.hakenLaeuft[hakenSchluessel]) return true;
+    HD.S.hakenLaeuft[hakenSchluessel] = true;
+    t.disabled = true;
     send("/bridge/toggle?pfad=" + encodeURIComponent(datei2) + "&index=" + encodeURIComponent(index), function (a) {
-      if (!a.ok) { HD.melden(a.fehler || HD.W.hakenFehler); return; }
+      HD.S.hakenLaeuft[hakenSchluessel] = false;
+      if (!a.ok) { HD.meldenFehler(a.fehler || HD.W.hakenFehler); HD.zeichnen(); return; }
       var pkg = (HD.bridgeData.packages || []).find(function (p) { return p.file === datei2; });
       if (pkg && pkg.steps && pkg.steps[index]) {
         pkg.steps[index].done = a.nowDone;
         pkg.doneSteps = pkg.steps.filter(function (s) { return s.done; }).length;
       }
+      // Ein Schritt in einer Datei laesst sich nicht "rueckgaengig machen" wie
+      // eine Textaenderung -- aber derselbe Klick noch einmal stellt den alten
+      // Zustand her. Die Meldung sagt das, statt den Nutzer raten zu lassen.
+      HD.melden(a.nowDone ? HD.W.hakenGesetzt : HD.W.hakenEntfernt);
       HD.zeichnen();
     });
   } else if (t.dataset.bridgeSelftest) {
