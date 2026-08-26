@@ -1197,10 +1197,16 @@ description: Sichert die ungesicherte Arbeit DIESES Kontexts -- commit + push in
    keine Pfade aus dem Kopf.
 2. `git -C "<repo>" status --porcelain` -- ungesicherte Aenderungen? Wenn nein: fertig.
 3. Halbfertig-Check: wenn der Stand kaputt/mittendrin ist, hinweisen und fragen statt blind committen.
-4. Committen + pushen NUR im Ziel-Repo via `git -C "<repo>"` (add -A + aussagekraeftige Message + push).
+4. Committen + pushen NUR im Ziel-Repo via `git -C "<repo>"`, mit aussagekraeftiger
+   Message. **Form je Ziel** [Fix 27.08.2026: hier stand `add -A`, was der
+   `commit-pathspec-guard` im Werkbank-Repo mit exit 2 blockt -- der Befehl fuehrte in
+   die eigene Blockade]: Werkbank = `git commit -m "…" -- <pfad>` (neue Datei vorher
+   gezielt `git add <datei>`); verschachteltes Projekt-Repo = `add -A` erlaubt, dort
+   arbeitet je eine Sitzung allein.
    NIEMALS ins falsche Repo committen (Plugin-Arbeit darf nicht im Harness-Repo landen und umgekehrt).
 5. Ansage (VERBINDLICH) vor dem Push: "-> committe + push nach <account>/<repo>".
-6. Danach bestaetigen: Repo, Anzahl Dateien, gepusht ja/nein.
+6. Danach bestaetigen: Repo, Anzahl Dateien, gepusht ja/nein -- und die zwei
+   Abschlusszeilen anhaengen, sonst blockt `dod-guard` den Turn, den dieser Befehl erzeugt.
 ```
 
 ### 6.7 `CLAUDE.md` — der Architektur-Abschnitt (Auszug, gehört committet)
