@@ -13,7 +13,7 @@ egal, in welchem Verzeichnis du gerade stehst.
 
 | Platzhalter | Bedeutung | Windows (Beispiel) | macOS / Linux (Beispiel) |
 |---|---|---|---|
-| `<PAKET>` | dieser Bausatz, so wie du ihn geklont oder entpackt hast | `C:\Users\du\Downloads\keel-harness-standalone` | `~/Downloads/keel-harness-standalone` |
+| `<PAKET>` | dieser Bausatz, so wie du ihn geklont oder entpackt hast | `C:\Users\du\Downloads\keel-harness-standalone-setup` | `~/Downloads/keel-harness-standalone-setup` |
 | `<HARNESS>` | dein Workspace — neu und leer oder ein bestehendes Projekt | `C:\Users\du\WORKSPACES\mein-workspace` | `~/workspaces/mein-workspace` |
 
 Regel: **`<PAKET>` liegt nicht in `<HARNESS>`, und `<HARNESS>` nicht in `<PAKET>`.**
@@ -48,7 +48,7 @@ node <PAKET>/install.mjs --paket <PAKET> --ziel <HARNESS> --trocken
 Windows, ausgeschrieben:
 
 ```
-node C:\Users\du\Downloads\keel-harness-standalone\install.mjs --paket C:\Users\du\Downloads\keel-harness-standalone --ziel C:\Users\du\WORKSPACES\mein-workspace --trocken
+node C:\Users\du\Downloads\keel-harness-standalone-setup\install.mjs --paket C:\Users\du\Downloads\keel-harness-standalone-setup --ziel C:\Users\du\WORKSPACES\mein-workspace --trocken
 ```
 
 Zeigt jeden Schritt und schreibt **nichts**. Lies die Ausgabe einmal durch. Sie
