@@ -219,6 +219,12 @@ document.addEventListener("input", function (ev) {
 // So laedt ein Dokumentblock erst dann, wenn man ihn wirklich aufklappt (lazy).
 document.addEventListener("toggle", function () { if (HD.inhaltLaden) HD.inhaltLaden(); }, true);
 
+// Auswahlfelder (Auftrag-Komposer: Sitzung/Projekt) feuern "change", nicht
+// "input" bei jedem Tastendruck -- eigener Listener, delegiert an bridge.js.
+document.addEventListener("change", function (ev) {
+  if (HD.bridgeChange) HD.bridgeChange(ev);
+});
+
 // --- Tastatur ------------------------------------------------------------
 document.addEventListener("keydown", function (ev) {
   var inFeld = /^(INPUT|TEXTAREA|SELECT)$/.test(ev.target.tagName) || ev.target.isContentEditable;

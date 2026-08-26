@@ -76,6 +76,59 @@ test("parseRoles liest die Rollen-Tabelle, Kopf- und Trennzeilen zaehlen nicht",
   assert.deepStrictEqual(rollen, { ALPHA: "Bau", BETA: "Review" });
 });
 
+test("projectForRole liest die bestehende Rollen-Konvention -- kein Rateersatz", () => {
+  const w = "keel-harness-live-1";
+  // Workbench-Paket: "... (Paket docs/packages/dashboard.md)"
+  assert.deepStrictEqual(
+    bridge.projectForRole("Dashboard-Neubau per gauntlet-loop (Paket docs/packages/dashboard.md)", "/x/" + w),
+    { repo: w, file: "docs/packages/dashboard.md" }
+  );
+  // Benanntes Projekt: "Projekt <name> (user-projects)"
+  assert.deepStrictEqual(
+    bridge.projectForRole("Projekt keel-showcase (user-projects)", "/x/" + w),
+    { repo: "keel-showcase", file: null }
+  );
+  // Paket in einem benannten Projekt-Repo
+  assert.deepStrictEqual(
+    bridge.projectForRole("Bau (user-projects/keel-showcase/docs/packages/foo.md)", "/x/" + w),
+    { repo: "keel-showcase", file: "user-projects/keel-showcase/docs/packages/foo.md" }
+  );
+  // "Harness" ohne Paketpfad -> Workbench als Vorschlag
+  assert.deepStrictEqual(
+    bridge.projectForRole("Harness-Betrieb, Kontrolle und Bau", "/x/" + w),
+    { repo: w, file: null }
+  );
+  // Kein Treffer -> null, KEIN Rateersatz
+  assert.strictEqual(bridge.projectForRole("Irgendeine freie Notiz ohne Bezug", "/x/" + w), null);
+  assert.strictEqual(bridge.projectForRole(null, "/x/" + w), null);
+});
+
+test("scanSessions traegt project, wo die Rolle es hergibt", () => {
+  // Selbststaendige Fixture, NICHT die echte docs/08-sessions-rollen.md dieses
+  // Workspace -- die traegt in einer frischen Bausatz-Installation einen
+  // anderen Inhalt (Falle, im Gedaechtnis dieser Werkbank schon zweimal notiert).
+  // Die "Projekt X (user-projects)"-Form haengt zudem an keinem Ordnernamen.
+  const wurzel = fs.mkdtempSync(path.join(os.tmpdir(), "harness-tmp-root-"));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "harness-tmp-sessions-"));
+  try {
+    fs.mkdirSync(path.join(wurzel, "docs"), { recursive: true });
+    fs.writeFileSync(
+      path.join(wurzel, "docs", "08-sessions-rollen.md"),
+      "| Session-Titel | Rolle | seit |\n|---|---|---|\n"
+        + "| Testsitzung | Bau (Projekt sample-project (user-projects)) | heute |\n"
+    );
+    fs.writeFileSync(path.join(dir, "s1.jsonl"), JSON.stringify({ type: "custom-title", customTitle: "Testsitzung" }) + "\n");
+    const sitzungen = bridge.scanSessions(wurzel, { sessionsDir: dir });
+    const s1 = sitzungen.find((s) => s.id === "s1");
+    assert.ok(s1, "Sitzung nicht gefunden");
+    assert.strictEqual(s1.role, "Bau (Projekt sample-project (user-projects))");
+    assert.deepStrictEqual(s1.project, { repo: "sample-project", file: null });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(wurzel, { recursive: true, force: true });
+  }
+});
+
 test("workspaceSlug traegt keine Pfadzeichen und trifft den Projekte-Ordner, wo es ihn gibt", () => {
   const slug = bridge.workspaceSlug(WURZEL);
   assert.ok(!/[:\\/]/.test(slug), "keine Pfadzeichen im Slug");

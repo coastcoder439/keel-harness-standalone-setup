@@ -143,6 +143,26 @@ function parseRoles(rolesText) {
   return roles;
 }
 
+// Projekt aus der ROLLE lesen -- die Konvention existiert schon, sie wird hier
+// nur geparst, nicht erfunden [Owner 26.08.2026: "die Projekte sind laengst
+// festgelegt im Harness und Rollen zugewiesen"]. Zwei belegte Muster:
+//   "... (Paket docs/packages/dashboard.md)"           -> Workbench-Paket
+//   "... Projekt keel-showcase (user-projects) ..."     -> benanntes Projekt
+// Ohne Treffer: kein Projekt zugewiesen (kein Rateersatz) -- ausser die Rolle
+// nennt "Harness" ausdruecklich, dann ist die Workbench selbst gemeint.
+function projectForRole(role, root) {
+  if (!role) return null;
+  const workbench = path.basename(root);
+  const paket = role.match(/(?:^|[\s(])((?:user-projects\/([\w.-]+)\/)?docs\/packages\/([\w.-]+\.md))/);
+  if (paket) {
+    return { repo: paket[2] || workbench, file: paket[1] };
+  }
+  const benannt = role.match(/Projekt\s+([\w.-]+)\s*\(user-projects\)/i);
+  if (benannt) return { repo: benannt[1], file: null };
+  if (/harness/i.test(role)) return { repo: workbench, file: null };
+  return null;
+}
+
 function scanSessions(root, opts = {}) {
   const dir = opts.sessionsDir || path.join(os.homedir(), ".claude", "projects", workspaceSlug(root));
   const activeMinutes = opts.activeMinutes || 10;
@@ -157,10 +177,12 @@ function scanSessions(root, opts = {}) {
     const st = fs.statSync(full);
     const title = readSessionTitle(full, 512 * 1024) || f.replace(/\.jsonl$/, "");
     const ageMin = (Date.now() - st.mtimeMs) / 60000;
+    const role = roles[title] || null;
     out.push({
       id: f.replace(/\.jsonl$/, ""),
       title,
-      role: roles[title] || null,
+      role,
+      project: projectForRole(role, root),
       lastActivity: st.mtime.toISOString(),
       active: ageMin < activeMinutes,
     });
@@ -205,6 +227,7 @@ module.exports = {
   toggleStep,
   workspaceSlug,
   parseRoles,
+  projectForRole,
   scanSessions,
   runSelftest,
   writeOrder,
