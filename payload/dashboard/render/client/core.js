@@ -49,6 +49,57 @@ HD.geholt = function (schluessel, ersatz) {
   } catch (e) { return ersatz; }
 };
 
+// ZUSTAND UEBER EIN NEULADEN RETTEN [Kritik-Runde 2, Problem 1]. Nach dem
+// Speichern muss die Seite neu laden -- sie traegt ihren Datensatz eingebettet,
+// und der ist nach dem Neumessen veraltet. Was der NUTZER aufgebaut hat, ist
+// davon aber unberuehrt: welche Bloecke offen sind, welcher Ordner aufgeklappt
+// ist, wonach er sucht, wo er stand. sessionStorage, nicht localStorage: das
+// gilt fuer diesen einen Neuladevorgang, nicht fuer alle Zeit.
+HD.zustandRetten = function () {
+  try {
+    sessionStorage.setItem((window.__hdPraefix || "hd:") + "rettung", JSON.stringify({
+      seite: HD.S.seite,
+      auswahl: HD.S.auswahl,
+      suche: HD.S.suche,
+      filter: HD.S.filter,
+      ansicht: HD.S.ansicht,
+      abschnitt: HD.S.abschnitt,
+      baumOffen: HD.S.baumOffen,
+      baumDatei: HD.S.baumDatei,
+      seitenStand: HD.S.seitenStand,
+      auftragText: HD.S.auftragText,
+      auftragVerlauf: HD.S.auftragVerlauf,
+      scroll: (document.getElementById("hauptflaeche") || {}).scrollTop || 0,
+    }));
+  } catch (e) { /* Speicher gesperrt -- dann eben ohne Rettung */ }
+};
+
+HD.zustandZurueck = function () {
+  var roh;
+  try {
+    var schluessel = (window.__hdPraefix || "hd:") + "rettung";
+    roh = sessionStorage.getItem(schluessel);
+    sessionStorage.removeItem(schluessel);   // gilt genau einmal
+  } catch (e) { return false; }
+  if (!roh) return false;
+  var z;
+  try { z = JSON.parse(roh); } catch (e) { return false; }
+  if (!z || !z.seite || !HD.D.seiten[z.seite]) return false;
+  HD.S.seite = z.seite;
+  HD.S.auswahl = z.auswahl || null;
+  HD.S.suche = z.suche || "";
+  HD.S.filter = z.filter || [];
+  HD.S.ansicht = z.ansicht || "liste";
+  HD.S.abschnitt = z.abschnitt || {};
+  HD.S.baumOffen = z.baumOffen || {};
+  HD.S.baumDatei = z.baumDatei || null;
+  HD.S.seitenStand = z.seitenStand || {};
+  HD.S.auftragText = z.auftragText || "";
+  HD.S.auftragVerlauf = z.auftragVerlauf || [];
+  HD._rettungScroll = z.scroll || 0;
+  return true;
+};
+
 // --- Werkzeuge -----------------------------------------------------------
 HD.esc = function (s) {
   return String(s == null ? "" : s)
@@ -195,22 +246,51 @@ HD.speichern = function (pfad, text) {
     headers: { "content-type": "text/plain; charset=utf-8" },
     body: text,
   })
+    // ZWEI PHASEN, ZWEI WAHRHEITEN [Kritik-Runde 3, Befund 5]. Vorher hingen
+    // Schreiben und Neumessen in EINER Kette, und ein gemeinsames catch meldete
+    // fuer beide "Speichern fehlgeschlagen -- dein Text steht noch im Feld".
+    // Scheiterte aber erst das Neumessen, war der Text laengst geschrieben und
+    // HD.S.entwurf bereits null: die Meldung antwortete FALSCH auf die einzige
+    // Frage, die zaehlt ("ist mein Text weg?"). Eine falsche Antwort darauf ist
+    // schlimmer als gar keine.
     .then(function (a) { return a.json().then(function (j) { return { ok: a.ok, j: j }; }); })
     .then(function (r) {
-      if (!r.ok) throw new Error((r.j && r.j.fehler) || "unbekannt");
-      HD.melden(HD.W.wirdGemessen, true);
+      if (!r.ok) throw new Error((r.j && r.j.fehler) || HD.W.grundUnbekannt);
+      // AB HIER IST DER TEXT AUF DER PLATTE. Alles Weitere kann schiefgehen,
+      // ohne dass die Arbeit verloren ist -- und genau das sagen die Meldungen
+      // unten, statt Verlust zu behaupten.
       HD.S.bearbeitet = null;
       HD.S.entwurf = null;
-      return fetch("/neu-messen", { method: "POST" });
-    })
-    .then(function (a) {
-      if (a && a.ok) location.reload();
+      HD.S.entwurfStart = null;
+      HD.melden(HD.W.wirdGemessen, "bleiben");
+      return fetch("/neu-messen", { method: "POST" })
+        .then(function (a2) {
+          if (!a2 || !a2.ok) {
+            // Gespeichert ist gespeichert -- nur die Anzeige ist jetzt veraltet.
+            // Vorher passierte hier GAR NICHTS: "wird gemessen" stand fuer immer
+            // und das Textfeld blieb gesperrt.
+            if (feld) feld.disabled = false;
+            HD.meldenFehler(HD.W.gespeichertMessungFehlt, null, HD.W.anzeigeVeraltet);
+            HD.zeichnen();
+            return;
+          }
+          // Das Neuladen ist technisch noetig -- die Seite traegt ihren Datensatz
+          // als eingebetteten Block, und nach dem Neumessen ist der veraltet.
+          // Der NUTZER darf es nicht bezahlen: der Zustand reist mit.
+          HD.zustandRetten();
+          location.reload();
+        })
+        .catch(function (e2) {
+          if (feld) feld.disabled = false;
+          HD.meldenFehler(HD.fuellen(HD.W.gespeichertMessungFehler, { grund: e2.message }),
+            null, HD.W.anzeigeVeraltet);
+          HD.zeichnen();
+        });
     })
     .catch(function (e) {
+      // Nur noch der ECHTE Speicherfehler landet hier: der Text ist nicht
+      // geschrieben, und er steht unveraendert im Feld.
       if (feld) feld.disabled = false;
-      // Die einzige Frage, die der Nutzer jetzt hat, ist NICHT der Fehlercode --
-      // es ist "ist mein Text weg?". Der Entwurf steht noch im Feld, und genau
-      // das sagt die Meldung [Kritik-Runde 2, Problem 2].
       HD.meldenFehler(
         HD.fuellen(HD.W.speichernFehlgeschlagen, { grund: e.message }),
         null,
@@ -238,14 +318,21 @@ HD.melden = function (text, art) {
   clearTimeout(HD._meldeUhr);
 
   m.classList.toggle("meldung-fehler", istFehler);
+  // Ohne diese Klasse waere der Schliessen-Knopf einer bleibenden Meldung nicht
+  // anklickbar: .meldung traegt pointer-events:none, damit sie im Weg nichts
+  // abfaengt -- und nur die Fehler-Klasse hob das bisher auf.
+  m.classList.toggle("meldung-bleibt", bleibt);
   // Ein Fehler wird ANGESAGT, nicht beilaeufig gemeldet: assertive unterbricht
   // den Vorleser, polite wartet -- und ein verlorener Text wartet nicht.
   m.setAttribute("aria-live", istFehler ? "assertive" : "polite");
   m.setAttribute("role", istFehler ? "alert" : "status");
 
-  if (istFehler) {
-    // Ein Fehler ohne Ausweg ist eine Sackgasse: er bekommt einen Knopf, der
-    // ihn schliesst -- sonst muesste man die Seite neu laden, um ihn loszuwerden.
+  // JEDE bleibende Meldung bekommt den Ausgang, nicht nur die Fehler
+  // [Kritik-Runde 3, Rueckfall 3]: der Knopf haing an "istFehler", waehrend
+  // "bleibt" beide Arten umfasst. Die Tastenhilfe (Art "bleiben") klebte
+  // deshalb dauerhaft fest -- der Fix "jede Sackgasse bekommt einen Ausgang"
+  // hatte seine eigene Sackgasse gebaut.
+  if (bleibt) {
     m.innerHTML = '<span class="meldung-text"></span>'
       + '<button class="meldung-zu" type="button" aria-label="' + HD.esc(HD.W.schliessen)
       + '" title="' + HD.esc(HD.W.schliessen) + '">' + HD.icon("schliessen") + "</button>";
@@ -284,7 +371,7 @@ HD.meldungSchliessen = function () {
 };
 
 HD.kopieren = function (text) {
-  function fertig(ok) { HD.melden(ok ? HD.W.kopiert : HD.W.kopierenFehlgeschlagen); }
+  function fertig(ok) { if (ok) HD.melden(HD.W.kopiert); else HD.meldenFehler(HD.W.kopierenFehlgeschlagen); }
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(text).then(function () { fertig(true); }, function () { HD.kopierenAlt(text, fertig); });
   } else {
@@ -392,12 +479,44 @@ HD.ahnenOeffnen = function (pfad) {
 };
 
 // --- Zeichnen ------------------------------------------------------------
+// DAS TIPPEN UEBERLEBT JEDES NEUZEICHNEN -- ALS REGEL, NICHT ALS EINZELFALL
+// [Kritik-Runde 3, Rueckfall 4]. Fuer das Suchfeld war das repariert, fuer das
+// EDITOR-Textfeld nicht: dort baute jeder eintreffende Live-Abruf, jeder
+// Fensterfokus, jeder fremde Klick das Feld neu -- Cursor ans Textende, Scroll
+// an den Anfang, Fokus weg, mitten im Satz. Der Entwurf ueberlebte, das
+// Schreiben nicht.
+//
+// Deshalb steht das jetzt im zentralen Zeichenlauf und gilt fuer JEDES
+// Text-Eingabefeld, auch fuer kuenftige -- statt an jeder Stelle einzeln
+// nachgeruestet zu werden (genau das Muster, das die Nachpruefung geruegt hat).
+HD.feldZustand = function () {
+  var a = document.activeElement;
+  if (!a || !a.id) return null;
+  if (!/^(INPUT|TEXTAREA)$/.test(a.tagName)) return null;
+  try {
+    return { id: a.id, start: a.selectionStart, ende: a.selectionEnd, scroll: a.scrollTop };
+  } catch (e) { return { id: a.id, start: null, ende: null, scroll: a.scrollTop }; }
+};
+
+HD.feldZustandZurueck = function (z) {
+  if (!z) return;
+  var f = document.getElementById(z.id);
+  if (!f) return;
+  f.focus();
+  if (z.start != null) {
+    try { f.setSelectionRange(z.start, z.ende); } catch (e) { /* type=search o. ae. */ }
+  }
+  if (z.scroll) f.scrollTop = z.scroll;
+};
+
 HD.zeichnen = function () {
+  var feld = HD.feldZustand();
   HD.pfadleisteZeichnen();
   HD.navZeichnen();
   HD.seiteZeichnen();
   HD.detailZeichnen();
   HD.zaehlerZeichnen();
+  HD.feldZustandZurueck(feld);
   // Dateirumpf steht nicht mehr im Datensatz -- die eben gezeichneten
   // Platzhalter holen ihn jetzt beim Server nach. Ohne Server bleibt der
   // Platzhalter mit seinem Hinweis stehen.
@@ -487,46 +606,51 @@ HD.entwurfFreigeben = function () {
   return true;
 };
 
-HD.zurSeite = function (id) {
-  if (!HD.D.seiten[id]) return;
-  if (!HD.entwurfFreigeben()) return;
-  // SUCHE UND FILTER GEHOEREN ZUR SEITE, NICHT ZUM KLICK [Kritik-Runde 2,
-  // Problem 1]: vorher loeschte JEDER Navigationsklick beides -- auch der
-  // Wechsel zwischen zwei Reitern DERSELBEN Gruppe und der Weg zurueck. Wer
-  // auf "Hooks" gesucht, kurz nach "Regeln" geschaut und zurueckgeklickt hat,
-  // fing von vorne an. Jetzt merkt sich jede Seite ihren eigenen Stand.
+// SUCHE UND FILTER GEHOEREN ZUR SEITE, NICHT ZUM KLICK [Kritik-Runde 2,
+// Problem 1]: vorher loeschte JEDER Navigationsklick beides -- auch der Wechsel
+// zwischen zwei Reitern DERSELBEN Gruppe und der Weg zurueck.
+//
+// Als eigene Funktion, weil es DREI Eingaenge in einen Seitenwechsel gibt:
+// HD.zurSeite (Navigation), HD.oeffnen (Palette, Sprungmarken) und den
+// Ordner-Weg in start.js. Der Fix stand vorher nur an einem davon -- genau das
+// Muster, das die Nachpruefung geruegt hat [Kritik-Runde 3, Rueckfall 5].
+HD.seitenStandWechseln = function (nachId) {
   HD.S.seitenStand = HD.S.seitenStand || {};
-  if (HD.S.seite && HD.S.seite !== id) {
+  if (HD.S.seite && HD.S.seite !== nachId) {
     HD.S.seitenStand[HD.S.seite] = { suche: HD.S.suche, filter: HD.S.filter, ansicht: HD.S.ansicht };
   }
-  var alt = HD.S.seitenStand[id] || {};
-  HD.S.seite = id;
-  HD.S.auswahl = null;
+  var alt = HD.S.seitenStand[nachId] || {};
+  HD.S.seite = nachId;
   HD.S.suche = alt.suche || "";
   HD.S.filter = alt.filter || [];
   HD.S.ansicht = alt.ansicht || "liste";
+};
+
+HD.zurSeite = function (id) {
+  if (!HD.D.seiten[id]) return;
+  if (!HD.entwurfFreigeben()) return;
+  HD.seitenStandWechseln(id);
+  HD.S.auswahl = null;
   HD.S.vollbild = false;
   HD.adresseSchreiben(false);
+  // Ein bewusster Seitenwechsel beginnt oben -- im Unterschied zu jedem anderen
+  // Neuzeichnen, das die Position behaelt [Kritik-Runde 3, Befund 4].
+  //
+  // ZWEIMAL, und das mit Absicht: das Flag verhindert, dass seiteZeichnen den
+  // ALTEN Stand wiederherstellt, und die Zuweisung danach faengt ab, was
+  // WAEHREND des Zeichnens scrollt -- ein focus() auf ein wiederhergestelltes
+  // Feld zieht seinen Container in den Sichtbereich (gemessen: 151 px statt 0).
+  HD.scrollZuruecksetzen();
   HD.zeichnen();
-  document.getElementById("hauptflaeche").scrollTop = 0;
+  var flaeche = document.getElementById("hauptflaeche");
+  if (flaeche) flaeche.scrollTop = 0;
 };
 
 HD.oeffnen = function (id) {
   var e = HD.eintragMit(id);
   if (!e) return;
   if (!HD.entwurfFreigeben()) return;
-  if (e.seite !== HD.S.seite) {
-    // Denselben Seitenstand merken wie HD.zurSeite -- sonst waere der Sprung
-    // aus der Befehlspalette das eine Schlupfloch, das die Suche doch loescht.
-    HD.S.seitenStand = HD.S.seitenStand || {};
-    if (HD.S.seite) {
-      HD.S.seitenStand[HD.S.seite] = { suche: HD.S.suche, filter: HD.S.filter, ansicht: HD.S.ansicht };
-    }
-    var vor = HD.S.seitenStand[e.seite] || {};
-    HD.S.seite = e.seite;
-    HD.S.suche = vor.suche || "";
-    HD.S.filter = vor.filter || [];
-  }
+  if (e.seite !== HD.S.seite) HD.seitenStandWechseln(e.seite);
   if (e.seite === "dateien") HD.dateiWaehlen(e.pfad);
   else { HD.S.auswahl = id; HD.adresseSchreiben(false); HD.zeichnen(); }
 };

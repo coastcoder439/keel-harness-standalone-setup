@@ -537,7 +537,14 @@ const UI = {
   claudeMdFehlt: "in CLAUDE.md nicht aufgeführt",
   selbsttest: "Probe-Lauf",
   probeNichtGelaufen: "Probe nicht gelaufen: {grund}",
+  // ERGEBNIS ZUERST, MESSWERTE DANACH [Kritik-Runde 2, Problem 2]. Vorher:
+  // "Beendet mit {exit} nach {ms} ms, {bytes} Bytes Ausgabe" -- drei Messwerte
+  // und kein Urteil, für jemanden, der gerade klickte, WEIL er das Urteil nicht
+  // kennt. Ein Exit-Code ist die Antwort der Maschine, nicht die des Nutzers.
   probeErgebnis: "Beendet mit {exit} nach {ms} ms, {bytes} Bytes Ausgabe",
+  probeBestanden: "Bestanden",
+  probeDurchgefallen: "Durchgefallen",
+  probeMesswerte: "({ms} ms, Rückgabewert {exit})",
 
   // Commands, Skills, Rules
   ruftAuf: "Ruft auf",
@@ -649,6 +656,18 @@ const UI = {
   // weil er in der Meldungsleiste steht — kein eigenes Fenster für sechs Zeilen.
   tastenUebersicht: "Strg+K Suche über alles · / ins Suchfeld · J und K blättern · ← → klappen im Dateibaum · Strg+B Seitenleiste · Strg+Enter sendet den Auftrag · Esc schließt",
   tastenTitel: "Tastaturwege anzeigen (Taste ?)",
+  // Sagt, was passiert ist UND wie man es zurücknimmt — ein Schritt in einer
+  // Datei kennt kein Rückgängig, aber derselbe Klick stellt ihn wieder her.
+  hakenGesetzt: "Schritt als erledigt eingetragen — derselbe Klick nimmt es zurück.",
+  hakenEntfernt: "Haken entfernt — derselbe Klick setzt ihn wieder.",
+  // Eine Anfrage ohne Zeitgrenze hinterlässt eine tote Oberfläche ohne Erklärung.
+  zeitUeberschritten: "Der Server hat 30 Sekunden lang nicht geantwortet. Läuft er noch?",
+  // Schreiben und Neumessen sind zwei Vorgänge. Scheitert der zweite, ist die
+  // Arbeit trotzdem sicher — und genau das muss dastehen [Kritik-Runde 3].
+  gespeichertMessungFehlt: "Gespeichert. Die Neumessung ist fehlgeschlagen.",
+  gespeichertMessungFehler: "Gespeichert. Die Neumessung ist fehlgeschlagen: {grund}",
+  anzeigeVeraltet: "Deine Änderung ist auf der Platte — nur die angezeigten Zahlen sind jetzt veraltet. Der Knopf „Neu messen“ holt sie nach.",
+  grundUnbekannt: "Grund unbekannt",
 
   // Control Center (Widgets verdichten nach oben [Owner 25.08.2026])
   // Titel, die sagen was drinsteht -- keine Kunstworte, die man erklaeren

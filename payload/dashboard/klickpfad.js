@@ -340,6 +340,35 @@ zusage("Kein Text schreibt '1 Minuten' oder '1 Dateien'", async (p) => {
   if (treffer) throw new Error("falsche Einzahl auf der Seite: " + treffer[0]);
 });
 
+zusage("Der Zustand überlebt das Neuladen nach dem Speichern", async (p) => {
+  // Aufbauen, was ein Nutzer aufgebaut hätte: Seite, Suche, ein zugeklappter
+  // Block, ein geöffneter Ordner.
+  await p.evaluate(() => {
+    HD.zurSeite("hooks");
+    HD.S.suche = "guard";
+    HD.S.abschnitt["gruppe:SessionStart"] = false;
+    HD.S.baumOffen[".claude"] = true;
+    HD.zeichnen();
+  });
+  await p.waitForTimeout(500);
+  // Genau das tut das Speichern: retten, dann neu laden.
+  await p.evaluate(() => HD.zustandRetten());
+  await p.reload({ waitUntil: "networkidle" });
+  await p.waitForTimeout(2000);
+  const nach = await p.evaluate(() => ({
+    seite: HD.S.seite,
+    suche: HD.S.suche,
+    zugeklappt: HD.S.abschnitt["gruppe:SessionStart"],
+    ordner: !!HD.S.baumOffen[".claude"],
+  }));
+  await p.evaluate(() => { HD.S.suche = ""; HD.zurSeite("ueberblick"); });
+  await p.waitForTimeout(500);
+  if (nach.seite !== "hooks") throw new Error("Seite verloren: " + nach.seite);
+  if (nach.suche !== "guard") throw new Error("Suche verloren: '" + nach.suche + "'");
+  if (nach.zugeklappt !== false) throw new Error("Klappzustand verloren");
+  if (!nach.ordner) throw new Error("geöffneter Ordner verloren");
+});
+
 zusage("Eine angeklickte Regel zeigt ihren vollen Text", async (p) => {
   await p.evaluate(() => HD.zurSeite("rules"));
   await p.waitForTimeout(500);
@@ -349,6 +378,206 @@ zusage("Eine angeklickte Regel zeigt ihren vollen Text", async (p) => {
   if (!hatInhalt) throw new Error("Regel-Detail hat keinen Dateiinhalt-Kasten");
   await p.evaluate(() => HD.zurSeite("ueberblick"));
   await p.waitForTimeout(400);
+});
+
+// --- Durchgang E: MUSTER statt Einzelstelle -------------------------------
+// Die Nachprüfung (Runde 3) fand neun halb behobene Fixes und nannte den Grund:
+// „Fixes werden an dem einen Ort gebaut, an dem der Kritikpunkt formuliert war,
+// und nicht an den sieben anderen Orten, an denen dasselbe Muster steht."
+// Diese Zusagen prüfen deshalb die REGEL, nicht die Stelle — ein neuer
+// Fehlerweg oder ein neues Textfeld fällt hier auf, ohne dass jemand daran denkt.
+
+zusage("Jeder Fehlerweg meldet als Fehler, nicht als beiläufiger Hinweis", async (p) => {
+  const ungetypt = await p.evaluate(() => {
+    // Den ausgelieferten Client-Quelltext selbst durchsuchen: er steht in den
+    // <script>-Blöcken der Seite und ist damit genau das, was wirklich läuft.
+    const quelle = Array.from(document.querySelectorAll("script:not([type])"))
+      .map((s) => s.textContent).join("\n");
+    const treffer = [];
+    quelle.split("\n").forEach((zeile, n) => {
+      if (!/HD\.melden\(/.test(zeile)) return;
+      if (/HD\.meldenFehler\(/.test(zeile)) return;
+      if (/^\s*\/\//.test(zeile)) return;
+      // Ein Fehlerwort im Aufruf, aber kein Fehler-Typ und kein "bleiben".
+      if (/Fehl|fehlgeschlagen|nichtErreichbar|Gesperrt|grund:/.test(zeile)
+          && !/"fehler"|"bleiben"/.test(zeile)) {
+        treffer.push((n + 1) + ": " + zeile.trim().slice(0, 90));
+      }
+    });
+    return treffer;
+  });
+  if (ungetypt.length) {
+    throw new Error(ungetypt.length + " Fehlerweg(e) blenden nach 1,5 s aus:\n         " + ungetypt.join("\n         "));
+  }
+});
+
+zusage("Jede bleibende Meldung hat einen Ausgang — nicht nur die Fehler", async (p) => {
+  await p.evaluate(() => HD.melden("Bleibender Hinweis zur Probe", "bleiben"));
+  await p.waitForTimeout(2200);
+  const sichtbar = await p.evaluate(() => document.getElementById("meldung").classList.contains("sichtbar"));
+  if (!sichtbar) throw new Error("bleibende Meldung ist verschwunden");
+  const zu = p.locator(".meldung-zu");
+  if (!(await zu.count())) throw new Error("bleibende Meldung hat keinen Schließen-Knopf");
+  await zu.click();   // muss klickbar sein: pointer-events
+  await p.waitForTimeout(300);
+  const wegJetzt = await p.evaluate(() => document.getElementById("meldung").classList.contains("sichtbar"));
+  if (wegJetzt) throw new Error("Schließen-Knopf der bleibenden Meldung wirkt nicht");
+});
+
+zusage("Grün heißt nur 'in Ordnung' — laufende Arbeit trägt einen eigenen Ton", async (p) => {
+  const gleich = await p.evaluate(() => {
+    const w = getComputedStyle(document.documentElement);
+    const ok = w.getPropertyValue("--status-ok").trim();
+    const laeuft = w.getPropertyValue("--status-laeuft").trim();
+    return { ok, laeuft, gleich: !laeuft || ok === laeuft };
+  });
+  if (gleich.gleich) throw new Error("Fortschritt und 'in Ordnung' teilen sich eine Farbe: " + gleich.ok);
+});
+
+zusage("Jedes Textfeld behält Cursor und Fokus über ein Neuzeichnen", async (p) => {
+  // Nicht das Suchfeld — dort war es schon repariert. Geprüft wird die REGEL
+  // im zentralen Zeichenlauf, an einem beliebigen Feld.
+  await p.evaluate(() => HD.zurSeite("hooks"));
+  await p.waitForTimeout(600);
+  const feld = p.locator("#suche");
+  await feld.click();
+  await feld.fill("abcdefgh");
+  await p.evaluate(() => {
+    const f = document.getElementById("suche");
+    f.setSelectionRange(3, 3);   // Cursor mitten im Wort
+  });
+  await p.evaluate(() => HD.zeichnen());
+  await p.waitForTimeout(400);
+  const nach = await p.evaluate(() => {
+    const f = document.getElementById("suche");
+    return { fokus: document.activeElement === f, start: f.selectionStart };
+  });
+  await p.evaluate(() => { HD.S.suche = ""; HD.zurSeite("ueberblick"); });
+  await p.waitForTimeout(400);
+  if (!nach.fokus) throw new Error("Fokus nach dem Neuzeichnen verloren");
+  if (nach.start !== 3) throw new Error("Cursor sprang von 3 auf " + nach.start);
+});
+
+zusage("Die Seite springt bei einem Klick nicht an den Anfang", async (p) => {
+  await p.evaluate(() => HD.zurSeite("dateien"));
+  await p.waitForTimeout(900);
+  await p.evaluate(() => { document.getElementById("hauptflaeche").scrollTop = 400; });
+  await p.waitForTimeout(200);
+  const vor = await p.evaluate(() => document.getElementById("hauptflaeche").scrollTop);
+  if (vor < 100) throw new Error("Seite ließ sich nicht scrollen (Testaufbau)");
+  await p.evaluate(() => HD.zeichnen());
+  await p.waitForTimeout(300);
+  const nach = await p.evaluate(() => document.getElementById("hauptflaeche").scrollTop);
+  await p.evaluate(() => HD.zurSeite("ueberblick"));
+  await p.waitForTimeout(400);
+  if (Math.abs(nach - vor) > 8) throw new Error("Sprung von " + vor + " auf " + nach);
+});
+
+zusage("Ein bewusster Seitenwechsel beginnt dagegen oben", async (p) => {
+  await p.evaluate(() => HD.zurSeite("dateien"));
+  await p.waitForTimeout(900);
+  await p.evaluate(() => { document.getElementById("hauptflaeche").scrollTop = 400; });
+  await p.waitForTimeout(200);
+  await p.evaluate(() => HD.zurSeite("hooks"));
+  await p.waitForTimeout(600);
+  const nach = await p.evaluate(() => document.getElementById("hauptflaeche").scrollTop);
+  await p.evaluate(() => HD.zurSeite("ueberblick"));
+  await p.waitForTimeout(400);
+  if (nach > 8) throw new Error("neue Seite beginnt bei " + nach + " statt oben");
+});
+
+zusage("Die Befehlspalette meldet ihre Markierung an Vorlesesoftware", async (p) => {
+  await p.keyboard.press("Control+k");
+  await p.waitForTimeout(700);
+  const stand = await p.evaluate(() => {
+    const feld = document.getElementById("palette-feld");
+    const ziel = feld.getAttribute("aria-activedescendant");
+    return { ziel, gibtEs: ziel ? !!document.getElementById(ziel) : false };
+  });
+  await p.keyboard.press("Escape");
+  await p.waitForTimeout(300);
+  if (!stand.ziel) throw new Error("kein aria-activedescendant gesetzt");
+  if (!stand.gibtEs) throw new Error("aria-activedescendant zeigt auf eine ID, die es nicht gibt: " + stand.ziel);
+});
+
+zusage("Zahlen widersprechen sich nicht zwischen zwei Flächen", async (p) => {
+  const zahlen = await p.evaluate(() => {
+    const alle = HD.seitenEintraege("hooks");
+    return {
+      ccZahl: alle.filter((e) => e.art === "hook-skript").length,
+      gemessen: HD.D.zahlen.hooks,
+      aufDerSeite: alle.length,
+    };
+  });
+  if (zahlen.ccZahl !== zahlen.gemessen) {
+    throw new Error("Control Center zählt " + zahlen.ccZahl + " Hooks, die Messung " + zahlen.gemessen);
+  }
+});
+
+zusage("Dieselbe Sache trägt auf beiden Flächen dieselbe Stufe", async (p) => {
+  await p.evaluate(() => HD.zurSeite("ueberblick"));
+  await p.waitForTimeout(1200);
+  const stand = await p.evaluate(() => {
+    const flaeche = document.querySelector(".achtung-widget");
+    if (!flaeche) return { ohne: true };
+    const gezeigt = Array.from(document.querySelectorAll(".drei-zeile"))
+      .map((z) => z.dataset.id)
+      .map((id) => HD.eintragMit(id))
+      .filter(Boolean);
+    let hoechsterRang = -1, erwartet = null;
+    gezeigt.forEach((e) => {
+      const r = (HD.D.status[e.status] || {}).rang;
+      if (r != null && r > hoechsterRang) { hoechsterRang = r; erwartet = e.status; }
+    });
+    return { gesetzt: flaeche.dataset.stufe || null, erwartet, anzahl: gezeigt.length };
+  });
+  if (stand.ohne || !stand.anzahl) return;   // nichts offen: nichts zu prüfen
+  if (stand.gesetzt !== stand.erwartet) {
+    throw new Error("Warnfläche zeigt '" + stand.gesetzt + "', die Einträge sagen '" + stand.erwartet + "'");
+  }
+});
+
+zusage("Alles steht auf einer gemeinsamen linken Kante", async (p) => {
+  await p.evaluate(() => HD.zurSeite("zutun"));
+  await p.waitForTimeout(1800);
+  const kanten = await p.evaluate(() => {
+    const proben = [".seiten-titel", ".seiten-unter", ".suchfeld", ".gruppen-kopf",
+                    ".gruppen-titel", ".kanban-spalte", ".werkzeugleiste"];
+    const raus = {};
+    proben.forEach((w) => {
+      const el = document.querySelector(w);
+      if (el) raus[w] = Math.round(el.getBoundingClientRect().x);
+    });
+    return raus;
+  });
+  await p.evaluate(() => HD.zurSeite("ueberblick"));
+  await p.waitForTimeout(400);
+  const werte = Object.values(kanten);
+  const kante = werte[0];
+  const abweichend = Object.entries(kanten).filter(([, x]) => Math.abs(x - kante) > 2);
+  if (abweichend.length) {
+    throw new Error("Kante " + kante + ", abweichend: "
+      + abweichend.map(([w, x]) => w + "=" + x).join(", "));
+  }
+});
+
+zusage("Kein Leerzustand wird von Hand geschrieben statt über HD.leerHTML", async (p) => {
+  const handarbeit = await p.evaluate(() => {
+    const quelle = Array.from(document.querySelectorAll("script:not([type])"))
+      .map((s) => s.textContent).join("\n");
+    const treffer = [];
+    quelle.split("\n").forEach((zeile, n) => {
+      // HD.D.leer[...] direkt in HTML gegossen, statt HD.leerHTML zu rufen —
+      // dabei geht die Handlung verloren, die den Leerzustand erst brauchbar macht.
+      if (/HD\.D\.leer\[[^\]]+\]\.(text|titel)/.test(zeile) && !/^\s*\/\//.test(zeile)) {
+        treffer.push((n + 1) + ": " + zeile.trim().slice(0, 80));
+      }
+    });
+    return treffer;
+  });
+  if (handarbeit.length) {
+    throw new Error("Leerzustand ohne Handlung von Hand gebaut:\n         " + handarbeit.join("\n         "));
+  }
 });
 
 (async () => {
