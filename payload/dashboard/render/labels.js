@@ -311,8 +311,16 @@ const QUELLE = {
 };
 
 // Git-Zustand je Datei.
+//
+// "gesichert" HIESS HIER EINE LUEGE [Kritik-Runde 2, Problem 3]: das Wort stand
+// fuer eine Datei, die Git lediglich VERFOLGT. Zwei Klicks weiter fragt dieselbe
+// Anwendung unter "Sicherung": "Liegt die Arbeit auch ausserhalb dieses
+// Rechners?" -- eine Datei kann committet und trotzdem nirgends gepusht sein.
+// Wer "gesichert" liest, glaubt, seine Arbeit ueberlebt einen Plattenausfall.
+// Ein Wort, das Sicherheit verspricht, wo keine ist, ist schlimmer als gar kein
+// Wort. "gesichert" ist ab jetzt dem GEPUSHTEN Zustand vorbehalten.
 const GIT = {
-  getrackt:   "gesichert",
+  getrackt:   "von Git verfolgt",
   ungetrackt: "nicht in Git",
   ignoriert:  "von Git ausgeschlossen",
   unbekannt:  "Git nicht verfügbar",
@@ -328,7 +336,7 @@ const LEER = {
   zutun: {
     titel: "Nichts offen",
     text: "Alle geprüften Bereiche melden In Ordnung.",
-    handlung: null,
+    handlung: { wort: "Projekte ansehen", ziel: "seite:projekte" },
   },
   hooks: {
     titel: "Keine Hooks eingetragen",
@@ -337,18 +345,21 @@ const LEER = {
   },
   commands: {
     titel: "Keine Commands",
-    text: "Commands sind Markdown-Dateien in .claude/commands/ mit einer description im Frontmatter.",
-    handlung: null,
+    text: "Commands sind Markdown-Dateien in .claude/commands/ mit einer description im Frontmatter. Leg dort eine an, dann erscheint sie hier.",
+    handlung: { wort: "Ordner im Dateibaum ansehen", ziel: "ordner:.claude/commands" },
   },
   skills: {
     titel: "Keine Skills",
-    text: "Skills liegen als .claude/skills/<name>/SKILL.md und laden auf Abruf.",
-    handlung: null,
+    text: "Skills liegen als .claude/skills/<name>/SKILL.md und laden erst auf Abruf — deshalb kosten sie nichts, solange niemand sie ruft.",
+    handlung: { wort: "Ordner im Dateibaum ansehen", ziel: "ordner:.claude/skills" },
   },
   rules: {
-    titel: "Keine Rules",
-    text: "Ohne Dauer-Regeln in .claude/rules/ ist das ein leerer Claude Code, kein Harness.",
-    handlung: null,
+    // Kein Vorwurf ohne Ausweg [Kritik-Runde 2, Problem 9]: hier stand
+    // "ist das ein leerer Claude Code, kein Harness" -- ein Urteil ueber den
+    // Nutzer, ohne ihm zu sagen, was er tun kann.
+    titel: "Keine Dauer-Regeln",
+    text: "Dauer-Regeln stehen als Markdown in .claude/rules/ und werden in jede Sitzung geladen. Sie sind der Unterschied zwischen einem leeren Claude Code und einem Harness.",
+    handlung: { wort: "Ordner im Dateibaum ansehen", ziel: "ordner:.claude/rules" },
   },
   werkzeuge: {
     titel: "Noch nichts erhoben",
@@ -368,17 +379,17 @@ const LEER = {
   "bridge-pakete": {
     titel: "Keine Arbeitspakete gefunden",
     text: "Arbeitspakete stehen als docs/packages/*.md je Repo — angelegt beim Planen, nachgeführt bei jedem Abschluss.",
-    handlung: null,
+    handlung: { wort: "Vorlage ansehen", ziel: "datei:docs/packages/TEMPLATE.md" },
   },
   automatik: {
     titel: "Es läuft nichts automatisch",
     text: "Weder geplante Aufgaben noch Cron-Jobs oder Loops sind für diesen Workspace eingerichtet. Sobald etwas läuft, steht es hier mit seinen Zeiten.",
-    handlung: null,
+    handlung: { wort: "Start-Skript ansehen", ziel: "datei:dashboard/start-server.cmd" },
   },
   "bridge-sitzungen": {
     titel: "Keine Sitzung sichtbar",
     text: "Sitzungen erscheinen hier, sobald sie Nachrichten mit diesem Workspace-Pfad geschrieben haben.",
-    handlung: null,
+    handlung: { wort: "Jetzt neu abfragen", ziel: "live:frisch" },
   },
   verknuepft: {
     titel: null,
@@ -387,8 +398,8 @@ const LEER = {
   },
   allgemein: {
     titel: "Nichts vorhanden",
-    text: "Für diesen Bereich wurde nichts gefunden.",
-    handlung: null,
+    text: "Für diesen Bereich hat die letzte Messung nichts gefunden. Wenn du gerade etwas angelegt hast, miss neu.",
+    handlung: { wort: "Neu messen", ziel: "mess:neu" },
   },
 };
 
@@ -473,6 +484,12 @@ const UI = {
   jsonKopieren: "JSON kopieren",
   imBrowserOeffnen: "Datei im Browser öffnen",
   inVsCodeOeffnen: "In VS Code öffnen",
+  // Sagt, WAS passiert (Wechsel in die Dateiansicht), nicht wie der Knopf
+  // aussieht -- "Maximieren" waere eine Formbeschreibung, kein Versprechen.
+  ganzOeffnen: "In voller Breite öffnen",
+  // Beantwortet die einzige Frage nach einem gescheiterten Speichern: ist mein
+  // Text weg? [Kritik-Runde 2, Problem 2]
+  entwurfStehtNoch: "Dein Text steht noch im Feld — nichts ist verloren.",
 
   // Baum
   aufklappen: "Aufklappen",
@@ -602,9 +619,36 @@ const UI = {
   nurServerText: "Diese Ansicht liest und schreibt live. Starte: node dashboard/serve.js — dann http://127.0.0.1:8765",
   schrittVon: "{done} von {total} Schritten",
   offenPunkt: "Offen",
-  hakenFehler: "Haken konnte nicht gesetzt werden",
+  // Nennt den Grund UND den naechsten Schritt -- "Haken konnte nicht gesetzt
+  // werden" allein liess offen, ob der Schritt jetzt gilt [Kritik-Runde 2].
+  hakenFehler: "Der Haken wurde nicht gespeichert — der Schritt steht unverändert.",
   laedtNoch: "Lädt …",
-  nichtErreichbar: "Nicht erreichbar: {grund}",
+  nichtErreichbar: "Der Dashboard-Server antwortet nicht: {grund}",
+
+  // Live-Stand [Kritik-Runde 2, Problem 6]: eine Zahl ohne Zeitpunkt ist eine
+  // Behauptung. Jede Live-Sektion sagt, wann sie zuletzt gemessen hat.
+  standUm: "Stand {zeit} Uhr",
+  standUnbekannt: "Stand unbekannt",
+  liveAktualisieren: "Jetzt neu abfragen",
+  nochmalVersuchen: "Nochmal versuchen",
+
+  // Schutz vor dem Unumkehrbaren [Kritik-Runde 2, Problem 4]: die Rueckfrage
+  // nennt die Empfaenger, statt nur "alle" zu sagen.
+  auftragAlleFrage: "Diesen Auftrag an alle {n} laufenden Sitzungen senden? Er lässt sich nicht zurückholen. Empfänger:",
+  auftragStehtNoch: "Dein Auftrag steht noch im Feld.",
+  auftragVerlauf: "Zuletzt gesendet",
+
+  // Gruppen auf "Zu tun". Beide in derselben Form -- vorher stand "gemessen"
+  // klein neben "Aus Dokumenten gezogen" gross, zwei Sprachen fuer dieselbe
+  // Rangstufe [Kritik-Runde 2, Problem 7]. Und beide waren deutsche Literale
+  // mitten im Code, statt hier zu stehen (labels.js Regel 1).
+  gruppeGemessen: "Aus der Messung",
+  gruppeDokumente: "Aus Dokumenten",
+
+  // Tastaturwege, mit „?" abrufbar [Kritik-Runde 2, Problem 12]. Ein Satz,
+  // weil er in der Meldungsleiste steht — kein eigenes Fenster für sechs Zeilen.
+  tastenUebersicht: "Strg+K Suche über alles · / ins Suchfeld · J und K blättern · ← → klappen im Dateibaum · Strg+B Seitenleiste · Strg+Enter sendet den Auftrag · Esc schließt",
+  tastenTitel: "Tastaturwege anzeigen (Taste ?)",
 
   // Control Center (Widgets verdichten nach oben [Owner 25.08.2026])
   // Titel, die sagen was drinsteht -- keine Kunstworte, die man erklaeren
@@ -627,10 +671,19 @@ const UI = {
   ccKeinLauf: "Es läuft nichts automatisch.",
   ccAutomatikZeigen: "Automatik ansehen",
   ccAllesOffene: "Alles Offene ansehen",
+  // EINZAHL IST KEIN SONDERFALL [Kritik-Runde 2, Problem 14]: "vor 1 Minuten"
+  // stand an der prominentesten Stelle der Startseite. Falsches Deutsch dort
+  // laesst die ganze Flaeche unfertig wirken -- an anderer Stelle ("Ein Repo mit
+  // Sicherungslücke") war es laengst geloest, nur hier nicht.
   dauerGerade: "einem Augenblick",
+  dauerMinuteEins: "einer Minute",
   dauerMinuten: "{n} Minuten",
+  dauerStundeEins: "einer Stunde",
   dauerStunden: "{n} Stunden",
+  dauerTagEins: "einem Tag",
   dauerTage: "{n} Tagen",
+  schrittVonEins: "1 von {total} Schritten",
+  schrittEinerVonEinem: "der eine Schritt ist erledigt",
 
   // Ueberblick
   brauchtAufmerksamkeit: "Braucht Aufmerksamkeit",

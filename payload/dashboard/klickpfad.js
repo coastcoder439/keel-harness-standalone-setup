@@ -142,6 +142,215 @@ zusage("Kein Text behauptet 'alles gut', wenn nichts gemessen wurde", async (p) 
   }
 });
 
+// W8 [Owner]: "dass ich alle Sachen, die ich anklicken kann in dieser Sidebar
+// immer als Dokument auch vollkommen lesen und bearbeiten kann".
+zusage("Ein angeklickter Hook zeigt sein Skript, nicht nur eine Feldtabelle", async (p) => {
+  await p.evaluate(() => HD.zurSeite("hooks"));
+  await p.waitForTimeout(500);
+  await p.locator(".eintrag-zeile").first().click();
+  await p.waitForTimeout(900);
+  const hatInhalt = await p.locator("#detail [data-inhalt], #detail .datei-inhalt").count();
+  if (!hatInhalt) throw new Error("Hook-Detail hat keinen Dateiinhalt-Kasten");
+});
+
+zusage("Aus dem schmalen Panel führt ein Weg in die volle Dateiansicht", async (p) => {
+  const knopf = p.locator('#detail [data-pfadziel="dateien"][data-pfadpfad]').first();
+  if (!(await knopf.count())) throw new Error("kein 'In voller Breite öffnen' im Panel");
+  const pfad = await knopf.getAttribute("data-pfadpfad");
+  await knopf.click();
+  await p.waitForTimeout(900);
+  const seite = await p.evaluate(() => HD.S.seite);
+  const datei = await p.evaluate(() => HD.S.baumDatei);
+  if (seite !== "dateien") throw new Error("landet nicht auf 'dateien', sondern auf " + seite);
+  if (datei !== pfad) throw new Error("öffnet die falsche Datei: " + datei + " statt " + pfad);
+});
+
+// --- Prinzip 1: Der Nutzer besitzt einen Zustand, den die Oberfläche schützt
+zusage("Getippter Text im Editor überlebt ein Neuzeichnen", async (p) => {
+  await p.evaluate(() => {
+    HD.S.bearbeitet = "TEST.md";
+    HD.S.entwurf = "ursprung";
+    HD.S.entwurfStart = "ursprung";
+  });
+  await p.evaluate(() => {
+    // Tippen nachstellen: Wert setzen und dasselbe input-Ereignis auslösen,
+    // das auch eine echte Taste erzeugt.
+    HD.S.entwurf = "ursprung + meine Arbeit";
+  });
+  await p.evaluate(() => HD.zeichnen());
+  const nachher = await p.evaluate(() => HD.S.entwurf);
+  await p.evaluate(() => { HD.S.bearbeitet = null; HD.S.entwurf = null; HD.S.entwurfStart = null; HD.zeichnen(); });
+  if (nachher !== "ursprung + meine Arbeit") throw new Error("Entwurf nach Neuzeichnen: " + nachher);
+});
+
+zusage("Ein Seitenwechsel mit offenem Entwurf fragt, statt zu verwerfen", async (p) => {
+  await p.evaluate(() => {
+    HD.S.bearbeitet = "TEST.md";
+    HD.S.entwurf = "ungespeichert";
+    HD.S.entwurfStart = "ursprung";
+  });
+  let gefragt = false;
+  p.once("dialog", async (d) => { gefragt = true; await d.dismiss(); });
+  await p.evaluate(() => HD.zurSeite("hooks"));
+  await p.waitForTimeout(400);
+  const nochDa = await p.evaluate(() => HD.S.entwurf);
+  await p.evaluate(() => { HD.S.bearbeitet = null; HD.S.entwurf = null; HD.S.entwurfStart = null; HD.zurSeite("ueberblick"); });
+  await p.waitForTimeout(300);
+  if (!gefragt) throw new Error("keine Rückfrage beim Verlassen");
+  if (nochDa !== "ungespeichert") throw new Error("Entwurf trotz Abbruch weg: " + nochDa);
+});
+
+zusage("Die Suche einer Seite überlebt einen Ausflug auf eine andere", async (p) => {
+  await p.evaluate(() => { HD.zurSeite("hooks"); HD.S.suche = "guard"; HD.zeichnen(); });
+  await p.waitForTimeout(300);
+  await p.evaluate(() => HD.zurSeite("rules"));
+  await p.waitForTimeout(300);
+  await p.evaluate(() => HD.zurSeite("hooks"));
+  await p.waitForTimeout(300);
+  const suche = await p.evaluate(() => HD.S.suche);
+  await p.evaluate(() => { HD.S.suche = ""; HD.zurSeite("ueberblick"); });
+  await p.waitForTimeout(300);
+  if (suche !== "guard") throw new Error("Suche verloren, ist jetzt: '" + suche + "'");
+});
+
+// --- Prinzip 1/2: Fehler sind ein Zustand, kein Aufblitzen
+zusage("Eine Fehlermeldung bleibt stehen, ein Erfolg vergeht", async (p) => {
+  await p.evaluate(() => HD.melden("Testfehler", "fehler"));
+  await p.waitForTimeout(2200);
+  const fehlerDa = await p.evaluate(() => document.getElementById("meldung").classList.contains("sichtbar"));
+  if (!fehlerDa) throw new Error("Fehlermeldung nach 2,2 s verschwunden");
+  const zu = p.locator(".meldung-zu");
+  if (!(await zu.count())) throw new Error("Fehlermeldung hat keinen Schließen-Knopf");
+  await zu.click();
+  await p.waitForTimeout(300);
+  const wegNachKlick = await p.evaluate(() => document.getElementById("meldung").classList.contains("sichtbar"));
+  if (wegNachKlick) throw new Error("Schließen-Knopf schließt nicht");
+
+  await p.evaluate(() => HD.melden("Testerfolg"));
+  await p.waitForTimeout(2200);
+  const erfolgWeg = await p.evaluate(() => document.getElementById("meldung").classList.contains("sichtbar"));
+  if (erfolgWeg) throw new Error("Erfolgsmeldung bleibt stehen, statt zu vergehen");
+});
+
+// --- Prinzip 1: Live-Zahlen tragen ihren Stand
+zusage("Jede Live-Sektion sagt, wann sie zuletzt gemessen hat", async (p) => {
+  await p.evaluate(() => HD.zurSeite("ueberblick"));
+  await p.waitForTimeout(1200);
+  const stand = await p.locator(".live-stand").first().textContent();
+  if (!stand || !/\d{1,2}:\d{2}/.test(stand)) throw new Error("kein Zeitpunkt an der Live-Sektion: " + stand);
+  const knopf = p.locator('.live-stand [data-bridge-frisch]').first();
+  if (!(await knopf.count())) throw new Error("kein Aktualisieren-Knopf an der Live-Sektion");
+});
+
+// --- Prinzip 3: Jede Sackgasse bekommt einen Ausgang
+zusage("Kein Leerzustand ist eine Sackgasse — jeder hat eine Handlung", async (p) => {
+  const ohne = await p.evaluate(() => {
+    const fehlt = [];
+    for (const [name, l] of Object.entries(HD.D.leer || {})) {
+      // "verknuepft" ist ein Inline-Satz ohne Titel, kein eigener Zustand.
+      if (name !== "verknuepft" && !(l.handlung && l.handlung.ziel)) fehlt.push(name);
+    }
+    return fehlt;
+  });
+  if (ohne.length) throw new Error("Leerzustand ohne Handlung: " + ohne.join(", "));
+});
+
+zusage("Jede Leerzustands-Handlung zeigt auf ein Ziel, das der Klick versteht", async (p) => {
+  const unbekannt = await p.evaluate(() => {
+    const erlaubt = ["suche:", "filter:", "json:", "datei:", "ordner:", "seite:", "live:", "mess:"];
+    const schlecht = [];
+    for (const [name, l] of Object.entries(HD.D.leer || {})) {
+      const z = l.handlung && l.handlung.ziel;
+      if (z && !erlaubt.some((v) => z.indexOf(v) === 0)) schlecht.push(name + " -> " + z);
+      if (z && z.indexOf("seite:") === 0 && !HD.D.seiten[z.slice(6)]) schlecht.push(name + " -> unbekannte Seite " + z);
+    }
+    return schlecht;
+  });
+  if (unbekannt.length) throw new Error("Handlung ins Leere: " + unbekannt.join(" | "));
+});
+
+zusage("Kein Markdown-Rohtext steht als Titel im Interface", async (p) => {
+  await p.evaluate(() => HD.zurSeite("zutun"));
+  await p.waitForTimeout(1500);
+  const titel = await p.locator(".kanban-titel, .eintrag-haupt > .eintrag-name").allTextContents();
+  for (const t of titel) {
+    if (/\*\*/.test(t)) throw new Error("Markdown-Sternchen im Titel: " + t);
+    if (/^[-*+]\s/.test(t)) throw new Error("Listenzeichen im Titel: " + t);
+    if (/\.md:\d+/.test(t)) throw new Error("Datei:Zeile im Titel: " + t);
+  }
+  await p.evaluate(() => HD.zurSeite("ueberblick"));
+  await p.waitForTimeout(400);
+});
+
+zusage("Kein Wort verspricht Sicherheit, die es nicht gibt", async (p) => {
+  const luege = await p.evaluate(() => {
+    // "gesichert" ist dem GEPUSHTEN Zustand vorbehalten; der Git-Zustand einer
+    // einzelnen Datei sagt nur, dass Git sie verfolgt.
+    return (HD.D.roh && HD.D.roh.woerter && HD.D.roh.woerter.git)
+      ? HD.D.roh.woerter.git.getrackt : null;
+  });
+  const sichtbar = await p.evaluate(() => document.body.innerText);
+  if (luege === "gesichert") throw new Error("GIT.getrackt heißt weiterhin 'gesichert'");
+  if (/\bgesichert\b/.test(sichtbar) && !/Sicherung/.test(sichtbar)) {
+    throw new Error("'gesichert' steht ohne Sicherungs-Zusammenhang auf der Seite");
+  }
+});
+
+// --- Durchgang D: Tastatur und Sprache
+zusage("Die Befehlspalette lässt sich mit der Tastatur bedienen", async (p) => {
+  await p.keyboard.press("Control+k");
+  await p.waitForTimeout(600);
+  const offen = await p.evaluate(() => HD.S.palette);
+  if (!offen) throw new Error("Strg+K öffnet die Palette nicht");
+  const ersterMarkiert = await p.locator('.palette-treffer[aria-selected="true"]').count();
+  if (!ersterMarkiert) throw new Error("kein Treffer ist vorab markiert");
+  await p.keyboard.press("ArrowDown");
+  await p.waitForTimeout(250);
+  const index = await p.evaluate(() => HD.S.paletteIndex);
+  if (index !== 1) throw new Error("Pfeil-runter bewegt die Markierung nicht (Index " + index + ")");
+  await p.keyboard.press("Enter");
+  await p.waitForTimeout(600);
+  const zu = await p.evaluate(() => HD.S.palette);
+  if (zu) throw new Error("Enter öffnet den Treffer nicht");
+  await p.evaluate(() => HD.zurSeite("ueberblick"));
+  await p.waitForTimeout(400);
+});
+
+zusage("Die Tastaturwege stehen irgendwo — '?' zeigt sie", async (p) => {
+  await p.keyboard.press("?");
+  await p.waitForTimeout(500);
+  const text = await p.locator("#meldung").textContent();
+  if (!/Strg\+K/.test(text || "")) throw new Error("'?' zeigt keine Tastaturübersicht: " + text);
+  const knopf = await p.locator("#tasten-hilfe").count();
+  if (!knopf) throw new Error("kein sichtbarer Hinweis auf die Tastaturhilfe");
+  await p.evaluate(() => HD.meldungSchliessen());
+});
+
+zusage("Kein Text schreibt '1 Minuten' oder '1 Dateien'", async (p) => {
+  const falsch = await p.evaluate(() => {
+    const proben = [1, 2, 59, 60, 1440].map((m) => HD.dauer(m));
+    return proben.filter((t) => /\b1 (Minuten|Stunden|Tagen)\b/.test(t || ""));
+  });
+  if (falsch.length) throw new Error("falsche Einzahl: " + falsch.join(", "));
+  // innerText, NICHT textContent: textContent liefert auch den Inhalt der
+  // <script>-Blöcke mit — dort steht der Client-Quelltext samt der Vorlage
+  // "{n} Minuten", und der Test schlug auf seinen eigenen Code an.
+  const sichtbar = await p.evaluate(() => document.body.innerText);
+  const treffer = (sichtbar || "").match(/\b1 (Minuten|Stunden|Tagen|Dateien|Repos|Schritten)\b/);
+  if (treffer) throw new Error("falsche Einzahl auf der Seite: " + treffer[0]);
+});
+
+zusage("Eine angeklickte Regel zeigt ihren vollen Text", async (p) => {
+  await p.evaluate(() => HD.zurSeite("rules"));
+  await p.waitForTimeout(500);
+  await p.locator(".eintrag-zeile").first().click();
+  await p.waitForTimeout(900);
+  const hatInhalt = await p.locator("#detail [data-inhalt], #detail .datei-inhalt").count();
+  if (!hatInhalt) throw new Error("Regel-Detail hat keinen Dateiinhalt-Kasten");
+  await p.evaluate(() => HD.zurSeite("ueberblick"));
+  await p.waitForTimeout(400);
+});
+
 (async () => {
   const b = await chromium.launch();
   const ctx = await b.newContext({ viewport: { width: 1440, height: 900 } });

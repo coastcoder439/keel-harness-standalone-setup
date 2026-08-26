@@ -14,9 +14,10 @@ const quelltext = `
 // --- Ordnerbaum ----------------------------------------------------------
 HD.dateienSeite = function () {
   var s = HD.D.seiten.dateien;
-  var kopf = '<p class="erklaersatz">' + HD.esc(s.zweck) + "</p>";
-  var suchfeld = '<input class="suchfeld" id="suche" type="text" value="' + HD.esc(HD.S.suche) + '"'
-    + ' autocomplete="off" spellcheck="false" placeholder="' + HD.esc(HD.W.suchenIn.replace("{seite}", s.name)) + '"'
+  var kopf = HD.seitenKopfHTML("dateien");
+  var suchfeld = '<input class="suchfeld" id="suche" type="search" name="suche" value="' + HD.esc(HD.S.suche) + '"'
+    + ' autocomplete="off" spellcheck="false" enterkeyhint="search"'
+    + ' placeholder="' + HD.esc(HD.W.suchenIn.replace("{seite}", s.name)) + '"'
     + ' aria-label="' + HD.esc(HD.W.suchen) + '">';
 
   var baum = HD.D.roh.messung.inventar && HD.D.roh.messung.inventar.baum;
@@ -187,6 +188,17 @@ HD.detailKoerper = function (e, inline) {
        + '" title="' + HD.esc(HD.W.imBrowserOeffnen) + '">' + HD.icon("external-link") + "</a>" : "")
     + (pfad ? '<a class="ikon-knopf" href="vscode://file/' + HD.esc(wurzelPosix + "/" + pfad)
        + '" aria-label="' + HD.esc(HD.W.inVsCodeOeffnen) + '" title="' + HD.esc(HD.W.inVsCodeOeffnen) + '">' + HD.icon("code") + "</a>" : "")
+    // GANZ OEFFNEN [Owner, 25.08.2026: "vollkommen lesen und bearbeiten"]. Im
+    // schmalen Panel bleibt ein langer Rumpf zugeklappt -- eine 400-Zeilen-Wand
+    // in 320 px ist keine Information. Damit "zugeklappt" keine Sackgasse ist,
+    // fuehrt dieser Knopf dieselbe Datei in die volle Dateiansicht hinueber
+    // (HD.dateiWaehlen, derselbe Weg wie der Dateibaum -- kein zweiter
+    // Mechanismus). Nur im Panel und nur bei einer lesbaren Datei.
+    + (!inline && pfad && e.inhalt && !e.inhalt.gesperrt
+       ? '<button class="ikon-knopf" data-pfadziel="dateien" data-pfadpfad="' + HD.esc(pfad)
+         + '" aria-label="' + HD.esc(HD.W.ganzOeffnen) + '" title="' + HD.esc(HD.W.ganzOeffnen) + '">'
+         + HD.icon("maximize") + "</button>"
+       : "")
     + (inline ? "" : '<button class="ikon-knopf" id="detail-zu" aria-label="' + HD.esc(HD.W.schliessen)
        + '" title="' + HD.esc(HD.W.schliessen) + '">' + HD.icon("x") + "</button>")
     + "</span>";
