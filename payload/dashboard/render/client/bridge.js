@@ -22,20 +22,58 @@ HD._bridgeLaedt = false;
 
 // Idempotent: laedt genau einmal je Seitenaufruf. Der Rueckruf zeichnet die
 // Seite neu -- die Sektionen wechseln dann von "Laedt" zu Inhalt.
-HD.bridgeLade = function () {
+// LIVE-DATEN HABEN EIN ALTER [Kritik-Runde 2, Problem 6]. Vorher lud diese
+// Funktion GENAU EINMAL und merkte sich das Ergebnis unbegrenzt -- im
+// Fehlerfall sogar das {error}-Objekt, das jeden weiteren Versuch fuer immer
+// verhinderte. Nach einer Stunde offener Seite standen beendete Sitzungen
+// weiter als "arbeitet gerade", ein Auftrag ging an eine Sitzung, die es nicht
+// mehr gab, und der einzige Ausweg (F5) wurde nirgends genannt.
+//
+// erzwingen=true holt neu, auch wenn schon etwas da ist (Aktualisieren-Knopf,
+// Rueckkehr ins Fenster).
+HD.bridgeLade = function (erzwingen) {
   if (!HD.serverModus()) return;
-  if (HD.bridgeData || HD._bridgeLaedt) return;
+  if (HD._bridgeLaedt) return;
+  if (HD.bridgeData && !erzwingen) return;
   if (["ueberblick", "zutun", "hooks", "automatik"].indexOf(HD.S.seite) < 0) return;
   HD._bridgeLaedt = true;
   fetch("/bridge/data").then(function (r) { return r.json(); }).then(function (d) {
     HD.bridgeData = d;
+    HD.bridgeStand = new Date();
     HD._bridgeLaedt = false;
     HD.zeichnen();
   }).catch(function (e) {
     HD.bridgeData = { error: String(e) };
+    HD.bridgeStand = new Date();
     HD._bridgeLaedt = false;
     HD.zeichnen();
   });
+};
+
+// Beim Zurueckkehren ins Fenster ist der Stand fast immer veraltet -- dort war
+// der Nutzer gerade in einer Sitzung, ueber die diese Seite berichtet.
+HD.bridgeFrischHalten = function () {
+  window.addEventListener("focus", function () { HD.bridgeLade(true); });
+  document.addEventListener("visibilitychange", function () {
+    if (!document.hidden) HD.bridgeLade(true);
+  });
+};
+
+// "Stand: 20:43" an jeder Live-Sektion plus ein Knopf, der neu holt. Eine Zahl
+// ohne Zeitpunkt ist eine Behauptung; mit Zeitpunkt ist sie eine Messung.
+HD.bridgeStandHTML = function () {
+  if (!HD.serverModus()) return "";
+  var wann = HD.bridgeStand
+    ? HD.fuellen(HD.W.standUm, { zeit: HD.uhrzeit(HD.bridgeStand) })
+    : HD.W.standUnbekannt;
+  return '<span class="live-stand">' + HD.esc(wann)
+    + '<button class="ikon-knopf" data-bridge-frisch="1" aria-label="' + HD.esc(HD.W.liveAktualisieren)
+    + '" title="' + HD.esc(HD.W.liveAktualisieren) + '">' + HD.icon("refresh") + "</button></span>";
+};
+
+HD.uhrzeit = function (d) {
+  var z = function (n) { return (n < 10 ? "0" : "") + n; };
+  return z(d.getHours()) + ":" + z(d.getMinutes());
 };
 
 // Gemeinsame Huelle: Server fehlt -> ein Satz mit dem Startbefehl; Stand
@@ -56,14 +94,19 @@ HD.liveSektion = function (titel, anzahl, inhaltFn) {
   } else if (HD.bridgeData && HD.bridgeData.error) {
     // Fehlertext MIT Handlung: der rohe JS-Fehler allein sagt dem Nutzer
     // nicht, was er tun soll (Regel "Error messages include fix/next step").
+    // Der Knopf ist der eigentliche Ausweg -- ohne ihn blieb der Fehlerzustand
+    // fuer immer stehen, weil ein einmal gemerktes {error} nie neu lud.
     rumpf = '<p class="leer-kompakt">' + HD.esc(HD.fuellen(HD.W.nichtErreichbar, { grund: HD.bridgeData.error }))
-      + " " + HD.esc(HD.W.nichtErreichbarHilfe) + "</p>";
+      + " " + HD.esc(HD.W.nichtErreichbarHilfe) + "</p>"
+      + '<p class="leer-handlung"><button class="knopf-haupt" data-bridge-frisch="1">'
+      + HD.esc(HD.W.nochmalVersuchen) + "</button></p>";
   } else if (!HD.bridgeData) {
     rumpf = '<p class="leer-kompakt">' + HD.esc(HD.W.laedtNoch) + "</p>";
   } else {
     rumpf = inhaltVon(HD.bridgeData);
   }
-  return "<section>" + HD.gruppeHTML(titel, anzahl, offen) + (offen ? rumpf : "") + "</section>";
+  return "<section>" + HD.gruppeHTML(titel, anzahl, offen, false, HD.bridgeStandHTML())
+    + (offen ? rumpf : "") + "</section>";
 };
 
 // --- Sitzungen (Ueberblick, oben -- die Karten des Vorbilds) --------------
@@ -140,11 +183,15 @@ HD.auftragSektion = function () {
       return '<p class="leer-kompakt">' + HD.esc(HD.W.nurLeseBetrieb) + "</p>";
     }
     var sitzungen = (d.sessions || []).filter(function (s) { return s.active; });
-    var ziel = HD.S.auftragZiel || "all";
-    // Ziel-Sitzung nicht mehr aktiv (z.B. seit dem letzten Neumessen beendet)?
-    // Dann zurueck auf "alle" -- sonst zeigt das Feld eine Auswahl, die es
-    // nicht mehr gibt.
-    if (ziel !== "all" && !sitzungen.some(function (s) { return s.id === ziel; })) ziel = "all";
+    // DAS FOLGENREICHSTE IST NICHT DIE VORGABE [Kritik-Runde 2, Problem 4]:
+    // vorher stand hier "alle Sitzungen", und ein einziger Klick feuerte einen
+    // Auftrag in JEDE laufende Sitzung -- ohne Rueckfrage. Genau das ist am
+    // 26.08.2026 passiert, als ein Test einen echten Auftrag in die Sitzung des
+    // Owners zustellte. Die Vorgabe ist jetzt die schmalste sinnvolle Wahl:
+    // die einzige laufende Sitzung, sonst keine.
+    var ziel = HD.S.auftragZiel;
+    if (ziel && ziel !== "all" && !sitzungen.some(function (s) { return s.id === ziel; })) ziel = null;
+    if (!ziel) ziel = sitzungen.length === 1 ? sitzungen[0].id : "all";
     HD.S.auftragZiel = ziel;
     var optionen = '<option value="all"' + (ziel === "all" ? " selected" : "") + ">" + HD.esc(HD.W.auftragAlle) + "</option>"
       + sitzungen.map(function (s) {
@@ -183,7 +230,7 @@ HD.auftragSektion = function () {
       };
       paketHTML = '<label class="auftrag-feld"><span class="auftrag-feld-label">'
         + HD.esc(HD.fuellen(HD.W.auftragPaketWaehlen, { n: offenePakete.length })) + "</span>"
-        + '<select id="bridge-paket">'
+        + '<select id="bridge-paket" name="paket" autocomplete="off">'
         + '<option value="">' + HD.esc(HD.W.auftragKeinPaket) + "</option>"
         + offenePakete.map(function (p) {
             var an = anhang && anhang.file === p.file;
@@ -205,9 +252,9 @@ HD.auftragSektion = function () {
     return '<p class="erklaersatz">' + HD.esc(HD.W.auftragKopf) + "</p>"
       + '<div class="auftrag-zeile">'
       + '<label class="auftrag-feld"><span class="auftrag-feld-label">' + HD.esc(HD.W.auftragAn) + "</span>"
-      + '<select id="bridge-target">' + optionen + "</select></label>"
+      + '<select id="bridge-target" name="ziel" autocomplete="off">' + optionen + "</select></label>"
       + '<label class="auftrag-feld"><span class="auftrag-feld-label">' + HD.esc(HD.W.auftragProjekt) + "</span>"
-      + '<select id="bridge-projekt">' + projektOptionen + "</select></label>"
+      + '<select id="bridge-projekt" name="projekt" autocomplete="off">' + projektOptionen + "</select></label>"
       + paketHTML
       + vorschlagHTML
       + "</div>"
@@ -219,10 +266,28 @@ HD.auftragSektion = function () {
       + '<label class="auftrag-feld auftrag-feld-breit"><span class="auftrag-feld-label">' + HD.esc(HD.W.auftragText) + "</span>"
       + '<textarea id="bridge-text" rows="3" name="auftrag" autocomplete="off" placeholder="'
       + HD.esc(HD.W.auftragFeld) + '">' + HD.esc(HD.S.auftragText || "") + "</textarea></label>"
+      + "</div>"
+      // Der Knopf steht UNTER der Textflaeche auf ihrer Kante, nicht daneben
+      // [Kritik-Runde 2, Problem 15]: schwebend neben dem Formular gehoerte er
+      // optisch zu nichts und riss eine dritte rechte Kante auf.
+      + '<div class="auftrag-fuss">'
       + '<button class="knopf-haupt" data-bridge-order="1"' + (HD.S.auftragLaeuft ? " disabled" : "") + ">"
       + HD.esc(HD.S.auftragLaeuft ? HD.W.auftragLaeuft : HD.W.auftragSenden) + "</button>"
-      + "</div>";
+      + "</div>"
+      + HD.auftragVerlaufHTML();
   });
+};
+
+// Was gesendet wurde, bleibt nachlesbar [Kritik-Runde 2, Problem 4].
+HD.auftragVerlaufHTML = function () {
+  var v = HD.S.auftragVerlauf || [];
+  if (!v.length) return "";
+  return '<div class="auftrag-verlauf"><p class="auftrag-verlauf-kopf">' + HD.esc(HD.W.auftragVerlauf) + "</p>"
+    + v.map(function (a) {
+        return '<p class="auftrag-verlauf-zeile"><time>' + HD.esc(a.um) + "</time> "
+          + HD.esc(HD.aufEineZeile(a.text, 96)) + "</p>";
+      }).join("")
+    + "</div>";
 };
 
 // --- Arbeitspakete (Zu tun) -----------------------------------------------
@@ -300,11 +365,17 @@ HD.paketKanban = function (repo) {
     });
 
     var titelKurz = function (p) {
-      return String(p.title || p.file).replace(/^(Work package|Paket):\\s*/i, "");
+      // Erst das Praefix weg, dann Auszeichnung raus und auf eine Zeile kappen
+      // [Kritik-Runde 2, Problem 8]. Vorher stand der Markdown-Rohtext auf der
+      // Karte, samt Sternchen und mitten im Wort abgeschnitten.
+      return HD.aufEineZeile(String(p.title || p.file).replace(/^(Work package|Paket):\\s*/i, ""), 64);
     };
     var naechsterSchritt = function (p) {
       var offen = (p.steps || []).filter(function (s) { return !s.done; })[0];
-      return offen ? offen.text : null;
+      // 56 statt 80: auf einer Kanban-Karte in einer Drittelspalte sind 80
+      // Zeichen zwei volle Zeilen, die das CSS dann noch einmal kappt -- also
+      // ein zweimal abgeschnittener Satz [Abnahme 26.08.2026].
+      return offen ? HD.aufEineZeile(offen.text, 56) : null;
     };
 
     return '<div class="kanban">' + spalten.map(function (s) {
@@ -312,9 +383,16 @@ HD.paketKanban = function (repo) {
         ? s.pakete.map(function (p) {
             var naechst = naechsterSchritt(p);
             var anteil = p.totalSteps ? Math.round((p.doneSteps / p.totalSteps) * 100) : 0;
+            // EINE ANATOMIE FUER ALLE DREI SPALTEN [Kritik-Runde 2, Problem 10]:
+            // vorher hatte "Offen" gar keinen Balken, "In Arbeit" einen
+            // teilgefuellten gruenen und "Abgeschlossen" einen vollen gruenen --
+            // GLEICHER Gruenton fuer "laeuft" und "fertig", damit trug die Farbe
+            // keine Information mehr. Jetzt zeigt jede Karte ihre Spur, auch bei
+            // 0 von 5; Gruen bleibt dem aktiven Fortschritt vorbehalten, fertig
+            // ist ruhiges Grau.
             return '<button class="kanban-karte" data-bridge-doc="' + HD.esc(p.file) + '">'
               + '<span class="kanban-titel">' + HD.esc(titelKurz(p)) + "</span>"
-              + '<span class="kanban-balken" role="img" aria-label="'
+              + '<span class="kanban-balken" data-zustand="' + HD.esc(s.schluessel) + '" role="img" aria-label="'
               + HD.esc(HD.fuellen(HD.W.schrittVon, { done: p.doneSteps, total: p.totalSteps })) + '">'
               + '<span class="kanban-balken-fuell" style="width:' + anteil + '%"></span></span>'
               + '<span class="kanban-fuss">'
@@ -381,10 +459,19 @@ HD.guardSektion = function () {
 // Ein delegierter Listener fuer alle Live-Knoepfe -- einmal registriert.
 HD.bridgeClick = function (ev) {
   var t = ev.target.closest
-    ? ev.target.closest("[data-bridge-toggle],[data-bridge-selftest],[data-bridge-order],[data-bridge-pkg],[data-bridge-more],[data-bridge-doc],[data-bridge-projekt-vorschlag]")
+    ? ev.target.closest("[data-bridge-toggle],[data-bridge-selftest],[data-bridge-order],[data-bridge-pkg],[data-bridge-more],[data-bridge-doc],[data-bridge-projekt-vorschlag],[data-bridge-frisch]")
     : null;
   if (!t) return false;
 
+  // Live-Daten neu holen -- der Ausweg aus einem gemerkten Fehlerzustand und
+  // der Weg zu einem frischen Stand, ohne die ganze Seite neu zu laden
+  // (was Klappzustaende, Baum und Scrollposition wegwerfen wuerde).
+  if (t.dataset.bridgeFrisch) {
+    HD.bridgeData = null;
+    HD.bridgeLade(true);
+    HD.zeichnen();
+    return true;
+  }
   if (t.dataset.bridgeProjektVorschlag) {
     HD.S.auftragProjekt = t.dataset.bridgeProjektVorschlag;
     HD.S.auftragPaket = null;
@@ -455,6 +542,21 @@ HD.bridgeClick = function (ev) {
       return true;
     }
     if (HD.S.auftragLaeuft) return true;
+    // VOR DEM UNUMKEHRBAREN WIRD GEFRAGT [Kritik-Runde 2, Problem 4]. Ein
+    // Auftrag an "alle" erreicht mehrere fremde Sitzungen gleichzeitig und laesst
+    // sich nicht zurueckholen -- also nennt die Rueckfrage die Empfaenger beim
+    // Namen, statt nur "alle" zu sagen. Bei genau einer Sitzung ist das kein
+    // Massenversand: dort fragt nichts, das waere nur Reibung.
+    if (ziel === "all") {
+      var empfaenger = ((HD.bridgeData && HD.bridgeData.sessions) || [])
+        .filter(function (s) { return s.active; })
+        .map(function (s) { return s.title || HD.W.sitzungOhneTitel; });
+      if (empfaenger.length > 1) {
+        var frage = HD.fuellen(HD.W.auftragAlleFrage, { n: empfaenger.length })
+          + "\\n\\n" + empfaenger.join("\\n");
+        if (!confirm(frage)) return true;
+      }
+    }
     HD.S.auftragLaeuft = true;
     HD.S.auftragText = text;
     // Das angeheftete Paket geht als Referenzzeile mit -- /bridge/order kennt
@@ -471,16 +573,28 @@ HD.bridgeClick = function (ev) {
       .then(function (r) { return r.json(); }).then(function (a) {
         HD.S.auftragLaeuft = false;
         if (a.ok) {
+          // WAS ICH GESENDET HABE, KANN ICH NACHLESEN [Kritik-Runde 2,
+          // Problem 4]: der gesendete Text stand 1,5 Sekunden im Toast und war
+          // danach unwiederbringlich weg -- der Nutzer konnte nicht einmal
+          // pruefen, WAS er losgeschickt hatte. Das Feld wird erst nach
+          // bestaetigtem Erfolg geleert, der Text wandert in den Verlauf.
+          HD.S.auftragVerlauf = (HD.S.auftragVerlauf || []);
+          HD.S.auftragVerlauf.unshift({ text: voll, ziel: ziel, um: HD.uhrzeit(new Date()) });
+          if (HD.S.auftragVerlauf.length > 5) HD.S.auftragVerlauf.length = 5;
           HD.S.auftragText = "";
           HD.S.auftragPaket = null;
           HD.melden(HD.fuellen(HD.W.auftragZugestellt, { datei: a.file || "" }));
         } else {
-          HD.melden(HD.fuellen(HD.W.nichtErreichbar, { grund: a.fehler || a.error || "" }));
+          // Der Text bleibt im Feld stehen -- ein gescheiterter Auftrag darf
+          // nicht auch noch die Formulierung kosten.
+          HD.meldenFehler(HD.fuellen(HD.W.nichtErreichbar, { grund: a.fehler || a.error || "" }),
+            null, HD.W.auftragStehtNoch);
         }
         HD.zeichnen();
       }).catch(function (e) {
         HD.S.auftragLaeuft = false;
-        HD.melden(HD.fuellen(HD.W.nichtErreichbar, { grund: String(e) }));
+        HD.meldenFehler(HD.fuellen(HD.W.nichtErreichbar, { grund: String(e) }),
+          null, HD.W.auftragStehtNoch);
         HD.zeichnen();
       });
   }

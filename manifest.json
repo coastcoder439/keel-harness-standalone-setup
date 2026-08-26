@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-26T18:54:58.993Z",
+  "gebautAm": "2026-08-26T20:58:55.762Z",
   "posten": 95,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -388,8 +388,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 7743,
-      "sha256": "369dabb2726bd5d0"
+      "bytes": 18201,
+      "sha256": "8f10a2b08aff90f3"
     },
     {
       "datei": "payload/dashboard/measure.js",
@@ -420,48 +420,48 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 26059,
-      "sha256": "990f65d034b761e6"
+      "bytes": 32476,
+      "sha256": "bdf58bb957825ac2"
     },
     {
       "datei": "payload/dashboard/render/client/core.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 16326,
-      "sha256": "ee7824e815cb7c1b"
+      "bytes": 24091,
+      "sha256": "1643e2e028000765"
     },
     {
       "datei": "payload/dashboard/render/client/detail.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 24115,
-      "sha256": "f9bc3e45423dcc17"
+      "bytes": 24905,
+      "sha256": "63e19846d730aa9c"
     },
     {
       "datei": "payload/dashboard/render/client/pages.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 31213,
-      "sha256": "e82256af4fb5988a"
+      "bytes": 33161,
+      "sha256": "24e50f4b5a573e76"
     },
     {
       "datei": "payload/dashboard/render/client/start.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 16954,
-      "sha256": "ec76a74381bc9a0b"
+      "bytes": 22972,
+      "sha256": "810a7a04a2a70f4a"
     },
     {
       "datei": "payload/dashboard/render/data.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15088,
-      "sha256": "166759d7dcf0ca45"
+      "bytes": 16245,
+      "sha256": "b2498ff04bdcd994"
     },
     {
       "datei": "payload/dashboard/render/helpers.js",
@@ -476,16 +476,16 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 13820,
-      "sha256": "ed9a2a88d16c6dc9"
+      "bytes": 14043,
+      "sha256": "9229b61576f92951"
     },
     {
       "datei": "payload/dashboard/render/labels.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 30901,
-      "sha256": "c5542473d43c4690"
+      "bytes": 34920,
+      "sha256": "a5501093bd7a6aaf"
     },
     {
       "datei": "payload/dashboard/render/markdown.js",
@@ -500,32 +500,32 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 7383,
-      "sha256": "3dd415b50457111f"
+      "bytes": 7535,
+      "sha256": "09e0f7901d3550b7"
     },
     {
       "datei": "payload/dashboard/render/styles-extra.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 8653,
-      "sha256": "6e7e76d79f7589cf"
+      "bytes": 15666,
+      "sha256": "766b4ea07eb3339c"
     },
     {
       "datei": "payload/dashboard/render/styles.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 46878,
-      "sha256": "7335b6206501e677"
+      "bytes": 46258,
+      "sha256": "614be4c18dd2b108"
     },
     {
       "datei": "payload/dashboard/render/views.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 25959,
-      "sha256": "7fdcc1b147c2a636"
+      "bytes": 26898,
+      "sha256": "168c6e0096dc5545"
     },
     {
       "datei": "payload/dashboard/rules.js",

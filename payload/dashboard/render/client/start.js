@@ -12,6 +12,12 @@ document.addEventListener("click", function (ev) {
   var z = ev.target;
   function nah(wahl) { return z.closest ? z.closest(wahl) : null; }
 
+  // Fehlermeldungen bleiben stehen, bis man sie wegklickt -- das ist der Klick.
+  // Steht VOR allem anderen: der Knopf liegt ueber der Flaeche, und wer ihn
+  // trifft, will nichts anderes.
+  if (nah(".meldung-zu")) { HD.meldungSchliessen(); return; }
+  if (nah("#tasten-hilfe")) { HD.tastenZeigen(); return; }
+
   var nav = nah("[data-ziel]");
   if (nav) { HD.zurSeite(nav.dataset.ziel); return; }
 
@@ -44,6 +50,21 @@ document.addEventListener("click", function (ev) {
     if (h === "suche:leeren") { HD.S.suche = ""; HD.adresseSchreiben(true); HD.zeichnen(); }
     else if (h === "filter:leeren") { HD.S.filter = []; HD.adresseSchreiben(true); HD.zeichnen(); }
     else if (h === "json:kopieren") HD.kopieren(JSON.stringify(HD.D.roh.messung, null, 1));
+    // JEDE SACKGASSE BEKOMMT EINEN AUSGANG [Kritik-Runde 2, Problem 9]: die
+    // Leerzustaende hatten zu neun von dreizehn keine Handlung. Damit sie eine
+    // bekommen konnten, brauchte es diese drei Zielarten -- ein Ordner im
+    // Dateibaum, eine andere Seite, ein frischer Live-Stand.
+    else if (h.indexOf("ordner:") === 0) {
+      var ordner = h.slice(7);
+      HD.S.seite = "dateien";
+      HD.S.baumOffen[ordner] = true;
+      HD.ahnenOeffnen(ordner + "/x");
+      HD.adresseSchreiben(false);
+      HD.zeichnen();
+    }
+    else if (h.indexOf("seite:") === 0) HD.zurSeite(h.slice(6));
+    else if (h === "live:frisch") { HD.bridgeData = null; HD.bridgeLade(true); HD.zeichnen(); }
+    else if (h === "mess:neu") { var nm = document.getElementById("neu-messen"); if (nm) nm.click(); }
     else if (h.indexOf("datei:") === 0) HD.oeffnen(h);
     return;
   }
@@ -202,15 +223,33 @@ document.addEventListener("click", function (ev) {
 // --- Eingabe -------------------------------------------------------------
 document.addEventListener("input", function (ev) {
   if (ev.target.id === "suche") {
+    // Die Cursorposition gehoert dem Nutzer [Kritik-Runde 2, Problem 1]: vorher
+    // sprang sie nach JEDEM Anschlag ans Textende, weil das Feld neu gezeichnet
+    // wurde. Ein Wort in der Mitte zu korrigieren war damit unmoeglich -- man
+    // tippte einen Buchstaben und stand wieder hinten.
+    var stand = ev.target.selectionStart;
+    var ende = ev.target.selectionEnd;
     HD.S.suche = ev.target.value;
     HD._suchFokus = true;
     HD.adresseSchreiben(true);
     HD.zeichnen();
     HD._suchFokus = false;
     var f = document.getElementById("suche");
-    if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); }
+    if (f) {
+      f.focus();
+      try { f.setSelectionRange(stand, ende); }
+      catch (e) { f.setSelectionRange(f.value.length, f.value.length); }
+    }
     return;
   }
+  // DER ENTWURF LEBT IM ZUSTAND, NICHT IM DOM [Kritik-Runde 2, Problem 1].
+  // Vorher wurde HD.S.entwurf nur beim OEFFNEN gesetzt und danach nie wieder --
+  // jedes HD.zeichnen() (ein Klick auf eine Baumzeile, ein Chevron, "j",
+  // Escape, eine eintreffende Live-Antwort) baute das Textfeld aus dem
+  // ORIGINAL neu auf. Der getippte Text war weg, ohne Rueckfrage und ohne
+  // Wiederherstellen; die Rueckfrage "ungespeichert?" hing allein am
+  // Abbrechen-Knopf und griff auf keinem dieser Wege.
+  if (ev.target.id === "editor-feld") { HD.S.entwurf = ev.target.value; return; }
   if (ev.target.id === "palette-feld") { HD.paletteZeichnen(ev.target.value); return; }
   if (HD.bridgeEingabe) HD.bridgeEingabe(ev);
 });
@@ -243,7 +282,30 @@ document.addEventListener("keydown", function (ev) {
     HD.schliessen();
     return;
   }
+
+  // Die Palette wird BEDIENT, nicht nur befuellt -- diese Tasten muessen VOR
+  // dem inFeld-Ausstieg stehen, weil das Palettenfeld selbst ein Eingabefeld
+  // ist [Kritik-Runde 2, Problem 12].
+  if (HD.S.palette) {
+    if (ev.key === "ArrowDown") { ev.preventDefault(); HD.paletteBlaettern(1); return; }
+    if (ev.key === "ArrowUp") { ev.preventDefault(); HD.paletteBlaettern(-1); return; }
+    if (ev.key === "Enter") { ev.preventDefault(); HD.paletteOeffnen(); return; }
+  }
+
+  // Strg+Enter sendet den Auftrag: wer ihn getippt hat, hat die Haende auf der
+  // Tastatur -- der Griff zur Maus ist der teuerste Teil des Vorgangs.
+  if ((ev.ctrlKey || ev.metaKey) && ev.key === "Enter" && ev.target.id === "bridge-text") {
+    ev.preventDefault();
+    var senden = document.querySelector("[data-bridge-order]");
+    if (senden) senden.click();
+    return;
+  }
+
   if (inFeld) return;
+
+  // Die Tastaturwege stehen nirgends -- also existieren sie fuer den Nutzer
+  // nicht [Kritik-Runde 2, Problem 12]. "?" zeigt sie.
+  if (ev.key === "?") { ev.preventDefault(); HD.tastenZeigen(); return; }
 
   if (ev.key === "/") {
     ev.preventDefault();
@@ -373,6 +435,50 @@ HD.paletteZeichnen = function (q) {
             }).join("");
       }).join("")
     : '<div class="leer-kompakt">' + HD.esc(HD.D.leer.treffer.text) + "</div>";
+  // Der erste Treffer ist sofort markiert: wer tippt, will meistens den ersten
+  // -- ein Enter soll ihn oeffnen, ohne dass man erst einmal Pfeil-runter
+  // drueckt [Kritik-Runde 2, Problem 12].
+  HD.paletteMarkieren(0);
+};
+
+// TASTATURBEDIENUNG FUER DAS TASTATUR-WERKZEUG [Kritik-Runde 2, Problem 12].
+// Die Befehlspalette -- das eine Werkzeug, das man ausschliesslich mit der
+// Tastatur bedient -- hatte KEINE: im Tastaturhandler stand "if (inFeld)
+// return;" vor allen Pfeiltasten, und das Palettenfeld IST ein Eingabefeld.
+// Nach dem Tippen musste man zur Maus greifen; damit rechnet sich eine
+// Befehlspalette nie.
+HD.paletteMarkieren = function (index) {
+  var treffer = Array.prototype.slice.call(document.querySelectorAll(".palette-treffer"));
+  if (!treffer.length) { HD.S.paletteIndex = 0; return; }
+  var i = index;
+  if (i < 0) i = treffer.length - 1;
+  if (i >= treffer.length) i = 0;
+  HD.S.paletteIndex = i;
+  treffer.forEach(function (t, n) { t.setAttribute("aria-selected", n === i ? "true" : "false"); });
+  var feld = document.getElementById("palette-feld");
+  if (feld && treffer[i].id) feld.setAttribute("aria-activedescendant", treffer[i].id);
+  if (treffer[i].scrollIntoView) treffer[i].scrollIntoView({ block: "nearest" });
+};
+
+HD.paletteBlaettern = function (richtung) {
+  HD.paletteMarkieren((HD.S.paletteIndex || 0) + richtung);
+};
+
+HD.paletteOeffnen = function () {
+  var treffer = document.querySelectorAll(".palette-treffer");
+  var t = treffer[HD.S.paletteIndex || 0];
+  if (!t) return;
+  var id = t.dataset.palette;
+  HD.paletteZu();
+  if (id.indexOf("seite:") === 0) HD.zurSeite(id.slice(6));
+  else HD.oeffnen(id);
+};
+
+// Wissen, das die Oberflaeche nicht mitteilt, existiert fuer den Nutzer nicht
+// [Kritik-Runde 2, Problem 12]. Es gab Strg+K, Strg+B, "/", j/k, Pfeile,
+// Escape -- und nirgends eine Stelle, wo das stand.
+HD.tastenZeigen = function () {
+  HD.melden(HD.W.tastenUebersicht, "bleiben");
 };
 
 document.addEventListener("click", function (ev) {
@@ -414,13 +520,32 @@ document.addEventListener("click", function (ev) {
 })();
 
 // --- Start ---------------------------------------------------------------
-window.addEventListener("popstate", function () { HD.adresseLesen(); HD.zeichnen(); });
+window.addEventListener("popstate", function () {
+  // Auch der Zurueck-Knopf verlaesst den Editor -- vorher der einzige Weg, der
+  // den getippten Text ohne jede Rueckfrage verwarf [Kritik-Runde 2, Problem 1].
+  if (!HD.entwurfFreigeben()) { history.pushState(null, "", location.href); return; }
+  HD.adresseLesen();
+  HD.zeichnen();
+});
+
+// Ein offener Editor haelt auch das SCHLIESSEN DES FENSTERS an. Das ist der
+// einzige Weg, den die Seite selbst nicht abfangen kann -- dafuer gibt es
+// beforeunload, den der Browser in seinen eigenen Dialog uebersetzt.
+window.addEventListener("beforeunload", function (ev) {
+  if (HD.S.bearbeitet == null) return;
+  var feld = document.getElementById("editor-feld");
+  var jetzt = feld ? feld.value : HD.S.entwurf;
+  if (HD.S.entwurfStart == null || jetzt === HD.S.entwurfStart) return;
+  ev.preventDefault();
+  ev.returnValue = "";
+});
 
 (function start() {
   if (HD.geholt("leiste", "breit") === "schmal") HD.leisteKlappen();
   HD.S.breite = parseInt(HD.geholt("breite", "320"), 10) || 320;
   HD.themaZeigen(HD.geholt("thema", "system"));
   if (!HD.adresseLesen()) HD.adresseSchreiben(true);
+  if (HD.bridgeFrischHalten) HD.bridgeFrischHalten();
   HD.zeichnen();
 })();
 `;

@@ -97,6 +97,49 @@ HD.fuellen = function (vorlage, werte) {
   });
 };
 
+// KEIN ROHER WERKZEUG-AUSDRUCK IM INTERFACE [Kritik-Runde 2, Problem 8].
+// Arbeitspaket-Titel kommen aus Markdown-Dateien und standen woertlich auf den
+// Karten: sichtbare Sternchen, offene Anfuehrungszeichen, "·"-Ketten, Fussnoten
+// in eckigen Klammern. Das las sich nicht als Interface, sondern als Datei-Dump
+// mit einem Rahmen darum -- der staerkste einzelne Grund, warum die Flaeche wie
+// Werkzeug-Ausgabe wirkte und nicht wie ein Produkt.
+//
+// Diese Funktion nimmt die Auszeichnung heraus, statt sie zu rendern: auf einer
+// einzeiligen Karte hilft Fettdruck nicht, er stoert nur.
+HD.klartext = function (text) {
+  var s = String(text == null ? "" : text);
+  // Code-Zeichen. Der Backtick steht als Zeichenklasse [\\x60] da, nicht als
+  // Zeichen: dieser Modultext lebt selbst in einem Template-Literal, und die
+  // Klasse haelt ausserdem den Namens-Test davon ab, "x60(" fuer einen
+  // Funktionsaufruf zu halten.
+  s = s.replace(/[\\x60]([^\\x60]+)[\\x60]/g, "$1");
+  s = s.replace(/\\*\\*([^*]+)\\*\\*/g, "$1");      // fett
+  s = s.replace(/(^|\\s)\\*([^*]+)\\*/g, "$1$2");  // kursiv (nicht mitten im Wort)
+  s = s.replace(/\\[([^\\]]+)\\]\\([^)]*\\)/g, "$1"); // Verweise -> nur der Text
+  s = s.replace(/^#+\\s*/, "");                   // Ueberschriftszeichen
+  s = s.replace(/^[-*+]\\s+/, "");                // Listenzeichen
+  // BELEGKLAMMERN GEHOEREN INS DOKUMENT, NICHT AUF DIE KARTE. Arbeitspakete
+  // tragen ihre Quelle woertlich im Titel ("[Owner, woertlich: ...]") -- auf
+  // einer Karte ist das ein Zitat ohne Zusammenhang, das den eigentlichen Satz
+  // aus dem sichtbaren Bereich schiebt und mitten im Wort abbricht.
+  s = s.replace(/\\s*\\[[^\\]]*$/, "");             // angefangene Klammer am Ende
+  s = s.replace(/\\s*\\[(Owner|Kritiker|Befund|Quelle)[^\\]]*\\]/gi, "");
+  return s.replace(/\\s+/g, " ").trim();
+};
+
+// EINE ZEILE HEISST EINE ZEILE [Kritik-Runde 2, Problem 8]. Vorher brachen
+// Kartentitel mitten im Wort ab ('[Owner, woertlich: "userfreundlich,') --
+// weil niemand entschied, wie lang ein Titel sein darf. Gekappt wird am
+// Wortende, mit echtem Auslassungszeichen; der volle Text steht im Dokument,
+// das die Karte oeffnet.
+HD.aufEineZeile = function (text, hoechstens) {
+  var s = HD.klartext(text);
+  var max = hoechstens || 72;
+  if (s.length <= max) return s;
+  var kurz = s.slice(0, max).replace(/[\\s.,;:·\\-–—]+\\S*$/, "");
+  return (kurz || s.slice(0, max)) + " …";
+};
+
 // Zeitpunkt fuer die Anzeige: Uhrzeit wenn heute, sonst Datum -- ueber Intl,
 // nicht ueber String-Zerlegung eines fertigen Datumstextes (die bricht, sobald
 // die Laufzeit das Trennzeichen aendert). Ohne lesbaren Wert: ehrlicher Strich.
@@ -165,18 +208,54 @@ HD.speichern = function (pfad, text) {
     })
     .catch(function (e) {
       if (feld) feld.disabled = false;
-      HD.melden(HD.fuellen(HD.W.speichernFehlgeschlagen, { grund: e.message }));
+      // Die einzige Frage, die der Nutzer jetzt hat, ist NICHT der Fehlercode --
+      // es ist "ist mein Text weg?". Der Entwurf steht noch im Feld, und genau
+      // das sagt die Meldung [Kritik-Runde 2, Problem 2].
+      HD.meldenFehler(
+        HD.fuellen(HD.W.speichernFehlgeschlagen, { grund: e.message }),
+        null,
+        HD.W.entwurfStehtNoch
+      );
     });
 };
 
-HD.melden = function (text, bleiben) {
+// EIN ERFOLG DARF VERGEHEN, EIN FEHLER NICHT [Kritik-Runde 2, Problem 2]:
+// vorher lief BEIDES durch dieselbe 1,5-Sekunden-Blende. Wer in dem Moment
+// wegsah, erfuhr nie, dass sein Speichern oder sein Auftrag fehlgeschlagen war
+// -- und die Oberflaeche sah danach exakt aus wie im Erfolgsfall.
+//
+//   HD.melden(text)             Erfolg/Hinweis, blendet nach 1,5 s aus
+//   HD.melden(text, "bleiben")  laufender Vorgang, bleibt bis zur naechsten
+//   HD.melden(text, "fehler")   FEHLER: bleibt stehen, bis er weggeklickt wird
+//
+// Der alte zweite Parameter war ein boolean; true bedeutete "bleiben". Beides
+// wird weiter verstanden, damit kein Aufrufer stillschweigend die Bedeutung
+// wechselt.
+HD.melden = function (text, art) {
   var m = document.getElementById("meldung");
-  m.textContent = text;
-  m.classList.add("sichtbar");
+  var istFehler = art === "fehler";
+  var bleibt = istFehler || art === "bleiben" || art === true;
   clearTimeout(HD._meldeUhr);
-  // bleiben: fuer Vorgaenge, die laenger dauern als die 1,5 Sekunden. Die
-  // Meldung verschwindet dann erst, wenn die naechste sie ersetzt.
-  if (bleiben) return;
+
+  m.classList.toggle("meldung-fehler", istFehler);
+  // Ein Fehler wird ANGESAGT, nicht beilaeufig gemeldet: assertive unterbricht
+  // den Vorleser, polite wartet -- und ein verlorener Text wartet nicht.
+  m.setAttribute("aria-live", istFehler ? "assertive" : "polite");
+  m.setAttribute("role", istFehler ? "alert" : "status");
+
+  if (istFehler) {
+    // Ein Fehler ohne Ausweg ist eine Sackgasse: er bekommt einen Knopf, der
+    // ihn schliesst -- sonst muesste man die Seite neu laden, um ihn loszuwerden.
+    m.innerHTML = '<span class="meldung-text"></span>'
+      + '<button class="meldung-zu" type="button" aria-label="' + HD.esc(HD.W.schliessen)
+      + '" title="' + HD.esc(HD.W.schliessen) + '">' + HD.icon("schliessen") + "</button>";
+    m.querySelector(".meldung-text").textContent = text;
+  } else {
+    m.textContent = text;
+  }
+  m.classList.add("sichtbar");
+
+  if (bleibt) return;
   HD._meldeUhr = setTimeout(function () {
     m.classList.remove("sichtbar");
     // Auch den Text raeumen: die Klasse allein blendet nur aus, der Inhalt
@@ -184,6 +263,24 @@ HD.melden = function (text, bleiben) {
     // angesagt.
     m.textContent = "";
   }, 1500);
+};
+
+// Eine Fehlermeldung beantwortet DREI Fragen [Kritik-Runde 2]: was ist schief
+// gegangen, was ist mit meinen Daten, was tue ich jetzt. Ein blosses
+// "Nicht gespeichert: EACCES" beantwortet keine davon.
+HD.meldenFehler = function (was, grund, datenZustand) {
+  var teile = [was];
+  if (grund) teile.push(String(grund));
+  if (datenZustand) teile.push(datenZustand);
+  HD.melden(teile.join(" · "), "fehler");
+};
+
+HD.meldungSchliessen = function () {
+  var m = document.getElementById("meldung");
+  if (!m) return;
+  clearTimeout(HD._meldeUhr);
+  m.classList.remove("sichtbar", "meldung-fehler");
+  m.textContent = "";
 };
 
 HD.kopieren = function (text) {
@@ -321,8 +418,19 @@ HD.navZeichnen = function () {
 };
 
 HD.pfadleiste = [];
+// EIN DING, EIN NAME [Kritik-Runde 2, Problem 7]. Vorher hiess dieselbe Stelle
+// gleichzeitig "Projekte" (Navigation), "Zu tun" (Krume), "Zu tun" (Reiter) und
+// "ARBEITSPAKETE" (Abschnitt) -- drei Navigationsebenen in aehnlichem Grau, die
+// sich widersprachen. Der Nutzer konnte seinen eigenen Standort nicht bestimmen.
+//
+// Seit die Seite eine <h1> traegt, sagt die Krume auf einer Listenseite nichts,
+// was der Titel nicht schon sagt. Sie erscheint deshalb nur noch, wenn sie mehr
+// weiss: ein Dateipfad oder ein ausgewaehlter Eintrag. Dann ist sie ein Weg,
+// vorher war sie eine dritte Meinung.
 HD.pfadleisteZeichnen = function () {
   var s = HD.D.seiten[HD.S.seite];
+  var tiefer = (HD.S.seite === "dateien" && HD.S.baumDatei) || HD.S.auswahl;
+  if (!tiefer) { document.getElementById("pfadleiste").innerHTML = ""; return; }
   var stuecke = [
     { wort: HD.D.workspace, ziel: "ueberblick", titel: HD.D.wurzel },
     { wort: s ? s.name : HD.S.seite, ziel: HD.S.seite },
@@ -362,13 +470,41 @@ HD.zaehlerZeichnen = function () {
 };
 
 // --- Umschalten ----------------------------------------------------------
+// EIN OFFENER ENTWURF WIRD NICHT LAUTLOS UEBERFAHREN [Kritik-Runde 2, Problem 1].
+// Jeder Weg, der den Editor verlaesst, fragt zuerst -- vorher tat das allein der
+// Abbrechen-Knopf, waehrend Navigation, Dateiwechsel und Zurueck-Taste den
+// getippten Text kommentarlos verwarfen. Rueckgabe true heisst "weiter".
+HD.entwurfFreigeben = function () {
+  if (HD.S.bearbeitet == null) return true;
+  var feld = document.getElementById("editor-feld");
+  var jetzt = feld ? feld.value : HD.S.entwurf;
+  var geaendert = HD.S.entwurfStart != null && jetzt != null && jetzt !== HD.S.entwurfStart;
+  if (!geaendert) return true;
+  if (!confirm(HD.W.ungespeichert)) return false;
+  HD.S.bearbeitet = null;
+  HD.S.entwurf = null;
+  HD.S.entwurfStart = null;
+  return true;
+};
+
 HD.zurSeite = function (id) {
   if (!HD.D.seiten[id]) return;
+  if (!HD.entwurfFreigeben()) return;
+  // SUCHE UND FILTER GEHOEREN ZUR SEITE, NICHT ZUM KLICK [Kritik-Runde 2,
+  // Problem 1]: vorher loeschte JEDER Navigationsklick beides -- auch der
+  // Wechsel zwischen zwei Reitern DERSELBEN Gruppe und der Weg zurueck. Wer
+  // auf "Hooks" gesucht, kurz nach "Regeln" geschaut und zurueckgeklickt hat,
+  // fing von vorne an. Jetzt merkt sich jede Seite ihren eigenen Stand.
+  HD.S.seitenStand = HD.S.seitenStand || {};
+  if (HD.S.seite && HD.S.seite !== id) {
+    HD.S.seitenStand[HD.S.seite] = { suche: HD.S.suche, filter: HD.S.filter, ansicht: HD.S.ansicht };
+  }
+  var alt = HD.S.seitenStand[id] || {};
   HD.S.seite = id;
   HD.S.auswahl = null;
-  HD.S.suche = "";
-  HD.S.filter = [];
-  HD.S.ansicht = "liste";
+  HD.S.suche = alt.suche || "";
+  HD.S.filter = alt.filter || [];
+  HD.S.ansicht = alt.ansicht || "liste";
   HD.S.vollbild = false;
   HD.adresseSchreiben(false);
   HD.zeichnen();
@@ -378,16 +514,25 @@ HD.zurSeite = function (id) {
 HD.oeffnen = function (id) {
   var e = HD.eintragMit(id);
   if (!e) return;
+  if (!HD.entwurfFreigeben()) return;
   if (e.seite !== HD.S.seite) {
+    // Denselben Seitenstand merken wie HD.zurSeite -- sonst waere der Sprung
+    // aus der Befehlspalette das eine Schlupfloch, das die Suche doch loescht.
+    HD.S.seitenStand = HD.S.seitenStand || {};
+    if (HD.S.seite) {
+      HD.S.seitenStand[HD.S.seite] = { suche: HD.S.suche, filter: HD.S.filter, ansicht: HD.S.ansicht };
+    }
+    var vor = HD.S.seitenStand[e.seite] || {};
     HD.S.seite = e.seite;
-    HD.S.suche = "";
-    HD.S.filter = [];
+    HD.S.suche = vor.suche || "";
+    HD.S.filter = vor.filter || [];
   }
   if (e.seite === "dateien") HD.dateiWaehlen(e.pfad);
   else { HD.S.auswahl = id; HD.adresseSchreiben(false); HD.zeichnen(); }
 };
 
 HD.dateiWaehlen = function (pfad) {
+  if (!HD.entwurfFreigeben()) return;
   HD.S.seite = "dateien";
   HD.S.baumDatei = pfad;
   HD.S.auswahl = pfad ? "datei:" + pfad : null;
@@ -398,6 +543,9 @@ HD.dateiWaehlen = function (pfad) {
 
 HD.schliessen = function () {
   if (HD.S.vollbild) { HD.S.vollbild = false; HD.zeichnen(); return true; }
+  // Escape mit offenem Editor: erst fragen. Sonst raeumt die Taste, die man
+  // druecken WILL, um ein Panel loszuwerden, den getippten Text mit weg.
+  if (HD.S.bearbeitet != null && !HD.entwurfFreigeben()) return true;
   if (HD.S.auswahl) {
     HD.S.auswahl = null;
     if (HD.S.seite === "dateien") HD.S.baumDatei = null;

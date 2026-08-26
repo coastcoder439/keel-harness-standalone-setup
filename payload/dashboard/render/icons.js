@@ -167,6 +167,10 @@ Object.assign(FORMEN, {
   Lock:
     '<path d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z"/>' +
     '<path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  // Maximize2 -- dieselbe Datei in voller Breite oeffnen (Panel -> Dateiansicht)
+  Maximize2:
+    '<path d="M15 3h6v6"/><path d="M9 21H3v-6"/>' +
+    '<path d="M21 3l-7 7"/><path d="M3 21l7-7"/>',
 });
 
 const NAMEN = Object.keys(FORMEN);
@@ -182,6 +186,7 @@ const ZWEITNAMEN = {
   schliessen: "X",
   ordner: "Folder",
   datei: "File",
+  maximize: "Maximize2",
 };
 
 // Aufrufe mit unbekanntem Namen. Bewusst eine Liste am Modul (keine Ausgabe):

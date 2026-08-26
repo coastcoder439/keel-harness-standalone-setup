@@ -161,6 +161,12 @@ const MASSE = {
   "--text-sm": "14px",
   "--text-md": "15px",
   "--text-base": "16px",
+  // DREI STUFEN MIT ECHTEN SPRUENGEN [Kritik-Runde 2, Problem 5]: die gesamte
+  // Anwendung lief auf 11-14 px -- Einleitung, Zeilentitel, Kartentitel,
+  // Formularlabels alle gleich gross. Eine Skala ohne Spruenge ist keine
+  // Hierarchie: alles wirkt gleich wichtig, das Auge findet keinen Weg. Der
+  // Seitentitel bekommt deshalb einen Sprung, den man nicht uebersehen kann.
+  "--text-titel": "30px",
   "--text-2xl": "24px",
   "--text-md-h1": "1.6em",
   "--text-md-h2": "1.3em",
@@ -356,6 +362,21 @@ const GERUEST = `
 @media (min-width:768px){.hauptflaeche{padding:24px}}
 .erklaersatz{font-size:var(--text-sm);color:var(--muted-foreground);margin-bottom:12px;max-width:80ch}
 .erklaersatz .pfad{font-size:var(--text-xs);color:var(--muted-foreground)}
+/* SEITENKOPF [Kritik-Runde 2, Problem 5]. Der erste Halt des Auges auf jeder
+   Seite: ein Titel, den man nicht uebersehen kann, und EIN Satz darunter, der
+   seine Lesebreite begruendet, statt wie eine vergessene Formatierung
+   auszusehen. Die Abstaende sind gestaffelt (32 unten, 6 dazwischen), damit
+   Titel und Satz als EIN Block lesen und nicht als zwei Fundstuecke. */
+.seiten-kopf{margin-bottom:24px}
+.seiten-titel{font-size:var(--text-titel);font-weight:600;line-height:1.15;
+  letter-spacing:-0.02em;color:var(--foreground);margin:0}
+.seiten-unter{font-size:var(--text-sm);color:var(--muted-foreground);
+  margin:6px 0 0;max-width:68ch;line-height:1.5}
+.seiten-unter .pfad{font-size:var(--text-xs)}
+@media (max-width:767px){
+  .seiten-titel{font-size:var(--text-2xl)}
+  .seiten-kopf{margin-bottom:16px}
+}
 .werkzeugleiste{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
 .suchfeld{width:256px;height:32px;padding:0 10px;border:1px solid var(--input);
   border-radius:var(--radius-md);background:var(--card);color:var(--foreground);font-size:var(--text-compact)}
@@ -436,13 +457,33 @@ const LISTEN = `
 .gruppen-kopf{display:flex;align-items:center;gap:8px;padding:12px 4px 6px;width:100%;text-align:left}
 .gruppen-caret{flex:0 0 14px;width:14px;height:14px;color:var(--muted-foreground);transition:transform var(--dauer)}
 .gruppen-kopf[aria-expanded="false"] .gruppen-caret{transform:rotate(-90deg)}
-.gruppen-titel{font-size:var(--text-sm);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+/* ABSCHNITTE IN NORMALER SCHREIBUNG [Kritik-Runde 2, Problem 5]. Versalien
+   waren hier die zweite von VIER Ueberschriften-Sprachen fuer EINE Rangstufe
+   (Versal-Grau mit Chevron, Versal-Grau ohne, fette Monospace, Reiterschrift)
+   -- und Versalien lesen sich langsamer, ohne mehr Rang zu tragen. Der Rang
+   kommt jetzt aus Groesse und Gewicht: 15 px halbfett in Vordergrundfarbe,
+   eine klare Stufe unter dem 30-px-Seitentitel und ueber der 14-px-Zeile. */
+.gruppen-titel{font-size:var(--text-md);font-weight:600;letter-spacing:-0.01em;
+  color:var(--foreground)}
+/* Gruppenkopf mit Zusatz rechts: "Stand 20:43" plus Aktualisieren-Knopf an
+   Live-Sektionen [Kritik-Runde 2, Problem 6]. Der Kopf behaelt seine Breite,
+   der Zusatz sitzt am rechten Rand auf derselben Grundlinie. */
+.gruppen-zeile{display:flex;align-items:center;gap:8px}
+.gruppen-zeile > .gruppen-kopf{flex:1 1 auto;width:auto}
+.live-stand{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;
+  padding-top:6px;font-size:var(--text-xs);color:var(--muted-foreground)}
+.live-stand .ikon-knopf{width:22px;height:22px}
+.live-stand .ikon-knopf svg{width:13px;height:13px}
+.leer-handlung{margin-top:8px}
 /* Kanban der Arbeitspakete je Projekt [Owner-Wunsch W7]. Drei Spalten nach
    ZUSTAND; auf schmalen Flaechen untereinander. */
 .kanban{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;align-items:start}
 .kanban-spalte{min-width:0;display:flex;flex-direction:column;gap:8px}
-.kanban-kopf{margin:0 0 2px;font-size:var(--text-xs);font-weight:600;text-transform:uppercase;
-  letter-spacing:.06em;color:var(--muted-foreground);display:flex;align-items:center;gap:6px}
+/* Der Spaltenkopf ist eine Stufe UNTER dem Abschnittstitel, nicht eine eigene
+   Sprache [Kritik-Runde 2, Problem 5]: 14 px halbfett in normaler Schreibung.
+   Versalien waren hier die vierte Ueberschriften-Sprache auf derselben Seite. */
+.kanban-kopf{margin:0 0 6px;font-size:var(--text-sm);font-weight:600;
+  letter-spacing:-0.01em;color:var(--foreground);display:flex;align-items:center;gap:6px}
 .kanban-karte{display:flex;flex-direction:column;gap:6px;width:100%;text-align:left;
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius-lg);
   padding:10px 12px;transition:border-color var(--dauer),background var(--dauer)}
@@ -453,6 +494,12 @@ const LISTEN = `
 .kanban-balken-fuell{display:block;height:100%;background:var(--status-ok)}
 .kanban-fuss{font-size:var(--text-micro);color:var(--muted-foreground);
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+/* GRUEN NUR FUER AKTIVEN FORTSCHRITT [Kritik-Runde 2, Problem 10]. Trug beides
+   -- laufend UND fertig -- denselben Ton, sagte die Farbe nichts mehr. Fertig
+   ist jetzt ruhiges Grau (die Arbeit ist vorbei, sie braucht keine Farbe),
+   offen eine leere Spur (sichtbar, dass noch nichts geschah). */
+.kanban-balken[data-zustand="fertig"] .kanban-balken-fuell{background:var(--muted-foreground);opacity:.55}
+.kanban-balken[data-zustand="offen"] .kanban-balken-fuell{background:var(--border)}
 @media (max-width:900px){.kanban{grid-template-columns:1fr}}
 /* Erklaersatz unter einem technischen Gruppennamen [Owner-Wunsch W14]. */
 .gruppen-erklaersatz{font-size:var(--text-xs);color:var(--muted-foreground);
@@ -529,89 +576,6 @@ const BAUM = `
 .baum-flaeche{display:flex;min-height:0;height:100%}
 `;
 
-const DATEIANSICHT = `
-.dateiansicht{flex:1 1 auto;min-width:0;overflow:auto;padding:16px;scrollbar-gutter:stable}
-.datei-kopf{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:10px;
-  padding-bottom:10px;border-bottom:1px solid var(--border)}
-.datei-name{display:block;font-size:var(--text-sm);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.datei-pfad{display:block;font-family:var(--mono);font-size:var(--text-xs);color:var(--muted-foreground);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.datei-meta{display:flex;flex-wrap:wrap;gap:8px;font-size:var(--text-xs);
-  color:var(--muted-foreground);padding:8px 0}
-.datei-meta > * + *::before{content:"\\00B7";margin-right:8px}
-.datei-aktionen{display:flex;align-items:center;gap:4px}
-/* Code-Ansicht: Rinne fuer Zeilennummern, Text scrollt waagerecht fuer sich. */
-.code-flaeche{display:grid;grid-template-columns:auto minmax(0,1fr);border:1px solid var(--border);
-  border-radius:var(--radius-lg);background:var(--muted);overflow:hidden;font-family:var(--mono);
-  font-size:var(--text-xs);line-height:20px}
-.code-rinne{padding:12px 8px;text-align:right;color:var(--muted-foreground);
-  border-right:1px solid var(--border);user-select:none;font-variant-numeric:tabular-nums;white-space:pre}
-.code-text{padding:12px;overflow-x:auto;white-space:pre;color:var(--foreground)}
-.code-zeile[data-treffer="ja"]{background:color-mix(in srgb,var(--primary) 18%,transparent)}
-/* Gerendertes Markdown: 15/1.6, Ueberschriften als em-Leiter relativ dazu. */
-.md{font-size:var(--text-md);line-height:1.6;max-width:78ch}
-.md h1{font-size:var(--text-md-h1);font-weight:600;margin:1.2em 0 .5em;line-height:1.25}
-.md h2{font-size:var(--text-md-h2);font-weight:600;margin:1.2em 0 .4em;line-height:1.3}
-.md h3{font-size:var(--text-md-h3);font-weight:600;margin:1em 0 .3em}
-.md h4{font-size:var(--text-md-h4);font-weight:600;margin:1em 0 .3em}
-.md p,.md ul,.md ol,.md blockquote,.md pre,.md table{margin:.7em 0}
-.md ul,.md ol{padding-left:1.4em}
-.md code{font-size:var(--text-xs);background:var(--muted);border-radius:var(--radius-sm);padding:1px 4px}
-.md pre{background:var(--muted);border-radius:var(--radius-md);padding:12px;overflow-x:auto}
-.md pre code{background:none;padding:0}
-.md blockquote{border-left:2px solid var(--border);padding-left:12px;color:var(--muted-foreground)}
-.md table{border-collapse:collapse;font-size:var(--text-compact);display:block;overflow-x:auto}
-.md th,.md td{border:1px solid var(--border);padding:6px 10px;text-align:left}
-.md th{background:var(--muted)}
-.md a{text-decoration:underline}
-`;
-
-const DETAIL = `
-/* Detail = Spalte UNTER der Kopfzeile (kein Overlay), 320 px, bis 60 % breit. */
-.detail{width:var(--detail-breite);min-width:320px;max-width:60%;flex:0 0 auto;
-  background:var(--card);border-left:1px solid var(--border);
-  display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
-.detail[hidden]{display:none}
-.detail[data-vollbild="ja"]{width:100%;max-width:none;border-left:0}
-.detail[data-vollbild="ja"] .detail-koerper{max-width:1280px;margin:0 auto;width:100%}
-.detail-kopf{flex:0 0 auto;display:grid;grid-template-columns:auto minmax(0,1fr) auto;
-  align-items:start;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)}
-.detail-name{display:block;font-size:var(--text-sm);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.detail-pfad{display:block;font-family:var(--mono);font-size:var(--text-xs);color:var(--muted-foreground);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.detail-titel{font-size:var(--text-2xl);font-weight:600;line-height:1.2;margin-bottom:8px}
-.detail-aktionen{display:flex;align-items:center;gap:2px}
-.detail-koerper{flex:1 1 auto;min-height:0;overflow:auto;padding:12px 16px;scrollbar-gutter:stable}
-/* PropertySection + PropertyRow: Label 96 px muted links, Wert rechts. */
-.eigenschaft-abschnitt{border-top:1px solid var(--border);padding:10px 0}
-.eigenschaft-abschnitt:first-child{border-top:0}
-.eigenschaft-abschnitt > summary{font-size:var(--text-xs);font-weight:600;text-transform:uppercase;
-  letter-spacing:.05em;color:var(--muted-foreground);cursor:pointer;padding:2px 0}
-.eigenschaft-zeile{display:flex;gap:12px;padding:4px 0;font-size:var(--text-xs)}
-.eigenschaft-label{flex:0 0 var(--label-breite);width:var(--label-breite);color:var(--muted-foreground);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.eigenschaft-wert{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
-.eigenschaft-wert .pfad,.eigenschaft-wert .zahl,.eigenschaft-wert .zeit{font-family:var(--mono)}
-.eigenschaft-pille{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);
-  border-radius:var(--radius-pille);padding:0 8px;font-size:var(--text-nano);
-  text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground)}
-.beschreibung-quelle{font-size:var(--text-nano);color:var(--muted-foreground);margin-top:4px}
-/* IssueRelatedWorkPanel: Referenz-Pille + Art-Badge + Titel. */
-.verknuepft-zeile{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:var(--text-xs)}
-.verknuepft-pille{font-family:var(--mono);border:1px solid var(--border);border-radius:var(--radius-sm);
-  padding:0 5px;color:var(--foreground);flex:0 0 auto}
-.verknuepft-art{border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 5px;
-  background:color-mix(in srgb,var(--muted) 40%,transparent);color:var(--muted-foreground);flex:0 0 auto}
-.verknuepft-titel{color:var(--muted-foreground);min-width:0;overflow:hidden;
-  text-overflow:ellipsis;white-space:nowrap}
-/* ResizableHandle: 8 px Trefferflaeche, 1 px Linie, Ring beim Zeigen. */
-.griff{position:absolute;top:0;left:-4px;width:8px;height:100%;cursor:col-resize;z-index:2;
-  display:grid;place-items:center;touch-action:none}
-.griff::before{content:"";width:1px;height:100%;background:var(--border)}
-.griff:hover::before,.griff:focus-visible::before,.griff[data-zieht="ja"]::before{background:var(--ring);width:2px}
-.baum-flaeche .griff{position:relative;left:0;height:auto}
-`;
-
 const BAUSTEINE = `
 /* MetricCard: Wert 24 tabular, Label 12 muted, kein Rahmen. */
 /* auto-fit statt fester Spaltenzahl: fuenf Karten fuellen die Reihe, keine
@@ -681,6 +645,22 @@ const BAUSTEINE = `
   .meldung{transition:none}
   .meldung.sichtbar{transition:none}
 }
+/* FEHLER SIND EIN ZUSTAND, KEIN AUFBLITZEN [Kritik-Runde 2, Problem 2].
+   Ein Fehler bleibt stehen, bis man ihn wegklickt -- also braucht er Platz fuer
+   einen ganzen Satz (keine Pille mehr), eine Farbkante, die ihn vom Erfolg
+   unterscheidet, und Zeigerereignisse, damit sein Schliessen-Knopf klickbar ist. */
+.meldung.meldung-fehler{display:flex;align-items:flex-start;gap:10px;
+  max-width:min(560px,calc(100vw - 32px));text-align:left;
+  border-radius:var(--radius);padding:12px 12px 12px 14px;
+  border-color:var(--status-warn);border-left:3px solid var(--status-warn);
+  font-size:var(--text-sm);line-height:1.45;pointer-events:auto}
+.meldung-text{flex:1 1 auto}
+.meldung-zu{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  width:24px;height:24px;margin:-2px -2px 0 0;border-radius:var(--radius-sm);
+  color:var(--muted-foreground);background:none;border:0;cursor:pointer;
+  -webkit-tap-highlight-color:transparent}
+.meldung-zu:hover{color:var(--foreground);background:var(--accent)}
+.meldung-zu svg{width:14px;height:14px}
 .kopieren{display:inline-flex;align-items:center;gap:5px;font-size:var(--text-xs);
   color:var(--muted-foreground);border:1px solid var(--border);border-radius:var(--radius-sm);padding:2px 6px}
 .kopieren:hover{color:var(--foreground);background:color-mix(in srgb,var(--accent) 50%,transparent)}
@@ -692,8 +672,18 @@ const BAUSTEINE = `
 /* Haupt-Knopf: die EINE ausgezeichnete Handlung einer Flaeche (Vorbild: der
    dunkle Aktionsknopf "Pruefung jetzt ausfuehren" in Keel Light). */
 .knopf-haupt{background:var(--primary);color:var(--primary-foreground);border:1px solid var(--primary);
-  border-radius:var(--radius-md);padding:6px 14px;font-size:var(--text-compact);font-weight:500}
+  border-radius:var(--radius-md);padding:6px 14px;font-size:var(--text-compact);font-weight:500;
+  -webkit-tap-highlight-color:transparent}
 .knopf-haupt:hover{opacity:.9}
+/* FARBE MUSS MAN SICH VERDIENEN [Kritik-Runde 2, Problem 4]. "Neu messen" war
+   das dunkelste und groesste Element JEDER Seite -- also lag das lauteste
+   Gewicht auf einer Wartungsaktion, die man fast nie braucht, waehrend die
+   unumkehrbaren Handlungen still danebenstanden. Der Knopf bleibt vollwertig
+   erreichbar, tritt aber als Umriss auf und ueberlaesst die Fuellung dem,
+   was der Nutzer wirklich tun will. */
+#neu-messen{background:transparent;color:var(--muted-foreground);border-color:var(--border);
+  font-weight:400}
+#neu-messen:hover{background:var(--accent);color:var(--foreground);opacity:1}
 /* Sitzungs-Karten (Ueberblick, oben): laufende Sitzungen wie die
    Agenten-Karten des Vorbilds -- Karte, Puls-Punkt, Titel, Rolle, Status. */
 .sitzung-reihe{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;margin-bottom:8px}
@@ -718,6 +708,17 @@ const BAUSTEINE = `
   border-radius:var(--radius-md);background:var(--card);color:var(--foreground);
   font:inherit;font-size:var(--text-compact);resize:vertical}
 .auftrag-feld-breit{flex:1 1 260px}
+/* Der Senden-Knopf steht UNTER der Textflaeche, an ihrer rechten Kante
+   [Kritik-Runde 2, Problem 15] -- neben dem Formular schwebend gehoerte er
+   optisch zu nichts und riss eine dritte rechte Kante auf. Der Verlauf darunter
+   macht nachlesbar, was rausging [Problem 4]. */
+.auftrag-fuss{display:flex;justify-content:flex-end;margin-top:8px}
+.auftrag-verlauf{margin-top:14px;padding-top:10px;border-top:1px solid var(--border)}
+.auftrag-verlauf-kopf{font-size:var(--text-micro);font-weight:600;
+  color:var(--muted-foreground);margin:0 0 4px}
+.auftrag-verlauf-zeile{font-size:var(--text-xs);color:var(--muted-foreground);
+  margin:0;padding:3px 0;display:flex;gap:8px}
+.auftrag-verlauf-zeile time{flex:0 0 auto;font-variant-numeric:tabular-nums}
 /* Komposer-Felder: jedes Auswahlfeld traegt ein SICHTBARES Label ueber sich
    (Regel "Form controls need <label>"), nicht nur ein aria-label. */
 .auftrag-feld{display:flex;flex-direction:column;gap:3px;min-width:0}
@@ -751,7 +752,7 @@ const BAUSTEINE = `
 .ablauf-pfeil{align-self:center;color:var(--muted-foreground);flex:0 0 auto}
 `;
 
-const { BOARD_UND_PALETTE, SCHMAL, CONTROL_CENTER } = require("./styles-extra.js");
+const { BOARD_UND_PALETTE, SCHMAL, CONTROL_CENTER, DATEIANSICHT, DETAIL } = require("./styles-extra.js");
 
 const css = [
   themenBloecke(),
