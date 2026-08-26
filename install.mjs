@@ -166,7 +166,7 @@ const BEFEHLE = ["repo-status.md", "save-work.md", "session-map.md", "tell-sessi
 // sind genau deshalb bewusst kurz gehalten. (24.08.2026: completeness.md wurde
 // zum on-demand-Skill, output-shape.md ersatzlos gestrichen -- Neubau-Grundsatz
 // "Dauer-Kontext minimal, Situatives on-demand".)
-const REGELN = ["no-oneshot.md", "tools.md", "working-method.md"];
+const REGELN = ["no-oneshot.md", "tools.md", "working-method.md", "read-before-act.md"];
 
 const SKILLS = [
   // domain-modeling + resolving-merge-conflicts (generische mattpocock-Skills,

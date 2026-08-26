@@ -31,6 +31,7 @@
 !.claude/rules/keel/no-oneshot.md
 !.claude/rules/keel/tools.md
 !.claude/rules/keel/working-method.md
+!.claude/rules/keel/read-before-act.md
 
 # Rechnerlokal, NIE committen: die Befehls-Freigabeliste.
 .claude/settings.local.json
