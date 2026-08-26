@@ -38,7 +38,7 @@ document.addEventListener("click", function (ev) {
     // Inhalt steht nicht mehr im Datensatz -- erst holen, dann kopieren.
     var pfadK = kopieInhalt.dataset.kopieinhalt;
     HD.dateiHolen(pfadK, function (fehler, d) {
-      if (fehler) { HD.melden(HD.fuellen(HD.W.inhaltFehler, { grund: fehler })); return; }
+      if (fehler) { HD.meldenFehler(HD.fuellen(HD.W.inhaltFehler, { grund: fehler })); return; }
       HD.kopieren(d.text);
     });
     return;
@@ -56,7 +56,9 @@ document.addEventListener("click", function (ev) {
     // Dateibaum, eine andere Seite, ein frischer Live-Stand.
     else if (h.indexOf("ordner:") === 0) {
       var ordner = h.slice(7);
-      HD.S.seite = "dateien";
+      // Ueber seitenStandWechseln, nicht per Zuweisung -- der dritte Eingang in
+      // einen Seitenwechsel [Kritik-Runde 3, Rueckfall 5].
+      HD.seitenStandWechseln("dateien");
       HD.S.baumOffen[ordner] = true;
       HD.ahnenOeffnen(ordner + "/x");
       HD.adresseSchreiben(false);
@@ -113,9 +115,9 @@ document.addEventListener("click", function (ev) {
     // oeffnen. Enthaelt die Datei maskierte Zugangszeilen, NICHT oeffnen: ein
     // Speichern schriebe sonst eine Fassung ohne das echte Geheimnis zurueck.
     HD.dateiHolen(pfadB, function (fehler, d) {
-      if (fehler) { HD.melden(HD.fuellen(HD.W.inhaltFehler, { grund: fehler })); return; }
+      if (fehler) { HD.meldenFehler(HD.fuellen(HD.W.inhaltFehler, { grund: fehler })); return; }
       if (d.ausgeblendeteZeilen && d.ausgeblendeteZeilen.length) {
-        HD.melden(HD.W.bearbeitenGesperrt);
+        HD.meldenFehler(HD.W.bearbeitenGesperrt);
         return;
       }
       HD.S.bearbeitet = pfadB;
@@ -209,7 +211,7 @@ document.addEventListener("click", function (ev) {
         location.reload();
       })
       .catch(function (e) {
-        HD.melden(HD.fuellen(HD.W.neuMessenFehler, { grund: e.message }));
+        HD.meldenFehler(HD.fuellen(HD.W.neuMessenFehler, { grund: e.message }));
       });
     return;
   }
@@ -223,23 +225,15 @@ document.addEventListener("click", function (ev) {
 // --- Eingabe -------------------------------------------------------------
 document.addEventListener("input", function (ev) {
   if (ev.target.id === "suche") {
-    // Die Cursorposition gehoert dem Nutzer [Kritik-Runde 2, Problem 1]: vorher
-    // sprang sie nach JEDEM Anschlag ans Textende, weil das Feld neu gezeichnet
-    // wurde. Ein Wort in der Mitte zu korrigieren war damit unmoeglich -- man
-    // tippte einen Buchstaben und stand wieder hinten.
-    var stand = ev.target.selectionStart;
-    var ende = ev.target.selectionEnd;
+    // Cursorposition und Fokus stellt HD.zeichnen() fuer JEDES Feld wieder her
+    // (HD.feldZustand/feldZustandZurueck, core.js) -- hier stand frueher eine
+    // Sonderbehandlung nur fuer dieses eine Feld, waehrend das Editor-Textfeld
+    // leer ausging [Kritik-Runde 3, Rueckfall 4].
     HD.S.suche = ev.target.value;
     HD._suchFokus = true;
     HD.adresseSchreiben(true);
     HD.zeichnen();
     HD._suchFokus = false;
-    var f = document.getElementById("suche");
-    if (f) {
-      f.focus();
-      try { f.setSelectionRange(stand, ende); }
-      catch (e) { f.setSelectionRange(f.value.length, f.value.length); }
-    }
     return;
   }
   // DER ENTWURF LEBT IM ZUSTAND, NICHT IM DOM [Kritik-Runde 2, Problem 1].
@@ -397,6 +391,11 @@ HD.paletteZu = function () {
   document.getElementById("palette").hidden = true;
 };
 
+// Laufende Nummer fuer die Treffer-IDs. Zaehlt weiter statt bei 0 zu beginnen:
+// so kann eine alte ID nie mit einer neuen kollidieren, waehrend der Browser
+// das alte DOM noch haelt.
+HD.paletteLaufnummer = 0;
+
 HD.paletteZeichnen = function (q) {
   var liste = document.getElementById("palette-liste");
   var gruppen = [];
@@ -427,8 +426,14 @@ HD.paletteZeichnen = function (q) {
   liste.innerHTML = gruppen.length
     ? gruppen.map(function (g) {
         return '<div class="palette-gruppe">' + HD.esc(g.titel) + "</div>"
-          + g.treffer.map(function (t) {
-              return '<button class="palette-treffer" data-palette="' + HD.esc(t.id) + '" role="option">'
+          + g.treffer.map(function (t, n) {
+              // Eine ID ist Pflicht, nicht Kosmetik: aria-activedescendant zeigt
+              // auf sie. Ohne sie war der Fix vorhanden und WIRKUNGSLOS -- fuer
+              // die Zielgruppe einer Befehlspalette hatte sich nichts geaendert
+              // [Kritik-Runde 3, Rueckfall 7]. Laufende Nummer statt der
+              // Eintrags-Kennung: die enthaelt Pfade und Doppelpunkte.
+              return '<button class="palette-treffer" id="pt-' + HD.paletteLaufnummer++
+                + '" data-palette="' + HD.esc(t.id) + '" role="option">'
                 + '<span class="baum-symbol">' + HD.icon(t.symbol) + "</span>"
                 + '<span class="baum-name">' + HD.markiere(t.name, q) + "</span>"
                 + '<span class="palette-pfad">' + HD.esc(t.unter) + "</span></button>";
@@ -544,9 +549,17 @@ window.addEventListener("beforeunload", function (ev) {
   if (HD.geholt("leiste", "breit") === "schmal") HD.leisteKlappen();
   HD.S.breite = parseInt(HD.geholt("breite", "320"), 10) || 320;
   HD.themaZeigen(HD.geholt("thema", "system"));
-  if (!HD.adresseLesen()) HD.adresseSchreiben(true);
+  // Der geretteten Zustand geht VOR der Adresse: er stammt aus dem Neuladen
+  // nach dem Speichern, die Adresse ist dabei unveraendert geblieben und wuesste
+  // nichts von Klappzustaenden oder Scrollposition [Kritik-Runde 2, Problem 1].
+  var gerettet = HD.zustandZurueck();
+  if (!gerettet && !HD.adresseLesen()) HD.adresseSchreiben(true);
   if (HD.bridgeFrischHalten) HD.bridgeFrischHalten();
   HD.zeichnen();
+  if (gerettet && HD._rettungScroll) {
+    var flaeche = document.getElementById("hauptflaeche");
+    if (flaeche) flaeche.scrollTop = HD._rettungScroll;
+  }
 })();
 `;
 

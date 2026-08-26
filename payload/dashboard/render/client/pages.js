@@ -355,8 +355,14 @@ HD.boardHTML = function (liste) {
 // kommt aus HD.statusChip (Baustein), nicht aus Unicode-Zeichen.
 HD.wGesundheit = function () {
   var z = HD.D.zahlen;
-  var hooks = HD.seitenEintraege("hooks");
-  var hooksAbweichung = hooks.filter(function (e) { return e.status && e.status !== "ok"; }).length;
+  // EINE ZAEHLREGEL FUER BEIDE FLAECHEN [Kritik-Runde 3, Befund 4]: hier stand
+  // die Zahl ALLER Eintraege der Hooks-Seite (13) unter dem Wort "Hooks",
+  // waehrend die Seite selbst 12 nennt -- der 13. Eintrag ist die statusLine,
+  // und die ist kein Hook. Ein Dashboard verkauft genau eine Ware: Vertrauen in
+  // seine Zahlen. Zwei Klicks auseinander 13 gegen 12 kostet genau die.
+  var alleEintraege = HD.seitenEintraege("hooks");
+  var hooks = alleEintraege.filter(function (e) { return e.art === "hook-skript"; });
+  var hooksAbweichung = alleEintraege.filter(function (e) { return e.status && e.status !== "ok"; }).length;
   var alterMin = Math.max(0, Math.round((Date.now() - Date.parse(HD.D.gemessenAm)) / 60000));
   var alterLesbar = HD.dauer(alterMin);
   var zeilen = [
@@ -435,7 +441,23 @@ HD.wDrei = function () {
           + "</button>";
       }).join("")
     : HD.leerHTML("zutun");
-  return '<section class="achtung-widget">' + HD.gruppeHTML(HD.W.ccDrei, offene.length || null, offenAn)
+  // EINE SACHE, EINE STUFE -- UEBER ALLE ANSICHTEN [Kritik-Runde 3, Befund 3].
+  // Diese Flaeche trug ihren Warnton FEST verdrahtet: derselbe Eintrag, der auf
+  // "Zu tun" ein rotes "Fehler" bekam, erschien hier bernsteinfarben. Wenn
+  // dieselbe Meldung je nach Reiter die Farbe wechselt, ist Farbe keine
+  // Information mehr, sondern Dekoration je Seite -- der Nutzer lernt nichts,
+  // was er auf der naechsten Seite wiederverwenden koennte.
+  //
+  // Die Flaeche traegt jetzt die HOECHSTE Stufe dessen, was in ihr steht. Die
+  // Ansicht darf die Dichte aendern (Karte statt Zeile), nie die Farbe.
+  var hoechste = null;
+  var hoechsterRang = -1;
+  gezeigt.forEach(function (e) {
+    var r = (HD.D.status[e.status] || {}).rang;
+    if (r != null && r > hoechsterRang) { hoechsterRang = r; hoechste = e.status; }
+  });
+  var stufe = hoechste ? ' data-stufe="' + HD.esc(hoechste) + '"' : "";
+  return '<section class="achtung-widget"' + stufe + ">" + HD.gruppeHTML(HD.W.ccDrei, offene.length || null, offenAn)
     + (offenAn ? '<div class="widget-rumpf">' + rumpf
         + '<p class="sektion-fuss"><button class="widget-link" data-ziel="zutun">'
         + HD.esc(HD.W.ccAllesOffene) + "</button></p></div>" : "")
@@ -600,18 +622,32 @@ HD.jsonBaum = function (wert, name, tiefe) {
 };
 
 // --- Weiche ---------------------------------------------------------------
+// DIE SEITE SPRINGT NICHT MEHR NACH OBEN [Kritik-Runde 3, Befund 4]. Jedes
+// Neuzeichnen ersetzt den kompletten Inhalt der Hauptflaeche, und ein Browser
+// setzt scrollTop dabei auf 0. Fuer den Nutzer hiess das: ein Klick auf eine
+// Zeile weit unten in einer langen Liste, und die Liste sprang an den Anfang --
+// der Alltagsschmerz mit der hoechsten Frequenz, weil er JEDEN Mausklick traf.
+// Der Tastaturweg kompensierte es per scrollIntoView, der Mausweg nicht.
+//
+// Ein bewusster Seitenwechsel setzt die Position weiterhin auf 0; dafuer
+// meldet HD.zurSeite() sich mit HD.scrollZuruecksetzen() an.
 HD.seiteZeichnen = function () {
   var ziel = document.getElementById("hauptflaeche");
+  var stand = HD._scrollNeu ? 0 : (ziel ? ziel.scrollTop : 0);
+  HD._scrollNeu = false;
   var html;
   if (HD.S.seite === "ueberblick") html = HD.ueberblickSeite();
   else if (HD.S.seite === "dateien") html = HD.dateienSeite();
   else if (HD.S.seite === "rohdaten") html = HD.rohdatenSeite();
   else html = HD.listenSeite(HD.S.seite);
   ziel.innerHTML = html;
+  if (stand) ziel.scrollTop = stand;
   // Live-Sektionen (Sitzungen, Pakete, Guard-Tests) brauchen den Server-Stand
   // -- einmal holen, dann zeichnet der Rueckruf die Seite erneut.
   if (HD.bridgeLade) HD.bridgeLade();
 };
+
+HD.scrollZuruecksetzen = function () { HD._scrollNeu = true; };
 `;
 
 module.exports = { quelltext };

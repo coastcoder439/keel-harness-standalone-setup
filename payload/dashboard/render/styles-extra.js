@@ -121,10 +121,21 @@ const CONTROL_CENTER = `
 .logbuch-halt time{display:block;font-size:var(--text-micro);color:var(--muted-foreground)}
 .logbuch-halt.logbuch-leer span{color:var(--muted-foreground)}
 /* Die Aufmerksamkeits-Flaeche traegt den Warnton -- aber KEIN Kaestchen mehr:
-   das sah aus wie eine Checkbox und navigierte weg [Befund 26.08.2026]. */
-.achtung-widget .widget-rumpf{border-color:color-mix(in srgb,var(--status-hinweis) 45%,var(--border));
-  border-left:3px solid var(--status-hinweis);
-  background:color-mix(in srgb,var(--status-hinweis) 8%,var(--card))}
+   das sah aus wie eine Checkbox und navigierte weg [Befund 26.08.2026].
+
+   EINE SACHE, EINE STUFE [Kritik-Runde 3, Befund 3]: der Ton war hier fest auf
+   --status-hinweis verdrahtet, waehrend derselbe Eintrag auf "Zu tun" als roter
+   "Fehler" erschien. Jetzt bestimmt data-stufe die Farbe -- gesetzt aus dem
+   hoechsten Rang der Eintraege, die wirklich in der Flaeche stehen. Der
+   Vorgabe-Ton bleibt Bernstein fuer den Fall, dass keine Stufe gemessen ist. */
+.achtung-widget{--warnton:var(--status-hinweis)}
+.achtung-widget[data-stufe="befund"]{--warnton:var(--status-fehler)}
+.achtung-widget[data-stufe="unlesbar"]{--warnton:var(--status-unlesbar)}
+.achtung-widget[data-stufe="fehlt"]{--warnton:var(--status-fehlt)}
+.achtung-widget[data-stufe="hinweis"]{--warnton:var(--status-hinweis)}
+.achtung-widget .widget-rumpf{border-color:color-mix(in srgb,var(--warnton) 45%,var(--border));
+  border-left:3px solid var(--warnton);
+  background:color-mix(in srgb,var(--warnton) 8%,var(--card))}
 .drei-zeile{display:flex;gap:11px;align-items:center;width:100%;text-align:left;
   padding:8px 0;font-size:var(--text-sm);font-weight:500;
   border-radius:var(--radius-md);transition:background var(--dauer)}
@@ -134,7 +145,7 @@ const CONTROL_CENTER = `
 .drei-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 /* Sitzung: "arbeitet gerade" ist ein Laufzustand, kein Pruefergebnis --
    deshalb eigenes Wort statt des Status-Chips [Befund 26.08.2026]. */
-.sitzung-laeuft{flex:0 0 auto;font-size:var(--text-xs);color:var(--status-ok);font-weight:500}`;
+.sitzung-laeuft{flex:0 0 auto;font-size:var(--text-xs);color:var(--status-laeuft);font-weight:500}`;
 
 // ANSEHEN -- Code-Ansicht, gerendertes Markdown und das Detail-Panel.
 // Ausgelagert am 26.08.2026: styles.js riss erneut die 800-Zeilen-Hausgrenze
@@ -225,4 +236,51 @@ const DETAIL = `
 .baum-flaeche .griff{position:relative;left:0;height:auto}
 `;
 
-module.exports = { BOARD_UND_PALETTE, SCHMAL, CONTROL_CENTER, DATEIANSICHT, DETAIL };
+// AUFTRAG -- der Komposer im Control Center (Ziel, Projekt, Paket, Text,
+// Senden, Verlauf). Ausgelagert am 26.08.2026: styles.js riss zum dritten
+// Mal die 800-Zeilen-Hausgrenze. Der Block ist in sich geschlossen -- er
+// beschreibt EIN Formular und beruehrt sonst nichts.
+
+const AUFTRAG = `
+/* Auftrag: Ziel, Text und Senden in EINER Zeile -- ein Formular, kein Block. */
+.auftrag-zeile{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap}
+.auftrag-zeile select{height:32px;padding:0 8px;border:1px solid var(--input);border-radius:var(--radius-md);
+  background:var(--card);color:var(--foreground);font:inherit;font-size:var(--text-compact)}
+/* Feste Hoehe statt flex-Streckung: das Feld wuchs sonst auf die ganze
+   Restseite, weil .auftrag-zeile es dehnte [Abnahme 26.08.2026]. */
+.auftrag-zeile textarea{flex:1 1 260px;height:64px;min-height:44px;max-height:200px;
+  padding:8px 10px;border:1px solid var(--input);
+  border-radius:var(--radius-md);background:var(--card);color:var(--foreground);
+  font:inherit;font-size:var(--text-compact);resize:vertical}
+.auftrag-feld-breit{flex:1 1 260px}
+/* Der Senden-Knopf steht UNTER der Textflaeche, an ihrer rechten Kante
+   [Kritik-Runde 2, Problem 15] -- neben dem Formular schwebend gehoerte er
+   optisch zu nichts und riss eine dritte rechte Kante auf. Der Verlauf darunter
+   macht nachlesbar, was rausging [Problem 4]. */
+.auftrag-fuss{display:flex;justify-content:flex-end;margin-top:8px}
+.auftrag-verlauf{margin-top:14px;padding-top:10px;border-top:1px solid var(--border)}
+.auftrag-verlauf-kopf{font-size:var(--text-micro);font-weight:600;
+  color:var(--muted-foreground);margin:0 0 4px}
+.auftrag-verlauf-zeile{font-size:var(--text-xs);color:var(--muted-foreground);
+  margin:0;padding:3px 0;display:flex;gap:8px}
+.auftrag-verlauf-zeile time{flex:0 0 auto;font-variant-numeric:tabular-nums}
+/* Rohausgabe eines Selbsttests: lesbar, aber untergeordnet -- das Urteil steht
+   darueber [Kritik-Runde 2, Problem 2]. Eigener Scrollbereich, damit eine lange
+   Ausgabe die Seite nicht waagerecht aufschiebt. */
+.probe-ausgabe{max-height:180px;overflow:auto;margin:0 0 12px;padding:10px 12px;
+  background:var(--muted);border:1px solid var(--border);border-radius:var(--radius-md);
+  font-family:var(--mono);font-size:var(--text-xs);line-height:1.5;white-space:pre-wrap;
+  color:var(--muted-foreground)}
+/* Komposer-Felder: jedes Auswahlfeld traegt ein SICHTBARES Label ueber sich
+   (Regel "Form controls need <label>"), nicht nur ein aria-label. */
+.auftrag-feld{display:flex;flex-direction:column;gap:3px;min-width:0}
+/* Das Textfeld darf NICHT von der Flex-Spalte gestreckt werden -- sonst
+   waechst es bis zur max-height statt auf seiner Hoehe zu bleiben (gemessen
+   26.08.2026: 200 px statt 64) [Abnahme-Befund]. */
+.auftrag-feld > textarea{flex:0 0 auto}
+.auftrag-feld-breit{flex:1 1 260px}
+.auftrag-feld-label{font-size:var(--text-micro);color:var(--muted-foreground)}
+.auftrag-feld select{max-width:22rem}
+`;
+
+module.exports = { BOARD_UND_PALETTE, SCHMAL, CONTROL_CENTER, DATEIANSICHT, DETAIL, AUFTRAG };
