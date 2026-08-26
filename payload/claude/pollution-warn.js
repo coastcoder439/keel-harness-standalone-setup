@@ -37,6 +37,10 @@ const rules = mdDateien(path.join(H, "rules"));
 if (rules.n > 0) funde.push(`~/.claude/rules: ${rules.n} Datei(en), ${rules.bytes} Bytes`);
 const agents = mdDateien(path.join(H, "agents"));
 if (agents.n > 0) funde.push(`~/.claude/agents: ${agents.n} Agent(en), ${agents.bytes} Bytes`);
+// commands/ laden als Slash-Skills ebenfalls in JEDE Session (Description pro Datei
+// im Dauer-Kontext) -- 26.08.2026 uebersehen gefunden: 76 ECC-Dateien, 317 KB.
+const cmds = mdDateien(path.join(H, "commands"));
+if (cmds.n > 0) funde.push(`~/.claude/commands: ${cmds.n} Command(s), ${cmds.bytes} Bytes`);
 try {
   const fremd = fs.readdirSync(path.join(H, "skills")).filter((s) => !EIGENE_SKILLS.has(s));
   if (fremd.length) funde.push(`~/.claude/skills: fremde Skills ${fremd.join(", ")}`);
