@@ -128,7 +128,10 @@ test("Dateizahl stimmt mit unabhaengiger Zaehlung ueberein", () => {
 });
 
 test("Dateizahl stimmt mit find ueberein (wird uebersprungen, wenn keine Shell da ist)", (t) => {
-  const befehl = "find CLAUDE.md .gitignore .claude docs dashboard licenses -type f | wc -l";
+  // .secrets seit 25.08.2026 abends (AI-ZUGAENGE.md, Commit 2bc1469) -- der
+  // Walk nimmt jeden Wurzelordner ausser den Ausschluessen, die Liste hier
+  // muss mitwachsen.
+  const befehl = "find CLAUDE.md .gitignore .claude .secrets docs dashboard licenses -type f | wc -l";
   const lauf = spawnSync("bash", ["-lc", befehl], { cwd: WURZEL, encoding: "utf8", timeout: 30000 });
   if (lauf.error || lauf.status !== 0) return t.skip("bash/find nicht verfuegbar: " + (lauf.error ? lauf.error.code : lauf.status));
   const ausFind = Number(String(lauf.stdout).trim());
@@ -321,7 +324,9 @@ wennDa(echt.dateien.some((d) => d.rolle === "launch"), "keine Vorschau-Konfigura
 
 test("verdrahtete Skripte tragen Ereignis und settings.json-Zeile", () => {
   const dg = echt.dateien.find((d) => d.pfad === ".claude/danger-guard.js");
-  assert.deepStrictEqual(dg.verdrahtung, [{ ereignis: "PreToolUse", matcher: "Bash", datei: ".claude/settings.json", zeile: 63 }]);
+  // Zeile 63 -> 69: pollution-warn.js (vierter SessionStart-Hook, 2bc1469)
+  // schiebt die PreToolUse-Bloecke in settings.json nach unten.
+  assert.deepStrictEqual(dg.verdrahtung, [{ ereignis: "PreToolUse", matcher: "Bash", datei: ".claude/settings.json", zeile: 69 }]);
   const sl = echt.dateien.find((d) => d.pfad === ".claude/statusline.js");
   assert.strictEqual(sl.verdrahtung[0].ereignis, "statusLine");
   assert.strictEqual(echt.dateien.find((d) => d.pfad === ".claude/repo-status.js").verdrahtung, undefined);
