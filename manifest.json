@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-25T14:45:27.489Z",
-  "posten": 91,
+  "gebautAm": "2026-08-26T15:59:28.418Z",
+  "posten": 93,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -52,16 +52,16 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 8814,
-      "sha256": "8885d9c72749e18c"
+      "bytes": 8838,
+      "sha256": "b5611a249b735e31"
     },
     {
       "datei": "README.md",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 5759,
-      "sha256": "d7468b731debb18a"
+      "bytes": 5777,
+      "sha256": "8bf8b3378b40cfa3"
     },
     {
       "datei": "checks/anleitung-sync.mjs",
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 77159,
-      "sha256": "33b64ec4bba37124"
+      "bytes": 77408,
+      "sha256": "582dee8b02f4e401"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -116,8 +116,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 4920,
-      "sha256": "7c9c45984dc5bfa3"
+      "bytes": 5624,
+      "sha256": "c937337d5110119c"
     },
     {
       "datei": "payload/claude/commands/repo-status.md",
@@ -192,6 +192,14 @@
       "sha256": "a92868c376a4ce19"
     },
     {
+      "datei": "payload/claude/pollution-warn.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 2577,
+      "sha256": "b63de8ffc838ec80"
+    },
+    {
       "datei": "payload/claude/project-context.js",
       "herkunft": null,
       "quellordner": "bausatz",
@@ -204,8 +212,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 5735,
-      "sha256": "1876af633baf290a"
+      "bytes": 7713,
+      "sha256": "c743c30f9d5870a9"
     },
     {
       "datei": "payload/claude/repo-status.js",
@@ -268,8 +276,8 @@
       "herkunft": ".claude/skills/i-have-adhd/SKILL.md",
       "quellordner": "werkbank",
       "gesaeubert": 0,
-      "bytes": 6634,
-      "sha256": "78980a2f8507813c"
+      "bytes": 6794,
+      "sha256": "7e344dd431269710"
     },
     {
       "datei": "payload/claude/statusline.js",
@@ -300,8 +308,8 @@
       "herkunft": "zustand/README.md",
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 5200,
-      "sha256": "2d785e02bd055e43"
+      "bytes": 6187,
+      "sha256": "38a946136028d6e0"
     },
     {
       "datei": "payload/dashboard/access-filter.js",
@@ -420,8 +428,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 23662,
-      "sha256": "d3356d1a98b2a952"
+      "bytes": 27652,
+      "sha256": "801a7bc12947b862"
     },
     {
       "datei": "payload/dashboard/render/client/start.js",
@@ -460,8 +468,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 26855,
-      "sha256": "35ce10a06f8dd8ad"
+      "bytes": 27280,
+      "sha256": "2d631f5460f2cdae"
     },
     {
       "datei": "payload/dashboard/render/markdown.js",
@@ -480,12 +488,20 @@
       "sha256": "3dd415b50457111f"
     },
     {
+      "datei": "payload/dashboard/render/styles-extra.js",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 4471,
+      "sha256": "ee1995f5bbdca588"
+    },
+    {
       "datei": "payload/dashboard/render/styles.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 48092,
-      "sha256": "c15af311d530863c"
+      "bytes": 46822,
+      "sha256": "179eff61ad4a88c3"
     },
     {
       "datei": "payload/dashboard/render/views.js",
@@ -572,16 +588,16 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 26101,
-      "sha256": "8cc57255b20d221d"
+      "bytes": 26426,
+      "sha256": "ecc402aba6a56b2e"
     },
     {
       "datei": "payload/dashboard/test/hooks-detail.test.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 21416,
-      "sha256": "c7be9d291d8c2c9d"
+      "bytes": 21942,
+      "sha256": "6d2ed351ca40e5a8"
     },
     {
       "datei": "payload/dashboard/test/icons.test.js",
@@ -620,8 +636,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15908,
-      "sha256": "e86b992b27f0e15a"
+      "bytes": 15843,
+      "sha256": "5e137ac64e5390db"
     },
     {
       "datei": "payload/dashboard/test/rule-loading.test.js",
@@ -652,8 +668,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 15730,
-      "sha256": "fb854d42ad2fdf1d"
+      "bytes": 16340,
+      "sha256": "a86317c2e9c94ce5"
     },
     {
       "datei": "payload/dashboard/test/todo-docs.test.js",
@@ -708,8 +724,8 @@
       "herkunft": "docs/10-nachbau-anleitung.md",
       "quellordner": "werkbank",
       "gesaeubert": 11,
-      "bytes": 219193,
-      "sha256": "71f91c041b7ff17a"
+      "bytes": 219481,
+      "sha256": "18c73266ad729bbe"
     },
     {
       "datei": "payload/docs/tool-landscape.md",
@@ -748,16 +764,16 @@
       "herkunft": "erzeugt von paketieren.mjs",
       "quellordner": "erzeugt",
       "gesaeubert": 0,
-      "bytes": 1641,
-      "sha256": "beb95b52fae80b3b"
+      "bytes": 1651,
+      "sha256": "dc2a3164dea77778"
     },
     {
       "datei": "templates/settings.json",
       "herkunft": "erzeugt von paketieren.mjs",
       "quellordner": "erzeugt",
       "gesaeubert": 0,
-      "bytes": 3289,
-      "sha256": "6117c5a8835a763c"
+      "bytes": 3516,
+      "sha256": "27fdd593ed3cab14"
     }
   ]
 }

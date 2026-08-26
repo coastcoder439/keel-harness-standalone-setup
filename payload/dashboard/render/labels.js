@@ -44,17 +44,13 @@ const VERBOTEN = [
 
 const SEITEN = {
   ueberblick: {
-    name: "Überblick",
+    // Owner 25.08.2026 abends: der Ueberblick IST das Control Center --
+    // Widgets verdichten nach oben (Gesundheit, die drei wichtigsten
+    // Aufgaben, Logbuch/Automatik, Sitzungen, Auftrag), die Reiter darunter
+    // verbreitern. Kennung bleibt "ueberblick" (Adressen, Eintraege).
+    name: "Control Center",
     ort: null,
-    // KEIN Text aus der CLAUDE.md des Workspace. Das Dashboard ist Teil des
-    // Harness-Bausatzes und laeuft in JEDER Installation -- eine Ueberschrift,
-    // die eine bestimmte Zeile in einer bestimmten CLAUDE.md sucht, ist beim
-    // naechsten Empfaenger leer oder falsch (gefunden 23.08.2026).
-    // Seit dem Neubau 25.08.2026 ist der Ueberblick zugleich die Bruecke:
-    // Sitzungen live, Auftraege, offene Punkte -- eine Seite, ein Zweck.
-    // Die Messzeit steht im Seitenleisten-Fuss ("Gemessen am ...") -- hier
-    // noch einmal waere dieselbe Angabe an zwei Orten (Beanstandung A7).
-    zweck: "Was in {workspace} läuft und ob es trägt — Sitzungen, offene Punkte, letzte Änderungen.",
+    zweck: "Trägt alles, was braucht dich, wer arbeitet woran — verdichtet; die Breite liegt in den Reitern.",
     icon: "layout-dashboard",
   },
   zutun: {
@@ -146,19 +142,22 @@ const TABGRUPPEN = {
     seiten: ["hooks", "commands", "skills", "rules", "kontext", "werkzeuge"],
   },
   repos: {
+    // "Zu tun" lebt hier als Reiter [Owner 25.08.2026 abends: der Vollbestand
+    // des Offenen wandert zu den Projekten; oben verdichtet ihn das
+    // Control-Center-Widget "Deine drei"].
     name: "Projekte",
     icon: "folder-open",
     ort: "user-projects/",
-    seiten: ["projekte", "backup", "commits"],
+    seiten: ["projekte", "zutun", "backup", "commits"],
   },
 };
 
-// Die Seitenleiste: fuenf Nutzer-Eintraege, keine Gruppen-Ueberschriften mehr.
+// Die Seitenleiste: VIER Nutzer-Eintraege [Owner 25.08.2026 abends].
 // "tab:<id>" verweist auf eine Tab-Gruppe. "Rohdaten" steht bewusst NICHT hier
 // -- die Seite bleibt ueber die Befehlspalette und den Fusszeilen-Verweis
 // erreichbar; sie ist Beleg, nicht Alltag.
 const NAVIGATION = [
-  { gruppe: null, eintraege: ["ueberblick", "zutun", "dateien", "tab:harness", "tab:repos"] },
+  { gruppe: null, eintraege: ["ueberblick", "tab:repos", "tab:harness", "dateien"] },
 ];
 
 // ---------------------------------------------------------------------------
@@ -553,6 +552,20 @@ const UI = {
   hakenFehler: "Haken konnte nicht gesetzt werden",
   laedtNoch: "Lädt …",
   nichtErreichbar: "Nicht erreichbar: {grund}",
+
+  // Control Center (Widgets verdichten nach oben [Owner 25.08.2026])
+  ccGesundheit: "Trägt alles?",
+  ccLogbuch: "Logbuch heute",
+  ccDrei: "Deine drei",
+  ccHooksGeladen: "Hooks geladen",
+  ccMessungFrisch: "Messung vor {n} min",
+  ccServerJa: "Server erreichbar",
+  ccServerNein: "Kein Server — Seite nur lesbar",
+  ccSicherungOk: "Sicherung ohne Lücke",
+  ccSicherungLuecke: "Sicherung: {n} mit Lücke",
+  ccMessungGelaufen: "Messung gelaufen",
+  ccKeinLauf: "Kein automatischer Lauf eingerichtet.",
+  ccAllesOffene: "alles Offene",
 
   // Ueberblick
   brauchtAufmerksamkeit: "Braucht Aufmerksamkeit",
