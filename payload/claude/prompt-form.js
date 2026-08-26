@@ -32,6 +32,10 @@ const KURZFORM =
   "nicht als Einzelgriff. Jede Antwort endet mit dem naechsten Arbeitsauftrag samt Besitzer " +
   "(ich/du) und Empfehlung — und was bei MIR liegt und entschieden ist, fuehre ich AUS, " +
   "statt es zurueckzugeben. " +
+  // Wiederhergestellt 27.08.2026 [Owner]: stand bis zur Kuerzung 9f0967f im Skill
+  // ("Measured: the single largest source of length") und fehlte danach -- die
+  // Textwand kam zurueck. Beleg: docs/packages/injektion-wirkt-nicht.md
+  "Vor dem Absenden streichen: die HERLEITUNG (wie ein Befund zustande kam, wie oft etwas lief, was du unterwegs geprueft hast) — sie gehoert in die Commit-Nachricht, nicht in die Antwort; genannt wird das ERGEBNIS. Mehrschritt-Arbeit ist eine NUMMERIERTE Liste, nie Fliesstext. Pruefung: Weiss der Leser nach ERSTER und LETZTER Zeile, was zu tun ist und was passiert ist? Sonst umschreiben. " +
   // Ein-Satz-Index der Abruf-Werkzeuge [Owner 26.08.2026]: Injektion ist der einzige
   // deterministische Ausloeser — der Skill-Katalog ist nur ein Relevanz-Wettbewerb
   // (Beleg docs/packages/skill-invocation-diagnose.md). Volltexte laden per Skill-Aufruf.

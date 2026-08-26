@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-26T21:26:18.890Z",
+  "gebautAm": "2026-08-26T23:11:24.365Z",
   "posten": 95,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -212,8 +212,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 7713,
-      "sha256": "c743c30f9d5870a9"
+      "bytes": 8347,
+      "sha256": "80c938e5721c55f3"
     },
     {
       "datei": "payload/claude/repo-status.js",
@@ -284,8 +284,8 @@
       "herkunft": ".claude/skills/i-have-adhd/SKILL.md",
       "quellordner": "werkbank",
       "gesaeubert": 0,
-      "bytes": 6794,
-      "sha256": "7e344dd431269710"
+      "bytes": 7663,
+      "sha256": "639677dfa4742a02"
     },
     {
       "datei": "payload/claude/statusline.js",
