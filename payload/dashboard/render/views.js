@@ -244,7 +244,7 @@ function zuTunEintraege(m) {
       art: "sonstiges",
       artWort: SEITEN[t.bereich] ? SEITEN[t.bereich].name : t.bereich,
       status: t.status,
-      gruppe: "gemessen",
+      gruppe: UI.gruppeGemessen,
       beschreibung: { text: t.grund || null, quelle: null, beleg: null },
       befehl: t.befehl || null,
       felder: felderVon(
@@ -264,11 +264,17 @@ function zuTunEintraege(m) {
       // "| `x.md`-Vorlage | neuer Schritt 3 |" liest sich wie ein Auszug aus
       // einer Datei, nicht wie etwas, das man tun kann.
       name: aufgabentitel(d.text),
-      unter: d.datei + ":" + d.zeile,
+      // HERKUNFT IST KEINE UNTERSCHRIFT [Kritik-Runde 2, Problem 8]: hier stand
+      // "docs/kit-backport.md:140" unter JEDEM Titel. Eine Datei-und-Zeile-
+      // Angabe als zweite Zeile jeder Karte liest sich wie Werkzeug-Ausgabe,
+      // nicht wie Information -- und die Zeilennummer hilft beim Lesen nie.
+      // Der Dateiname allein sagt, woher es kommt; die genaue Stelle steht im
+      // Detail (Feld "Quelle") und springt von dort in die Datei.
+      unter: String(d.datei).split("/").pop(),
       art: "doku",
       artWort: ZUTUN_ART[d.artCode] || d.artCode,
       status: null,
-      gruppe: "Aus Dokumenten gezogen",
+      gruppe: UI.gruppeDokumente,
       beschreibung: { text: d.text, quelle: QUELLE.absatz, beleg: d.datei + ":" + d.zeile },
       felder: felderVon(
         feld(UI.art, ZUTUN_ART[d.artCode] || d.artCode),
@@ -297,7 +303,15 @@ function aufgabentitel(roh) {
   }
   t = t.replace(/`/g, "").replace(/\*\*/g, "").replace(/_\(([^)]*)\)_/g, "$1");
   t = t.replace(/\s+/g, " ").trim();
-  return t || String(roh || "").trim();
+  t = t || String(roh || "").trim();
+  // EINE AUFGABE IST EIN SATZ, KEINE AUFZAEHLUNGSKETTE [Kritik-Runde 2,
+  // Problem 8]. Vorher standen ganze "·"-Ketten als Titel und wurden vom CSS
+  // mitten im Wort gekappt ("… · Si…"). Der Titel endet jetzt am ersten
+  // Trenner oder am Wortende -- der volle Text bleibt in der Beschreibung.
+  const trenner = t.indexOf(" · ");
+  if (trenner > 24) t = t.slice(0, trenner);
+  if (t.length > 96) t = t.slice(0, 95).replace(/\s+\S*$/, "") + " …";
+  return t;
 }
 
 function kontextEintraege(m, beschreibungen) {

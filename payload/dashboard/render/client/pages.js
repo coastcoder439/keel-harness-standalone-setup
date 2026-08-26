@@ -48,13 +48,20 @@ HD.statusGlyphe = function (code) {
 
 // Dauer in Worten: Minuten, Stunden, Tage -- "4317 min" rechnet niemand um.
 // Ausgeschrieben, weil Abkuerzungen verboten sind (labels.js Regel 4).
+// Einzahl ist kein Sonderfall [Kritik-Runde 2, Problem 14]: "vor 1 Minuten"
+// stand in der obersten Zeile der Startseite.
 HD.dauer = function (minuten) {
   if (typeof minuten !== "number" || !isFinite(minuten)) return null;
   if (minuten < 1) return HD.W.dauerGerade;
-  if (minuten < 60) return HD.fuellen(HD.W.dauerMinuten, { n: minuten });
+  if (minuten < 60) {
+    return minuten === 1 ? HD.W.dauerMinuteEins : HD.fuellen(HD.W.dauerMinuten, { n: minuten });
+  }
   var stunden = Math.round(minuten / 60);
-  if (stunden < 24) return HD.fuellen(HD.W.dauerStunden, { n: stunden });
-  return HD.fuellen(HD.W.dauerTage, { n: Math.round(stunden / 24) });
+  if (stunden < 24) {
+    return stunden === 1 ? HD.W.dauerStundeEins : HD.fuellen(HD.W.dauerStunden, { n: stunden });
+  }
+  var tage = Math.round(stunden / 24);
+  return tage === 1 ? HD.W.dauerTagEins : HD.fuellen(HD.W.dauerTage, { n: tage });
 };
 
 // --- Zeile: EIN Rezept fuer alle Listenseiten ----------------------------
@@ -119,7 +126,10 @@ HD.sammelZeile = function (seite) {
 };
 
 // --- Gruppenkopf ---------------------------------------------------------
-HD.gruppeHTML = function (titel, anzahl, offen, istCode) {
+// zusatz: HTML, das NEBEN dem Kopf steht (z. B. "Stand: 20:43" mit
+// Aktualisieren-Knopf). Bewusst neben und nicht im Knopf -- ein <button> im
+// <button> ist ungueltiges HTML, und der innere waere nicht klickbar.
+HD.gruppeHTML = function (titel, anzahl, offen, istCode, zusatz) {
   // Ohne Zahl keine Zahl: ein Block wie "Auftrag senden" traegt keinen
   // Zaehler -- "null" hinzuschreiben waere ein Maschinenwert im UI.
   var zahl = (anzahl === null || anzahl === undefined) ? "" : '<span class="gruppen-zahl">' + anzahl + "</span>";
@@ -128,10 +138,12 @@ HD.gruppeHTML = function (titel, anzahl, offen, istCode) {
   // daraus, einen Namen, den es nirgends gibt [Kritiker-Befund Runde 3].
   // istCode kommt vom Aufrufer (Daten wissen es); camelCase faengt den Rest.
   var code = (istCode || /[a-z][A-Z]/.test(titel)) ? ' data-code="ja"' : "";
-  return '<button class="gruppen-kopf" data-gruppe="' + HD.esc(titel) + '" aria-expanded="' + (offen ? "true" : "false") + '">'
+  var kopf = '<button class="gruppen-kopf" data-gruppe="' + HD.esc(titel) + '" aria-expanded="' + (offen ? "true" : "false") + '">'
     + '<span class="gruppen-caret">' + HD.icon("chevron-down") + "</span>"
     + '<span class="gruppen-titel"' + code + ">" + HD.esc(titel) + "</span>"
     + zahl + "</button>";
+  if (!zusatz) return kopf;
+  return '<div class="gruppen-zeile">' + kopf + zusatz + "</div>";
 };
 
 // --- Werkzeugleiste ------------------------------------------------------
@@ -194,15 +206,34 @@ HD.tabLeisteHTML = function (seite) {
 };
 
 // --- Listenseite ---------------------------------------------------------
+// JEDE SEITE HAT EINEN KOPF [Kritik-Runde 2, Problem 5]. Vorher war das oberste
+// Textelement jeder Seite eine 12-px-Krume, danach sofort ein grauer Absatz --
+// es gab in der GANZEN Anwendung keine einzige <h1>. Das Auge landete zuerst
+// auf dem dunklen Knopf "Neu messen" oben rechts, also auf einer Wartungs-
+// aktion, und musste dann zurueck nach links oben wandern, um zu erfahren, wo
+// es ueberhaupt ist. Man wurde nicht empfangen, man wurde abgeladen.
+//
+// Der Name kommt aus HD.D.seiten -- derselbe, den Navigation und Reiter tragen
+// [Problem 7: ein Ding, ein Name]. Der Zweck-Satz wird zum Untertitel und
+// begruendet damit seine Lesebreite, statt wie ein vergessener Absatz zu wirken.
+HD.seitenKopfHTML = function (seite) {
+  var s = HD.D.seiten[seite];
+  if (!s) return "";
+  return '<header class="seiten-kopf">'
+    + '<h1 class="seiten-titel">' + HD.esc(s.name) + "</h1>"
+    + (s.zweck ? '<p class="seiten-unter">' + HD.esc(s.zweck)
+        + (s.ort ? ' <span class="pfad">' + HD.esc(s.ort) + "</span>" : "") + "</p>" : "")
+    + "</header>";
+};
+
 HD.listenSeite = function (seite) {
   var s = HD.D.seiten[seite];
   var liste = HD.gefiltert(seite);
   // Statusaussage VOR der Erklaer-Prosa: die wichtigste Information der
   // Seite darf nicht die dritte Zeile sein [Kritiker-Befund Runde 4].
-  var kopf = HD.tabLeisteHTML(seite)
-    + HD.sammelZeile(seite)
-    + '<p class="erklaersatz">' + HD.esc(s.zweck)
-    + (s.ort ? ' <span class="pfad">' + HD.esc(s.ort) + "</span>" : "") + "</p>";
+  var kopf = HD.seitenKopfHTML(seite)
+    + HD.tabLeisteHTML(seite)
+    + HD.sammelZeile(seite);
   var werkzeug = HD.werkzeugHTML(seite);
   // Live-Anbauten je Seite: "Zu tun" traegt die Arbeitspakete, "Hooks" die
   // Guard-Selbsttests -- beides liest der Server, beides gehoert zum Thema
@@ -350,10 +381,16 @@ HD.wGesundheit = function () {
     var kern = '<span class="check-glyphe">' + (r.status ? HD.statusGlyphe(r.status) : HD.icon("circle-dashed")) + "</span>"
       + '<span class="check-text">' + HD.esc(r.text) + "</span>"
       + '<span class="check-wert mono">' + HD.esc(r.wert) + "</span>";
+    // EINE WARNUNG BEKOMMT GEWICHT, NICHT NUR EINE ANDERE FARBE [Kritik-Runde 2,
+    // Problem 11]: das Bernstein-Zeichen war in Groesse und Position identisch
+    // zum gruenen Haken und verschwand deshalb beim Ueberfliegen -- genau dann,
+    // wenn man es braucht. Die Zeile mit Handlungsbedarf traegt jetzt zusaetzlich
+    // eine linke Farbkante und einen Ton, den man auch aus dem Augenwinkel sieht.
+    var achtung = r.status === "hinweis" ? " check-reihe-achtung" : "";
     return r.ziel
-      ? '<button class="check-reihe" data-ziel="' + HD.esc(r.ziel) + '">' + kern
+      ? '<button class="check-reihe' + achtung + '" data-ziel="' + HD.esc(r.ziel) + '">' + kern
         + '<span class="zeilen-pfeil" aria-hidden="true">' + HD.icon("chevron-right") + "</span></button>"
-      : '<div class="check-reihe check-reihe-still">' + kern + "</div>";
+      : '<div class="check-reihe check-reihe-still' + achtung + '">' + kern + "</div>";
   }).join("");
   return "<section>" + HD.gruppeHTML(HD.W.ccGesundheit, null, offenAn)
     + (offenAn ? '<div class="widget-rumpf">' + rumpf + "</div>" : "") + "</section>";
@@ -406,8 +443,7 @@ HD.wDrei = function () {
 };
 
 HD.ueberblickSeite = function () {
-  var s = HD.D.seiten.ueberblick;
-  return '<p class="erklaersatz">' + HD.esc(s.zweck) + "</p>"
+  return HD.seitenKopfHTML("ueberblick")
     + '<div class="cc-raster">'
     + '<div class="cc-spalte">' + HD.wGesundheit() + HD.wLogbuch() + "</div>"
     + '<div class="cc-spalte">' + HD.wDrei() + HD.sitzungenSektion() + "</div>"
@@ -475,7 +511,7 @@ HD.altUeberblickSeite = function () {
   // Formular mitten im Lesefluss unterbrach ihn [Kritiker-Befund Runde 3].
   // Das Wichtigste zuerst: die Warnflaeche VOR den Sitzungen [Kritiker-
   // Befund Runde 4: die Dringlichkeits-Hierarchie muss auch raeumlich gelten].
-  return '<p class="erklaersatz">' + HD.esc(s.zweck) + "</p>"
+  return HD.seitenKopfHTML("ueberblick")
     + aufmerksam
     + HD.sitzungenSektion()
     + kachelHTML + verlauf + HD.auftragSektion() + HD.ablaufHTML() + HD.fehltHTML();
@@ -524,8 +560,7 @@ HD.fehltHTML = function () {
 
 // --- Rohdaten ------------------------------------------------------------
 HD.rohdatenSeite = function () {
-  var s = HD.D.seiten.rohdaten;
-  var kopf = '<p class="erklaersatz">' + HD.esc(s.zweck) + "</p>";
+  var kopf = HD.seitenKopfHTML("rohdaten");
   var meta = '<div class="eintrag-liste"><div class="eintrag-zeile"><span class="eintrag-haupt">'
     + HD.eigenschaftZeile(HD.W.schema, HD.D.schema, true)
     + HD.eigenschaftZeile(HD.W.gemessenAm, HD.D.gemessenText, true)

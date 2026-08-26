@@ -122,6 +122,8 @@ function renderHTML(daten) {
     <nav class="pfadleiste" id="pfadleiste" aria-label="${esc(U.pfad)}"></nav>
     <div class="seiten-aktion"><span class="treffer-zahl" id="zaehler" aria-live="polite"></span>
       <span class="mess-zeit"><span>${esc(U.gemessenAm)}</span> <span class="mono">${esc(d.gemessenText)}</span></span>
+      <button class="ikon-knopf" id="tasten-hilfe" aria-label="${esc(U.tastenTitel)}"
+              title="${esc(U.tastenTitel)}"><kbd>?</kbd></button>
       <button class="knopf-haupt" id="neu-messen" title="${esc(U.neuMessen)}">${icon("refresh")}<span>${esc(U.neuMessen)}</span></button>
     </div>
   </header>

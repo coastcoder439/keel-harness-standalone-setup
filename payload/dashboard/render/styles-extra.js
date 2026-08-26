@@ -100,6 +100,13 @@ const CONTROL_CENTER = `
 .check-reihe:hover{background:color-mix(in srgb,var(--accent) 45%,transparent)}
 .check-reihe-still:hover{background:transparent}
 .check-reihe-still .zeilen-pfeil{display:none}
+/* Handlungsbedarf traegt GEWICHT, nicht nur eine andere Ikonfarbe
+   [Kritik-Runde 2, Problem 11]. Linke Farbkante plus getoenter Grund: das
+   sieht man aus dem Augenwinkel, ein 16-px-Zeichen nicht. */
+.check-reihe-achtung{padding-left:10px;border-left:3px solid var(--status-hinweis);
+  background:color-mix(in srgb,var(--status-hinweis) 7%,transparent)}
+.check-reihe-achtung .check-text{font-weight:600}
+.check-reihe-achtung:hover{background:color-mix(in srgb,var(--status-hinweis) 13%,transparent)}
 .check-glyphe{flex:0 0 16px;width:16px;height:16px;display:grid;place-items:center}
 .check-text{flex:1 1 auto;min-width:0}
 .check-wert{flex:0 0 auto;font-size:var(--text-micro);color:var(--muted-foreground);
@@ -129,4 +136,93 @@ const CONTROL_CENTER = `
    deshalb eigenes Wort statt des Status-Chips [Befund 26.08.2026]. */
 .sitzung-laeuft{flex:0 0 auto;font-size:var(--text-xs);color:var(--status-ok);font-weight:500}`;
 
-module.exports = { BOARD_UND_PALETTE, SCHMAL, CONTROL_CENTER };
+// ANSEHEN -- Code-Ansicht, gerendertes Markdown und das Detail-Panel.
+// Ausgelagert am 26.08.2026: styles.js riss erneut die 800-Zeilen-Hausgrenze
+// (Seitenkopf, Fehlerzustand, Live-Stand aus Kritik-Runde 2). Die drei
+// Bloecke gehoeren zusammen -- sie beschreiben alle dasselbe: wie man EIN
+// Ding ansieht, ob als Quelltext, als Dokument oder im Panel rechts.
+
+const DATEIANSICHT = `
+.dateiansicht{flex:1 1 auto;min-width:0;overflow:auto;padding:16px;scrollbar-gutter:stable}
+.datei-kopf{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:start;gap:10px;
+  padding-bottom:10px;border-bottom:1px solid var(--border)}
+.datei-name{display:block;font-size:var(--text-sm);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.datei-pfad{display:block;font-family:var(--mono);font-size:var(--text-xs);color:var(--muted-foreground);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.datei-meta{display:flex;flex-wrap:wrap;gap:8px;font-size:var(--text-xs);
+  color:var(--muted-foreground);padding:8px 0}
+.datei-meta > * + *::before{content:"\\00B7";margin-right:8px}
+.datei-aktionen{display:flex;align-items:center;gap:4px}
+/* Code-Ansicht: Rinne fuer Zeilennummern, Text scrollt waagerecht fuer sich. */
+.code-flaeche{display:grid;grid-template-columns:auto minmax(0,1fr);border:1px solid var(--border);
+  border-radius:var(--radius-lg);background:var(--muted);overflow:hidden;font-family:var(--mono);
+  font-size:var(--text-xs);line-height:20px}
+.code-rinne{padding:12px 8px;text-align:right;color:var(--muted-foreground);
+  border-right:1px solid var(--border);user-select:none;font-variant-numeric:tabular-nums;white-space:pre}
+.code-text{padding:12px;overflow-x:auto;white-space:pre;color:var(--foreground)}
+.code-zeile[data-treffer="ja"]{background:color-mix(in srgb,var(--primary) 18%,transparent)}
+/* Gerendertes Markdown: 15/1.6, Ueberschriften als em-Leiter relativ dazu. */
+.md{font-size:var(--text-md);line-height:1.6;max-width:78ch}
+.md h1{font-size:var(--text-md-h1);font-weight:600;margin:1.2em 0 .5em;line-height:1.25}
+.md h2{font-size:var(--text-md-h2);font-weight:600;margin:1.2em 0 .4em;line-height:1.3}
+.md h3{font-size:var(--text-md-h3);font-weight:600;margin:1em 0 .3em}
+.md h4{font-size:var(--text-md-h4);font-weight:600;margin:1em 0 .3em}
+.md p,.md ul,.md ol,.md blockquote,.md pre,.md table{margin:.7em 0}
+.md ul,.md ol{padding-left:1.4em}
+.md code{font-size:var(--text-xs);background:var(--muted);border-radius:var(--radius-sm);padding:1px 4px}
+.md pre{background:var(--muted);border-radius:var(--radius-md);padding:12px;overflow-x:auto}
+.md pre code{background:none;padding:0}
+.md blockquote{border-left:2px solid var(--border);padding-left:12px;color:var(--muted-foreground)}
+.md table{border-collapse:collapse;font-size:var(--text-compact);display:block;overflow-x:auto}
+.md th,.md td{border:1px solid var(--border);padding:6px 10px;text-align:left}
+.md th{background:var(--muted)}
+.md a{text-decoration:underline}
+`;
+
+const DETAIL = `
+/* Detail = Spalte UNTER der Kopfzeile (kein Overlay), 320 px, bis 60 % breit. */
+.detail{width:var(--detail-breite);min-width:320px;max-width:60%;flex:0 0 auto;
+  background:var(--card);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;min-height:0;overflow:hidden;position:relative}
+.detail[hidden]{display:none}
+.detail[data-vollbild="ja"]{width:100%;max-width:none;border-left:0}
+.detail[data-vollbild="ja"] .detail-koerper{max-width:1280px;margin:0 auto;width:100%}
+.detail-kopf{flex:0 0 auto;display:grid;grid-template-columns:auto minmax(0,1fr) auto;
+  align-items:start;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.detail-name{display:block;font-size:var(--text-sm);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.detail-pfad{display:block;font-family:var(--mono);font-size:var(--text-xs);color:var(--muted-foreground);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.detail-titel{font-size:var(--text-2xl);font-weight:600;line-height:1.2;margin-bottom:8px}
+.detail-aktionen{display:flex;align-items:center;gap:2px}
+.detail-koerper{flex:1 1 auto;min-height:0;overflow:auto;padding:12px 16px;scrollbar-gutter:stable}
+/* PropertySection + PropertyRow: Label 96 px muted links, Wert rechts. */
+.eigenschaft-abschnitt{border-top:1px solid var(--border);padding:10px 0}
+.eigenschaft-abschnitt:first-child{border-top:0}
+.eigenschaft-abschnitt > summary{font-size:var(--text-xs);font-weight:600;text-transform:uppercase;
+  letter-spacing:.05em;color:var(--muted-foreground);cursor:pointer;padding:2px 0}
+.eigenschaft-zeile{display:flex;gap:12px;padding:4px 0;font-size:var(--text-xs)}
+.eigenschaft-label{flex:0 0 var(--label-breite);width:var(--label-breite);color:var(--muted-foreground);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eigenschaft-wert{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
+.eigenschaft-wert .pfad,.eigenschaft-wert .zahl,.eigenschaft-wert .zeit{font-family:var(--mono)}
+.eigenschaft-pille{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);
+  border-radius:var(--radius-pille);padding:0 8px;font-size:var(--text-nano);
+  text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground)}
+.beschreibung-quelle{font-size:var(--text-nano);color:var(--muted-foreground);margin-top:4px}
+/* IssueRelatedWorkPanel: Referenz-Pille + Art-Badge + Titel. */
+.verknuepft-zeile{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:var(--text-xs)}
+.verknuepft-pille{font-family:var(--mono);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:0 5px;color:var(--foreground);flex:0 0 auto}
+.verknuepft-art{border:1px solid var(--border);border-radius:var(--radius-sm);padding:0 5px;
+  background:color-mix(in srgb,var(--muted) 40%,transparent);color:var(--muted-foreground);flex:0 0 auto}
+.verknuepft-titel{color:var(--muted-foreground);min-width:0;overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap}
+/* ResizableHandle: 8 px Trefferflaeche, 1 px Linie, Ring beim Zeigen. */
+.griff{position:absolute;top:0;left:-4px;width:8px;height:100%;cursor:col-resize;z-index:2;
+  display:grid;place-items:center;touch-action:none}
+.griff::before{content:"";width:1px;height:100%;background:var(--border)}
+.griff:hover::before,.griff:focus-visible::before,.griff[data-zieht="ja"]::before{background:var(--ring);width:2px}
+.baum-flaeche .griff{position:relative;left:0;height:auto}
+`;
+
+module.exports = { BOARD_UND_PALETTE, SCHMAL, CONTROL_CENTER, DATEIANSICHT, DETAIL };

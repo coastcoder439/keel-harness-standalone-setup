@@ -136,6 +136,27 @@ function daten(m, regelDaten) {
     S.commitEintraege(m)
   );
 
+  // DOKUMENT UEBERALL [Owner, 25.08.2026: "dass ich alle Sachen, die ich
+  // anklicken kann in dieser Sidebar immer als Dokument auch vollkommen lesen
+  // und bearbeiten kann"]. Die Seitenbauer setzen "inhalt" nur dort, wo sie
+  // ohnehin aus dem Datei-Inventar kommen -- ein Hook stammt aus settings.json,
+  // eine Doku-Zeile aus der Sammlung. Gemessen am 26.08.2026 trugen deshalb 72
+  // von 207 Eintraegen mit Pfad KEINEN Dateirumpf: 12 Hooks, 18 Doku, 41 Repos,
+  // 1 Skript -- man klickte auf ein Hook-Skript und bekam eine Feldtabelle
+  // statt des Skripts. Statt das in elf Seitenbauern einzeln nachzuruesten,
+  // steht der Nachtrag hier an EINER Stelle und gilt auch fuer jede kuenftige
+  // Eintragsart. Ordner (die 41 Repos) haben im Inventar keinen Datensatz und
+  // bleiben von selbst aussen vor -- ein Verzeichnis hat keinen Rumpf.
+  const inventarNachPfad = new Map();
+  for (const d of ((m.inventar || {}).dateien) || []) {
+    if (d.pfad) inventarNachPfad.set(d.pfad, d);
+  }
+  for (const e of eintraege) {
+    if (e.inhalt || !e.pfad) continue;
+    const d = inventarNachPfad.get(e.pfad);
+    if (d) e.inhalt = inhaltVon(d);
+  }
+
   const jeSeite = {};
   for (const e of eintraege) jeSeite[e.seite] = (jeSeite[e.seite] || 0) + 1;
 
