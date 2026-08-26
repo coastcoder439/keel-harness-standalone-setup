@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-26T23:11:24.365Z",
+  "gebautAm": "2026-08-26T23:53:03.944Z",
   "posten": 95,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -132,8 +132,8 @@
       "herkunft": ".claude/commands/save-work.md",
       "quellordner": "werkbank",
       "gesaeubert": 1,
-      "bytes": 1142,
-      "sha256": "a3e25e41926ece6f"
+      "bytes": 1598,
+      "sha256": "5ff0acba9020772f"
     },
     {
       "datei": "payload/claude/commands/session-map.md",
@@ -172,8 +172,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 5811,
-      "sha256": "04014d7e70b42726"
+      "bytes": 7104,
+      "sha256": "face0fd2f086aa10"
     },
     {
       "datei": "payload/claude/git-guard.js",
@@ -740,8 +740,8 @@
       "herkunft": "docs/10-nachbau-anleitung.md",
       "quellordner": "werkbank",
       "gesaeubert": 11,
-      "bytes": 219481,
-      "sha256": "18c73266ad729bbe"
+      "bytes": 219937,
+      "sha256": "017108aea4651a52"
     },
     {
       "datei": "payload/docs/tool-landscape.md",
