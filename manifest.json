@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-26T15:59:28.418Z",
+  "gebautAm": "2026-08-26T16:20:34.736Z",
   "posten": 93,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -324,8 +324,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 8038,
-      "sha256": "50488dc60bd925b3"
+      "bytes": 9155,
+      "sha256": "941b27ba9e88f511"
     },
     {
       "datei": "payload/dashboard/classify.js",
@@ -404,8 +404,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 12251,
-      "sha256": "fa84b4c5c0ed3e82"
+      "bytes": 17010,
+      "sha256": "f910ad705806fd83"
     },
     {
       "datei": "payload/dashboard/render/client/core.js",
@@ -436,8 +436,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 16641,
-      "sha256": "7c51c86066afbab9"
+      "bytes": 16896,
+      "sha256": "06ac17edc850c5ab"
     },
     {
       "datei": "payload/dashboard/render/data.js",
@@ -468,8 +468,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 27280,
-      "sha256": "2d631f5460f2cdae"
+      "bytes": 27560,
+      "sha256": "101aeaa00ba77154"
     },
     {
       "datei": "payload/dashboard/render/markdown.js",
@@ -500,8 +500,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 46822,
-      "sha256": "179eff61ad4a88c3"
+      "bytes": 47422,
+      "sha256": "906cbffe7584bc98"
     },
     {
       "datei": "payload/dashboard/render/views.js",
@@ -556,8 +556,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 4991,
-      "sha256": "669e04cb16c12fb9"
+      "bytes": 7684,
+      "sha256": "f4a42a95bea78f12"
     },
     {
       "datei": "payload/dashboard/test/client.test.js",

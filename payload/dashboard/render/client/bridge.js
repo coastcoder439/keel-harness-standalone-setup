@@ -99,20 +99,75 @@ HD.sitzungenSektion = function () {
   });
 };
 
-// --- Auftrag (Ueberblick) -------------------------------------------------
+// --- Auftrag (Ueberblick) --------------------------------------------------
+// Ausgebaut [Owner 25.08.2026 abends: "Projekt direkt waehlen, auch von der
+// Sitzung, dann werden die Arbeitspakete angezeigt, alles sortiert"]. Die
+// Sitzung->Projekt-Vorbelegung liest die BESTEHENDE Rollen-Konvention
+// (bridge.js projectForRole, server-seitig geparst) -- kein Rateersatz, und
+// als VORSCHLAG markiert, nie als Fakt (der Owner kann das Projekt jederzeit
+// selbst wechseln).
 HD.auftragSektion = function () {
   if (!HD.serverModus()) return "";
   return HD.liveSektion(HD.W.auftragSenden, null, function (d) {
     if (d.readOnly === true) {
       return '<p class="leer-kompakt">' + HD.esc(HD.W.nurLeseBetrieb) + "</p>";
     }
-    var optionen = '<option value="all">' + HD.esc(HD.W.auftragAlle) + "</option>"
-      + (d.sessions || []).filter(function (s) { return s.active; }).map(function (s) {
-        return '<option value="' + HD.esc(s.id) + '">' + HD.esc(s.title) + "</option>";
+    var sitzungen = (d.sessions || []).filter(function (s) { return s.active; });
+    var ziel = HD.S.auftragZiel || "all";
+    // Ziel-Sitzung nicht mehr aktiv (z.B. seit dem letzten Neumessen beendet)?
+    // Dann zurueck auf "alle" -- sonst zeigt das Feld eine Auswahl, die es
+    // nicht mehr gibt.
+    if (ziel !== "all" && !sitzungen.some(function (s) { return s.id === ziel; })) ziel = "all";
+    HD.S.auftragZiel = ziel;
+    var optionen = '<option value="all"' + (ziel === "all" ? " selected" : "") + ">" + HD.esc(HD.W.auftragAlle) + "</option>"
+      + sitzungen.map(function (s) {
+        return '<option value="' + HD.esc(s.id) + '"' + (s.id === ziel ? " selected" : "") + ">" + HD.esc(s.title) + "</option>";
       }).join("");
+
+    var repos = [];
+    (d.packages || []).forEach(function (p) { if (repos.indexOf(p.repo) < 0) repos.push(p.repo); });
+    repos.sort(function (a, b) {
+      if (a === HD.D.workspace) return -1;
+      if (b === HD.D.workspace) return 1;
+      return a.localeCompare(b, "de");
+    });
+    if (!HD.S.auftragProjekt && repos.length) HD.S.auftragProjekt = repos[0];
+    var projektOptionen = repos.map(function (r) {
+      return '<option value="' + HD.esc(r) + '"' + (r === HD.S.auftragProjekt ? " selected" : "") + ">" + HD.esc(r) + "</option>";
+    }).join("");
+
+    var pakete = (d.packages || []).filter(function (p) { return p.repo === HD.S.auftragProjekt && !p.error; })
+      .sort(function (a, b) {
+        var offenA = a.totalSteps > 0 && a.doneSteps === a.totalSteps ? 1 : 0;
+        var offenB = b.totalSteps > 0 && b.doneSteps === b.totalSteps ? 1 : 0;
+        return offenA - offenB;
+      });
+    var anhang = HD.S.auftragPaket;
+    var paketHTML = pakete.length
+      ? pakete.map(function (p) {
+          var an = anhang && anhang.file === p.file;
+          return '<button class="paket-chip' + (an ? " paket-chip-an" : "") + '" data-bridge-anhang="' + HD.esc(p.file) + '"'
+            + ' data-bridge-anhang-titel="' + HD.esc(p.title || p.file) + '" aria-pressed="' + (an ? "true" : "false") + '">'
+            + HD.esc(p.title || p.file) + (an ? " · " + HD.esc(HD.W.auftragPaketAngeheftet) : "") + "</button>";
+        }).join("")
+      : '<p class="leer-kompakt">' + HD.esc(HD.W.auftragKeinePakete) + "</p>";
+
+    var vorschlagHTML = "";
+    var gewaehlteSitzung = sitzungen.find(function (s) { return s.id === HD.S.auftragZiel; });
+    if (gewaehlteSitzung && gewaehlteSitzung.project && gewaehlteSitzung.project.repo !== HD.S.auftragProjekt) {
+      vorschlagHTML = '<button class="filter-chip" data-bridge-projekt-vorschlag="' + HD.esc(gewaehlteSitzung.project.repo) + '">'
+        + HD.esc(HD.fuellen(HD.W.auftragProjektVorschlag, { repo: gewaehlteSitzung.project.repo })) + "</button>";
+    }
+
     return '<p class="erklaersatz">' + HD.esc(HD.W.auftragKopf) + "</p>"
       + '<div class="auftrag-zeile">'
       + '<select id="bridge-target" aria-label="' + HD.esc(HD.W.sitzungen) + '">' + optionen + "</select>"
+      + '<select id="bridge-projekt" aria-label="' + HD.esc(HD.W.auftragProjekt) + '">' + projektOptionen + "</select>"
+      + vorschlagHTML
+      + "</div>"
+      + '<p class="auftrag-pakete-label">' + HD.esc(HD.W.auftragPaketWaehlen) + "</p>"
+      + '<div class="auftrag-pakete">' + paketHTML + "</div>"
+      + '<div class="auftrag-zeile">'
       + '<textarea id="bridge-text" rows="2" placeholder="' + HD.esc(HD.W.auftragFeld) + '"></textarea>'
       + '<button class="knopf-haupt" data-bridge-order="1">' + HD.esc(HD.W.auftragSenden) + "</button>"
       + "</div>"
@@ -186,10 +241,22 @@ HD.guardSektion = function () {
 // Ein delegierter Listener fuer alle Live-Knoepfe -- einmal registriert.
 HD.bridgeClick = function (ev) {
   var t = ev.target.closest
-    ? ev.target.closest("[data-bridge-toggle],[data-bridge-selftest],[data-bridge-order],[data-bridge-pkg],[data-bridge-more]")
+    ? ev.target.closest("[data-bridge-toggle],[data-bridge-selftest],[data-bridge-order],[data-bridge-pkg],[data-bridge-more],[data-bridge-anhang],[data-bridge-projekt-vorschlag]")
     : null;
   if (!t) return false;
 
+  if (t.dataset.bridgeProjektVorschlag) {
+    HD.S.auftragProjekt = t.dataset.bridgeProjektVorschlag;
+    HD.S.auftragPaket = null;
+    HD.zeichnen();
+    return true;
+  }
+  if (t.dataset.bridgeAnhang) {
+    var schonAn = HD.S.auftragPaket && HD.S.auftragPaket.file === t.dataset.bridgeAnhang;
+    HD.S.auftragPaket = schonAn ? null : { repo: HD.S.auftragProjekt, file: t.dataset.bridgeAnhang, titel: t.dataset.bridgeAnhangTitel };
+    HD.zeichnen();
+    return true;
+  }
   if (t.dataset.bridgePkg) {
     HD.S.brueckeOffenePakete = HD.S.brueckeOffenePakete || {};
     var datei = t.dataset.bridgePkg;
@@ -230,19 +297,46 @@ HD.bridgeClick = function (ev) {
   } else if (t.dataset.bridgeOrder) {
     var text = (document.getElementById("bridge-text") || {}).value || "";
     var ziel = (document.getElementById("bridge-target") || {}).value || "all";
-    fetch("/bridge/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target: ziel, text: text }) })
+    // Das angeheftete Paket geht als Referenzzeile mit -- /bridge/order kennt
+    // nur {target, text}, kein eigenes Schema-Feld (Auftraege werden von
+    // prompt-form.js woertlich als Text zugestellt, siehe .claude/prompt-form.js).
+    var anhang = HD.S.auftragPaket;
+    var voll = anhang ? "[Paket: " + anhang.file + "] " + text : text;
+    fetch("/bridge/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target: ziel, text: voll }) })
       .then(function (r) { return r.json(); }).then(function (a) {
         var aus = document.getElementById("bridge-order-out");
         if (aus) aus.textContent = a.ok
           ? HD.fuellen(HD.W.auftragZugestellt, { datei: a.file || "" })
           : HD.fuellen(HD.W.nichtErreichbar, { grund: a.fehler || a.error || "" });
-        if (a.ok) { var f = document.getElementById("bridge-text"); if (f) f.value = ""; }
+        if (a.ok) {
+          var f = document.getElementById("bridge-text"); if (f) f.value = "";
+          HD.S.auftragPaket = null;
+          HD.zeichnen();
+        }
       }).catch(function (e) {
         var aus = document.getElementById("bridge-order-out");
         if (aus) aus.textContent = HD.fuellen(HD.W.nichtErreichbar, { grund: String(e) });
       });
   }
   return true;
+};
+
+// Aenderung an einem der zwei Auswahlfelder: Projekt-Wechsel loescht den
+// Anhang (er gehoert zum alten Projekt), Sitzungs-Wechsel zeichnet nur neu,
+// damit ein passender Vorschlag erscheinen kann (Klick uebernimmt ihn).
+HD.bridgeChange = function (ev) {
+  if (ev.target && ev.target.id === "bridge-projekt") {
+    HD.S.auftragProjekt = ev.target.value;
+    HD.S.auftragPaket = null;
+    HD.zeichnen();
+    return true;
+  }
+  if (ev.target && ev.target.id === "bridge-target") {
+    HD.S.auftragZiel = ev.target.value;
+    HD.zeichnen();
+    return true;
+  }
+  return false;
 };
 `;
 
