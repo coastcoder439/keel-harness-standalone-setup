@@ -211,7 +211,8 @@ document.addEventListener("input", function (ev) {
     if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); }
     return;
   }
-  if (ev.target.id === "palette-feld") HD.paletteZeichnen(ev.target.value);
+  if (ev.target.id === "palette-feld") { HD.paletteZeichnen(ev.target.value); return; }
+  if (HD.bridgeEingabe) HD.bridgeEingabe(ev);
 });
 
 // Ein Abschnitt (details) klappt NATIV auf, ohne Neuzeichnen -- deshalb muss der

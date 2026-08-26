@@ -44,36 +44,55 @@ HD.liveSektion = function (titel, anzahl, inhaltFn) {
   // Lokale Erklaerung statt direktem Parameter-Aufruf: der Namens-Test in
   // client.test.js sammelt nur function/var-Erklaerungen ein.
   var inhaltVon = inhaltFn;
+  // Der Klappzustand kommt aus HD.S.abschnitt -- demselben Ort, den der
+  // globale [data-gruppe]-Handler (start.js) kippt. Vorher stand hier das
+  // Literal true: der Caret trug aria-expanded="true" und tat bei jedem Klick
+  // nichts, waehrend identisch aussehende Koepfe auf Listenseiten sehr wohl
+  // klappten [Befund 26.08.2026: Zusagebruch].
+  var offen = HD.S.abschnitt["gruppe:" + titel] !== false;
   var rumpf;
   if (!HD.serverModus()) {
     rumpf = '<p class="leer-kompakt">' + HD.esc(HD.W.nurServerText) + "</p>";
   } else if (HD.bridgeData && HD.bridgeData.error) {
-    rumpf = '<p class="leer-kompakt">' + HD.esc(HD.fuellen(HD.W.nichtErreichbar, { grund: HD.bridgeData.error })) + "</p>";
+    // Fehlertext MIT Handlung: der rohe JS-Fehler allein sagt dem Nutzer
+    // nicht, was er tun soll (Regel "Error messages include fix/next step").
+    rumpf = '<p class="leer-kompakt">' + HD.esc(HD.fuellen(HD.W.nichtErreichbar, { grund: HD.bridgeData.error }))
+      + " " + HD.esc(HD.W.nichtErreichbarHilfe) + "</p>";
   } else if (!HD.bridgeData) {
     rumpf = '<p class="leer-kompakt">' + HD.esc(HD.W.laedtNoch) + "</p>";
   } else {
     rumpf = inhaltVon(HD.bridgeData);
   }
-  return "<section>" + HD.gruppeHTML(titel, anzahl, true) + rumpf + "</section>";
+  return "<section>" + HD.gruppeHTML(titel, anzahl, offen) + (offen ? rumpf : "") + "</section>";
 };
 
 // --- Sitzungen (Ueberblick, oben -- die Karten des Vorbilds) --------------
 HD.sitzungenSektion = function () {
-  var aktiv = ((HD.bridgeData || {}).sessions || []).filter(function (s) { return s.active; });
-  return HD.liveSektion(HD.W.sitzungen, aktiv.length, function (d) {
+  // Zahl NUR wenn gemessen: solange HD.bridgeData null ist, stuende sonst
+  // "Sitzungen 0" ueber "Laedt ..." -- eine Aussage, die es noch nicht gibt,
+  // und im Fehlerfall bliebe die 0 dauerhaft stehen [Befund 26.08.2026].
+  var aktiv = HD.bridgeData && !HD.bridgeData.error
+    ? (HD.bridgeData.sessions || []).filter(function (s) { return s.active; }).length
+    : null;
+  return HD.liveSektion(HD.W.sitzungen, aktiv, function (d) {
     var alle = d.sessions || [];
     var laufend = alle.filter(function (s) { return s.active; });
     var fruehere = alle.filter(function (s) { return !s.active; });
     if (!laufend.length && !fruehere.length) return HD.leerHTML("bridge-sitzungen");
 
+    // "laeuft gerade" ist KEIN Pruefergebnis -- HD.statusChip("ok") sagt
+    // "In Ordnung" und meint damit etwas anderes. Eine haengende Sitzung
+    // truege dasselbe gruene Wort. Also eigenes, ehrliches Wort + Zeitangabe.
+    // Ohne Titel: ein lesbarer Ersatzsatz statt der rohen Kennung.
+    var name = function (s) { return s.title || HD.W.sitzungOhneTitel; };
     var karten = laufend.map(function (s) {
       return '<div class="sitzung-karte">'
         + '<span class="sitzung-punkt" aria-hidden="true"></span>'
         + '<span class="sitzung-haupt">'
-        + '<span class="sitzung-titel">' + HD.esc(s.title) + "</span>"
-        + (s.role ? '<span class="sitzung-rolle">' + HD.esc(s.role) + "</span>" : "")
+        + '<span class="sitzung-titel" title="' + HD.esc(name(s)) + '">' + HD.esc(name(s)) + "</span>"
+        + (s.role ? '<span class="sitzung-rolle" title="' + HD.esc(s.role) + '">' + HD.esc(s.role) + "</span>" : "")
         + "</span>"
-        + '<span class="eintrag-schluss">' + HD.statusChip("ok") + "</span>"
+        + '<span class="sitzung-laeuft">' + HD.esc(HD.W.sitzungLaeuft) + "</span>"
         + "</div>";
     }).join("");
     var kartenHTML = laufend.length
@@ -82,19 +101,27 @@ HD.sitzungenSektion = function () {
 
     // Fruehere Sitzungen nur als EINE Zeile mit Zahl -- 75 Titel flach
     // auszukippen war Beanstandung B10.
+    // Jede fruehere Sitzung mit ihrer letzten Aktivitaet -- "frueher" allein
+    // kann fuenf Minuten oder drei Wochen heissen [Befund 26.08.2026].
     var alteZeigen = !!HD.S.brueckeAlleSitzungen;
     var alteListe = alteZeigen
       ? '<div class="eintrag-liste">' + fruehere.map(function (s) {
           return '<div class="eintrag-zeile"><span class="eintrag-haupt"><span class="eintrag-titel">'
-            + HD.esc(s.title) + "</span></span>"
+            + HD.esc(name(s)) + "</span></span>"
             + (s.role ? '<span class="eintrag-meta"><span>' + HD.esc(s.role) + "</span></span>" : "")
+            + '<span class="eintrag-schluss mono">' + HD.esc(HD.zeitpunkt(s.lastActivity)) + "</span>"
             + "</div>";
         }).join("") + "</div>"
       : "";
-    var mehr = fruehere.length && !alteZeigen
-      ? '<p class="sektion-fuss"><button class="filter-chip" data-bridge-more="1">'
-        + HD.esc(HD.fuellen(HD.W.fruehereAnzeigen, { n: fruehere.length })) + "</button></p>"
-      : "";
+    // Der Weg zurueck fehlte: wer einmal auf 111 fruehere Sitzungen klickte,
+    // hatte den Rest des Control Centers dauerhaft begraben [Befund].
+    var mehr = "";
+    if (fruehere.length) {
+      mehr = '<p class="sektion-fuss"><button class="filter-chip" data-bridge-more="'
+        + (alteZeigen ? "zu" : "auf") + '" aria-expanded="' + (alteZeigen ? "true" : "false") + '">'
+        + HD.esc(alteZeigen ? HD.W.fruehereVerbergen : HD.fuellen(HD.W.fruehereAnzeigen, { n: fruehere.length }))
+        + "</button></p>";
+    }
     return kartenHTML + alteListe + mehr;
   });
 };
@@ -121,7 +148,8 @@ HD.auftragSektion = function () {
     HD.S.auftragZiel = ziel;
     var optionen = '<option value="all"' + (ziel === "all" ? " selected" : "") + ">" + HD.esc(HD.W.auftragAlle) + "</option>"
       + sitzungen.map(function (s) {
-        return '<option value="' + HD.esc(s.id) + '"' + (s.id === ziel ? " selected" : "") + ">" + HD.esc(s.title) + "</option>";
+        return '<option value="' + HD.esc(s.id) + '"' + (s.id === ziel ? " selected" : "") + ">"
+          + HD.esc(s.title || HD.W.sitzungOhneTitel) + "</option>";
       }).join("");
 
     var repos = [];
@@ -136,21 +164,34 @@ HD.auftragSektion = function () {
       return '<option value="' + HD.esc(r) + '"' + (r === HD.S.auftragProjekt ? " selected" : "") + ">" + HD.esc(r) + "</option>";
     }).join("");
 
-    var pakete = (d.packages || []).filter(function (p) { return p.repo === HD.S.auftragProjekt && !p.error; })
-      .sort(function (a, b) {
-        var offenA = a.totalSteps > 0 && a.doneSteps === a.totalSteps ? 1 : 0;
-        var offenB = b.totalSteps > 0 && b.doneSteps === b.totalSteps ? 1 : 0;
-        return offenA - offenB;
-      });
+    // EIN Auftrag hat EIN Paket -- also ein Auswahlfeld, keine Knopf-Wand
+    // [Owner-Befund 26.08.: "alle Arbeitspakete zum Auswaehlen angeheftet"].
+    // Nur OFFENE Pakete: einer abgeschlossenen Sache einen Auftrag anzuhaengen
+    // ergibt keinen Sinn; die Zahl steht im Label, damit die Kappung sichtbar
+    // ist statt stumm.
+    var offenePakete = (d.packages || []).filter(function (p) {
+      return p.repo === HD.S.auftragProjekt && !p.error
+        && !(p.totalSteps > 0 && p.doneSteps === p.totalSteps);
+    });
     var anhang = HD.S.auftragPaket;
-    var paketHTML = pakete.length
-      ? pakete.map(function (p) {
-          var an = anhang && anhang.file === p.file;
-          return '<button class="paket-chip' + (an ? " paket-chip-an" : "") + '" data-bridge-anhang="' + HD.esc(p.file) + '"'
-            + ' data-bridge-anhang-titel="' + HD.esc(p.title || p.file) + '" aria-pressed="' + (an ? "true" : "false") + '">'
-            + HD.esc(p.title || p.file) + (an ? " · " + HD.esc(HD.W.auftragPaketAngeheftet) : "") + "</button>";
-        }).join("")
-      : '<p class="leer-kompakt">' + HD.esc(HD.W.auftragKeinePakete) + "</p>";
+    var paketHTML;
+    if (!offenePakete.length) {
+      paketHTML = '<p class="leer-kompakt">' + HD.esc(HD.W.auftragKeinePakete) + "</p>";
+    } else {
+      var paketTitel = function (p) {
+        return String(p.title || p.file).replace(/^(Work package|Paket):\\s*/i, "");
+      };
+      paketHTML = '<label class="auftrag-feld"><span class="auftrag-feld-label">'
+        + HD.esc(HD.fuellen(HD.W.auftragPaketWaehlen, { n: offenePakete.length })) + "</span>"
+        + '<select id="bridge-paket">'
+        + '<option value="">' + HD.esc(HD.W.auftragKeinPaket) + "</option>"
+        + offenePakete.map(function (p) {
+            var an = anhang && anhang.file === p.file;
+            return '<option value="' + HD.esc(p.file) + '"' + (an ? " selected" : "") + ">"
+              + HD.esc(paketTitel(p)) + "</option>";
+          }).join("")
+        + "</select></label>";
+    }
 
     var vorschlagHTML = "";
     var gewaehlteSitzung = sitzungen.find(function (s) { return s.id === HD.S.auftragZiel; });
@@ -159,19 +200,28 @@ HD.auftragSektion = function () {
         + HD.esc(HD.fuellen(HD.W.auftragProjektVorschlag, { repo: gewaehlteSitzung.project.repo })) + "</button>";
     }
 
+    // Sichtbare Labels statt nur aria-label (Regel "Form controls need
+    // <label>"): das Formular sagt selbst, was jedes Feld bedeutet.
     return '<p class="erklaersatz">' + HD.esc(HD.W.auftragKopf) + "</p>"
       + '<div class="auftrag-zeile">'
-      + '<select id="bridge-target" aria-label="' + HD.esc(HD.W.sitzungen) + '">' + optionen + "</select>"
-      + '<select id="bridge-projekt" aria-label="' + HD.esc(HD.W.auftragProjekt) + '">' + projektOptionen + "</select>"
+      + '<label class="auftrag-feld"><span class="auftrag-feld-label">' + HD.esc(HD.W.auftragAn) + "</span>"
+      + '<select id="bridge-target">' + optionen + "</select></label>"
+      + '<label class="auftrag-feld"><span class="auftrag-feld-label">' + HD.esc(HD.W.auftragProjekt) + "</span>"
+      + '<select id="bridge-projekt">' + projektOptionen + "</select></label>"
+      + paketHTML
       + vorschlagHTML
       + "</div>"
-      + '<p class="auftrag-pakete-label">' + HD.esc(HD.W.auftragPaketWaehlen) + "</p>"
-      + '<div class="auftrag-pakete">' + paketHTML + "</div>"
+      // Der Text lebt in HD.S.auftragText, nicht nur im DOM: sonst loescht
+      // JEDES Neuzeichnen (Projektwechsel, Sitzungswechsel, Vorschlag,
+      // Fruehere-anzeigen) den bereits getippten Auftrag [Befund 26.08.2026].
+      // Waehrend des Sendens ist der Knopf gesperrt und sagt das auch.
       + '<div class="auftrag-zeile">'
-      + '<textarea id="bridge-text" rows="2" placeholder="' + HD.esc(HD.W.auftragFeld) + '"></textarea>'
-      + '<button class="knopf-haupt" data-bridge-order="1">' + HD.esc(HD.W.auftragSenden) + "</button>"
-      + "</div>"
-      + '<p id="bridge-order-out" class="erklaersatz" aria-live="polite"></p>';
+      + '<label class="auftrag-feld auftrag-feld-breit"><span class="auftrag-feld-label">' + HD.esc(HD.W.auftragText) + "</span>"
+      + '<textarea id="bridge-text" rows="3" name="auftrag" autocomplete="off" placeholder="'
+      + HD.esc(HD.W.auftragFeld) + '">' + HD.esc(HD.S.auftragText || "") + "</textarea></label>"
+      + '<button class="knopf-haupt" data-bridge-order="1"' + (HD.S.auftragLaeuft ? " disabled" : "") + ">"
+      + HD.esc(HD.S.auftragLaeuft ? HD.W.auftragLaeuft : HD.W.auftragSenden) + "</button>"
+      + "</div>";
   });
 };
 
@@ -230,30 +280,31 @@ HD.guardSektion = function () {
   if (!HD.serverModus()) return "";
   var anzahl = ((HD.bridgeData || {}).guards || []).length;
   return HD.liveSektion(HD.W.guardTests, anzahl, function (d) {
+    var laeuft = HD.S.selbsttestLaeuft;
     var chips = (d.guards || []).map(function (g) {
-      return '<button class="filter-chip" data-bridge-selftest="' + HD.esc(g) + '">' + HD.esc(g) + "</button>";
+      var an = laeuft === g;
+      return '<button class="filter-chip" data-bridge-selftest="' + HD.esc(g) + '"' + (laeuft ? " disabled" : "") + ">"
+        + HD.esc(g) + (an ? " " + HD.esc(HD.W.selbsttestLaeuft) : "") + "</button>";
     }).join("");
-    return '<div class="werkzeugleiste">' + chips + "</div>"
-      + '<p id="bridge-selftest-out" class="erklaersatz" aria-live="polite"></p>';
+    var e = HD.S.selbsttest;
+    var ergebnis = e
+      ? '<p class="erklaersatz" aria-live="polite">' + HD.statusChip(e.ok ? "ok" : "befund")
+        + " " + HD.esc(e.guard) + " — " + HD.esc(e.text) + "</p>"
+      : '<p class="erklaersatz" aria-live="polite">' + HD.esc(HD.W.selbsttestHinweis) + "</p>";
+    return '<div class="werkzeugleiste">' + chips + "</div>" + ergebnis;
   });
 };
 
 // Ein delegierter Listener fuer alle Live-Knoepfe -- einmal registriert.
 HD.bridgeClick = function (ev) {
   var t = ev.target.closest
-    ? ev.target.closest("[data-bridge-toggle],[data-bridge-selftest],[data-bridge-order],[data-bridge-pkg],[data-bridge-more],[data-bridge-anhang],[data-bridge-projekt-vorschlag]")
+    ? ev.target.closest("[data-bridge-toggle],[data-bridge-selftest],[data-bridge-order],[data-bridge-pkg],[data-bridge-more],[data-bridge-projekt-vorschlag]")
     : null;
   if (!t) return false;
 
   if (t.dataset.bridgeProjektVorschlag) {
     HD.S.auftragProjekt = t.dataset.bridgeProjektVorschlag;
     HD.S.auftragPaket = null;
-    HD.zeichnen();
-    return true;
-  }
-  if (t.dataset.bridgeAnhang) {
-    var schonAn = HD.S.auftragPaket && HD.S.auftragPaket.file === t.dataset.bridgeAnhang;
-    HD.S.auftragPaket = schonAn ? null : { repo: HD.S.auftragProjekt, file: t.dataset.bridgeAnhang, titel: t.dataset.bridgeAnhangTitel };
     HD.zeichnen();
     return true;
   }
@@ -265,7 +316,7 @@ HD.bridgeClick = function (ev) {
     return true;
   }
   if (t.dataset.bridgeMore) {
-    HD.S.brueckeAlleSitzungen = true;
+    HD.S.brueckeAlleSitzungen = t.dataset.bridgeMore === "auf";
     HD.zeichnen();
     return true;
   }
@@ -289,33 +340,59 @@ HD.bridgeClick = function (ev) {
       HD.zeichnen();
     });
   } else if (t.dataset.bridgeSelftest) {
-    send("/bridge/selftest?guard=" + encodeURIComponent(t.dataset.bridgeSelftest), function (a) {
-      var aus = document.getElementById("bridge-selftest-out");
-      if (aus) aus.textContent = (a.ok ? HD.D.status.ok.wort + " \\u2014 " : HD.D.status.befund.wort + " \\u2014 ")
-        + (a.output || a.fehler || a.error || "");
+    // Ergebnis in HD.S, Anzeige beim Zeichnen -- ein Ergebnis, das nur im DOM
+    // haengt, verschwindet beim naechsten Zeichenlauf [Befund 26.08.2026].
+    var wachname = t.dataset.bridgeSelftest;
+    HD.S.selbsttestLaeuft = wachname;
+    HD.zeichnen();
+    send("/bridge/selftest?guard=" + encodeURIComponent(wachname), function (a) {
+      HD.S.selbsttestLaeuft = null;
+      HD.S.selbsttest = {
+        guard: wachname,
+        ok: !!a.ok,
+        text: (a.output || a.fehler || a.error || ""),
+      };
+      HD.zeichnen();
     });
   } else if (t.dataset.bridgeOrder) {
-    var text = (document.getElementById("bridge-text") || {}).value || "";
+    var feld = document.getElementById("bridge-text");
+    var text = feld ? feld.value : (HD.S.auftragText || "");
     var ziel = (document.getElementById("bridge-target") || {}).value || "all";
+    // Pflichtfeld: ein leerer Auftrag ging bisher wortlos raus (nur die
+    // Paket-Klammer). Fehler AM Feld, mit Fokus [Regel "focus first error"].
+    if (!text.trim()) {
+      HD.melden(HD.W.auftragLeer);
+      if (feld) feld.focus();
+      return true;
+    }
+    if (HD.S.auftragLaeuft) return true;
+    HD.S.auftragLaeuft = true;
+    HD.S.auftragText = text;
     // Das angeheftete Paket geht als Referenzzeile mit -- /bridge/order kennt
     // nur {target, text}, kein eigenes Schema-Feld (Auftraege werden von
     // prompt-form.js woertlich als Text zugestellt, siehe .claude/prompt-form.js).
     var anhang = HD.S.auftragPaket;
     var voll = anhang ? "[Paket: " + anhang.file + "] " + text : text;
+    // Rueckmeldung ueber HD.melden -- der Toast lebt in der SCHALE und
+    // ueberlebt HD.zeichnen(). Vorher stand sie in #bridge-order-out INNERHALB
+    // der Hauptflaeche und wurde vom Neuzeichnen im selben Tick geloescht:
+    // der Nutzer bekam null Rueckmeldung [Befund 26.08.2026].
+    HD.zeichnen();
     fetch("/bridge/order", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ target: ziel, text: voll }) })
       .then(function (r) { return r.json(); }).then(function (a) {
-        var aus = document.getElementById("bridge-order-out");
-        if (aus) aus.textContent = a.ok
-          ? HD.fuellen(HD.W.auftragZugestellt, { datei: a.file || "" })
-          : HD.fuellen(HD.W.nichtErreichbar, { grund: a.fehler || a.error || "" });
+        HD.S.auftragLaeuft = false;
         if (a.ok) {
-          var f = document.getElementById("bridge-text"); if (f) f.value = "";
+          HD.S.auftragText = "";
           HD.S.auftragPaket = null;
-          HD.zeichnen();
+          HD.melden(HD.fuellen(HD.W.auftragZugestellt, { datei: a.file || "" }));
+        } else {
+          HD.melden(HD.fuellen(HD.W.nichtErreichbar, { grund: a.fehler || a.error || "" }));
         }
+        HD.zeichnen();
       }).catch(function (e) {
-        var aus = document.getElementById("bridge-order-out");
-        if (aus) aus.textContent = HD.fuellen(HD.W.nichtErreichbar, { grund: String(e) });
+        HD.S.auftragLaeuft = false;
+        HD.melden(HD.fuellen(HD.W.nichtErreichbar, { grund: String(e) }));
+        HD.zeichnen();
       });
   }
   return true;
@@ -334,6 +411,20 @@ HD.bridgeChange = function (ev) {
   if (ev.target && ev.target.id === "bridge-target") {
     HD.S.auftragZiel = ev.target.value;
     HD.zeichnen();
+    return true;
+  }
+  if (ev.target && ev.target.id === "bridge-paket") {
+    HD.S.auftragPaket = ev.target.value ? { repo: HD.S.auftragProjekt, file: ev.target.value } : null;
+    return true;
+  }
+  return false;
+};
+
+// Jeder Tastendruck im Auftragsfeld landet im Zustand -- ohne das ueberlebt
+// der Text kein Neuzeichnen (start.js ruft das im input-Listener auf).
+HD.bridgeEingabe = function (ev) {
+  if (ev.target && ev.target.id === "bridge-text") {
+    HD.S.auftragText = ev.target.value;
     return true;
   }
   return false;

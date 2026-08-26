@@ -50,7 +50,9 @@ const SEITEN = {
     // verbreitern. Kennung bleibt "ueberblick" (Adressen, Eintraege).
     name: "Control Center",
     ort: null,
-    zweck: "Trägt alles, was braucht dich, wer arbeitet woran — verdichtet; die Breite liegt in den Reitern.",
+    // Ein echter Satz, keine Aneinanderreihung von Widget-Namen [Befund
+    // 26.08.2026: der erste Text der Seite erklaerte nichts].
+    zweck: "Hier siehst du auf einen Blick, ob dein Harness trägt, was deine Aufmerksamkeit braucht und wer gerade woran arbeitet. Die Einzelheiten stehen in den Reitern links.",
     icon: "layout-dashboard",
   },
   zutun: {
@@ -544,12 +546,23 @@ const UI = {
   auftragZugestellt: "Zugestellt beim nächsten Prompt: {datei}",
   auftragAlle: "alle Sitzungen",
   auftragFeld: "Was soll die Sitzung tun?",
+  auftragAn: "An",
   auftragProjekt: "Projekt",
+  auftragText: "Auftrag",
   auftragProjektVorschlag: "passend zur Sitzung: {repo}",
-  auftragPaketWaehlen: "Arbeitspaket anheften (optional)",
-  auftragPaketAngeheftet: "angeheftet",
-  auftragPaketLos: "lösen",
-  auftragKeinePakete: "Dieses Projekt hat keine Arbeitspakete.",
+  // Zahl im Label: die Auswahl zeigt nur OFFENE Pakete -- die Kappung wird
+  // benannt statt stumm zu geschehen.
+  auftragPaketWaehlen: "Arbeitspaket ({n} offen)",
+  auftragKeinPaket: "— keins —",
+  auftragKeinePakete: "Dieses Projekt hat kein offenes Arbeitspaket.",
+  auftragLaeuft: "Wird gesendet …",
+  auftragLeer: "Schreib zuerst, was die Sitzung tun soll.",
+  sitzungLaeuft: "arbeitet gerade",
+  sitzungOhneTitel: "Sitzung ohne Namen",
+  fruehereVerbergen: "Frühere Sitzungen verbergen",
+  nichtErreichbarHilfe: "Läuft der Server? Starten mit: node dashboard/serve.js",
+  selbsttestLaeuft: "läuft …",
+  selbsttestHinweis: "Wähle einen Guard, um seinen Selbsttest zu starten.",
   nurLeseBetrieb: "Nur-Lese-Betrieb — Aufträge abgeschaltet.",
   nurServerTitel: "Nur im Server-Betrieb",
   nurServerText: "Diese Ansicht liest und schreibt live. Starte: node dashboard/serve.js — dann http://127.0.0.1:8765",
@@ -560,18 +573,30 @@ const UI = {
   nichtErreichbar: "Nicht erreichbar: {grund}",
 
   // Control Center (Widgets verdichten nach oben [Owner 25.08.2026])
-  ccGesundheit: "Trägt alles?",
-  ccLogbuch: "Logbuch heute",
-  ccDrei: "Deine drei",
-  ccHooksGeladen: "Hooks geladen",
-  ccMessungFrisch: "Messung vor {n} min",
+  // Titel, die sagen was drinsteht -- keine Kunstworte, die man erklaeren
+  // muesste (labels.js Regel 5) [Befund 26.08.2026].
+  ccGesundheit: "Trägt der Harness?",
+  ccLogbuch: "Zuletzt gelaufen",
+  ccDrei: "Braucht deine Aufmerksamkeit",
+  // Wort und Zahl beschreiben dasselbe: die Zeile nennt, was gemessen wurde.
+  ccHooksOhneBefund: "{n} Hooks eingetragen, keiner mit Befund",
+  ccHooksKeine: "Keine Hooks gemessen",
+  ccMessungFrisch: "Zuletzt gemessen vor {dauer}",
+  ccMessungUnbekannt: "Messzeit unbekannt",
   ccServerJa: "Server erreichbar",
   ccServerNein: "Kein Server — Seite nur lesbar",
-  ccSicherungOk: "Sicherung ohne Lücke",
-  ccSicherungLuecke: "Sicherung: {n} mit Lücke",
+  ccSicherungOk: "Alle {n} Repos gesichert",
+  ccSicherungLuecke: "{n} Repos mit Sicherungslücke",
+  ccSicherungLueckeEins: "Ein Repo mit Sicherungslücke",
+  ccSicherungUnbekannt: "Sicherung nicht gemessen",
   ccMessungGelaufen: "Messung gelaufen",
-  ccKeinLauf: "Kein automatischer Lauf eingerichtet.",
-  ccAllesOffene: "alles Offene",
+  ccKeinLauf: "Es läuft nichts automatisch.",
+  ccAutomatikZeigen: "Automatik ansehen",
+  ccAllesOffene: "Alles Offene ansehen",
+  dauerGerade: "einem Augenblick",
+  dauerMinuten: "{n} Minuten",
+  dauerStunden: "{n} Stunden",
+  dauerTage: "{n} Tagen",
 
   // Ueberblick
   brauchtAufmerksamkeit: "Braucht Aufmerksamkeit",
