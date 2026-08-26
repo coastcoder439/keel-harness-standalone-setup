@@ -72,6 +72,21 @@ handover: Coverage = everything addressed (run the `completeness` skill on
 bau-bereit claims and handovers); Fulfillment = the GOAL holds, not merely
 work happened. One finds gaps, the other finds frame errors.
 
+## Pre-send check — delete before sending
+
+1. **Derivation.** How a finding came about belongs in the commit message, not the
+   answer. State the result. *(Measured 24.08.2026: the single largest source of
+   length — restored 27.08.2026 after it was cut and the wall-of-text returned.)*
+2. **Retrospectives on your own mistake.** Concede once, in one sentence, then continue.
+3. Any hedging adverb that adds no information; keep a hedge carrying real uncertainty.
+4. Any idiom or figurative phrase — replace with the literal action.
+
+Multi-step work is a NUMBERED list, one bounded action per step — never a paragraph
+that hides the steps in prose. Errors are stated matter-of-fact: cause, then fix.
+
+Then verify: reading ONLY the first and the last line, does the reader know (a) what to
+do next and (b) what just happened? If not, the answer is not ready.
+
 ## Reference points
 
 When presenting three or more findings, decisions, risks, or questions, assign
