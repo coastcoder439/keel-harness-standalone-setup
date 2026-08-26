@@ -10,6 +10,11 @@
 // Kurzform an den WIRKZEITPUNKT: direkt vor die Antwort, jede Runde.
 // Kosten: ~1,7 KB je Turn (gemessen 26.08.2026, inkl. Abruf-Werkzeug-Index).
 // Langfassung bleibt der Skill i-have-adhd; Volltexte der Werkzeuge laden auf Abruf.
+// Budget-Massstab [Owner 26.08.2026]: Umfang darf wachsen (Dauer-Kontext bis ~5 %
+// des Fensters ok) — Massstab ist nicht die Byte-Zahl, sondern dass JEDER Satz eine
+// ERLEBTE Fehlerklasse abstellt; Zeile raus, wenn ihre Klasse nicht mehr auftritt.
+// Grenze bleibt die Schaerfe: waechst die Injektion zum Katalog, ueberliest das
+// Modell den Einzelsatz wieder (Beleg docs/packages/skill-invocation-diagnose.md).
 
 const KURZFORM =
   "Antwortform (gilt fuer JEDE Antwort, Kurzform des Skills i-have-adhd): " +
