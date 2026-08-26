@@ -150,7 +150,7 @@ const WAECHTER = [
   "write-guard.js",       // PreToolUse Write/Edit: Schreibziel, Zugaenge, gitignore-Reihenfolge (24.08.2026)
   "dod-guard.js",         // Stop: Abschluss-Format (Geprueft gegen / Offen) bei geleisteter Arbeit (24.08.2026)
   "prompt-form.js",       // UserPromptSubmit: Antwortform-Kurzform am Wirkzeitpunkt, jede Runde (24.08.2026)
-  "pollution-warn.js",    // SessionStart: misst User-Scope-Fremdmaterial (25.08.2026; stand in der gespiegelten settings.json, fehlte im Payload)
+  "pollution-warn.js",    // SessionStart: misst User-Scope-Fremdmaterial (25.08.2026; Datei lag im Payload, fehlte aber HIER in der Liste -- frisch-geklont 11/3 bis 26.08.: diese Liste ist die einzige Wahrheit, was installiert wird)
   "sessionpost-guard.js", // PreToolUse: blockt zu lange/menschliche Inter-Session-Nachrichten
   "repo-status.js",
   "session-roles.js",
