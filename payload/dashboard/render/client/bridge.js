@@ -25,7 +25,7 @@ HD._bridgeLaedt = false;
 HD.bridgeLade = function () {
   if (!HD.serverModus()) return;
   if (HD.bridgeData || HD._bridgeLaedt) return;
-  if (["ueberblick", "zutun", "hooks"].indexOf(HD.S.seite) < 0) return;
+  if (["ueberblick", "zutun", "hooks", "automatik"].indexOf(HD.S.seite) < 0) return;
   HD._bridgeLaedt = true;
   fetch("/bridge/data").then(function (r) { return r.json(); }).then(function (d) {
     HD.bridgeData = d;
@@ -275,6 +275,89 @@ HD.paketZeile = function (p) {
   return hauptzeile + '<div class="eintrag-liste paket-schritte">' + schritte + "</div>" + offenSatz;
 };
 
+// --- Arbeitspakete eines Projekts als KANBAN [Owner-Wunsch W7] -------------
+// "Ich will eine vernuenftige Kanban-Uebersicht": Pakete nach ZUSTAND, nicht
+// als flache Liste. Der Zustand kommt aus den Schritten des Artefakts --
+// nichts geraten: keine Schritte erledigt = offen, alle = abgeschlossen,
+// dazwischen = in Arbeit. Jede Karte nennt den naechsten Schritt und oeffnet
+// auf Klick das volle Dokument.
+HD.paketKanban = function (repo) {
+  return HD.liveSektion(HD.W.arbeitspakete, null, function (d) {
+    var pakete = (d.packages || []).filter(function (p) { return p.repo === repo && !p.error; });
+    if (!pakete.length) return HD.leerHTML("bridge-pakete");
+
+    var spalten = [
+      { schluessel: "offen", titel: HD.W.kanbanOffen, pakete: [] },
+      { schluessel: "arbeit", titel: HD.W.kanbanArbeit, pakete: [] },
+      { schluessel: "fertig", titel: HD.W.kanbanFertig, pakete: [] },
+    ];
+    pakete.forEach(function (p) {
+      var ziel;
+      if (p.totalSteps > 0 && p.doneSteps === p.totalSteps) ziel = spalten[2];
+      else if (p.doneSteps > 0) ziel = spalten[1];
+      else ziel = spalten[0];
+      ziel.pakete.push(p);
+    });
+
+    var titelKurz = function (p) {
+      return String(p.title || p.file).replace(/^(Work package|Paket):\\s*/i, "");
+    };
+    var naechsterSchritt = function (p) {
+      var offen = (p.steps || []).filter(function (s) { return !s.done; })[0];
+      return offen ? offen.text : null;
+    };
+
+    return '<div class="kanban">' + spalten.map(function (s) {
+      var karten = s.pakete.length
+        ? s.pakete.map(function (p) {
+            var naechst = naechsterSchritt(p);
+            var anteil = p.totalSteps ? Math.round((p.doneSteps / p.totalSteps) * 100) : 0;
+            return '<button class="kanban-karte" data-bridge-doc="' + HD.esc(p.file) + '">'
+              + '<span class="kanban-titel">' + HD.esc(titelKurz(p)) + "</span>"
+              + '<span class="kanban-balken" role="img" aria-label="'
+              + HD.esc(HD.fuellen(HD.W.schrittVon, { done: p.doneSteps, total: p.totalSteps })) + '">'
+              + '<span class="kanban-balken-fuell" style="width:' + anteil + '%"></span></span>'
+              + '<span class="kanban-fuss">'
+              + HD.esc(HD.fuellen(HD.W.schrittVon, { done: p.doneSteps, total: p.totalSteps }))
+              + (naechst ? " · " + HD.esc(HD.W.kanbanNaechster) + ": " + HD.esc(naechst) : "")
+              + "</span></button>";
+          }).join("")
+        : '<p class="leer-kompakt">' + HD.esc(HD.W.kanbanLeer) + "</p>";
+      return '<div class="kanban-spalte"><h3 class="kanban-kopf">' + HD.esc(s.titel)
+        + '<span class="gruppen-zahl">' + s.pakete.length + "</span></h3>" + karten + "</div>";
+    }).join("") + "</div>";
+  });
+};
+
+// --- Automatik (Harness-Reiter) -------------------------------------------
+// [Owner 25.08.2026: "was automatisch durchlaeuft, zu welcher Uhrzeit"]. Zeigt
+// GEMESSENE Laeufe. Findet sich nichts, sagt die Seite das ehrlich -- mit dem
+// Weg, wie man es einrichtet (ein Leerzustand ohne Handlung ist eine
+// Sackgasse, ui-standard Punkt 4).
+HD.automatikSektion = function () {
+  return HD.liveSektion(HD.D.seiten.automatik.name, null, function (d) {
+    var a = d.automatik || {};
+    var laeufe = a.laeufe || [];
+    if (laeufe.length) {
+      return '<div class="eintrag-liste">' + laeufe.map(function (l) {
+        return '<div class="eintrag-zeile"><span class="eintrag-haupt">'
+          + '<span class="eintrag-titel">' + HD.esc(l.name) + "</span>"
+          + '<span class="eintrag-unter">' + HD.esc(HD.W.automatikArt) + "</span></span>"
+          + '<span class="eintrag-meta"><span>' + HD.esc(l.status || "") + "</span></span>"
+          + '<span class="eintrag-schluss mono">' + HD.esc(l.naechster || "—") + "</span></div>";
+      }).join("") + "</div>";
+    }
+    // Leer -- und das ist die Wahrheit. Der Satz nennt, was fehlt UND was hilft.
+    var hilfe = (a.skripte || []).length
+      ? '<p class="leer-kompakt">' + HD.esc(HD.W.automatikEinrichten) + " <code>"
+        + HD.esc(a.skripte[0]) + "</code></p>"
+      : "";
+    var grund = a.aufgabenGelesen === false
+      ? '<p class="leer-kompakt">' + HD.esc(HD.W.automatikNichtLesbar) + "</p>" : "";
+    return HD.leerHTML("automatik") + hilfe + grund;
+  });
+};
+
 // --- Guard-Selbsttests (Hooks) --------------------------------------------
 HD.guardSektion = function () {
   if (!HD.serverModus()) return "";
@@ -298,7 +381,7 @@ HD.guardSektion = function () {
 // Ein delegierter Listener fuer alle Live-Knoepfe -- einmal registriert.
 HD.bridgeClick = function (ev) {
   var t = ev.target.closest
-    ? ev.target.closest("[data-bridge-toggle],[data-bridge-selftest],[data-bridge-order],[data-bridge-pkg],[data-bridge-more],[data-bridge-projekt-vorschlag]")
+    ? ev.target.closest("[data-bridge-toggle],[data-bridge-selftest],[data-bridge-order],[data-bridge-pkg],[data-bridge-more],[data-bridge-doc],[data-bridge-projekt-vorschlag]")
     : null;
   if (!t) return false;
 
@@ -318,6 +401,12 @@ HD.bridgeClick = function (ev) {
   if (t.dataset.bridgeMore) {
     HD.S.brueckeAlleSitzungen = t.dataset.bridgeMore === "auf";
     HD.zeichnen();
+    return true;
+  }
+  // Kanban-Karte -> das volle Dokument des Arbeitspakets, in derselben
+  // Dokumentansicht wie jede andere Datei [Owner-Wunsch W8].
+  if (t.dataset.bridgeDoc) {
+    HD.dateiWaehlen(t.dataset.bridgeDoc);
     return true;
   }
 

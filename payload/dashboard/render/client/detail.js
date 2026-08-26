@@ -239,8 +239,13 @@ HD.detailKoerper = function (e, inline) {
   var inhalt = HD.inhaltHTML(e, inline);
   // Bei einem Projekt: die Dokumente je Projekt (S5). Fuer alles andere leer.
   var dokumente = HD.projektDokumenteHTML(e);
+  // Der Paket-Kanban steht NICHT hier: gemessen 26.08.2026 liegen alle 15
+  // Arbeitspakete im Workspace selbst, der in der Projektliste gar nicht
+  // vorkommt -- ein Kanban je Projekt-Detail waere immer leer. Er lebt auf
+  // "Zu tun" (Reiter unter Projekte), wo das Offene ohnehin zu Hause ist.
+  var kanban = "";
 
-  return kopf + metaHTML + beschreibung + eigenschaften + inhalt + dokumente;
+  return kopf + metaHTML + beschreibung + kanban + eigenschaften + inhalt + dokumente;
 };
 
 HD.symbolFuer = function (e) {

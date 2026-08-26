@@ -232,6 +232,9 @@ function daten(m, regelDaten) {
     seiten,
     navigation: W.NAVIGATION,
     tabgruppen: W.TABGRUPPEN,
+    // Was ein Ereignisname bedeutet -- die Anzeige setzt ihn unter den
+    // Gruppenkopf, damit ueber einer Gruppe nicht nur ein Fachwort steht.
+    ereignisErklaerung: W.EREIGNIS_ERKLAERUNG,
     status: STATUS,
     gesamtstatus: m.gesamtstatus,
     zahlen,

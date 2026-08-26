@@ -208,8 +208,18 @@ HD.listenSeite = function (seite) {
   // Guard-Selbsttests -- beides liest der Server, beides gehoert zum Thema
   // der Seite (nicht auf eine eigene Bruecken-Seite ausgelagert).
   var anbau = "";
-  if (seite === "zutun") anbau = HD.paketeSektion();
+  // Arbeitspakete als KANBAN nach Zustand [Owner-Wunsch W7] -- ersetzt die
+  // flache Repo-Liste. Umschaltbar auf Liste ueber die Werkzeugleiste.
+  if (seite === "zutun") {
+    anbau = HD.S.ansicht === "liste-pakete" ? HD.paketeSektion() : HD.paketKanban(HD.D.workspace);
+  }
   if (seite === "hooks") anbau = HD.guardSektion();
+  // Automatik ist eine reine LIVE-Ansicht ohne Mess-Eintraege: Suchfeld und
+  // Listen-Leerzustand haetten nichts zu tun und der Leerzustand stuende
+  // doppelt [Abnahme 26.08.2026]. Frueh zurueck, mit Erklaersatz und Reitern.
+  if (seite === "automatik") {
+    return kopf + HD.automatikSektion();
+  }
 
   // Zustand OBEN in Kacheln, dann die Liste -- das Muster der Vorbild-
   // Pruefseite [Gauntlet]. Auf Hooks: was der Bestand insgesamt KANN. Die
@@ -258,7 +268,11 @@ HD.listenSeite = function (seite) {
     koerper = ordnung.map(function (g) {
       var offen = HD.S.abschnitt["gruppe:" + g] !== false;
       var istCode = nach[g][0] && nach[g][0].gruppeCode === true;
+      // Ein technischer Gruppenname bekommt seinen Erklaersatz mit -- sonst
+      // steht dort nur ein Fachwort [Owner-Wunsch W14].
+      var erklaerung = (HD.D.ereignisErklaerung || {})[g];
       return "<section>" + HD.gruppeHTML(g, nach[g].length, offen, istCode)
+        + (offen && erklaerung ? '<p class="gruppen-erklaersatz">' + HD.esc(erklaerung) + "</p>" : "")
         + (offen ? '<div class="eintrag-liste">' + nach[g].map(HD.zeileHTML).join("") + "</div>" : "")
         + "</section>";
     }).join("");
