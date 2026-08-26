@@ -35,6 +35,28 @@ HD.statusChip = function (code) {
     + "<span>" + HD.esc(s.wort) + "</span></span>";
 };
 
+// Nur die Glyphe eines Status, im Status-Ton -- fuer Stellen, an denen das
+// Wort daneben im Satz steht (Gesundheits-Zeilen). Kein Unicode-Ersatz:
+// dieselbe Lucide-Glyphe wie im Chip, damit die Oberflaeche EINE Sprache
+// spricht [ui-standard Punkt 3 und 5].
+HD.statusGlyphe = function (code) {
+  var s = HD.D.status[code];
+  if (!s) return HD.icon("circle-dashed");
+  return '<span class="status-glyphe ' + s.token.replace("--status-", "status-") + '">'
+    + HD.icon(s.glyphe) + "</span>";
+};
+
+// Dauer in Worten: Minuten, Stunden, Tage -- "4317 min" rechnet niemand um.
+// Ausgeschrieben, weil Abkuerzungen verboten sind (labels.js Regel 4).
+HD.dauer = function (minuten) {
+  if (typeof minuten !== "number" || !isFinite(minuten)) return null;
+  if (minuten < 1) return HD.W.dauerGerade;
+  if (minuten < 60) return HD.fuellen(HD.W.dauerMinuten, { n: minuten });
+  var stunden = Math.round(minuten / 60);
+  if (stunden < 24) return HD.fuellen(HD.W.dauerStunden, { n: stunden });
+  return HD.fuellen(HD.W.dauerTage, { n: Math.round(stunden / 24) });
+};
+
 // --- Zeile: EIN Rezept fuer alle Listenseiten ----------------------------
 // Titel und Untertitel uebereinander, Messwerte rechts, Status ganz rechts.
 // Nicht sieben Spalten nebeneinander: auf der schmalen Hauptflaeche wird das
@@ -282,66 +304,91 @@ HD.boardHTML = function (liste) {
 // wichtigsten offenen Punkte), Logbuch heute (was lief wann), Sitzungen,
 // Auftrag. Kennung bleibt "ueberblick".
 
-// Gesundheit: vier Haekchen aus ECHTEN Quellen -- Hooks, Messungsalter,
-// Server, Sicherung. Kein Haekchen ohne Messung dahinter.
+// Gesundheit: vier Pruefungen aus ECHTEN Quellen. DREI Zustaende, nicht zwei
+// [Befund 26.08.2026]: "nichts gemessen" darf nie aussehen wie "alles gut" --
+// eine beruhigende Falschaussage ist schlimmer als eine Warnung. Die Glyphe
+// kommt aus HD.statusChip (Baustein), nicht aus Unicode-Zeichen.
 HD.wGesundheit = function () {
   var z = HD.D.zahlen;
-  var hooksOk = HD.seitenEintraege("hooks").filter(function (e) { return e.status === "ok"; }).length;
-  var hooksAlle = HD.seitenEintraege("hooks").length;
+  var hooks = HD.seitenEintraege("hooks");
+  var hooksAbweichung = hooks.filter(function (e) { return e.status && e.status !== "ok"; }).length;
   var alterMin = Math.max(0, Math.round((Date.now() - Date.parse(HD.D.gemessenAm)) / 60000));
+  var alterLesbar = HD.dauer(alterMin);
   var zeilen = [
-    { ok: hooksOk === hooksAlle, text: HD.W.ccHooksGeladen, wert: hooksOk + "/" + hooksAlle, ziel: "hooks" },
-    { ok: alterMin <= 60, text: HD.fuellen(HD.W.ccMessungFrisch, { n: alterMin }), wert: HD.D.gemessenText.split(", ")[1] || "", ziel: null },
-    { ok: HD.serverModus(), text: HD.serverModus() ? HD.W.ccServerJa : HD.W.ccServerNein, wert: HD.serverModus() ? location.host : "", ziel: null },
-    { ok: z.reposOffen === 0,
-      text: z.reposOffen === 0 ? HD.W.ccSicherungOk : HD.fuellen(HD.W.ccSicherungLuecke, { n: z.reposOffen }),
-      wert: z.repos + " Repos", ziel: "backup" },
+    // Wort und Zahl beschreiben DASSELBE: die Zeile heisst jetzt, was sie misst.
+    { status: !hooks.length ? null : (hooksAbweichung === 0 ? "ok" : "hinweis"),
+      text: hooks.length ? HD.fuellen(HD.W.ccHooksOhneBefund, { n: hooks.length }) : HD.W.ccHooksKeine,
+      wert: hooks.length ? String(hooks.length) : "", ziel: "hooks" },
+    { status: alterLesbar === null ? null : (alterMin <= 60 ? "ok" : "hinweis"),
+      text: alterLesbar === null ? HD.W.ccMessungUnbekannt : HD.fuellen(HD.W.ccMessungFrisch, { dauer: alterLesbar }),
+      wert: HD.zeitpunkt(HD.D.gemessenAm), ziel: null },
+    { status: HD.serverModus() ? "ok" : "hinweis",
+      text: HD.serverModus() ? HD.W.ccServerJa : HD.W.ccServerNein,
+      wert: HD.serverModus() ? location.host : "", ziel: null },
+    { status: !z.repos ? null : (z.reposOffen === 0 ? "ok" : "hinweis"),
+      text: !z.repos ? HD.W.ccSicherungUnbekannt
+        : (z.reposOffen === 0 ? HD.fuellen(HD.W.ccSicherungOk, { n: z.repos })
+          : (z.reposOffen === 1 ? HD.W.ccSicherungLueckeEins : HD.fuellen(HD.W.ccSicherungLuecke, { n: z.reposOffen }))),
+      wert: z.repos ? String(z.repos) : "", ziel: "backup" },
   ];
-  return '<section class="widget"><h2 class="widget-titel">' + HD.esc(HD.W.ccGesundheit) + "</h2>"
-    + zeilen.map(function (r) {
-        var kern = '<span class="check-zeichen ' + (r.ok ? "check-ok" : "check-warn") + '">' + (r.ok ? "✓" : "!") + "</span>"
-          + '<span class="check-text">' + HD.esc(r.text) + "</span>"
-          + '<span class="check-wert mono">' + HD.esc(r.wert) + "</span>";
-        return r.ziel
-          ? '<button class="check-reihe" data-ziel="' + HD.esc(r.ziel) + '">' + kern + "</button>"
-          : '<div class="check-reihe">' + kern + "</div>";
-      }).join("") + "</section>";
+  var offenAn = HD.S.abschnitt["gruppe:" + HD.W.ccGesundheit] !== false;
+  var rumpf = zeilen.map(function (r) {
+    var kern = '<span class="check-glyphe">' + (r.status ? HD.statusGlyphe(r.status) : HD.icon("circle-dashed")) + "</span>"
+      + '<span class="check-text">' + HD.esc(r.text) + "</span>"
+      + '<span class="check-wert mono">' + HD.esc(r.wert) + "</span>";
+    return r.ziel
+      ? '<button class="check-reihe" data-ziel="' + HD.esc(r.ziel) + '">' + kern
+        + '<span class="zeilen-pfeil" aria-hidden="true">' + HD.icon("chevron-right") + "</span></button>"
+      : '<div class="check-reihe check-reihe-still">' + kern + "</div>";
+  }).join("");
+  return "<section>" + HD.gruppeHTML(HD.W.ccGesundheit, null, offenAn)
+    + (offenAn ? '<div class="widget-rumpf">' + rumpf + "</div>" : "") + "</section>";
 };
 
-// Logbuch heute: was lief, wann -- heute nur die Messung; der ehrliche Satz
-// zur fehlenden Automatik bleibt stehen, bis es sie gibt.
+// Logbuch: was lief, wann. Der Titel behauptet nicht mehr "heute" -- gezeigt
+// wird die letzte Messung, und die kann aelter sein [Befund 26.08.2026].
+// Der Leerzustand traegt eine HANDLUNG, keine blosse Feststellung.
 HD.wLogbuch = function () {
-  return '<section class="widget"><h2 class="widget-titel">' + HD.esc(HD.W.ccLogbuch) + "</h2>"
-    + '<div class="logbuch">'
-    + '<div class="logbuch-halt"><time class="mono">' + HD.esc((HD.D.gemessenText.split(", ")[1] || HD.D.gemessenText)) + "</time>"
-    + "<b>" + HD.esc(HD.W.ccMessungGelaufen) + "</b></div>"
-    + '<div class="logbuch-halt logbuch-leer"><time class="mono">—</time>'
-    + "<span>" + HD.esc(HD.W.ccKeinLauf) + "</span></div>"
-    + "</div></section>";
+  var offenAn = HD.S.abschnitt["gruppe:" + HD.W.ccLogbuch] !== false;
+  var rumpf = '<div class="logbuch">'
+    + '<div class="logbuch-halt"><time class="mono" datetime="' + HD.esc(HD.D.gemessenAm || "") + '">'
+    + HD.esc(HD.zeitpunkt(HD.D.gemessenAm)) + "</time>"
+    + "<b>" + HD.esc(HD.W.ccMessungGelaufen) + "</b></div></div>"
+    + '<p class="leer-kompakt">' + HD.esc(HD.W.ccKeinLauf) + " "
+    + '<button class="widget-link" data-ziel="hooks">' + HD.esc(HD.W.ccAutomatikZeigen) + "</button></p>";
+  return "<section>" + HD.gruppeHTML(HD.W.ccLogbuch, null, offenAn)
+    + (offenAn ? '<div class="widget-rumpf">' + rumpf + "</div>" : "") + "</section>";
 };
 
-// Deine drei: die wichtigsten offenen Punkte -- Abweichungen zuerst, dann
-// Dokument-Punkte. Klick oeffnet den Eintrag; der Fusslink fuehrt zur Breite.
+// Deine drei: die drei wichtigsten OFFENEN Punkte. Erledigtes wird
+// ausgeschlossen, nicht nur nach hinten sortiert [Befund 26.08.2026: das
+// Widget fuellte mit Erledigtem auf]. Rang kommt aus HD.D.status (Baustein),
+// nicht aus einer dritten eigenen Ordnung.
 HD.wDrei = function () {
-  var offene = HD.seitenEintraege("zutun");
-  var rang = { unlesbar: 0, befund: 1, fehlt: 2, hinweis: 3 };
+  var offene = HD.seitenEintraege("zutun").filter(function (e) {
+    return e.status && e.status !== "ok" && e.status !== "entfaellt";
+  });
   offene = offene.slice().sort(function (a, b) {
-    var ra = a.status in rang ? rang[a.status] : 9;
-    var rb = b.status in rang ? rang[b.status] : 9;
-    return ra - rb;
-  }).slice(0, 3);
-  var zeilen = offene.length
-    ? offene.map(function (e) {
+    var ra = (HD.D.status[a.status] || {}).rang;
+    var rb = (HD.D.status[b.status] || {}).rang;
+    return (rb == null ? -1 : rb) - (ra == null ? -1 : ra);
+  });
+  var gezeigt = offene.slice(0, 3);
+  var offenAn = HD.S.abschnitt["gruppe:" + HD.W.ccDrei] !== false;
+  var rumpf = gezeigt.length
+    ? gezeigt.map(function (e) {
         return '<button class="drei-zeile" data-id="' + HD.esc(e.id) + '">'
-          + '<span class="drei-kasten"></span>'
-          + '<span class="drei-text">' + HD.esc(e.name) + "</span>"
-          + (e.artWort ? '<span class="check-wert mono">' + HD.esc(e.artWort) + "</span>" : "")
+          + '<span class="drei-glyphe">' + HD.statusGlyphe(e.status) + "</span>"
+          + '<span class="drei-text" title="' + HD.esc(e.name) + '">' + HD.esc(e.name) + "</span>"
+          + '<span class="zeilen-pfeil" aria-hidden="true">' + HD.icon("chevron-right") + "</span>"
           + "</button>";
       }).join("")
     : HD.leerHTML("zutun");
-  return '<section class="widget widget-drei"><h2 class="widget-titel">' + HD.esc(HD.W.ccDrei)
-    + '<button class="widget-link" data-ziel="zutun">' + HD.esc(HD.W.ccAllesOffene) + " →</button></h2>"
-    + zeilen + "</section>";
+  return '<section class="achtung-widget">' + HD.gruppeHTML(HD.W.ccDrei, offene.length || null, offenAn)
+    + (offenAn ? '<div class="widget-rumpf">' + rumpf
+        + '<p class="sektion-fuss"><button class="widget-link" data-ziel="zutun">'
+        + HD.esc(HD.W.ccAllesOffene) + "</button></p></div>" : "")
+    + "</section>";
 };
 
 HD.ueberblickSeite = function () {

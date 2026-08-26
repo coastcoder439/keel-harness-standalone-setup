@@ -60,6 +60,13 @@ const SCHMAL = `
   .baum{width:100%;max-height:40dvh;border-right:0;border-bottom:1px solid var(--border)}
   .suchfeld{width:100%}
   .kennzahl-reihe{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* Control Center einspaltig: bei 375 px waeren die zwei Spalten rund 150
+     und 210 px breit -- die Widgets wuerden unlesbar gequetscht oder schoeben
+     die Seite waagerecht auf [Befund 26.08.2026]. */
+  .cc-raster{grid-template-columns:1fr}
+  .auftrag-feld select{max-width:none;width:100%}
+  .auftrag-zeile{flex-direction:column;align-items:stretch}
+  .auftrag-zeile .knopf-haupt{width:100%}
 }
 @media (min-width:768px) and (max-width:1023px){
   .detail{width:var(--detail-breite);max-width:var(--detail-breite)}
@@ -67,4 +74,59 @@ const SCHMAL = `
 `;
 
 
-module.exports = { BOARD_UND_PALETTE, SCHMAL };
+const CONTROL_CENTER = `
+/* Control Center: Widgets verdichten nach oben [Owner 25.08.2026]. */
+.cc-raster{display:grid;grid-template-columns:5fr 7fr;gap:14px;align-items:start}
+.cc-spalte{display:grid;gap:14px;min-width:0}
+/* Jede Stufe der Raster-Kette braucht min-width:0 -- sonst zwingt eine
+   nowrap-Zeile das Widget auf Maximalbreite (gemessen 26.08.: 3382 px). */
+.cc-spalte > *{min-width:0}
+.cc-voll{grid-column:1/-1;min-width:0}
+/* Widget-Rumpf: der Kopf ist HD.gruppeHTML (Baustein), der Rumpf die Karte.
+   Die Trennlinie kommt ueber :not(:first-child) -- :first-of-type traf je
+   Elementtyp und liess die Linie wandern, sobald eine Zeile klickbar wurde
+   [Befund 26.08.2026]. */
+.widget-rumpf{background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius-xl);padding:6px 16px;touch-action:manipulation}
+.widget-link{font-size:var(--text-micro);font-weight:500;color:var(--primary);
+  background:none;border:0;padding:2px 0;text-decoration:underline;text-underline-offset:2px}
+.widget-link:hover{color:var(--foreground)}
+.check-reihe{display:flex;gap:10px;align-items:center;width:100%;text-align:left;
+  padding:8px 0;font-size:var(--text-sm);font-weight:500;
+  border-radius:var(--radius-md);transition:background var(--dauer)}
+.check-reihe + .check-reihe{border-top:1px solid var(--border)}
+/* Klickbar sieht anders aus als still -- vorher waren beide identisch und der
+   Nutzer musste raten, welche Zeile reagiert [Befund 26.08.2026]. */
+.check-reihe:hover{background:color-mix(in srgb,var(--accent) 45%,transparent)}
+.check-reihe-still:hover{background:transparent}
+.check-reihe-still .zeilen-pfeil{display:none}
+.check-glyphe{flex:0 0 16px;width:16px;height:16px;display:grid;place-items:center}
+.check-text{flex:1 1 auto;min-width:0}
+.check-wert{flex:0 0 auto;font-size:var(--text-micro);color:var(--muted-foreground);
+  font-weight:400;font-variant-numeric:tabular-nums}
+.logbuch{position:relative;margin-left:5px;padding-left:20px}
+.logbuch::before{content:"";position:absolute;left:4px;top:8px;bottom:8px;width:2px;background:var(--border)}
+.logbuch-halt{position:relative;padding:6px 0}
+.logbuch-halt::before{content:"";position:absolute;left:-20px;top:12px;width:10px;height:10px;
+  border-radius:var(--radius-pille);background:var(--primary);
+  border:2px solid var(--card);box-shadow:0 0 0 1px var(--primary)}
+.logbuch-halt.logbuch-leer::before{background:var(--card);box-shadow:0 0 0 1px var(--muted-foreground)}
+.logbuch-halt time{display:block;font-size:var(--text-micro);color:var(--muted-foreground)}
+.logbuch-halt.logbuch-leer span{color:var(--muted-foreground)}
+/* Die Aufmerksamkeits-Flaeche traegt den Warnton -- aber KEIN Kaestchen mehr:
+   das sah aus wie eine Checkbox und navigierte weg [Befund 26.08.2026]. */
+.achtung-widget .widget-rumpf{border-color:color-mix(in srgb,var(--status-hinweis) 45%,var(--border));
+  border-left:3px solid var(--status-hinweis);
+  background:color-mix(in srgb,var(--status-hinweis) 8%,var(--card))}
+.drei-zeile{display:flex;gap:11px;align-items:center;width:100%;text-align:left;
+  padding:8px 0;font-size:var(--text-sm);font-weight:500;
+  border-radius:var(--radius-md);transition:background var(--dauer)}
+.drei-zeile + .drei-zeile{border-top:1px solid var(--border)}
+.drei-zeile:hover{background:color-mix(in srgb,var(--accent) 45%,transparent)}
+.drei-glyphe{flex:0 0 16px;width:16px;height:16px;display:grid;place-items:center}
+.drei-text{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Sitzung: "arbeitet gerade" ist ein Laufzustand, kein Pruefergebnis --
+   deshalb eigenes Wort statt des Status-Chips [Befund 26.08.2026]. */
+.sitzung-laeuft{flex:0 0 auto;font-size:var(--text-xs);color:var(--status-ok);font-weight:500}`;
+
+module.exports = { BOARD_UND_PALETTE, SCHMAL, CONTROL_CENTER };

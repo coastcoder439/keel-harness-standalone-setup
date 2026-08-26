@@ -175,7 +175,10 @@ function scanSessions(root, opts = {}) {
   for (const f of fs.readdirSync(dir).filter((n) => n.endsWith(".jsonl"))) {
     const full = path.join(dir, f);
     const st = fs.statSync(full);
-    const title = readSessionTitle(full, 512 * 1024) || f.replace(/\.jsonl$/, "");
+    // Ohne eigenen Titel bleibt title LEER -- die Anzeige entscheidet dann,
+    // was ein Mensch stattdessen liest. Eine rohe Sitzungs-Kennung als Name
+    // auszugeben ist Maschinen-Ausgabe [Abnahme 26.08.2026].
+    const title = readSessionTitle(full, 512 * 1024) || "";
     const ageMin = (Date.now() - st.mtimeMs) / 60000;
     const role = roles[title] || null;
     out.push({
