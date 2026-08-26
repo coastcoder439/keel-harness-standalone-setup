@@ -8,7 +8,8 @@
 // (arXiv 2605.10039: Compliance sinkt mit Session-Fortschritt; Anthropic:
 // spaete Position im Kontext verbessert Befolgung). Dieser Hook setzt die
 // Kurzform an den WIRKZEITPUNKT: direkt vor die Antwort, jede Runde.
-// Kosten: ~330 Zeichen je Turn. Langfassung bleibt der Skill i-have-adhd.
+// Kosten: ~1,7 KB je Turn (gemessen 26.08.2026, inkl. Abruf-Werkzeug-Index).
+// Langfassung bleibt der Skill i-have-adhd; Volltexte der Werkzeuge laden auf Abruf.
 
 const KURZFORM =
   "Antwortform (gilt fuer JEDE Antwort, Kurzform des Skills i-have-adhd): " +
@@ -25,7 +26,16 @@ const KURZFORM =
   "einen Plan im Paket; breite Recherche/Pruefung laeuft als parallele Agenten oder Workflow, " +
   "nicht als Einzelgriff. Jede Antwort endet mit dem naechsten Arbeitsauftrag samt Besitzer " +
   "(ich/du) und Empfehlung — und was bei MIR liegt und entschieden ist, fuehre ich AUS, " +
-  "statt es zurueckzugeben.";
+  "statt es zurueckzugeben. " +
+  // Ein-Satz-Index der Abruf-Werkzeuge [Owner 26.08.2026]: Injektion ist der einzige
+  // deterministische Ausloeser — der Skill-Katalog ist nur ein Relevanz-Wettbewerb
+  // (Beleg docs/packages/skill-invocation-diagnose.md). Volltexte laden per Skill-Aufruf.
+  "Abruf-Werkzeuge (Volltext laedt der jeweilige Skill-Aufruf): completeness = Audit vor " +
+  "jeder Fertig-/bau-bereit-Aussage und Uebergabe · save-work = ungesicherte Arbeit dieses " +
+  "Kontexts committen+pushen · repo-status = Git-Stand Harness+Projekte vs GitHub · " +
+  "session-map = alle Sessions, Rollen, Repo-Stand · tell-session = Befund/Uebergabe an " +
+  "eine andere Session · gauntlet-loop = Qualitaetsschleife Bau/Design gegen messbare " +
+  "Latte · onboarding = einmalig nach frischer Installation.";
 
 // --- Auftraege der Kommandobruecke zustellen (Wirkzeitpunkt-Zustellung) -----
 // bridge.html schreibt .claude/orders/<ts>.json {target, text}; dieser Hook
@@ -78,7 +88,8 @@ if (process.argv.includes("--selbsttest")) {
   const f1 =
     aus.hookSpecificOutput.hookEventName === "UserPromptSubmit" &&
     aus.hookSpecificOutput.additionalContext.includes("Antwort zuerst") &&
-    aus.hookSpecificOutput.additionalContext.includes("Geprueft gegen");
+    aus.hookSpecificOutput.additionalContext.includes("Geprueft gegen") &&
+    aus.hookSpecificOutput.additionalContext.includes("Abruf-Werkzeuge");
   const zugestellt = [];
   const deps = {
     ordersDir: "orders",
