@@ -23,6 +23,18 @@ function msysPfad(p) {
 }
 
 const ARBEITS_TOOLS = new Set(["Write", "Edit", "NotebookEdit"]);
+// Commit-Erkennung SHELL-UNABHAENGIG [Fix 27.08.2026, Audit-Befund]: die alte Fassung
+// prueste nur `b.name === "Bash"`. Diese Werkbank faehrt PowerShell als Primaer-Shell --
+// jeder Commit darueber entkam dem Waechter vollstaendig. Jetzt zaehlt der Kommando-
+// STRING in irgendeinem Feld des Tool-Inputs, gleich welches Werkzeug ihn ausfuehrt.
+const COMMIT_MUSTER = /\bgit\b[^\n]{0,400}\bcommit\b/;
+function istCommit(input) {
+  if (!input || typeof input !== "object") return false;
+  for (const wert of Object.values(input)) {
+    if (typeof wert === "string" && COMMIT_MUSTER.test(wert)) return true;
+  }
+  return false;
+}
 const DOD_GEPRUEFT = /gepr(ue|ü)ft gegen\s*:/i;
 const DOD_OFFEN = /\boffen\s*:/i;
 
@@ -54,22 +66,25 @@ function pruefen(eintraege) {
       if (!b) continue;
       if (b.type === "tool_use") {
         if (ARBEITS_TOOLS.has(b.name)) arbeit = true;
-        else if (b.name === "Bash" && /\bgit\b[^\n]*\bcommit\b/.test(String((b.input && b.input.command) || ""))) arbeit = true;
+        else if (istCommit(b.input)) arbeit = true;
       } else if (b.type === "text" && b.text && b.text.trim()) {
         schlussText = b.text;
       }
     }
   }
   if (!arbeit) return null;
-  if (!schlussText) return null; // kein Text zu pruefen -- nicht Aufgabe dieses Waechters
+  // Frueher stand hier "ohne Schlusstext -> frei". Das liess jeden Arbeits-Turn durch,
+  // der ohne Abschlussmeldung endete [Fix 27.08.2026].
+  if (!schlussText) return HINWEIS;
   if (DOD_GEPRUEFT.test(schlussText) && DOD_OFFEN.test(schlussText)) return null;
-  return (
-    "Dieser Turn hat Dateien geschrieben oder committet, aber die Schluss-Nachricht " +
-    "traegt kein Definition-of-Done-Format. Ergaenze am Ende der Meldung zwei Zeilen: " +
-    '"Geprueft gegen: <Quellen/Tests/Kommandos>" und "Offen: <Liste oder nichts>". ' +
-    "(working-method.md; Format statt Fertig-Behauptung.)"
-  );
+  return HINWEIS;
 }
+
+const HINWEIS =
+  "Dieser Turn hat Dateien geschrieben oder committet, aber die Schluss-Nachricht " +
+  "traegt kein Definition-of-Done-Format. Ergaenze am Ende der Meldung zwei Zeilen: " +
+  '"Geprueft gegen: <Quellen/Tests/Kommandos>" und "Offen: <Liste oder nichts>". ' +
+  "(working-method.md; Format statt Fertig-Behauptung.)";
 
 // --- Selbsttest: Fixtures in-memory ---
 if (process.argv.includes("--selbsttest")) {
@@ -77,6 +92,7 @@ if (process.argv.includes("--selbsttest")) {
   const toolResult = () => ({ type: "user", message: { content: [{ type: "tool_result", content: "ok" }] } });
   const edit = () => ({ type: "assistant", message: { content: [{ type: "tool_use", name: "Edit", input: {} }] } });
   const bash = (cmd) => ({ type: "assistant", message: { content: [{ type: "tool_use", name: "Bash", input: { command: cmd } }] } });
+  const ps = (cmd) => ({ type: "assistant", message: { content: [{ type: "tool_use", name: "PowerShell", input: { command: cmd, description: "x" } }] } });
   const text = (t) => ({ type: "assistant", message: { content: [{ type: "text", text: t }] } });
   const DOD = "Alles gebaut.\nGeprueft gegen: Tests 5/5\nOffen: nichts";
   const faelle = [
@@ -86,6 +102,10 @@ if (process.argv.includes("--selbsttest")) {
     ["keine Arbeit -> frei", [user("was ist X?"), text("X ist Y.")], false],
     ["Arbeit, Umlaut-Form -> frei", [user("bau"), edit(), toolResult(), text("Done.\nGeprüft gegen: Lauf\nOffen: A")], false],
     ["git status ist keine Arbeit -> frei", [user("status?"), bash("git status"), toolResult(), text("Sauber.")], false],
+    ["PowerShell-Commit ohne DoD -> BLOCK", [user("sichern"), ps('git commit -m "x" -- a.md; git push'), toolResult(), text("Gesichert.")], true],
+    ["PowerShell-Commit mit DoD -> frei", [user("sichern"), ps('git commit -m "x" -- a.md'), toolResult(), text(DOD)], false],
+    ["Arbeit ohne Schlusstext -> BLOCK", [user("bau"), edit(), toolResult()], true],
+    ["PowerShell ohne Commit -> frei", [user("liste"), ps("Get-ChildItem"), toolResult(), text("Fuenf Dateien.")], false],
   ];
   let fehler = 0;
   for (const [name, eintraege, sollBlock] of faelle) {
