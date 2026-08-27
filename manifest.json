@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-27T12:25:32.460Z",
+  "gebautAm": "2026-08-27T12:30:41.615Z",
   "posten": 99,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -260,8 +260,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 2498,
-      "sha256": "753a5ec05e1f6f4f"
+      "bytes": 2678,
+      "sha256": "e15581801b989d25"
     },
     {
       "datei": "payload/claude/session-roles.js",
