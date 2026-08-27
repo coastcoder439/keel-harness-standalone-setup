@@ -36,6 +36,11 @@ HD.S = {
   bearbeitet: null,
   entwurf: null,
   entwurfStart: null,
+  // Das Dokument im rechten Panel [Owner-Wunsch W8, Slice 4]. Unabhaengig von
+  // der Seite und von HD.S.auswahl: alles Datei-artige -- Arbeitspaket, Hook,
+  // Regel, Befehl, Datei -- oeffnet DIESELBE volle Ansicht, ohne dass der
+  // Klick den Nutzer aus seinem Zusammenhang wirft.
+  dokument: null,
 };
 
 // --- Speicher (mit Praefix, siehe shell.js) ------------------------------
@@ -655,6 +660,45 @@ HD.oeffnen = function (id) {
   else { HD.S.auswahl = id; HD.adresseSchreiben(false); HD.zeichnen(); }
 };
 
+// EIN Dokument rechts oeffnen, ohne die Seite zu verlassen [W8]. Der Weg zur
+// vollen Dateiansicht bleibt: der Vergroessern-Knopf im Panel fuehrt hinueber.
+HD.dokumentOeffnen = function (pfad) {
+  if (!pfad) return;
+  if (!HD.entwurfFreigeben()) return;
+  HD.S.dokument = pfad;
+  HD.S.vollbild = false;
+  HD.zeichnen();
+};
+
+HD.dokumentSchliessen = function () {
+  HD.S.dokument = null;
+  HD.S.bearbeitet = null;
+  HD.zeichnen();
+};
+
+// Der synthetische Eintrag fuer ein beliebiges Dokument: dieselbe Form, die
+// detailKoerper von jedem Datei-Eintrag erwartet. Kennt der Datensatz die
+// Datei bereits (Dateien-Seite), gewinnt der gemessene Eintrag -- er traegt
+// Beschreibung, Art und Belege.
+HD.dokumentEintrag = function (pfad) {
+  var vorhanden = HD.eintragMit("datei:" + pfad);
+  if (vorhanden) return vorhanden;
+  var name = String(pfad).split("/").pop();
+  return {
+    id: "datei:" + pfad,
+    seite: "dateien",
+    name: name,
+    pfad: pfad,
+    art: "datei",
+    artWort: null,
+    status: null,
+    liste: [],
+    felder: [],
+    beschreibung: { text: null, quelle: null, beleg: null },
+    inhalt: { aufAbruf: true },
+  };
+};
+
 HD.dateiWaehlen = function (pfad) {
   if (!HD.entwurfFreigeben()) return;
   HD.S.seite = "dateien";
@@ -667,6 +711,11 @@ HD.dateiWaehlen = function (pfad) {
 
 HD.schliessen = function () {
   if (HD.S.vollbild) { HD.S.vollbild = false; HD.zeichnen(); return true; }
+  if (HD.S.dokument) {
+    if (HD.S.bearbeitet != null && !HD.entwurfFreigeben()) return true;
+    HD.dokumentSchliessen();
+    return true;
+  }
   // Escape mit offenem Editor: erst fragen. Sonst raeumt die Taste, die man
   // druecken WILL, um ein Panel loszuwerden, den getippten Text mit weg.
   if (HD.S.bearbeitet != null && !HD.entwurfFreigeben()) return true;

@@ -255,7 +255,9 @@ function daten(m, regelDaten) {
     tabgruppen: W.TABGRUPPEN,
     // Was ein Ereignisname bedeutet -- die Anzeige setzt ihn unter den
     // Gruppenkopf, damit ueber einer Gruppe nicht nur ein Fachwort steht.
-    ereignisErklaerung: W.EREIGNIS_ERKLAERUNG,
+    // Eine Map je Gruppen-Name -- die Anzeige fragt nur nach dem Namen und
+    // weiss nicht, aus welcher Seite er stammt.
+    ereignisErklaerung: Object.assign({}, W.EREIGNIS_ERKLAERUNG, W.KONTEXTART_ERKLAERUNG),
     status: STATUS,
     gesamtstatus: m.gesamtstatus,
     zahlen,

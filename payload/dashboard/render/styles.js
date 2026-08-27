@@ -149,7 +149,10 @@ const MASSE = {
   "--board-rail": "52px",
   "--zeile-baum": "36px",
   "--zeile-tabelle": "36px",
-  "--zeile-eintrag": "44px",
+  // Kompakt statt komfortabel [ui-standard-werkzeug, Dichte]: ein Werkzeug
+  // zeigt Bestand, keine Broschuere. 36 statt 44 Bildpunkte Mindesthoehe --
+  // ueber der Mindest-Klickflaeche, aber ohne Luft zwischen den Zeilen.
+  "--zeile-eintrag": "36px",
   "--einzug-stufe": "24px",
   "--spalte-min": "96px",
   "--label-breite": "96px",
@@ -324,7 +327,9 @@ const SEITENLEISTE = `
   font-size:var(--text-xs);color:var(--sidebar-foreground);width:100%}
 .leiste-knopf:hover{background:color-mix(in srgb,var(--sidebar-accent) 50%,transparent)}
 .leiste-leise{color:var(--muted-foreground)}
-.ikon-knopf{width:28px;height:28px;flex:0 0 28px;display:grid;place-items:center;
+/* 32 statt 28: die Mindest-Klickflaeche eines Bedienelements
+   [docs/ui-standard-werkzeug.md]. Das Symbol darin bleibt gleich gross. */
+.ikon-knopf{width:32px;height:32px;flex:0 0 32px;display:grid;place-items:center;
   border-radius:var(--radius-md);color:var(--muted-foreground)}
 .ikon-knopf:hover{background:color-mix(in srgb,var(--accent) 50%,transparent);color:var(--foreground)}
 body[data-leiste="eingeklappt"] .nav-text,
@@ -384,7 +389,12 @@ const GERUEST = `
   .seiten-kopf{margin-bottom:16px}
 }
 .werkzeugleiste{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px}
-.suchfeld{width:256px;height:32px;padding:0 10px;border:1px solid var(--input);
+/* Die Lupe sitzt IM Feld, nicht daneben: sie ist das Erkennungszeichen der
+   Suche und bleibt sichtbar, wenn der Platzhalter beim Tippen verschwindet. */
+.suchfeld-huelle{position:relative;display:inline-flex;align-items:center}
+.suchfeld-huelle > svg{position:absolute;left:9px;width:15px;height:15px;
+  color:var(--muted-foreground);pointer-events:none}
+.suchfeld{width:256px;height:32px;padding:0 10px 0 30px;border:1px solid var(--input);
   border-radius:var(--radius-md);background:var(--card);color:var(--foreground);font-size:var(--text-compact)}
 .suchfeld::placeholder{color:var(--muted-foreground)}
 .filter-chip{height:28px;padding:0 10px;border:1px solid var(--input);border-radius:var(--radius-pille);
@@ -404,7 +414,7 @@ const LISTEN = `
 .eintrag-liste{border:1px solid var(--border);border-radius:var(--radius-lg);
   background:var(--card);overflow:hidden}
 .eintrag-zeile{display:flex;align-items:center;gap:12px;min-height:var(--zeile-eintrag);
-  padding:8px 16px;border-bottom:1px solid var(--border);width:100%;text-align:left;
+  padding:5px 16px;border-bottom:1px solid var(--border);width:100%;text-align:left;
   font-size:var(--text-sm);transition:background var(--dauer)}
 .eintrag-zeile:last-child{border-bottom:0}
 .eintrag-zeile:hover{background:color-mix(in srgb,var(--accent) 50%,transparent)}

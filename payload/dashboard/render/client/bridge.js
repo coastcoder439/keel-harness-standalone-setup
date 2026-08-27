@@ -35,7 +35,7 @@ HD.bridgeLade = function (erzwingen) {
   if (!HD.serverModus()) return;
   if (HD._bridgeLaedt) return;
   if (HD.bridgeData && !erzwingen) return;
-  if (["ueberblick", "zutun", "hooks", "automatik"].indexOf(HD.S.seite) < 0) return;
+  if (["ueberblick", "zutun", "hooks", "automatik", "projekte"].indexOf(HD.S.seite) < 0) return;
   HD._bridgeLaedt = true;
   fetch("/bridge/data").then(function (r) { return r.json(); }).then(function (d) {
     HD.bridgeData = d;
@@ -294,6 +294,93 @@ HD.auftragVerlaufHTML = function () {
     + "</div>";
 };
 
+// --- Ein Projekt und was an ihm haengt [Owner 27.08.2026] ------------------
+// Die Projektliste zeigte rechts Dokumentzahlen -- eine Zahl, die keine Frage
+// beantwortet, die ein Mensch stellt. Gefragt wird zweierlei: welche
+// Arbeitspakete liegen hier in welchem Stand, und arbeitet gerade jemand
+// daran. Beides ist bereits gemessen (bridge.js scanPackages liefert repo,
+// scanSessions liefert project) -- es stand nur nicht in der Anzeige.
+
+// Alle Pakete eines Repos. Der Repo-Name der Bruecke ist der Ordnername --
+// derselbe, den die Projektliste als Namen fuehrt.
+HD.projektPakete = function (repo) {
+  var d = HD.bridgeData;
+  if (!d || d.error) return null;
+  return (d.packages || []).filter(function (p) { return p.repo === repo; });
+};
+
+// Der Stand in EINEM Satz. Ein Paket gilt als abgeschlossen, wenn es Schritte
+// hat und alle gesetzt sind -- dieselbe Regel wie im Kanban, nicht eine zweite.
+HD.projektPaketSatz = function (repo) {
+  var pakete = HD.projektPakete(repo);
+  if (!pakete) return null;
+  if (!pakete.length) return HD.W.projektKeinePakete;
+  var fertig = pakete.filter(function (p) {
+    return p.totalSteps > 0 && p.doneSteps === p.totalSteps;
+  }).length;
+  var offen = pakete.length - fertig;
+  if (pakete.length === 1) {
+    return HD.fuellen(HD.W.projektPaketeEins, {
+      stand: offen ? HD.W.kanbanOffen.toLowerCase() : HD.W.kanbanFertig.toLowerCase(),
+    });
+  }
+  if (!offen) return HD.fuellen(HD.W.projektPaketeAlleFertig, { gesamt: pakete.length });
+  return HD.fuellen(HD.W.projektPaketeOffen, { offen: offen, gesamt: pakete.length });
+};
+
+// Sitzungen, deren Rolle auf dieses Repo zeigt. projectForRole hat das bereits
+// server-seitig aus docs/08-sessions-rollen.md gelesen -- hier wird nur
+// gefiltert, nichts geraten.
+HD.projektSitzungen = function (repo) {
+  var d = HD.bridgeData;
+  if (!d || d.error) return null;
+  return (d.sessions || []).filter(function (s) {
+    return s.project && s.project.repo === repo;
+  });
+};
+
+HD.projektSitzungSatz = function (repo) {
+  var sitzungen = HD.projektSitzungen(repo);
+  if (!sitzungen) return null;
+  var laufend = sitzungen.filter(function (s) { return s.active; });
+  if (!laufend.length) return HD.W.projektKeineSitzung;
+  if (laufend.length === 1) return HD.W.projektSitzungEine;
+  return HD.fuellen(HD.W.projektSitzungen, { n: laufend.length });
+};
+
+// Die Sitzungen eines Projekts als eigene Sektion im Projekt-Detail. Dieselben
+// Karten wie im Control Center -- ein Ding, eine Form.
+HD.projektSitzungenSektion = function (repo) {
+  return HD.liveSektion(HD.W.projektSitzungenTitel, null, function (d) {
+    var eigene = (d.sessions || []).filter(function (s) {
+      return s.project && s.project.repo === repo;
+    });
+    if (!eigene.length) return HD.leerHTML("projekt-sitzungen");
+    var name = function (s) { return s.title || HD.W.sitzungOhneTitel; };
+    var laufend = eigene.filter(function (s) { return s.active; });
+    var ruhend = eigene.filter(function (s) { return !s.active; });
+    var karten = laufend.map(function (s) {
+      return '<div class="sitzung-karte">'
+        + '<span class="sitzung-punkt" aria-hidden="true"></span>'
+        + '<span class="sitzung-haupt">'
+        + '<span class="sitzung-titel" title="' + HD.esc(name(s)) + '">' + HD.esc(name(s)) + "</span>"
+        + (s.role ? '<span class="sitzung-rolle" title="' + HD.esc(s.role) + '">' + HD.esc(s.role) + "</span>" : "")
+        + "</span>"
+        + '<span class="sitzung-laeuft">' + HD.esc(HD.W.sitzungLaeuft) + "</span>"
+        + "</div>";
+    }).join("");
+    var ruhendHTML = ruhend.length
+      ? '<div class="eintrag-liste">' + ruhend.map(function (s) {
+          return '<div class="eintrag-zeile"><span class="eintrag-haupt"><span class="eintrag-titel">'
+            + HD.esc(name(s)) + "</span></span>"
+            + '<span class="eintrag-schluss mono">' + HD.esc(HD.zeitpunkt(s.lastActivity)) + "</span>"
+            + "</div>";
+        }).join("") + "</div>"
+      : "";
+    return (karten ? '<div class="sitzung-reihe">' + karten + "</div>" : "") + ruhendHTML;
+  });
+};
+
 // --- Arbeitspakete (Zu tun) -----------------------------------------------
 HD.paketeSektion = function () {
   var anzahl = ((HD.bridgeData || {}).packages || []).length;
@@ -417,7 +504,7 @@ HD.paketKanban = function (repo) {
 // Weg, wie man es einrichtet (ein Leerzustand ohne Handlung ist eine
 // Sackgasse, ui-standard Punkt 4).
 HD.automatikSektion = function () {
-  return HD.liveSektion(HD.D.seiten.automatik.name, null, function (d) {
+  return HD.liveSektion(HD.W.automatikLaeufe, null, function (d) {
     var a = d.automatik || {};
     var laeufe = a.laeufe || [];
     if (laeufe.length) {
@@ -510,7 +597,7 @@ HD.bridgeClick = function (ev) {
   // Kanban-Karte -> das volle Dokument des Arbeitspakets, in derselben
   // Dokumentansicht wie jede andere Datei [Owner-Wunsch W8].
   if (t.dataset.bridgeDoc) {
-    HD.dateiWaehlen(t.dataset.bridgeDoc);
+    HD.dokumentOeffnen(t.dataset.bridgeDoc);
     return true;
   }
 
