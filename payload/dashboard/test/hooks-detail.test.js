@@ -48,6 +48,9 @@ const ERWARTETE_REIHENFOLGE = [
   "commit-pathspec-guard.js",
   "write-guard.js",
   "sessionpost-guard.js",
+  // paket-gate.js seit 27.08.2026 (Harness Control, Owner-Freigabe): erzwingt vor
+  // der ersten Schreibung die Zuordnung zu einem Arbeitspaket.
+  "paket-gate.js",
 ];
 
 // Marker je Wirkungs-Code: die Beleg-Zeile MUSS einen davon enthalten.
@@ -60,21 +63,21 @@ const WIRKUNG_MARKER = {
 // ---------------------------------------------------------------------------
 // Bestand und Reihenfolge
 // ---------------------------------------------------------------------------
-test("zwoelf Eintraege, in der Reihenfolge von settings.json", () => {
+test("dreizehn Eintraege, in der Reihenfolge von settings.json", () => {
   assert.deepStrictEqual(ergebnis.fehler, [], "kein Messfehler erwartet");
-  assert.strictEqual(ergebnis.eintraege.length, 12);
+  assert.strictEqual(ergebnis.eintraege.length, 13);
   assert.deepStrictEqual(ergebnis.eintraege.map((e) => e.skript), ERWARTETE_REIHENFOLGE);
   const zeilen = ergebnis.eintraege.map((e) => e.settingsZeile);
   const sortiert = [...zeilen].sort((a, b) => a - b);
   assert.deepStrictEqual(zeilen, sortiert, "settingsZeile muss monoton steigen");
 });
 
-test("Ereignisse: SessionStart 4, UserPromptSubmit 1, Stop 2, PreToolUse 5", () => {
+test("Ereignisse: SessionStart 4, UserPromptSubmit 1, Stop 2, PreToolUse 6", () => {
   const nach = (ev) => ergebnis.eintraege.filter((e) => e.ereignis === ev).length;
   assert.strictEqual(nach("SessionStart"), 4);
   assert.strictEqual(nach("UserPromptSubmit"), 1);
   assert.strictEqual(nach("Stop"), 2);
-  assert.strictEqual(nach("PreToolUse"), 5);
+  assert.strictEqual(nach("PreToolUse"), 6);
   assert.strictEqual(nach("SessionStart") + nach("UserPromptSubmit") + nach("Stop") + nach("PreToolUse"), ergebnis.eintraege.length);
 });
 

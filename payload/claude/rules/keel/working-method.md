@@ -1,7 +1,10 @@
 # Arbeitsweise — Zieldefinition, zwei Abschluss-Messungen
 
 Vor der Arbeit die Zieldefinition in drei Saetzen: **Problem** (was ist konkret kaputt) ·
-**Intent** (warum es getan wird) · **Goal** (der pruefbare Zielzustand). Schleife je
+**Intent** (warum es getan wird) · **Goal** (der pruefbare Zielzustand). Dann die
+**Zuordnung**: gehoert diese Arbeit in ein BESTEHENDES Paket oder braucht sie ein neues?
+[Owner 27.08.2026] — der `paket-gate` blockt die erste Schreibung, solange die Frage
+offen ist, und nennt Kandidaten. Schleife je
 Arbeitspaket: Zieldefinition → Plan → Bau → Verify → Ship; sichern per Push ist immer erlaubt.
 **Verify bei UI-Code heisst: echter Screenshot im Browser gegen `docs/ui-standard.md`
 geprueft** [Owner, 25.08.2026: "du hast anscheinend keine optische Abnahme gemacht"] —
