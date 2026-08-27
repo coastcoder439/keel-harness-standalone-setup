@@ -1,6 +1,6 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-26T23:53:03.944Z",
+  "gebautAm": "2026-08-27T00:48:44.191Z",
   "posten": 95,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
@@ -244,16 +244,16 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 385,
-      "sha256": "dfcc25c85af249f8"
+      "bytes": 1201,
+      "sha256": "5aa75e6210faa22f"
     },
     {
       "datei": "payload/claude/rules/keel/working-method.md",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 2021,
-      "sha256": "317972364cb17730"
+      "bytes": 2280,
+      "sha256": "eb1cda6b4ff04f46"
     },
     {
       "datei": "payload/claude/session-roles.js",
@@ -732,8 +732,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 846,
-      "sha256": "1fa6a786174be5aa"
+      "bytes": 1602,
+      "sha256": "d6f18c0ca4fa3ae3"
     },
     {
       "datei": "payload/docs/rebuild-guide.md",

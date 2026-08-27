@@ -12,7 +12,10 @@ Blocker, kein uebersprungener Schritt.
 24.08.2026]: `<projekt-repo>/docs/packages/<paket>.md` — Projekt-Arbeit unter
 `user-projects/<name>/docs/packages/` (landet mit dem Projekt auf GitHub), Werkbank-Arbeit
 in der Werkbank `docs/packages/`. Format: Vorlage `docs/packages/TEMPLATE.md` (PIG · Plan ·
-Stand · DoD); angelegt beim Planen, nachgefuehrt bei jedem Paket-Abschluss. Ein Plan,
+Status · Abnahme · Abschluss); angelegt beim Planen, nachgefuehrt bei jedem
+Paket-Abschluss. **Ein Paket wird nur geloescht, wenn `Offen:` leer ist UND alle
+Plan-Haken gesetzt sind** [Owner 27.08.2026: Commit cea6dbd loeschte acht Pakete als
+„fertig", sechs davon trugen offene Owner-Handlungen, die danach nur noch in git lebten]. Ein Plan,
 den der Owner nicht sehen kann, existiert nicht — und die Kommandobruecke liest alle
 Pakete ueber genau diese eine Struktur. **Fertig-Massstab des Harness** [Owner]:
 `docs/harness-issues.md` ist leer — offene ARBEIT lebt in Paket-Artefakten, nicht in Issue-Prosa.
