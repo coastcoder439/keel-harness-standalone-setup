@@ -597,7 +597,6 @@ const UI = {
   nichtErreichbarHilfe: "Läuft der Server? Starten mit: node dashboard/serve.js",
   selbsttestLaeuft: "läuft …",
   selbsttestHinweis: "Wähle einen Guard, um seinen Selbsttest zu starten.",
-  // Projekt-Uebersicht [Owner 27.08.2026]: Paketstand und Sitzung statt Dokumentzahl.
   projektPaketeOffen: "{offen} von {gesamt} Arbeitspaketen offen",
   projektPaketeAlleFertig: "{gesamt} Arbeitspakete, alle abgeschlossen",
   projektPaketeEins: "1 Arbeitspaket, {stand}",
@@ -609,12 +608,16 @@ const UI = {
   projektFilterAktive: "Mit Sitzung",
   projektFilterPakete: "Mit offenen Paketen",
   projektFilterLuecke: "Mit Sicherungslücke",
+  werkzeugSatzDa: "Der Befehl {befehl} ist vorhanden{fundort}.{herkunft}",
+  werkzeugSatzFehlt: "Der Befehl {befehl} fehlt{fundort}.{herkunft}",
+  werkzeugFundort: " ({ort})",
+  baumOhneZahl: "eigene Repos",
+  baumNichtGezaehlt: "Eigene Repos werden nicht mitgezählt — jedes hat seinen eigenen Verlauf und seine eigene Sicherung.",
   werkbankUnter: "Die Werkbank selbst — hier liegen die Arbeitspakete dieses Workspace.",
   projektSitzungen: "{n} Sitzungen arbeiten hier",
   projektSitzungEine: "1 Sitzung arbeitet hier",
   projektKeineSitzung: "Keine Sitzung zugeordnet",
   projektSitzungenTitel: "Sitzungen an diesem Projekt",
-  // Die drei Reiter der Projektseite [01-product.md].
   projektReiterPakete: "Arbeitspakete",
   projektReiterSicherung: "Sicherung",
   projektReiterVerlauf: "Verlauf",
@@ -699,8 +702,7 @@ const UI = {
   ccKeinLauf: "Es läuft nichts automatisch.",
   ccAutomatikZeigen: "Automatik ansehen",
   ccAllesOffene: "Alles Offene ansehen",
-  // Der Weg in die Tiefe im Kopf jedes Widgets [01-product.md: "nichts
-  // existiert nur oben"].
+  // Weg in die Tiefe je Widget [01-product.md].
   ccZuHarness: "Harness",
   ccZuAutomatik: "Automatik",
   ccZuProjekte: "Projekte",

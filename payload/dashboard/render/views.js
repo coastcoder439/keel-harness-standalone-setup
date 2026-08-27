@@ -623,6 +623,27 @@ function commitEintraege(m) {
   }));
 }
 
+// Aus der Strichkette der Erhebung wird ein Satz [Audit-Befund B16]. Die
+// Bestandteile bleiben unveraendert -- "`gh` -- ja (`gh` in `C:\...`) --
+// offiziell" ist eine Notiz, kein Satz, und die Oberflaeche zeigt Saetze
+// [ui-standard Punkt 1]. Passt das Muster nicht, bleibt der Text wie gemessen.
+function werkzeugSatz(roh) {
+  const text = String(roh || "").trim();
+  if (!text) return null;
+  const teile = text.split(/\s+[—-]\s+/);
+  if (teile.length < 2) return text;
+  const befehl = teile[0].replace(/`/g, "").trim();
+  const da = teile[1].trim().toLowerCase().indexOf("ja") === 0;
+  const fundort = (teile[1].match(/\(([^)]*)\)/) || [])[1];
+  const herkunft = teile.slice(2).join(" ").replace(/`/g, "").trim();
+  const satz = fuellen(da ? UI.werkzeugSatzDa : UI.werkzeugSatzFehlt, {
+    befehl,
+    fundort: fundort ? fuellen(UI.werkzeugFundort, { ort: String(fundort).replace(/`/g, "") }) : "",
+    herkunft: herkunft ? " " + herkunft + "." : "",
+  });
+  return satz.replace(/\s+/g, " ").replace(/\s+\./g, ".").trim();
+}
+
 function werkzeugEintraege(m) {
   const g = ((m.bereiche && m.bereiche.bestand && m.bereiche.bestand.gruppen) || [])
     .find((x) => x.id === "werkzeuge");
@@ -633,15 +654,15 @@ function werkzeugEintraege(m) {
       id: "werkzeug:" + i,
       seite: "werkzeuge",
       name: teile[0],
-      unter: p.beschreibung || null,
+      unter: werkzeugSatz(p.beschreibung) || null,
       art: "sonstiges",
       artWort: teile[1] || null,
       gruppe: teile[1] || null,
       status: null,
-      beschreibung: { text: p.beschreibung || null, quelle: null, beleg: g.ordner },
+      beschreibung: { text: werkzeugSatz(p.beschreibung) || null, quelle: null, beleg: g.ordner },
       liste: [
         { label: UI.name, wert: teile[0], stark: true },
-        { label: UI.beschreibung, wert: p.beschreibung, weich: true },
+        { label: UI.beschreibung, wert: werkzeugSatz(p.beschreibung), weich: true },
       ],
       felder: felderVon(feld(UI.quelle, g.ordner, { mono: true, sprung: "datei:" + g.ordner })),
       verwandt: [],

@@ -95,7 +95,11 @@ HD.baumZeilen = function (knoten, tiefe) {
       + '<span class="baum-symbol">' + HD.icon(symbol) + "</span>"
       + '<span class="baum-name">' + HD.markiere(k.name, HD.S.suche) + "</span>"
       + marke
-      + (istOrdner && k.anzahlDateien ? '<span class="baum-zahl">' + HD.esc(k.anzahlDateien) + "</span>" : "")
+      + (istOrdner && k.anzahlDateien ? '<span class="baum-zahl">' + HD.esc(k.anzahlDateien) + "</span>"
+          // Ein Ordner OHNE Zahl sagt, warum sie fehlt -- eine kommentarlos
+          // fehlende Zaehlung liest sich wie ein leerer Ordner [Befund B34].
+          : (istOrdner ? '<span class="baum-zahl" title="' + HD.esc(HD.W.baumNichtGezaehlt) + '">'
+             + HD.esc(HD.W.baumOhneZahl) + "</span>" : ""))
       + "</button>");
 
     if (istOrdner && offen) raus = raus.concat(HD.baumZeilen(k, tiefe + 1));
