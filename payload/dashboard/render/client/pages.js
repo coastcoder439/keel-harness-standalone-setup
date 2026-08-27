@@ -222,8 +222,11 @@ HD.seitenKopfHTML = function (seite) {
   if (!s) return "";
   return '<header class="seiten-kopf">'
     + '<h1 class="seiten-titel">' + HD.esc(s.name) + "</h1>"
-    + (s.zweck ? '<p class="seiten-unter">' + HD.esc(s.zweck)
-        + (s.ort ? ' <span class="pfad">' + HD.esc(s.ort) + "</span>" : "") + "</p>" : "")
+    // Die Herkunft steht als EIGENE Zeile, nicht als Bruchstueck hinter dem Satz
+    // [Audit-Befund B10]: "... 7 ohne Wegweiser. user-projects/" las sich wie ein
+    // abgerissener Halbsatz.
+    + (s.zweck ? '<p class="seiten-unter">' + HD.esc(s.zweck) + "</p>" : "")
+    + (s.ort ? '<p class="seiten-ort"><span class="pfad">' + HD.esc(s.ort) + "</span></p>" : "")
     + "</header>";
 };
 
@@ -441,7 +444,12 @@ HD.wGesundheit = function () {
   ];
   var offenAn = HD.S.abschnitt["gruppe:" + HD.W.ccGesundheit] !== false;
   var rumpf = zeilen.map(function (r) {
-    var kern = '<span class="check-glyphe">' + (r.status ? HD.statusGlyphe(r.status) : HD.icon("circle-dashed")) + "</span>"
+    // Das Zeichen traegt sein WORT als Namen [ui-standard Punkt 3: nie Farbe
+    // allein]. Im Satz daneben steht die Aussage, hier der Zustand -- so liest
+    // eine Vorlesesoftware "Hinweis" statt eines namenlosen Bildes.
+    var wort = r.status && HD.D.status[r.status] ? HD.D.status[r.status].wort : "";
+    var kern = '<span class="check-glyphe" role="img" aria-label="' + HD.esc(wort) + '" title="' + HD.esc(wort) + '">'
+      + (r.status ? HD.statusGlyphe(r.status) : HD.icon("circle-dashed")) + "</span>"
       + '<span class="check-text">' + HD.esc(r.text) + "</span>"
       + '<span class="check-wert mono">' + HD.esc(r.wert) + "</span>";
     // EINE WARNUNG BEKOMMT GEWICHT, NICHT NUR EINE ANDERE FARBE [Kritik-Runde 2,
@@ -482,9 +490,12 @@ HD.wLogbuch = function () {
   var halte = halt(HD.uhrzeitVon(HD.D.gemessenAm), HD.W.ccMessungGelaufen, false);
   var laeufe = ((HD.bridgeData || {}).automatik || {}).laeufe || [];
   var naechster = laeufe.filter(function (l) { return l.naechster; })[0];
+  // Ohne geplanten Lauf bleibt die Zeitspalte LEER: "als Naechstes" an der
+  // Stelle einer Uhrzeit sieht aus wie eine Zeitangabe und ist keine
+  // [Audit-Befund B18].
   halte += naechster
-    ? halt(HD.zeitpunkt(naechster.naechster), naechster.name, true)
-    : halt(HD.W.ccLaufNaechster, HD.W.ccKeinNaechster, true);
+    ? halt(HD.uhrzeitVon(naechster.naechster), naechster.name, true)
+    : halt("", HD.W.ccKeinNaechster, true);
   var weg = HD.widgetWeg("automatik", HD.W.ccZuAutomatik);
   return "<section>" + HD.gruppeHTML(HD.W.ccLogbuch, null, offenAn, false, weg)
     + (offenAn ? '<div class="widget-rumpf"><div class="logbuch">' + halte + "</div></div>" : "") + "</section>";
