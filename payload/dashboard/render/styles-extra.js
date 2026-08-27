@@ -245,6 +245,7 @@ const DETAIL = `
    Owner-Grundregel 27.08.: nichts liegt schief oder ragt heraus. */
 /* stretch (Vorgabe) statt start: alle Karten einer Reihe sind gleich hoch --
    sonst steht die Standzeile jeder Karte auf einer anderen Linie. */
+.seiten-ort{margin-top:2px;font-size:var(--text-xs);color:var(--muted-foreground)}
 .projekt-netz{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
 .projekt-karte{display:flex;flex-direction:column;gap:8px;width:100%;text-align:left;
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius);

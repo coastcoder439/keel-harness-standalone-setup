@@ -533,7 +533,10 @@ HD.zeichnen = function () {
 };
 
 HD.navZeichnen = function () {
-  var knoepfe = document.querySelectorAll(".nav-pille");
+  // Auch die Knoepfe im Fuss der Seitenleiste (Rohdaten) zeigen, wo man ist --
+  // vorher markierte die Navigation nur die vier Haupt-Eintraege, und wer auf
+  // Rohdaten stand, fand seinen Ort nirgends markiert [Audit-Befund B23].
+  var knoepfe = document.querySelectorAll(".nav-pille, .leiste-fuss [data-ziel]");
   for (var i = 0; i < knoepfe.length; i++) {
     // Ein Tab-Gruppen-Knopf (data-seiten) ist aktiv, sobald IRGENDEINE seiner
     // Seiten offen ist -- der Nutzer sieht dann am Menue, wo er sich befindet,
