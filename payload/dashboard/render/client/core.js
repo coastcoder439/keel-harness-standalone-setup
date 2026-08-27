@@ -1,4 +1,4 @@
-// BROWSER-TEIL 1 von 5: Zustand, Adresse, Ereignisse, Werkzeuge.
+// BROWSER-TEIL 1 von 6: Zustand, Adresse, Ereignisse, Werkzeuge.
 //
 // Der Inhalt dieser Datei laeuft NICHT in Node -- er wird als Zeichenkette in
 // die erzeugte Seite geschrieben. Deshalb: kein require, kein module, keine
@@ -41,6 +41,10 @@ HD.S = {
   // Regel, Befehl, Datei -- oeffnet DIESELBE volle Ansicht, ohne dass der
   // Klick den Nutzer aus seinem Zusammenhang wirft.
   dokument: null,
+  // Ein Filter der Projekt-Karten (Sitzung / offene Pakete / Sicherungsluecke).
+  projektFilter: null,
+  // Welcher Reiter der Projektseite offen ist.
+  projektReiter: "pakete",
 };
 
 // --- Speicher (mit Praefix, siehe shell.js) ------------------------------

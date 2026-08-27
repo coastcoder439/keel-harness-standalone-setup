@@ -1,4 +1,4 @@
-// BROWSER-TEIL 5 von 5: Ereignisse und Start.
+// BROWSER-TEIL 6 von 6: Ereignisse und Start.
 //
 // EIN Klick-Zuhoerer fuer die ganze Seite statt Zuhoerer je Element. Grund: die
 // Seite wird bei jeder Aenderung neu gezeichnet -- einzeln angeheftete Zuhoerer
@@ -27,6 +27,17 @@ document.addEventListener("click", function (ev) {
   if (pfad) {
     if (pfad.dataset.pfadpfad) HD.dateiWaehlen(pfad.dataset.pfadpfad);
     else HD.zurSeite(pfad.dataset.pfadziel);
+    return;
+  }
+
+  var preiter = nah("[data-projektreiter]");
+  if (preiter) { HD.S.projektReiter = preiter.dataset.projektreiter; HD.zeichnen(); return; }
+
+  var pfilter = nah("[data-projektfilter]");
+  if (pfilter) {
+    var code = pfilter.dataset.projektfilter;
+    HD.S.projektFilter = HD.S.projektFilter === code ? null : code;
+    HD.zeichnen();
     return;
   }
 

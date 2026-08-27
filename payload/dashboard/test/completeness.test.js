@@ -39,6 +39,7 @@ const OHNE_TEST = {
 // Entwicklungs-Paket laden (playwright) und Ergebnisse ausgeben. Die Liste ist
 // klein und benannt -- wer hier etwas eintraegt, muss den Grund verteidigen.
 const WERKZEUGE = {
+  "ausrichtung.js": "Abnahme-Werkzeug: misst je Seite, ob ein Element aus seinem Kasten ragt, zwei einander ueberdecken oder ein Text gekuerzt wird, obwohl Platz frei ist [Owner-Grundregel 27.08.2026]. Laeuft von Hand, wird nicht ausgeliefert, braucht playwright.",
   "screenshots.js": "Abnahme-Werkzeug: schiesst jede Seite in beiden Themes fuer die optische Abnahme gegen docs/ui-standard.md. Laeuft von Hand, wird nicht ausgeliefert, braucht playwright und gibt seine Dateiliste aus.",
   "klickpfad.js": "Abnahme-Werkzeug: klickt jede Zusage der Oberflaeche gegen den laufenden Server. Laeuft von Hand, wird nicht ausgeliefert, braucht playwright und gibt sein Ergebnis aus.",
 };
@@ -108,7 +109,7 @@ function geladeneModule() {
     }
     // client.test.js laedt die Browser-Teile ueber einen zusammengesetzten Pfad.
     if (/require\(path\.join\(CLIENT/.test(t)) {
-      for (const n of ["core", "pages", "detail", "bridge", "start"]) geladen.add("render/client/" + n + ".js");
+      for (const n of ["core", "pages", "projekte", "detail", "bridge", "start"]) geladen.add("render/client/" + n + ".js");
     }
   }
   return geladen;
@@ -162,6 +163,13 @@ const GROESSE_ALTBESTAND = {
   // die Klinke ueberschritten haette. Die Grenze wandert mit -- sonst
   // entstuende wieder Luft, in die die Datei zurueckwachsen kann.
   "measure.js": 1045,
+  // labels.js ist eine reine WORTLISTE ohne Logik. Sie waechst mit jeder neuen
+  // Flaeche, und aufteilen wuerde die tragende Regel der Datei brechen ("der
+  // EINZIGE Ort, an dem deutsche Beschriftungen stehen") -- ein zweiter Ort
+  // fuer Woerter ist genau der Zustand, den sie abgeschafft hat. Die 800er-
+  // Grenze zielt auf Module mit Verhalten, nicht auf Datenlisten. Die Klinke
+  // unten haelt sie trotzdem: sie darf nicht weiter wachsen [27.08.2026].
+  "render/labels.js": 812,
 };
 
 test("kein Modul ueberschreitet 800 Zeilen", () => {

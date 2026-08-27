@@ -597,17 +597,29 @@ const UI = {
   nichtErreichbarHilfe: "Läuft der Server? Starten mit: node dashboard/serve.js",
   selbsttestLaeuft: "läuft …",
   selbsttestHinweis: "Wähle einen Guard, um seinen Selbsttest zu starten.",
-  // Projekt-Uebersicht [Owner 27.08.2026]: die Zahlen rechts in der
-  // Projektliste waren Dokumentzahlen -- gefragt sind Paketstand und Sitzung.
+  // Projekt-Uebersicht [Owner 27.08.2026]: Paketstand und Sitzung statt Dokumentzahl.
   projektPaketeOffen: "{offen} von {gesamt} Arbeitspaketen offen",
   projektPaketeAlleFertig: "{gesamt} Arbeitspakete, alle abgeschlossen",
   projektPaketeEins: "1 Arbeitspaket, {stand}",
   projektKeinePakete: "Kein Arbeitspaket",
+  projektKarteSicher: "gesichert",
+  projektKarteLuecke: "Sicherungslücke",
+  projektKartePakete: "{done} von {total} Paketen abgeschlossen",
+  projektKarteOhnePakete: "Kein Arbeitspaket",
+  projektFilterAktive: "Mit Sitzung",
+  projektFilterPakete: "Mit offenen Paketen",
+  projektFilterLuecke: "Mit Sicherungslücke",
   werkbankUnter: "Die Werkbank selbst — hier liegen die Arbeitspakete dieses Workspace.",
   projektSitzungen: "{n} Sitzungen arbeiten hier",
   projektSitzungEine: "1 Sitzung arbeitet hier",
   projektKeineSitzung: "Keine Sitzung zugeordnet",
   projektSitzungenTitel: "Sitzungen an diesem Projekt",
+  // Die drei Reiter der Projektseite [01-product.md].
+  projektReiterPakete: "Arbeitspakete",
+  projektReiterSicherung: "Sicherung",
+  projektReiterVerlauf: "Verlauf",
+  projektKeinVerlauf: "Für dieses Projekt liegt kein Commit in der Messung.",
+  projektKeineSicherung: "Dieses Verzeichnis ist kein Git-Repository — die Arbeit ist nirgends versioniert.",
   projektDokumenteZahl: "{n} Dokumente",
   kanbanOffen: "Offen",
   kanbanArbeit: "In Arbeit",
@@ -670,7 +682,7 @@ const UI = {
   // Titel, die sagen was drinsteht -- keine Kunstworte, die man erklaeren
   // muesste (labels.js Regel 5) [Befund 26.08.2026].
   ccGesundheit: "Trägt der Harness?",
-  ccLogbuch: "Zuletzt gelaufen",
+  ccLogbuch: "Automatik heute",
   ccDrei: "Braucht deine Aufmerksamkeit",
   // Wort und Zahl beschreiben dasselbe: die Zeile nennt, was gemessen wurde.
   ccHooksOhneBefund: "{n} Hooks eingetragen, keiner mit Befund",
@@ -687,6 +699,16 @@ const UI = {
   ccKeinLauf: "Es läuft nichts automatisch.",
   ccAutomatikZeigen: "Automatik ansehen",
   ccAllesOffene: "Alles Offene ansehen",
+  // Der Weg in die Tiefe im Kopf jedes Widgets [01-product.md: "nichts
+  // existiert nur oben"].
+  ccZuHarness: "Harness",
+  ccZuAutomatik: "Automatik",
+  ccZuProjekte: "Projekte",
+  ccZuZutun: "Alles Offene",
+  ccLaufZuletzt: "zuletzt",
+  ccLaufNaechster: "als Nächstes",
+  ccKeinNaechster: "Kein Lauf geplant — nichts startet von selbst.",
+  ccAufgabeErledigt: "Erledigt: {was}",
   // EINZAHL IST KEIN SONDERFALL: "vor 1 Minuten" braucht eine eigene Fassung.
   dauerGerade: "einem Augenblick",
   dauerMinuteEins: "einer Minute",
