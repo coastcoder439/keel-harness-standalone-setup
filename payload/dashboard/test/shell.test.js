@@ -180,7 +180,7 @@ test("die vier Browser-Teile stehen vollstaendig und in der festgelegten Reihenf
   // die Kopfkommentare stehen ausserhalb der ausgelieferten Zeichenkette und
   // wuerden eine Pruefung vortaeuschen, die nichts beweist.
   const seite = renderHTML(datensatz());
-  const teile = ["core", "pages", "detail", "start"];
+  const teile = ["core", "pages", "projekte", "detail", "start"];
   let vorher = -1;
   for (const name of teile) {
     const { quelltext } = require("../render/client/" + name + ".js");

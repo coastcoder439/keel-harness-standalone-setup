@@ -1,4 +1,4 @@
-// BROWSER-TEIL 3 von 5: Ordnerbaum, Dateiansicht, Eigenschaften.
+// BROWSER-TEIL 4 von 6: Ordnerbaum, Dateiansicht, Eigenschaften.
 //
 // Hier liegt die Antwort auf die drei haertesten Beanstandungen der Vorfassung:
 //   "keine ordnerstruktur auslesbar"    -> ein begehbarer Baum ueber den echten Ordner

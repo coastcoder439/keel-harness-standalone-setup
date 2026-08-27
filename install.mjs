@@ -204,10 +204,18 @@ const DASHBOARD = [
   // Abnahme-Werkzeug (27.08.2026): schiesst jede Seite in beiden Themes fuer die
   // optische Abnahme gegen docs/ui-standard.md. Braucht ebenfalls playwright.
   "screenshots.js",
+  // Abnahme-Werkzeug (27.08.2026): misst je Seite, ob ein Element aus seinem
+  // Kasten ragt, zwei einander ueberdecken oder ein Text gekuerzt wird, obwohl
+  // Platz frei ist [Owner-Grundregel]. Braucht ebenfalls playwright.
+  "ausrichtung.js",
   // Dauerbetrieb (25.08.2026, Beanstandung A2): Doppelklick-Start und der
   // fensterlose Start fuer den Anmelde-Trigger (schtasks, siehe Kopf der .cmd).
   "start-server.cmd",
   "start-server-hidden.vbs",
+  // Ein Doppelklick richtet den Start bei jeder Anmeldung ein (Argument "aus"
+  // entfernt ihn wieder). schtasks /sc onlogon verlangt Administratorrechte --
+  // der Autostart-Ordner des Benutzers nicht.
+  "autostart-einrichten.cmd",
   "bridge.js",            // Kommandobruecken-Logik (Pakete/Sessions/Selbsttests/Auftraege)
   "test/bridge.test.js",
   "measure.js",
@@ -240,6 +248,7 @@ const DASHBOARD = [
   // Anzeige: der Teil, der im Browser laeuft
   "render/client/core.js",
   "render/client/pages.js",
+  "render/client/projekte.js",
   "render/client/detail.js",
   "render/client/bridge.js",
   "render/client/start.js",

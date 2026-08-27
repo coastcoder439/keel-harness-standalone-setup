@@ -156,6 +156,7 @@ function renderHTML(daten) {
 <script>
 ${require("./client/core.js").quelltext}
 ${require("./client/pages.js").quelltext}
+${require("./client/projekte.js").quelltext}
 ${require("./client/detail.js").quelltext}
 ${require("./client/bridge.js").quelltext}
 ${require("./client/start.js").quelltext}

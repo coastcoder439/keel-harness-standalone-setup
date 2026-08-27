@@ -88,9 +88,11 @@ const CONTROL_CENTER = `
    [Befund 26.08.2026]. */
 .widget-rumpf{background:var(--card);border:1px solid var(--border);
   border-radius:var(--radius-xl);padding:6px 16px;touch-action:manipulation}
-.widget-link{font-size:var(--text-micro);font-weight:500;color:var(--primary);
+.widget-link{display:inline-flex;align-items:center;margin-right:8px;
+  font-size:var(--text-micro);font-weight:500;color:var(--primary);
   background:none;border:0;padding:2px 0;text-decoration:underline;text-underline-offset:2px}
 .widget-link:hover{color:var(--foreground)}
+.widget-link > svg{width:13px;height:13px}
 .check-reihe{display:flex;gap:10px;align-items:center;width:100%;text-align:left;
   padding:8px 0;font-size:var(--text-sm);font-weight:500;
   border-radius:var(--radius-md);transition:background var(--dauer)}
@@ -211,6 +213,63 @@ const DETAIL = `
 .detail-titel{font-size:var(--text-2xl);font-weight:600;line-height:1.2;margin-bottom:8px}
 .detail-aktionen{grid-column:1/-1;display:flex;align-items:center;justify-content:flex-end;gap:2px}
 .detail-koerper{flex:1 1 auto;min-height:0;overflow:auto;padding:12px 16px;scrollbar-gutter:stable}
+/* ZEITLEISTE statt Einzelzeile [Entwurf mockups/d-cc.html]: das Widget
+   beantwortet "was lief, wann wieder" -- dafuer braucht es zwei Halte und eine
+   Spur dazwischen, nicht eine Zeile. Der geplante Halt ist hohl gezeichnet:
+   er ist noch nicht passiert. */
+.logbuch{position:relative;padding-left:22px}
+.logbuch::before{content:"";position:absolute;left:5px;top:6px;bottom:6px;width:1px;background:var(--border)}
+.logbuch-halt{position:relative;padding:6px 0}
+.logbuch-halt::before{content:"";position:absolute;left:-22px;top:9px;width:11px;height:11px;
+  border-radius:99px;background:var(--primary);border:2px solid var(--card);
+  box-shadow:0 0 0 1px var(--primary)}
+.logbuch-halt[data-geplant="ja"]::before{background:var(--card);box-shadow:0 0 0 1px var(--muted-foreground)}
+.logbuch-halt time{display:block;font-family:var(--mono);font-size:var(--text-nano);color:var(--muted-foreground)}
+.logbuch-halt b{font-weight:600;font-size:var(--text-sm)}
+.logbuch-halt span{color:var(--muted-foreground);font-size:var(--text-sm)}
+
+/* Deine drei: abhakbar [01-product.md "die drei wichtigsten, abhakbar"] */
+.drei-zeile input[type="checkbox"]{flex:0 0 auto;width:17px;height:17px;accent-color:var(--primary);margin:0}
+.drei-kontext{margin-left:auto;font-family:var(--mono);font-size:var(--text-nano);
+  color:var(--muted-foreground);white-space:nowrap}
+
+/* Sitzung -> Projekt: der Chip sagt, WORAN die Sitzung arbeitet */
+.sitzung-projekt{margin-left:auto;flex:0 0 auto;font-size:var(--text-nano);color:var(--foreground);
+  background:var(--accent);border-radius:var(--radius-pille);padding:2px 9px;
+  max-width:40%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* PROJEKTE ALS KARTEN [Entwurf mockups/d-projekte.html, Owner-Freigabe]:
+   eine Liste mit Texten und Zahlen beantwortet die Frage "welches Projekt
+   braucht mich" nicht. Die Karte zeigt Name, einen Satz, wer dort arbeitet und
+   den Stand in einer Zeile. Feste Satzhoehe, damit die Karten buendig stehen --
+   Owner-Grundregel 27.08.: nichts liegt schief oder ragt heraus. */
+/* stretch (Vorgabe) statt start: alle Karten einer Reihe sind gleich hoch --
+   sonst steht die Standzeile jeder Karte auf einer anderen Linie. */
+.projekt-netz{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px}
+.projekt-karte{display:flex;flex-direction:column;gap:8px;width:100%;text-align:left;
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px 16px;transition:border-color var(--dauer)}
+.projekt-karte:hover{border-color:var(--ring)}
+.projekt-karte[aria-selected="true"]{border-color:var(--ring)}
+.projekt-name{font-size:var(--text-sm);font-weight:600;overflow-wrap:anywhere}
+/* Genau zwei Zeilen -- laenger wird geklemmt, kuerzer haelt die Hoehe. */
+.projekt-satz{font-size:var(--text-xs);color:var(--muted-foreground);
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  min-height:2.8em;line-height:1.4}
+.projekt-sitzungen{display:flex;gap:6px;flex-wrap:wrap;min-height:22px}
+.projekt-schip{display:inline-flex;align-items:center;gap:6px;font-size:var(--text-nano);
+  color:var(--foreground);background:var(--accent);border-radius:var(--radius-pille);
+  padding:2px 9px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.projekt-schip::before{content:"";flex:0 0 auto;width:6px;height:6px;border-radius:99px;
+  background:var(--status-ok)}
+.projekt-stand{margin-top:auto;display:flex;align-items:center;gap:8px;font-size:var(--text-nano);
+  color:var(--muted-foreground);font-family:var(--mono)}
+.projekt-punkt{flex:0 0 auto;width:8px;height:8px;border-radius:99px;background:var(--status-ok)}
+.projekt-punkt[data-luecke="ja"]{background:var(--status-hinweis)}
+.projekt-balken{flex:1 1 auto;min-width:40px;height:5px;border-radius:99px;
+  background:var(--accent);overflow:hidden}
+.projekt-balken > i{display:block;height:100%;background:var(--status-ok)}
+
 /* PropertySection + PropertyRow: Label 96 px muted links, Wert rechts. */
 .eigenschaft-abschnitt{border-top:1px solid var(--border);padding:10px 0}
 .eigenschaft-abschnitt:first-child{border-top:0}
@@ -227,8 +286,8 @@ const DETAIL = `
   transform:rotate(-45deg);transition:transform .12s ease}
 .eigenschaft-abschnitt[open] > summary::before{transform:rotate(45deg)}
 .eigenschaft-zeile{display:flex;gap:12px;padding:4px 0;font-size:var(--text-xs)}
-.eigenschaft-label{flex:0 0 var(--label-breite);width:var(--label-breite);color:var(--muted-foreground);
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.eigenschaft-label{flex:0 1 auto;min-width:var(--label-breite);max-width:60%;
+  color:var(--muted-foreground);overflow-wrap:anywhere}
 .eigenschaft-wert{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
 .eigenschaft-wert .pfad,.eigenschaft-wert .zahl,.eigenschaft-wert .zeit{font-family:var(--mono)}
 .eigenschaft-pille{display:inline-flex;align-items:center;gap:4px;border:1px solid var(--border);
