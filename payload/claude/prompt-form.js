@@ -14,7 +14,7 @@
 // des Fensters ok) — Massstab ist nicht die Byte-Zahl, sondern dass JEDER Satz eine
 // ERLEBTE Fehlerklasse abstellt; Zeile raus, wenn ihre Klasse nicht mehr auftritt.
 // Grenze bleibt die Schaerfe: waechst die Injektion zum Katalog, ueberliest das
-// Modell den Einzelsatz wieder (Beleg docs/packages/skill-invocation-diagnose.md).
+// Modell den Einzelsatz wieder (Beleg .claude/rules/keel/tools.md, Abschnitt Skills).
 
 const KURZFORM =
   "Antwortform (gilt fuer JEDE Antwort, Kurzform des Skills i-have-adhd): " +
@@ -34,11 +34,11 @@ const KURZFORM =
   "statt es zurueckzugeben. " +
   // Wiederhergestellt 27.08.2026 [Owner]: stand bis zur Kuerzung 9f0967f im Skill
   // ("Measured: the single largest source of length") und fehlte danach -- die
-  // Textwand kam zurueck. Beleg: docs/packages/injektion-wirkt-nicht.md
-  "Vor dem Absenden streichen: die HERLEITUNG (wie ein Befund zustande kam, wie oft etwas lief, was du unterwegs geprueft hast) — sie gehoert in die Commit-Nachricht, nicht in die Antwort; genannt wird das ERGEBNIS. Mehrschritt-Arbeit ist eine NUMMERIERTE Liste, nie Fliesstext. Pruefung: Weiss der Leser nach ERSTER und LETZTER Zeile, was zu tun ist und was passiert ist? Sonst umschreiben. " +
+  // Textwand kam zurueck. Beleg: docs/packages/injection-not-effective.md
+  "Vor dem Absenden streichen: die HERLEITUNG (wie ein Befund zustande kam, wie oft etwas lief, was du unterwegs geprueft hast) — sie gehoert in die Commit-Nachricht, nicht in die Antwort; genannt wird das ERGEBNIS. Mehrschritt-Arbeit ist eine NUMMERIERTE Liste, nie Fliesstext. Jede Aufzaehlung ab ZWEI Punkten steht UNTEREINANDER (nummeriert oder je Zeile ein Punkt) — nie mehrere Punkte in einer Zeile mit Trennzeichen aneinandergereiht, und das gilt auch fuer 'Geprueft gegen' und 'Offen'. Pruefung: Weiss der Leser nach ERSTER und LETZTER Zeile, was zu tun ist und was passiert ist? Sonst umschreiben. " +
   // Ein-Satz-Index der Abruf-Werkzeuge [Owner 26.08.2026]: Injektion ist der einzige
   // deterministische Ausloeser — der Skill-Katalog ist nur ein Relevanz-Wettbewerb
-  // (Beleg docs/packages/skill-invocation-diagnose.md). Volltexte laden per Skill-Aufruf.
+  // (Beleg .claude/rules/keel/tools.md). Volltexte laden per Skill-Aufruf.
   "Abruf-Werkzeuge (Volltext laedt der jeweilige Skill-Aufruf): completeness = Audit vor " +
   "jeder Fertig-/bau-bereit-Aussage und Uebergabe · save-work = ungesicherte Arbeit dieses " +
   "Kontexts committen+pushen · repo-status = Git-Stand Harness+Projekte vs GitHub · " +

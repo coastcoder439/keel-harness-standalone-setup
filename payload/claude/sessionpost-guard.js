@@ -82,12 +82,35 @@ function main(roh) {
   if (!/send_message/.test(werkzeug)) process.exit(0);
 
   const text = String(d.tool_input?.message || "");
-  if (!text) process.exit(0);
 
+  // [Owner-Entscheid 27.08.2026, Paket session-messages] Senden ist ABGESTELLT --
+  // nicht wegen der Laenge, sondern wegen der Unterbrechung: die Nachricht erscheint
+  // beim Owner im Vordergrund und loest beim Empfaenger sofort Arbeit aus. Belegter
+  // Fall 26.08.2026 (Meldung zu pollution-warn.js riss eine laufende Owner-Aufgabe
+  // auseinander). Ersatz ohne Verlust: Datei-Ablage + Anzeige beim Sitzungsstart
+  // (session-roles.js, Funktion notizen()).
+  console.error(
+    "sessionpost-guard: Nachrichten ZWISCHEN Sitzungen sind abgestellt " +
+    "[Owner-Entscheid 27.08.2026].\n" +
+    "Lege den Befund stattdessen ab -- die Zielsitzung sieht ihn bei ihrem naechsten Start:\n" +
+    "  docs/session-notes/<ziel-rolle>.md, Eintrag im Format\n" +
+    "      ## <JJJJ-MM-TT> — von <deine Rolle>\n" +
+    "      <Fakt> — <was sich fuer DICH aendert>.\n" +
+    "      Beleg: <datei:zeile | commit | befehl>\n" +
+    "      Zu tun: <eine Sache>\n" +
+    "Ablauf steht in .claude/commands/tell-session.md."
+  );
+  process.exit(2);
+}
+
+// Ab hier: die alte Laengen-/Struktur-Pruefung. Sie bleibt als Mass fuer die
+// Notiz-Form erhalten (tell-session prueft seinen Text dagegen), wird aber nicht
+// mehr am Sende-Werkzeug ausgeloest.
+function altePruefung(text) {
   const befunde = pruefe(text);
   const zuLang = text.length > HART;
   const grenzwertig = text.length > WEICH && befunde.length > 0;
-  if (!zuLang && !grenzwertig) process.exit(0);
+  if (!zuLang && !grenzwertig) return null;
 
   console.error(
     `sessionpost-guard: Nachricht an eine andere Sitzung ist ${text.length} Zeichen ` +
@@ -101,7 +124,7 @@ function main(roh) {
     "Gemessen 03.08.2026: 63 Nachrichten, Median 1.378 Zeichen, 89.905 gesamt.\n" +
     "Ziel sind ~300."
   );
-  process.exit(2);
+  return "zu lang";
 }
 
 if (process.stdin.isTTY) main("");

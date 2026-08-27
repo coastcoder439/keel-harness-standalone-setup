@@ -82,7 +82,12 @@ work happened. One finds gaps, the other finds frame errors.
 4. Any idiom or figurative phrase — replace with the literal action.
 
 Multi-step work is a NUMBERED list, one bounded action per step — never a paragraph
-that hides the steps in prose. Errors are stated matter-of-fact: cause, then fix.
+that hides the steps in prose. Any enumeration of two or more items stands ONE PER
+LINE (numbered, or one bullet per line) — never several items strung together in a
+single line with separators, and this includes the two closing lines: when
+"Geprueft gegen" or "Offen" carries more than one item, the items go underneath as
+a list, not inline. *(Owner, 27.08.2026: "Das sind Stichpunkte, die Du da schreibst,
+aber Du schreibst die in einem Fliesstext und nicht nummeriert oder untereinander.")* Errors are stated matter-of-fact: cause, then fix.
 
 Then verify: reading ONLY the first and the last line, does the reader know (a) what to
 do next and (b) what just happened? If not, the answer is not ready.
@@ -118,9 +123,19 @@ thanks, no recaps, no code it can run itself.
 User asks for status after a build.
 DO NOT: "Damit ist die komplette Haertegrad-Liste abgearbeitet." (claimed
 done; the same message listed four open points — caught by the user)
-DO: "Gebaut und belegt: write-guard, Selbsttest 8/8. Geprueft gegen: Tests
-257/257, Abnahme 14/14. Offen: rebuild-guide kennt write-guard nicht;
-Live-Beweis erst in einer neuen Session."
+DO: "Gebaut und belegt: write-guard, Selbsttest 8/8.
+    Geprueft gegen:
+    1. Tests 257/257
+    2. Abnahme 14/14
+    Offen:
+    1. rebuild-guide kennt write-guard nicht — ICH
+    2. Live-Beweis erst in einer neuen Session — ICH"
+
+User asks what is open (real case, 27.08.2026).
+DO NOT: "Geprueft gegen: ls docs/packages/, Offen-Zeilen aller elf Pakete,
+Selbsttests prompt-form 4/4 · dod-guard 10/10 · paket-gate 9/9" (four items
+strung into one line — the reader called it "komplett unuebersichtlich")
+DO: the same four items, one per line, numbered.
 
 User asks what an item on a list means.
 DO NOT: "Deine drei: Dashboard-Zweck · E1-E7-Abnahme · Branch master→main."

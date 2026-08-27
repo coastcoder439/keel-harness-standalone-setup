@@ -282,6 +282,11 @@ const BEILEGER = [
   // Leere Issues-Datei mit dem Fertig-Massstab im Kopf (Owner 24.08.2026): leer = fertig;
   // offene ARBEIT lebt in docs/packages/. zutun-docs liest sie als Quelle.
   "harness-issues.md",
+  // Ablage der Sitzungs-Notizen [Owner-Entscheid 27.08.2026]: Nachrichten ZWISCHEN
+  // Sitzungen sind abgestellt (sessionpost-guard blockt send_message). Ohne diese
+  // README steht der Ersatzweg nirgends -- session-roles.js meldet beim Start, welche
+  // Notiz-Dateien Eintraege haben, und /tell-session schreibt sie.
+  "session-notes/README.md",
   // Ablage-Vorlage fuer den Onboarding-Schritt "Werkzeug-Landschaft" (Schritt 3):
   // vier Rubriken CLI/MCP/API/Zugaenge. Wird nach docs/ kopiert, dort traegt der
   // Onboarding-Befehl die erkannten Werkzeuge ein.
