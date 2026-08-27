@@ -313,7 +313,10 @@ test("die Masse der Spezifikation stehen als Token im Stylesheet", () => {
   const masse = {
     "--seitenleiste": "240px", "--seitenleiste-rail": "64px", "--kopfzeile": "48px",
     "--detail-breite": "320px", "--baum-breite": "288px", "--board-spalte": "260px",
-    "--board-rail": "52px", "--zeile-baum": "36px", "--zeile-eintrag": "44px",
+    "--board-rail": "52px", "--zeile-baum": "36px",
+    // 44 -> 36 am 27.08.2026 [docs/ui-standard-werkzeug.md, Dichte]: ein
+    // Werkzeug zeigt Bestand. Die Zeile bleibt ueber der Mindest-Klickflaeche.
+    "--zeile-eintrag": "36px",
     "--einzug-stufe": "24px", "--spalte-min": "96px", "--label-breite": "96px",
     "--ring-breite": "3px", "--radius": "8px", "--radius-md": "6.4px"
   };

@@ -106,8 +106,8 @@ HD.zeileHTML = function (e) {
     + (HD.S.auswahl === e.id ? ' aria-selected="true"' : "") + ">"
     + kachel
     + '<span class="eintrag-haupt">'
-    + '<span class="eintrag-titel">' + HD.markiere(titelSpalte.wert || e.name, HD.S.suche) + "</span>"
-    + (unterSpalte.wert ? '<span class="eintrag-unter">' + HD.markiere(unterSpalte.wert, HD.S.suche) + "</span>" : "")
+    + '<span class="eintrag-titel">' + HD.markiere(HD.klartext(titelSpalte.wert || e.name), HD.S.suche) + "</span>"
+    + (unterSpalte.wert ? '<span class="eintrag-unter">' + HD.markiere(HD.klartext(unterSpalte.wert), HD.S.suche) + "</span>" : "")
     + "</span>"
     + metaHTML
     + schluss
@@ -171,9 +171,10 @@ HD.werkzeugHTML = function (seite) {
       + "</span>" : "";
 
   return '<div class="werkzeugleiste">'
+    + '<span class="suchfeld-huelle">' + HD.icon("search")
     + '<input class="suchfeld" id="suche" type="text" value="' + HD.esc(HD.S.suche) + '" autocomplete="off" spellcheck="false"'
     + ' placeholder="' + HD.esc(HD.W.suchenIn.replace("{seite}", HD.D.seiten[seite].name)) + '"'
-    + ' aria-label="' + HD.esc(HD.W.suchen) + '">'
+    + ' aria-label="' + HD.esc(HD.W.suchen) + '"></span>'
     + (HD.S.suche ? '<button class="filter-chip" data-handlung="suche:leeren">' + HD.esc(HD.W.sucheLeeren) + "</button>" : "")
     + ansicht + chips + zuruecksetzen
     + "</div>";
@@ -226,9 +227,35 @@ HD.seitenKopfHTML = function (seite) {
     + "</header>";
 };
 
+// --- Ein Projekt in der Hauptflaeche [Owner-Wunsch W7, gebaut 27.08.2026] --
+// "Klick auf Projekt -> Arbeitspakete als Kanban, Reiter Sicherung und Verlauf
+// je Projekt": ein Projekt ist ein ORT, keine Eigenschaftsliste im Panel. Die
+// Seite traegt deshalb den vollen Platz -- Kopf, Arbeitspakete als Kanban,
+// die Sitzungen, die hier arbeiten, und die Dokumente des Projekts.
+HD.projektSeite = function (e) {
+  var kopf = '<header class="seiten-kopf">'
+    + '<button class="filter-chip" data-pfadziel="projekte">' + HD.icon("chevron-left")
+    + "<span>" + HD.esc(HD.W.zurueck) + "</span></button>"
+    + '<h1 class="seiten-titel">' + HD.esc(e.name) + "</h1>"
+    + (e.pfad ? '<p class="seiten-unter"><span class="pfad">' + HD.esc(e.pfad) + "</span></p>" : "")
+    + "</header>";
+  var beschreibung = e.beschreibung && e.beschreibung.text
+    ? '<p class="erklaersatz">' + HD.esc(e.beschreibung.text) + "</p>" : "";
+  var kanban = HD.paketKanban ? HD.paketKanban(e.name) : "";
+  var sitzungen = HD.projektSitzungenSektion ? HD.projektSitzungenSektion(e.name) : "";
+  var dokumente = HD.projektDokumenteHTML ? HD.projektDokumenteHTML(e) : "";
+  return kopf + beschreibung + kanban + sitzungen + dokumente;
+};
+
 HD.listenSeite = function (seite) {
   var s = HD.D.seiten[seite];
   var liste = HD.gefiltert(seite);
+  // Ein gewaehltes Projekt ersetzt die Liste -- die Hauptflaeche zeigt EIN
+  // Ding, nicht Liste und Detail nebeneinander.
+  if (seite === "projekte" && HD.S.auswahl) {
+    var gewaehlt = HD.eintragMit(HD.S.auswahl);
+    if (gewaehlt && gewaehlt.seite === "projekte") return HD.projektSeite(gewaehlt);
+  }
   // Statusaussage VOR der Erklaer-Prosa: die wichtigste Information der
   // Seite darf nicht die dritte Zeile sein [Kritiker-Befund Runde 4].
   var kopf = HD.seitenKopfHTML(seite)
@@ -241,9 +268,10 @@ HD.listenSeite = function (seite) {
   var anbau = "";
   // Arbeitspakete als KANBAN nach Zustand [Owner-Wunsch W7] -- ersetzt die
   // flache Repo-Liste. Umschaltbar auf Liste ueber die Werkzeugleiste.
-  if (seite === "zutun") {
-    anbau = HD.S.ansicht === "liste-pakete" ? HD.paketeSektion() : HD.paketKanban(HD.D.workspace);
-  }
+  // Die Arbeitspakete stehen hier als LISTE. Ihr Kanban lebt seit Slice 3 im
+  // Projekt-Detail (eine Sache, ein Ort) -- als Anbau unter einem Umschalter,
+  // der "Liste" anzeigt, sah er aus wie ein Schalter ohne Wirkung.
+  if (seite === "zutun") anbau = HD.paketeSektion();
   if (seite === "hooks") anbau = HD.guardSektion();
   // Automatik ist eine reine LIVE-Ansicht ohne Mess-Eintraege: Suchfeld und
   // Listen-Leerzustand haetten nichts zu tun und der Leerzustand stuende
@@ -286,6 +314,33 @@ HD.listenSeite = function (seite) {
   }
 
   if (seite === "zutun" && HD.S.ansicht === "board") return kopf + kacheln + werkzeug + HD.boardHTML(liste) + anbau;
+
+  // PROJEKTLISTE: der Live-Stand statt der Dokumentzahl [Owner 27.08.2026].
+  // Die Messung liefert je Projekt eine Dokumentzahl -- gefragt ist, welche
+  // Arbeitspakete hier in welchem Stand liegen und ob jemand daran arbeitet.
+  // Solange die Bruecke nicht geantwortet hat, bleibt die Zeile wie gemessen;
+  // eine Null waere eine Behauptung ueber ungelesene Daten.
+  if (seite === "projekte") {
+    liste = liste.map(function (e) {
+      var paketSatz = HD.projektPaketSatz ? HD.projektPaketSatz(e.name) : null;
+      var sitzungSatz = HD.projektSitzungSatz ? HD.projektSitzungSatz(e.name) : null;
+      if (!paketSatz && !sitzungSatz) return e;
+      var spalten = (e.liste || []).filter(function (sp) {
+        return sp.label !== HD.W.dokumente;
+      });
+      // Der Normalzustand schweigt: 18 von 21 Repos haben kein Arbeitspaket --
+      // achtzehnmal "Kein Arbeitspaket" untereinander ist Rauschen, keine
+      // Information [ui-standard, stiller Normalzustand].
+      if (paketSatz && paketSatz !== HD.W.projektKeinePakete) spalten.push({ label: HD.W.arbeitspakete, wert: paketSatz });
+      if (sitzungSatz && sitzungSatz !== HD.W.projektKeineSitzung) {
+        spalten.push({ label: HD.W.sitzungen, wert: sitzungSatz });
+      }
+      var kopie = {};
+      for (var k in e) if (Object.prototype.hasOwnProperty.call(e, k)) kopie[k] = e[k];
+      kopie.liste = spalten;
+      return kopie;
+    });
+  }
 
   var mitGruppe = liste.filter(function (e) { return e.gruppe; }).length;
   var koerper;
@@ -369,7 +424,9 @@ HD.wGesundheit = function () {
     // Wort und Zahl beschreiben DASSELBE: die Zeile heisst jetzt, was sie misst.
     { status: !hooks.length ? null : (hooksAbweichung === 0 ? "ok" : "hinweis"),
       text: hooks.length ? HD.fuellen(HD.W.ccHooksOhneBefund, { n: hooks.length }) : HD.W.ccHooksKeine,
-      wert: hooks.length ? String(hooks.length) : "", ziel: "hooks" },
+      // KEINE Zahl rechts: sie stuende ein zweites Mal, der Satz nennt sie schon
+      // [ui-standard: eine Sache, eine Beschreibung, ein Ort].
+      wert: "", ziel: "hooks" },
     { status: alterLesbar === null ? null : (alterMin <= 60 ? "ok" : "hinweis"),
       text: alterLesbar === null ? HD.W.ccMessungUnbekannt : HD.fuellen(HD.W.ccMessungFrisch, { dauer: alterLesbar }),
       wert: HD.zeitpunkt(HD.D.gemessenAm), ziel: null },
@@ -380,7 +437,9 @@ HD.wGesundheit = function () {
       text: !z.repos ? HD.W.ccSicherungUnbekannt
         : (z.reposOffen === 0 ? HD.fuellen(HD.W.ccSicherungOk, { n: z.repos })
           : (z.reposOffen === 1 ? HD.W.ccSicherungLueckeEins : HD.fuellen(HD.W.ccSicherungLuecke, { n: z.reposOffen }))),
-      wert: z.repos ? String(z.repos) : "", ziel: "backup" },
+      // Die 22 rechts war die Zahl ALLER Repos neben dem Satz ueber das EINE mit
+      // Luecke -- zwei Zahlen zu einer Zeile, von denen keine erklaert war.
+      wert: "", ziel: "backup" },
   ];
   var offenAn = HD.S.abschnitt["gruppe:" + HD.W.ccGesundheit] !== false;
   var rumpf = zeilen.map(function (r) {

@@ -198,19 +198,34 @@ const DETAIL = `
 .detail[hidden]{display:none}
 .detail[data-vollbild="ja"]{width:100%;max-width:none;border-left:0}
 .detail[data-vollbild="ja"] .detail-koerper{max-width:1280px;margin:0 auto;width:100%}
-.detail-kopf{flex:0 0 auto;display:grid;grid-template-columns:auto minmax(0,1fr) auto;
-  align-items:start;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border)}
-.detail-name{display:block;font-size:var(--text-sm);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Zwei Zeilen statt drei Spalten: sechs Icon-Knoepfe neben dem Namen liessen
+   im 320-px-Panel rund vier Zeichen uebrig ("acc..."), und ein Dateiname, der
+   nach vier Zeichen endet, benennt nichts mehr. Jetzt traegt Zeile 1 Symbol und
+   Namen ueber die volle Breite, Zeile 2 die Handlungen rechts. */
+.detail-kopf{flex:0 0 auto;display:grid;grid-template-columns:auto minmax(0,1fr);
+  align-items:start;gap:6px 10px;padding:12px 16px;border-bottom:1px solid var(--border)}
+.detail-name{display:block;font-size:var(--text-sm);font-weight:500;
+  overflow-wrap:anywhere;white-space:normal}
 .detail-pfad{display:block;font-family:var(--mono);font-size:var(--text-xs);color:var(--muted-foreground);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .detail-titel{font-size:var(--text-2xl);font-weight:600;line-height:1.2;margin-bottom:8px}
-.detail-aktionen{display:flex;align-items:center;gap:2px}
+.detail-aktionen{grid-column:1/-1;display:flex;align-items:center;justify-content:flex-end;gap:2px}
 .detail-koerper{flex:1 1 auto;min-height:0;overflow:auto;padding:12px 16px;scrollbar-gutter:stable}
 /* PropertySection + PropertyRow: Label 96 px muted links, Wert rechts. */
 .eigenschaft-abschnitt{border-top:1px solid var(--border);padding:10px 0}
 .eigenschaft-abschnitt:first-child{border-top:0}
+/* Kein Unicode-Dreieck als Aufklapp-Zeichen [ui-standard Punkt 5]: der native
+   Marker der Browser ist ein gefuelltes Schriftzeichen, waehrend die ganze
+   Oberflaeche Lucide-SVGs fuehrt. Statt dessen ein eigenes Winkel-Zeichen aus
+   zwei Strichen, das der Aufklappzustand dreht. */
 .eigenschaft-abschnitt > summary{font-size:var(--text-xs);font-weight:600;text-transform:uppercase;
-  letter-spacing:.05em;color:var(--muted-foreground);cursor:pointer;padding:2px 0}
+  letter-spacing:.05em;color:var(--muted-foreground);cursor:pointer;padding:2px 0;
+  list-style:none;display:flex;align-items:center;gap:6px}
+.eigenschaft-abschnitt > summary::-webkit-details-marker{display:none}
+.eigenschaft-abschnitt > summary::before{content:"";flex:0 0 auto;width:6px;height:6px;
+  border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;
+  transform:rotate(-45deg);transition:transform .12s ease}
+.eigenschaft-abschnitt[open] > summary::before{transform:rotate(45deg)}
 .eigenschaft-zeile{display:flex;gap:12px;padding:4px 0;font-size:var(--text-xs)}
 .eigenschaft-label{flex:0 0 var(--label-breite);width:var(--label-breite);color:var(--muted-foreground);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

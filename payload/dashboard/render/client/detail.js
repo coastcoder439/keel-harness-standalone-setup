@@ -251,10 +251,16 @@ HD.detailKoerper = function (e, inline) {
   var inhalt = HD.inhaltHTML(e, inline);
   // Bei einem Projekt: die Dokumente je Projekt (S5). Fuer alles andere leer.
   var dokumente = HD.projektDokumenteHTML(e);
-  // Der Paket-Kanban steht NICHT hier: gemessen 26.08.2026 liegen alle 15
-  // Arbeitspakete im Workspace selbst, der in der Projektliste gar nicht
-  // vorkommt -- ein Kanban je Projekt-Detail waere immer leer. Er lebt auf
-  // "Zu tun" (Reiter unter Projekte), wo das Offene ohnehin zu Hause ist.
+  // PROJEKT-DETAIL: Arbeitspakete als Kanban und die Sitzungen, die hier
+  // arbeiten [Owner-Wunsch W7, korrigiert 27.08.2026]. Bis dahin stand hier
+  // NICHTS, mit der Begruendung, alle Pakete lebten ohnehin im Workspace --
+  // das war eine Messung, aus der ich meinen eigenen Weg ableitete statt des
+  // gewuenschten. Ein Projekt ohne Pakete zeigt jetzt den Leerzustand mit
+  // seinem naechsten Schritt, statt die Frage gar nicht zu stellen.
+  // Der Kanban steht nicht im schmalen Panel, sondern auf der Projektseite in
+  // der Hauptflaeche (HD.projektSeite): drei Spalten in 320 Bildpunkten waeren
+  // drei Streifen. Regel T7 -- Tabellen und Boards gehoeren in die groesste
+  // verfuegbare Breite, nie in die Detailspalte.
   var kanban = "";
 
   return kopf + metaHTML + beschreibung + kanban + eigenschaften + inhalt + dokumente;
@@ -465,7 +471,19 @@ HD.codeHTML = function (text, ausgeblendet) {
 HD.detailZeichnen = function () {
   var panel = document.getElementById("detail");
   var koerper = document.getElementById("detail-koerper");
-  var zeigen = HD.S.auswahl && HD.S.seite !== "dateien";
+  // Auf "Projekte" traegt die HAUPTFLAECHE das Projekt (HD.projektSeite) --
+  // dasselbe Ding zweimal nebeneinander waere zwei Wahrheiten auf einem Schirm.
+  // Ein offenes Dokument gewinnt: es ist das, was der Nutzer zuletzt angeklickt
+  // hat, und es gilt auf JEDER Seite [W8].
+  if (HD.S.dokument) {
+    panel.hidden = false;
+    panel.style.setProperty("--detail-breite", HD.S.breite + "px");
+    if (HD.S.vollbild) panel.setAttribute("data-vollbild", "ja");
+    else panel.removeAttribute("data-vollbild");
+    koerper.innerHTML = HD.detailKoerper(HD.dokumentEintrag(HD.S.dokument), false);
+    return;
+  }
+  var zeigen = HD.S.auswahl && HD.S.seite !== "dateien" && HD.S.seite !== "projekte";
   if (!zeigen) { panel.hidden = true; return; }
   var e = HD.eintragMit(HD.S.auswahl);
   if (!e) { panel.hidden = true; return; }

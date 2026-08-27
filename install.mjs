@@ -201,6 +201,9 @@ const DASHBOARD = [
   // Server (26.08.2026). Braucht playwright -- eine ENTWICKLUNGS-Abhaengigkeit,
   // das Dashboard selbst laeuft weiter mit Bordmitteln.
   "klickpfad.js",
+  // Abnahme-Werkzeug (27.08.2026): schiesst jede Seite in beiden Themes fuer die
+  // optische Abnahme gegen docs/ui-standard.md. Braucht ebenfalls playwright.
+  "screenshots.js",
   // Dauerbetrieb (25.08.2026, Beanstandung A2): Doppelklick-Start und der
   // fensterlose Start fuer den Anmelde-Trigger (schtasks, siehe Kopf der .cmd).
   "start-server.cmd",
@@ -296,6 +299,13 @@ const BEILEGER = [
   // festgelegt"). Ohne diese Datei im frischen Klon baut die naechste Sitzung wieder
   // am Vokabular vorbei -- genau der Fund, der dieses Paket ausgeloest hat.
   "ui-standard.md",
+  // Regelwerk fuer WERKZEUG-Oberflaechen (27.08.2026): 104 pruefbare Regeln zu
+  // Tabellen, Filtern, Leerzustaenden, Zustandsanzeige und Dichte, destilliert
+  // aus IBM Carbon (Apache-2.0), SAP content-density (Apache-2.0) und GitHub
+  // Primer (MIT). Es sagt, WANN welches Muster genommen wird; ui-standard.md
+  // sagt, wie es hier heisst. Ohne diese Datei baut die naechste Sitzung
+  // Tabellen und Leerzustaende wieder nach Gefuehl.
+  "ui-standard-werkzeug.md",
 ];
 
 // LICENSE-mattpocock-skills.txt am 25.08.2026 entfernt: die zwei mattpocock-
