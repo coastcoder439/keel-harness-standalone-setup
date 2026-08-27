@@ -1772,6 +1772,36 @@ function zeilen() {
 // docs/08-sessions-rollen.md) stieg der Hook damit aus, BEVOR der /i-have-adhd-Aufruf
 // kam; frische Sessions bekamen den Antwortform-Skill NIE. Jetzt: Rollen-Tabelle nur,
 // wenn vorhanden -- aber der Skill-Aufruf laeuft bei jedem "startup" unabhaengig davon.
+// Offene Sitzungs-Notizen sichtbar machen [Paket session-messages, Owner-Entscheid
+// 27.08.2026: Senden abstellen]. Ohne diesen Block waere "abstellen" ein Verlust --
+// Befunde laegen in Dateien, die niemand oeffnet. Gemeldet wird nur Datei, Anzahl und
+// juengster Kopf, nie der Inhalt: der Sitzungsstart bleibt billig, gelesen wird auf Zuruf.
+function notizen() {
+  const dir = path.join(WURZEL, "docs", "session-notes");
+  let dateien;
+  try {
+    dateien = fs.readdirSync(dir).filter((n) => n.endsWith(".md") && n !== "README.md");
+  } catch {
+    return null; // Ordner fehlt (frischer Nachbau) -> still
+  }
+  const raus = [];
+  for (const name of dateien.sort()) {
+    let text;
+    try {
+      text = fs.readFileSync(path.join(dir, name), "utf8");
+    } catch {
+      continue;
+    }
+    const koepfe = text.split(/\r?\n/).filter((z) => z.startsWith("## "));
+    if (!koepfe.length) continue;
+    const letzter = koepfe[koepfe.length - 1].replace(/^##\s*/, "").trim();
+    raus.push(`- docs/session-notes/${name}: ${koepfe.length} Notiz(en), zuletzt ${letzter}`);
+  }
+  return raus.length
+    ? ["", "OFFENE SITZUNGS-NOTIZEN (lies die Datei, wenn deine Rolle betroffen ist):", ...raus]
+    : null;
+}
+
 const rollen = zeilen();
 const rollenText = rollen
   ? [
@@ -1779,10 +1809,13 @@ const rollenText = rollen
       "Es arbeiten mehrere Sitzungen parallel im selben Ordner:",
       ...rollen,
       "",
-      "MELDE-REGEL: Aenderst oder findest du einen Fakt, auf dem eine ANDERE Rolle aufbaut",
-      "(Pfad, Repo-/Branch-Name, Datenbank, ein Beschluss), dann schick ihn ihr per /tell-session,",
-      "statt ihn nur zu notieren. Gehoert eine Aufgabe erkennbar einer anderen Rolle: dorthin",
-      "uebergeben, nicht selbst machen. Ueberblick: /session-map",
+      "MELDE-REGEL [Owner 27.08.2026 -- Nachrichten ZWISCHEN Sitzungen sind abgestellt]:",
+      "Aenderst oder findest du einen Fakt, auf dem eine ANDERE Rolle aufbaut (Pfad,",
+      "Repo-/Branch-Name, Datenbank, ein Beschluss), dann LEGE IHN AB per /tell-session --",
+      "der Befehl schreibt docs/session-notes/<rolle>.md. Kein Senden: die andere Sitzung",
+      "liest die Notiz beim naechsten Start. Gehoert eine Aufgabe erkennbar einer anderen",
+      "Rolle: dorthin uebergeben, nicht selbst machen. Ueberblick: /session-map",
+      ...(notizen() || []),
     ].join("\n")
   : null;
 
@@ -1859,31 +1892,37 @@ Regeln:
 
 ```markdown
 ---
-description: Send a finding or handoff to another session in this workspace (it arrives there as a labelled message)
+description: Befund oder Uebergabe fuer eine andere Session ablegen (sie liest ihn bei ihrem naechsten Start)
 ---
 
-Schicke einer anderen Session dieses Workspace eine Nachricht. Argument (optional):
-Zielsession und/oder Inhalt; fehlt beides, aus dem Verlauf ableiten.
+Lege einer anderen Rolle dieses Workspace einen Befund ab. Argument (optional):
+Ziel-Rolle und/oder Inhalt; fehlt beides, aus dem Verlauf ableiten.
 
-1. `mcp__ccd_session_mgmt__list_sessions` — Zielsession am Titel finden. Passt keiner
-   eindeutig: Kandidaten zeigen und fragen, nie raten.
-2. Nachricht formulieren — **drei Zeilen, mehr nicht** (der Empfaenger ist eine Maschine
-   mit eigenem Kontextfenster; Verweis statt Inhalt, sie hat dieselben Dateien):
+**Senden ist abgestellt** [Owner-Entscheid 27.08.2026, Paket `docs/packages/session-messages.md`]:
+Eine gesendete Nachricht erscheint beim Owner im Vordergrund und unterbricht beim
+Empfaenger die laufende Arbeit. Der `sessionpost-guard` blockt
+`mcp__ccd_session_mgmt__send_message`.
 
+1. Ziel-Rolle in `docs/08-sessions-rollen.md` bestimmen. Passt keine eindeutig:
+   Kandidaten zeigen und fragen, nie raten.
+2. Notiz formulieren — **drei Zeilen, mehr nicht** (die Gegenseite ist eine Maschine mit
+   eigenem Kontextfenster und denselben Dateien; Verweis statt Inhalt):
+
+       ## <JJJJ-MM-TT> — von <deine Rolle>
        <Fakt> — <was sich fuer DICH aendert>.
        Beleg: <datei:zeile | commit | befehl>
        Zu tun: <eine Sache>            (weglassen, wenn nichts zu tun ist)
 
-   **Pruefsatz: Weiss die andere Session nach der ERSTEN Zeile, was sich fuer SIE
-   aendert?** Der `sessionpost-guard` erzwingt die Knappheit.
-3. Sind Ziel UND Anlass eindeutig: direkt senden, nicht rueckfragen — die Melderegel in
-   `docs/08-sessions-rollen.md` ist die stehende Freigabe [Auftraggeber 31.07.2026].
-   Nur bei erratenem Ziel/Inhalt vorher zeigen und bestaetigen lassen.
-4. `mcp__ccd_session_mgmt__send_message`, danach bestaetigen: welche Session, welcher Kern.
+   **Pruefsatz: Weiss die andere Rolle nach der ERSTEN Zeile, was sich fuer SIE aendert?**
+3. Eintrag ans ENDE von `docs/session-notes/<ziel-rolle>.md` haengen (Datei anlegen,
+   wenn sie fehlt) und committen:
+   `git commit -m "notiz(<ziel>): <kern>" -- docs/session-notes/<ziel-rolle>.md`
+4. Bestaetigen: welche Rolle, welcher Kern, welche Datei.
 
-Wann: ein Fakt aendert sich, den eine andere Session als Grundlage nutzt, oder eine
-Aufgabe gehoert erkennbar einer anderen Rolle. Nicht zum Fernsteuern; in
-unbeaufsichtigten Laeufen ist Senden gesperrt — Befund stattdessen in eine Datei im Repo.
+Wann: ein Fakt aendert sich, den eine andere Rolle als Grundlage nutzt, oder eine Aufgabe
+gehoert erkennbar einer anderen Rolle. Die Zielsitzung sieht beim naechsten Start, dass
+ihre Datei Eintraege hat (`.claude/session-roles.js`, Funktion `notizen()`); gelesen und
+erledigt heisst: Eintrag streichen, die Historie steht in git.
 ```
    <Fakt> — <was sich fuer DICH aendert>.
    Beleg: <datei:zeile | commit | befehl>
