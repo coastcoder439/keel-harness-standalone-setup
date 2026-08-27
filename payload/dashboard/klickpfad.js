@@ -380,6 +380,54 @@ zusage("Eine angeklickte Regel zeigt ihren vollen Text", async (p) => {
   await p.waitForTimeout(400);
 });
 
+// --- Durchgang G: Projekt als Ort [Slice 3 und 4, 27.08.2026] -------------
+// Der Owner-Wunsch W7 war zweimal falsch gebaut, weil niemand pruefte, WO der
+// Kanban landet. Diese drei Zusagen halten die Entscheidung fest.
+
+zusage("Ein Klick auf ein Projekt oeffnet die Projektseite, nicht das schmale Panel", async (p) => {
+  await p.evaluate(() => HD.zurSeite("projekte"));
+  await p.waitForTimeout(900);
+  await p.evaluate(() => {
+    const t = HD.seitenEintraege("projekte").find((e) => e.id.startsWith("werkbank:"));
+    if (!t) throw new Error("die Werkbank fehlt in der Projektliste");
+    HD.oeffnen(t.id);
+  });
+  await p.waitForTimeout(1200);
+  const panelOffen = await p.evaluate(() => !document.getElementById("detail").hidden);
+  if (panelOffen) throw new Error("das Detail-Panel steht offen -- das Projekt gehoert in die Hauptflaeche");
+  const spalten = await p.locator(".kanban .kanban-spalte, .kanban > *").count();
+  if (spalten < 3) throw new Error("kein Kanban mit drei Spalten auf der Projektseite");
+});
+
+zusage("Eine Kanban-Karte oeffnet das volle Dokument rechts, ohne die Seite zu verlassen", async (p) => {
+  const karten = p.locator(".kanban-karte");
+  if (!(await karten.count())) throw new Error("keine Kanban-Karte vorhanden");
+  await karten.first().click();
+  await p.waitForTimeout(1300);
+  const stand = await p.evaluate(() => ({
+    seite: HD.S.seite,
+    dokument: HD.S.dokument,
+    panel: !document.getElementById("detail").hidden,
+    inhalt: !!document.querySelector("#detail .datei-inhalt"),
+  }));
+  if (stand.seite !== "projekte") throw new Error("der Klick hat die Seite gewechselt: " + stand.seite);
+  if (!stand.dokument) throw new Error("kein Dokument geoeffnet");
+  if (!stand.panel || !stand.inhalt) throw new Error("das Dokument steht nicht mit Inhalt im Panel");
+  await p.keyboard.press("Escape");
+  await p.waitForTimeout(400);
+  await p.evaluate(() => HD.zurSeite("ueberblick"));
+  await p.waitForTimeout(400);
+});
+
+zusage("Die Projektliste nennt den Arbeitspaket-Stand, nicht die Dokumentzahl", async (p) => {
+  await p.evaluate(() => HD.zurSeite("projekte"));
+  await p.waitForTimeout(1100);
+  const text = await p.locator(".eintrag-liste").first().innerText();
+  if (!/Arbeitspaket/.test(text)) throw new Error("keine Zeile nennt Arbeitspakete");
+  await p.evaluate(() => HD.zurSeite("ueberblick"));
+  await p.waitForTimeout(400);
+});
+
 // --- Durchgang E: MUSTER statt Einzelstelle -------------------------------
 // Die Nachprüfung (Runde 3) fand neun halb behobene Fixes und nannte den Grund:
 // „Fixes werden an dem einen Ort gebaut, an dem der Kritikpunkt formuliert war,

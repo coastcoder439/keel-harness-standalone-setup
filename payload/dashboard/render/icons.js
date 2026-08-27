@@ -44,6 +44,8 @@ const FORMEN = {
   PanelLeftOpen:
     '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/><path d="m14 9 3 3-3 3"/>',
   Search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+  CircleHelp:
+    '<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
   Command:
     '<path d="M15 6v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3V6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3"/>',
   Sun:
@@ -181,6 +183,7 @@ const NAMEN = Object.keys(FORMEN);
 const ZWEITNAMEN = {
   filecode: "FileCode2",
   refresh: "RefreshCw",
+  "circle-help": "CircleHelp",
   panelleft: "PanelLeftClose",
   kopieren: "Copy",
   schliessen: "X",

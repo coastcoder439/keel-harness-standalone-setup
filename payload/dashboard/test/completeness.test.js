@@ -39,6 +39,7 @@ const OHNE_TEST = {
 // Entwicklungs-Paket laden (playwright) und Ergebnisse ausgeben. Die Liste ist
 // klein und benannt -- wer hier etwas eintraegt, muss den Grund verteidigen.
 const WERKZEUGE = {
+  "screenshots.js": "Abnahme-Werkzeug: schiesst jede Seite in beiden Themes fuer die optische Abnahme gegen docs/ui-standard.md. Laeuft von Hand, wird nicht ausgeliefert, braucht playwright und gibt seine Dateiliste aus.",
   "klickpfad.js": "Abnahme-Werkzeug: klickt jede Zusage der Oberflaeche gegen den laufenden Server. Laeuft von Hand, wird nicht ausgeliefert, braucht playwright und gibt sein Ergebnis aus.",
 };
 

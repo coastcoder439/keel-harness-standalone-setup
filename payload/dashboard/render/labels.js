@@ -1,21 +1,15 @@
-// WORTE -- der EINZIGE Ort, an dem deutsche Beschriftungen stehen.
-//
-// WARUM DAS EINE DATEI IST
-// Die Vorfassung hatte ihre Woerter ueber 950 Zeilen verstreut: "Brett", "Posten",
-// "Marke", "nicht messbar", "Dringlichkeit". Niemand konnte sie pruefen, weil niemand
-// sie alle sah. Hier stehen sie in einer Liste, die ein Test durchgehen kann -- und
-// die ein Mensch in fuenf Minuten liest, statt sie in der erzeugten Seite zu suchen.
+// WORTE -- der EINZIGE Ort, an dem deutsche Beschriftungen stehen. Eine Liste,
+// die ein Test durchgehen kann und ein Mensch in fuenf Minuten liest.
 //
 // REGEL FUER DIESE DATEI
-// 1. Kein deutsches Label ausserhalb dieser Datei. Weder in styles.js noch in shell.js
-//    noch im Browser-Skript. Wer eins braucht, holt es hier.
-// 2. Die MESSUNG liefert Codes, keine Saetze. Aus "notizCode: leere-vorlage" wird hier
-//    ein deutscher Satz -- nicht in measure.js.
+// 1. Kein deutsches Label ausserhalb dieser Datei -- weder in styles.js noch in
+//    shell.js noch im Browser-Skript. Wer eins braucht, holt es hier.
+// 2. Die MESSUNG liefert Codes, keine Saetze. Aus "notizCode: leere-vorlage" wird
+//    hier ein deutscher Satz -- nicht in measure.js.
 // 3. Harness-Begriffe bleiben englisch: Hooks, Skills, Commands, Rules, Agents, MCP,
-//    settings.json, CLAUDE.md, SessionStart, PreToolUse, Stop, matcher, statusMessage.
-//    Grund: das sind die Namen der Ordner und Schluessel auf der Platte. Eine
-//    Eindeutschung ("Waechter", "Faehigkeiten") liest sich deutsch, aber niemand
-//    erkennt daran noch, welches Verzeichnis gemeint ist.
+//    settings.json, CLAUDE.md, SessionStart, PreToolUse, Stop, matcher. Das sind die
+//    Namen der Ordner und Schluessel auf der Platte; eine Eindeutschung liest sich
+//    deutsch, aber niemand erkennt daran noch das Verzeichnis.
 // 4. Keine Abkuerzungen. "Zeile 2-7", nicht "Z. 2-7". Einheiten (B, KB, MB, s) erlaubt.
 // 5. Kein Kunstwort. Wenn ein Wort erklaert werden muss, ist es das falsche Wort.
 
@@ -35,12 +29,8 @@ const VERBOTEN = [
   "Z.", "Anz.", "geaend.", "geänd.", "Std.", "Verz.",
 ];
 
-// ---------------------------------------------------------------------------
-// Seiten -- Name, Zweck-Satz, Ordner dahinter.
-// Der Zweck-Satz steht als erste Zeile der Hauptflaeche; {n}-Platzhalter werden
-// mit gemessenen Zahlen gefuellt (fuellen() unten). Kein Satz ohne Zahl, wo eine
-// Zahl existiert -- sonst ist es Dekoration.
-// ---------------------------------------------------------------------------
+// Seiten -- Name, Zweck-Satz, Ordner dahinter. Der Zweck-Satz steht als erste
+// Zeile der Hauptflaeche; {n}-Platzhalter fuellt fuellen() mit gemessenen Zahlen.
 
 const SEITEN = {
   ueberblick: {
@@ -72,7 +62,7 @@ const SEITEN = {
     ort: ".claude/settings.json",
     // Der Eintragsort steht als Pfad-Chip hinter dem Satz (SEITEN.ort) --
     // ihn auch im Satz zu nennen hiesse zweimal dasselbe (Beanstandung A7).
-    zweck: "Hooks sind Skripte, die Claude Code bei Ereignissen ausführt. Hier {n} Einträge auf {skripte} Skripte, dazu die statusLine.",
+    zweck: "Hooks sind Skripte, die Claude Code bei Ereignissen ausführt. Hier {n} Hook-Einträge auf {skripte} Skripte, und als letzte Zeile die statusLine.",
     icon: "terminal",
   },
   commands: {
@@ -117,17 +107,17 @@ const SEITEN = {
   projekte: {
     name: "Projekte",
     ort: "user-projects/",
-    zweck: "Was unter user-projects/ liegt und was es vorhat — {n} Projekte, {doku} Dokumente. {ohne} ohne Wegweiser.",
+    zweck: "Die Werkbank und was unter user-projects/ liegt — {n} Repos, {doku} Dokumente. {ohne} ohne Wegweiser.",
     icon: "folder-open",
   },
   backup: {
-    name: "Backup",
+    name: "Sicherung",
     ort: "git je Repo",
     zweck: "Liegt die Arbeit auch außerhalb dieses Rechners? {n} Repos geprüft, {offen} mit Lücke.",
     icon: "hard-drive",
   },
   commits: {
-    name: "Commits",
+    name: "Verlauf",
     ort: "git log",
     zweck: "Die letzten Commits über alle Repos hinweg — {n} Einträge, nach Tag gruppiert.",
     icon: "git-commit",
@@ -141,10 +131,7 @@ const SEITEN = {
 };
 
 // Tab-Gruppen: EIN Eintrag in der Seitenleiste buendelt mehrere Seiten als
-// Reiter -- die Seiten selbst (Kennungen, Adressen, Eintraege) bleiben, nur die
-// Navigation zeigt sie nicht mehr einzeln. Grund [Owner, 25.08.2026]: das
-// Side-Menue darf keine interne Mess-Taxonomie sein; 14 Eintraege waren eine
-// Messkategorien-Liste, kein Nutzer-Menue.
+// Reiter [Owner 25.08.2026: das Side-Menue darf keine Mess-Taxonomie sein].
 const TABGRUPPEN = {
   harness: {
     name: "Harness",
@@ -225,11 +212,8 @@ const ART_BESCHREIBUNG = {
   "abruf-regel":    "Regel, die nur auf Abruf geladen wird — ihr Frontmatter kennzeichnet sie als abrufbar, nicht als Dauer-Kontext.",
 };
 
-// Letzter Ausweg (A6): eine Datei ohne eigene Beschreibung und ohne bekannte
-// Rolle bekommt wenigstens eine Aussage ueber ihre ART. Das ist der ehrliche
-// Boden -- besser als eine leere Zeile und besser als der blosse Dateiname,
-// den die Nutzen-Pruefung ohnehin verwirft. Greift z. B. fuer .yaml-/.json-
-// Datendateien, die weder Frontmatter noch Kopfkommentar tragen.
+// Letzter Ausweg: eine Datei ohne Beschreibung und ohne bekannte Rolle bekommt
+// wenigstens eine Aussage ueber ihre ART -- ehrlicher als eine leere Zeile.
 const DATEITYP = {
   yaml: "YAML-Datei — strukturierte Konfiguration oder Daten.",
   yml:  "YAML-Datei — strukturierte Konfiguration oder Daten.",
@@ -254,12 +238,8 @@ const DATEITYP_ALLGEMEIN = "Datei vom Typ .{ext}.";
 // "kann stoppen" / "meldet nur" der Vorfassung war geraten; das hier ist gemessen.
 // ---------------------------------------------------------------------------
 
-// In der LISTE steht nur das Wort -- "(exit 2)" ist Implementierungsdetail
-// und gehoert ins Detail (Beleg-Zeile), nicht in einen Chip [Kritiker-Befund
-// Gauntlet-Runde 1, 25.08.2026].
-// Kurzes, festes Vokabular gleicher Laenge -- ein Satzfragment neben
-// Ein-Wort-Verben war Badge-Chaos [Kritiker-Befund Gauntlet-Runde 3]. Der
-// volle Satz steht in der erklaerung (Detail).
+// In der LISTE steht nur das Wort: kurzes, festes Vokabular gleicher Laenge.
+// Der volle Satz und "(exit 2)" stehen im Detail, nicht in einem Chip.
 // Was ein Ereignis BEDEUTET -- ohne diese Saetze steht ueber einer Gruppe nur
 // ein technischer Name, den niemand kennt [Owner 26.08.2026: "Keine
 // Erklaerung, was eine SessionStart, was eine PreToolUse"].
@@ -279,6 +259,15 @@ const WIRKUNG = {
 };
 
 // Wann etwas geladen wird -- ueberall gleich formuliert.
+// Was eine Sorte Kontext IST und wann sie laedt [Owner-Wunsch W14: "Keine
+// Erklaerung, was eine SessionStart, was eine PreToolUse"]. Ueber einer Gruppe
+// stand bis hierher nur ihr Name.
+const KONTEXTART_ERKLAERUNG = {
+  "Wurzel-Kontext": "Die CLAUDE.md an der Wurzel — sie liegt in jeder Sitzung von der ersten Nachricht an im Kontext und kostet ihre Token bei jeder einzelnen Anfrage.",
+  "Dauer-Regel": "Regeln unter .claude/rules/ — sie laden mit jeder Sitzung mit und gelten ohne Aufruf; was hier steht, kostet dauerhaft Platz im Kontextfenster.",
+  "Hook-Skript": "Skripte, die bei einem Ereignis laufen und Text in die Sitzung legen. Nicht das Skript kostet Kontext, sondern was es ausgibt.",
+};
+
 const LADEART = {
   dauerhaft: "in jeder Sitzung",
   start:     "bei Sitzungsstart",
@@ -310,15 +299,9 @@ const QUELLE = {
   typ:           "Dateityp",
 };
 
-// Git-Zustand je Datei.
-//
-// "gesichert" HIESS HIER EINE LUEGE [Kritik-Runde 2, Problem 3]: das Wort stand
-// fuer eine Datei, die Git lediglich VERFOLGT. Zwei Klicks weiter fragt dieselbe
-// Anwendung unter "Sicherung": "Liegt die Arbeit auch ausserhalb dieses
-// Rechners?" -- eine Datei kann committet und trotzdem nirgends gepusht sein.
-// Wer "gesichert" liest, glaubt, seine Arbeit ueberlebt einen Plattenausfall.
-// Ein Wort, das Sicherheit verspricht, wo keine ist, ist schlimmer als gar kein
-// Wort. "gesichert" ist ab jetzt dem GEPUSHTEN Zustand vorbehalten.
+// Git-Zustand je Datei. "gesichert" ist dem GEPUSHTEN Zustand vorbehalten:
+// eine Datei kann committet und trotzdem nirgends gepusht sein, und ein Wort,
+// das Sicherheit verspricht, wo keine ist, ist schlimmer als gar kein Wort.
 const GIT = {
   getrackt:   "von Git verfolgt",
   ungetrackt: "nicht in Git",
@@ -326,11 +309,7 @@ const GIT = {
   unbekannt:  "Git nicht verfügbar",
 };
 
-// ---------------------------------------------------------------------------
-// Leerzustaende -- drei Sorten, nie nur ein Strich.
-// Jeder hat Titel, Erklaerung und eine Handlung. Ein Leerzustand ohne Handlung
-// ist eine Sackgasse.
-// ---------------------------------------------------------------------------
+// Leerzustaende: Titel, Erklaerung, Handlung. Einer ohne Handlung ist eine Sackgasse.
 
 const LEER = {
   zutun: {
@@ -385,6 +364,11 @@ const LEER = {
     titel: "Es läuft nichts automatisch",
     text: "Weder geplante Aufgaben noch Cron-Jobs oder Loops sind für diesen Workspace eingerichtet. Sobald etwas läuft, steht es hier mit seinen Zeiten.",
     handlung: { wort: "Start-Skript ansehen", ziel: "datei:dashboard/start-server.cmd" },
+  },
+  "projekt-sitzungen": {
+    titel: "Keine Sitzung an diesem Projekt",
+    text: "Eine Sitzung gehört zu einem Projekt, sobald ihre Rolle in docs/08-sessions-rollen.md das Projekt oder ein Arbeitspaket daraus nennt.",
+    handlung: { wort: "Rollen ansehen", ziel: "datei:docs/08-sessions-rollen.md" },
   },
   "bridge-sitzungen": {
     titel: "Keine Sitzung sichtbar",
@@ -613,11 +597,24 @@ const UI = {
   nichtErreichbarHilfe: "Läuft der Server? Starten mit: node dashboard/serve.js",
   selbsttestLaeuft: "läuft …",
   selbsttestHinweis: "Wähle einen Guard, um seinen Selbsttest zu starten.",
+  // Projekt-Uebersicht [Owner 27.08.2026]: die Zahlen rechts in der
+  // Projektliste waren Dokumentzahlen -- gefragt sind Paketstand und Sitzung.
+  projektPaketeOffen: "{offen} von {gesamt} Arbeitspaketen offen",
+  projektPaketeAlleFertig: "{gesamt} Arbeitspakete, alle abgeschlossen",
+  projektPaketeEins: "1 Arbeitspaket, {stand}",
+  projektKeinePakete: "Kein Arbeitspaket",
+  werkbankUnter: "Die Werkbank selbst — hier liegen die Arbeitspakete dieses Workspace.",
+  projektSitzungen: "{n} Sitzungen arbeiten hier",
+  projektSitzungEine: "1 Sitzung arbeitet hier",
+  projektKeineSitzung: "Keine Sitzung zugeordnet",
+  projektSitzungenTitel: "Sitzungen an diesem Projekt",
+  projektDokumenteZahl: "{n} Dokumente",
   kanbanOffen: "Offen",
   kanbanArbeit: "In Arbeit",
   kanbanFertig: "Abgeschlossen",
   kanbanNaechster: "Nächster Schritt",
   kanbanLeer: "Nichts in dieser Spalte.",
+  automatikLaeufe: "Geplante Läufe",
   automatikArt: "Geplante Aufgabe des Betriebssystems",
   automatikEinrichten: "Der Dashboard-Server kann bei jeder Anmeldung starten. Dafür liegt bereit:",
   automatikNichtLesbar: "Die Aufgabenplanung dieses Systems konnte nicht gelesen werden — es kann trotzdem etwas laufen.",
@@ -634,7 +631,7 @@ const UI = {
 
   // Live-Stand [Kritik-Runde 2, Problem 6]: eine Zahl ohne Zeitpunkt ist eine
   // Behauptung. Jede Live-Sektion sagt, wann sie zuletzt gemessen hat.
-  standUm: "Stand {zeit} Uhr",
+  standUm: "Live abgefragt {zeit} Uhr",
   standUnbekannt: "Stand unbekannt",
   liveAktualisieren: "Jetzt neu abfragen",
   nochmalVersuchen: "Nochmal versuchen",
@@ -690,10 +687,7 @@ const UI = {
   ccKeinLauf: "Es läuft nichts automatisch.",
   ccAutomatikZeigen: "Automatik ansehen",
   ccAllesOffene: "Alles Offene ansehen",
-  // EINZAHL IST KEIN SONDERFALL [Kritik-Runde 2, Problem 14]: "vor 1 Minuten"
-  // stand an der prominentesten Stelle der Startseite. Falsches Deutsch dort
-  // laesst die ganze Flaeche unfertig wirken -- an anderer Stelle ("Ein Repo mit
-  // Sicherungslücke") war es laengst geloest, nur hier nicht.
+  // EINZAHL IST KEIN SONDERFALL: "vor 1 Minuten" braucht eine eigene Fassung.
   dauerGerade: "einem Augenblick",
   dauerMinuteEins: "einer Minute",
   dauerMinuten: "{n} Minuten",
@@ -788,7 +782,7 @@ function datum(iso) {
 
 module.exports = {
   VERBOTEN, SEITEN, NAVIGATION, TABGRUPPEN, STATUS, ART, ART_BESCHREIBUNG,
-  EREIGNIS_ERKLAERUNG,
+  EREIGNIS_ERKLAERUNG, KONTEXTART_ERKLAERUNG,
   DATEITYP, DATEITYP_ALLGEMEIN,
   WIRKUNG, LADEART, KANTE, QUELLE, GIT, LEER, UI, NOTIZ, ZUTUN_ART,
   fuellen, zahl, bytes, datum,

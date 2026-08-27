@@ -216,14 +216,25 @@ function ausInventar(m, kanten, rollen, seite) {
   const inv = m.inventar || { dateien: [] };
   return (inv.dateien || [])
     .filter((d) => rollen.includes(d.rolle))
+    // Ein Skill ist EIN Eintrag. Sein Beiwerk (LICENSE.txt, rules.md) gehoert
+    // in den geoeffneten Skill, nicht als eigene Zeile in die Liste -- sonst
+    // zeigt eine Liste mit der Ueberschrift "5 Skills" sieben Zeilen.
+    .filter((d) => !(seite === "skills" && d.rolle === "skill-datei"))
     .map((d) => {
       const e = dateiEintraege({ inventar: { dateien: [d] } }, kanten)[0];
       // EIGENE Kennung je Seite. Mit der Dateikennung stuende dieselbe Datei
       // zweimal im Index -- einmal unter "Dateien", einmal unter "Commands" --
       // und ein Klick auf der Commands-Seite oeffnete den Dateien-Eintrag,
       // dessen Seite eine andere ist. Ergebnis: das Detail blieb zu.
-      return Object.assign({}, e, { id: seite + ":" + d.pfad, dateiId: e.id, seite, liste: [
-        { label: UI.name, wert: seite === "commands" ? "/" + d.name.replace(/\.md$/, "") : d.name, stark: true, mono: seite === "commands" },
+      // WIE DER NUTZER ES NENNT, nicht wie die Datei heisst [Owner-Wunsch W1,
+      // Audit 27.08.2026]: fuenf Zeilen hiessen "SKILL.md", weil der Skill-Name
+      // im ORDNER steht, nicht im Dateinamen.
+      const ordner = d.pfad.split("/").slice(-2)[0] || d.name;
+      const angezeigt = seite === "commands"
+        ? "/" + d.name.replace(/.md$/, "")
+        : (seite === "skills" ? ordner : d.name);
+      return Object.assign({}, e, { id: seite + ":" + d.pfad, dateiId: e.id, seite, name: angezeigt, liste: [
+        { label: UI.name, wert: angezeigt, stark: true, mono: seite === "commands" },
         { label: UI.beschreibung, wert: e.beschreibung.text, weich: true },
         { label: UI.groesse, wert: bytes(d.bytes), mono: true },
         { label: UI.geaendert, wert: datum(d.geaendert), mono: true },
@@ -336,8 +347,12 @@ function kontextEintraege(m, beschreibungen) {
     liste: [
       { label: UI.pfad, wert: s.pfad, stark: true, mono: true },
       { label: UI.groesse, wert: bytes(s.bytes), mono: true },
-      { label: "Token", wert: zahl(s.tokenSchaetzung), mono: true, balken: s.bytes },
-      { label: UI.laedt, wert: LADEART[s.ladeart] || s.art || null },
+      // Die Zahl traegt ihr Wort mit [ui-standard Punkt 1]: "680" allein sagt
+      // nicht, was gezaehlt wurde.
+      { label: "Token", wert: zahl(s.tokenSchaetzung) + " Token", mono: true, balken: s.bytes },
+      // Die Sorte steht bereits als Gruppenkopf ueber der Zeile -- ein zweites
+      // Mal rechts daneben ist Wiederholung, keine Information.
+      { label: UI.laedt, wert: LADEART[s.ladeart] || null },
     ],
     felder: felderVon(
       feld(UI.pfad, s.pfad, { mono: true, sprung: "datei:" + s.pfad }),
@@ -369,9 +384,45 @@ function kontextEintraege(m, beschreibungen) {
 // und nicht im Rang: die wenigen Wurzel-Dokumente tragen ihren Inhalt mit, die
 // docs/-Baeume werden gelistet und bei Bedarf nachgeladen. 572 Dateien mit
 // 7,1 MB in der Seite waeren die Seite selbst gewesen.
+// DIE WERKBANK GEHOERT IN DIESE LISTE [Owner 27.08.2026]. Sie ist das Repo,
+// in dem die Arbeitspakete dieses Workspace liegen -- wer fragt "welche
+// Arbeitspakete liegen in welchem Stand", meint zuerst sie. Bis hierher kam
+// sie in der Projektliste nicht vor, und der Paket-Kanban im Projekt-Detail
+// waere damit immer leer geblieben.
+function werkbankEintrag(m) {
+  const name = String(m.wurzel || "").split(/[\\/]/).filter(Boolean).pop();
+  if (!name) return null;
+  return {
+    // Nicht "repo:<name>" -- diese Kennung fuehrt bereits der Sicherungs-Eintrag
+    // desselben Repos; eine Adresse zeigte dann auf zwei Dinge.
+    id: "werkbank:" + name,
+    seite: "projekte",
+    name,
+    // Kein Pfad: die Werkbank IST der Workspace, den die Pfadleiste ohnehin
+    // fuehrt -- ein einzelner Punkt unter dem Titel ist kein Ort.
+    pfad: null,
+    unter: UI.werkbankUnter,
+    art: "repo",
+    artWort: ART.repo || "Projekt",
+    status: null,
+    gruppe: null,
+    beschreibung: { text: UI.werkbankUnter, quelle: null, beleg: null },
+    liste: [
+      { label: UI.name, wert: name, stark: true },
+      { label: UI.beschreibung, wert: UI.werkbankUnter, weich: true },
+    ],
+    felder: felderVon(feld(UI.pfad, m.wurzel, { mono: true })),
+    dokumente: { wurzel: [], doku: [], gekappt: false, gekapptText: null, leer: true,
+      leerText: UI.keineWegweiser, leerHinweis: UI.keineWegweiserHinweis },
+    verwandt: [],
+    roh: { id: "werkbank:" + name, name, pfad: m.wurzel, anzahlDokumente: null },
+  };
+}
+
 function projektEintraege(m, kanten) {
   const p = m.projekte || { liste: [] };
-  return (p.liste || []).map((x) => {
+  const werkbank = werkbankEintrag(m);
+  const projekte = (p.liste || []).map((x) => {
     const wurzel = x.wurzelDokumente || [];
     const doku = x.dokuDateien || [];
 
@@ -449,6 +500,7 @@ function projektEintraege(m, kanten) {
       },
     };
   });
+  return werkbank ? [werkbank].concat(projekte) : projekte;
 }
 
 // Der Sicherungsstand eines Repos ist NICHT seine Beschreibung.
@@ -589,7 +641,6 @@ function werkzeugEintraege(m) {
       beschreibung: { text: p.beschreibung || null, quelle: null, beleg: g.ordner },
       liste: [
         { label: UI.name, wert: teile[0], stark: true },
-        { label: UI.typ, wert: teile[1], mono: true },
         { label: UI.beschreibung, wert: p.beschreibung, weich: true },
       ],
       felder: felderVon(feld(UI.quelle, g.ordner, { mono: true, sprung: "datei:" + g.ordner })),
