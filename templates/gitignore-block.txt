@@ -58,3 +58,6 @@ credentials.json
 node_modules/
 .DS_Store
 # <<< harness-eigenbau (vom Onboarding gesetzt) <<<
+
+# Waechter-Zustand je Sitzung, nie committen.
+.claude/state/

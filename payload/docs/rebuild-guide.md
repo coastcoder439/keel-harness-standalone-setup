@@ -549,6 +549,17 @@ Sitzungs-Nachrichten) plus die Statusleiste. **Nichts von Hand anzupassen** — 
             "statusMessage": "sessionpost-guard (knappe Inter-Session-Nachrichten)"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/paket-gate.js\"",
+            "timeout": 10,
+            "statusMessage": "Zuordnung zum Arbeitspaket"
+          }
+        ]
       }
     ]
   },
