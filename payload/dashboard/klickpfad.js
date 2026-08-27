@@ -419,11 +419,62 @@ zusage("Eine Kanban-Karte oeffnet das volle Dokument rechts, ohne die Seite zu v
   await p.waitForTimeout(400);
 });
 
-zusage("Die Projektliste nennt den Arbeitspaket-Stand, nicht die Dokumentzahl", async (p) => {
+zusage("Die Projektseite traegt drei Reiter, und jeder zeigt echten Inhalt", async (p) => {
   await p.evaluate(() => HD.zurSeite("projekte"));
-  await p.waitForTimeout(1100);
-  const text = await p.locator(".eintrag-liste").first().innerText();
-  if (!/Arbeitspaket/.test(text)) throw new Error("keine Zeile nennt Arbeitspakete");
+  await p.waitForTimeout(900);
+  await p.evaluate(() => {
+    const t = HD.seitenEintraege("projekte").find((e) => e.id.startsWith("werkbank:"));
+    if (!t) throw new Error("die Werkbank fehlt in der Projektliste");
+    HD.oeffnen(t.id);
+  });
+  await p.waitForTimeout(1200);
+  for (const [reiter, muss] of [["pakete", ".kanban"], ["sicherung", ".eigenschaft-zeile"], ["verlauf", ".eintrag-zeile"]]) {
+    await p.click(`[data-projektreiter="${reiter}"]`);
+    await p.waitForTimeout(700);
+    const n = await p.locator(muss).count();
+    if (!n) throw new Error("Reiter " + reiter + " zeigt nichts (" + muss + ")");
+  }
+  await p.evaluate(() => { HD.S.projektReiter = "pakete"; HD.zurSeite("ueberblick"); });
+  await p.waitForTimeout(400);
+});
+
+zusage("Kein Element ragt aus seinem Kasten und keine zwei ueberdecken einander", async (p) => {
+  // Owner-Grundregel 27.08.2026: "ganz oft sind Sachen schief, lappen
+  // uebereinander, ein Text guckt raus". Die volle Messung macht
+  // dashboard/ausrichtung.js; hier steht die Zusage fuer die Startseite, damit
+  // ein Rueckfall nicht erst beim naechsten Handlauf auffaellt.
+  const funde = await p.evaluate(() => {
+    const raus = [];
+    const sicht = (el) => {
+      const s = getComputedStyle(el);
+      if (s.display === "none" || s.visibility === "hidden") return false;
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    };
+    const teile = [...document.querySelectorAll(".arbeitsflaeche *")].filter(
+      (el) => sicht(el) && !el.closest("svg")
+        && !["marginLeft", "marginRight"].some((k) => parseFloat(getComputedStyle(el)[k]) < 0));
+    for (const el of teile) {
+      const p = el.parentElement;
+      if (!p || !sicht(p)) continue;
+      const ps = getComputedStyle(p);
+      if (ps.overflow !== "visible" || ps.overflowX !== "visible") continue;
+      if (getComputedStyle(el).position !== "static" && getComputedStyle(el).position !== "relative") continue;
+      const a = el.getBoundingClientRect(), b = p.getBoundingClientRect();
+      if (a.right > b.right + 1 || a.left < b.left - 1) raus.push(el.className || el.tagName);
+    }
+    return raus;
+  });
+  if (funde.length) throw new Error(funde.length + " Element(e) ragen heraus: " + funde.slice(0, 3).join(", "));
+});
+
+zusage("Die Projekt-KARTE nennt den Arbeitspaket-Stand, nicht die Dokumentzahl", async (p) => {
+  await p.evaluate(() => HD.zurSeite("projekte"));
+  await p.waitForTimeout(1200);
+  const karten = p.locator(".projekt-karte");
+  if (!(await karten.count())) throw new Error("kein Kartengitter -- die Projekte stehen wieder als Liste");
+  const text = await karten.first().innerText();
+  if (!/Paket/.test(text)) throw new Error("die Karte nennt keinen Paketstand: " + text.slice(0, 60));
   await p.evaluate(() => HD.zurSeite("ueberblick"));
   await p.waitForTimeout(400);
 });

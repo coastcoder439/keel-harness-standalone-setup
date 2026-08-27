@@ -467,7 +467,7 @@ function ersterAbsatz(text, abZeile) {
 //      hier BLOCKIERT".
 //
 // Verloren geht nichts: jede weitere Fundstelle bleibt in `weitereQuellen`.
-const STUFEN = [stufeFrontmatter, stufeClaudeMd, stufeKopfkommentar, stufeRaute, stufeAnsage, stufeAbsatz, stufeRolle];
+const STUFEN = [stufeFrontmatter, stufeClaudeMd, stufeKopfkommentar, stufeRaute, stufeHtml, stufeAnsage, stufeAbsatz, stufeRolle];
 
 function stufeFrontmatter(lage) {
   if (lage.ext !== "md" || !lage.text) return null;
@@ -504,6 +504,18 @@ function rauteKommentar(text) {
     i++;
   }
   return stuecke.length ? { text: stuecke.join(" "), von, bis: i } : null;
+}
+
+// Ein HTML-Dokument traegt seinen Satz im ersten <!-- ... -->. Ohne diese Stufe
+// faellt es auf seinen Dateityp zurueck ("HTML-Dokument.") [27.08.2026].
+function stufeHtml(lage) {
+  if (!/^html?$/.test(lage.ext) || !lage.text) return null;
+  const m = String(lage.text).match(/^\s*<!--([\s\S]*?)-->/);
+  if (!m) return null;
+  const text = m[1].replace(/\s+/g, " ").trim();
+  if (!text) return null;
+  const bis = zeilenAufteilen(String(lage.text).slice(0, m.index + m[0].length)).length;
+  return { text: textSichern(text).text, quelle: "kopfkommentar", beleg: beleg(lage.pfad, 1, bis) };
 }
 
 function stufeRaute(lage) {

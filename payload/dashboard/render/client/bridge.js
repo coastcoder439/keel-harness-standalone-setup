@@ -1,4 +1,4 @@
-// BROWSER-TEIL 4 von 5: die Live-Sektionen -- sehen UND bedienen.
+// BROWSER-TEIL 5 von 6: die Live-Sektionen -- sehen UND bedienen.
 //
 // Seit dem Neubau 25.08.2026 gibt es KEINE eigene Bruecken-Seite mehr [Owner:
 // eine Sache, ein Ort]: die Sitzungen und der Auftrag stehen auf dem
@@ -135,7 +135,12 @@ HD.sitzungenSektion = function () {
         + '<span class="sitzung-titel" title="' + HD.esc(name(s)) + '">' + HD.esc(name(s)) + "</span>"
         + (s.role ? '<span class="sitzung-rolle" title="' + HD.esc(s.role) + '">' + HD.esc(s.role) + "</span>" : "")
         + "</span>"
-        + '<span class="sitzung-laeuft">' + HD.esc(HD.W.sitzungLaeuft) + "</span>"
+        // WORAN die Sitzung arbeitet, nicht nur DASS sie arbeitet [Entwurf
+        // d-cc.html]. Das Projekt steht in ihrer Rolle und ist bereits geparst.
+        + (s.project && s.project.repo
+            ? '<span class="sitzung-projekt" title="' + HD.esc(s.project.file || s.project.repo) + '">'
+              + HD.esc(s.project.repo) + "</span>"
+            : '<span class="sitzung-laeuft">' + HD.esc(HD.W.sitzungLaeuft) + "</span>")
         + "</div>";
     }).join("");
     // HD.leerHTML statt handgeschriebenem Text [Kritik-Runde 3, Rueckfall 6]:
@@ -369,13 +374,11 @@ HD.projektSitzungenSektion = function (repo) {
         + '<span class="sitzung-laeuft">' + HD.esc(HD.W.sitzungLaeuft) + "</span>"
         + "</div>";
     }).join("");
+    // Die Frage lautet "wer arbeitet HIER GERADE". Die 130 beendeten Sitzungen
+    // desselben Projekts als Liste auszukippen schiebt alles andere aus dem
+    // Bild [gemessen 27.08.2026: 20 gleichnamige Zeilen ueber den Reitern].
     var ruhendHTML = ruhend.length
-      ? '<div class="eintrag-liste">' + ruhend.map(function (s) {
-          return '<div class="eintrag-zeile"><span class="eintrag-haupt"><span class="eintrag-titel">'
-            + HD.esc(name(s)) + "</span></span>"
-            + '<span class="eintrag-schluss mono">' + HD.esc(HD.zeitpunkt(s.lastActivity)) + "</span>"
-            + "</div>";
-        }).join("") + "</div>"
+      ? '<p class="sektion-fuss">' + HD.esc(HD.fuellen(HD.W.fruehereAnzeigen, { n: ruhend.length })) + "</p>"
       : "";
     return (karten ? '<div class="sitzung-reihe">' + karten + "</div>" : "") + ruhendHTML;
   });

@@ -1,4 +1,4 @@
-// BROWSER-TEIL 2 von 5: die Seiten.
+// BROWSER-TEIL 2 von 6: die Seiten.
 //
 // Drei Formen, mehr braucht es nicht: Ueberblick (Kennzahlen und Abschnitte),
 // Listenseite (EIN Zeilenrezept fuer alles) und Dateien (Baum plus Ansicht).
@@ -227,26 +227,6 @@ HD.seitenKopfHTML = function (seite) {
     + "</header>";
 };
 
-// --- Ein Projekt in der Hauptflaeche [Owner-Wunsch W7, gebaut 27.08.2026] --
-// "Klick auf Projekt -> Arbeitspakete als Kanban, Reiter Sicherung und Verlauf
-// je Projekt": ein Projekt ist ein ORT, keine Eigenschaftsliste im Panel. Die
-// Seite traegt deshalb den vollen Platz -- Kopf, Arbeitspakete als Kanban,
-// die Sitzungen, die hier arbeiten, und die Dokumente des Projekts.
-HD.projektSeite = function (e) {
-  var kopf = '<header class="seiten-kopf">'
-    + '<button class="filter-chip" data-pfadziel="projekte">' + HD.icon("chevron-left")
-    + "<span>" + HD.esc(HD.W.zurueck) + "</span></button>"
-    + '<h1 class="seiten-titel">' + HD.esc(e.name) + "</h1>"
-    + (e.pfad ? '<p class="seiten-unter"><span class="pfad">' + HD.esc(e.pfad) + "</span></p>" : "")
-    + "</header>";
-  var beschreibung = e.beschreibung && e.beschreibung.text
-    ? '<p class="erklaersatz">' + HD.esc(e.beschreibung.text) + "</p>" : "";
-  var kanban = HD.paketKanban ? HD.paketKanban(e.name) : "";
-  var sitzungen = HD.projektSitzungenSektion ? HD.projektSitzungenSektion(e.name) : "";
-  var dokumente = HD.projektDokumenteHTML ? HD.projektDokumenteHTML(e) : "";
-  return kopf + beschreibung + kanban + sitzungen + dokumente;
-};
-
 HD.listenSeite = function (seite) {
   var s = HD.D.seiten[seite];
   var liste = HD.gefiltert(seite);
@@ -314,6 +294,14 @@ HD.listenSeite = function (seite) {
   }
 
   if (seite === "zutun" && HD.S.ansicht === "board") return kopf + kacheln + werkzeug + HD.boardHTML(liste) + anbau;
+
+  // PROJEKTE ALS KARTENGITTER [Entwurf mockups/d-projekte.html, 01-product.md:
+  // "Projektliste als Karten (offene Pakete, Sicherungsstand)"]. Eine Liste mit
+  // Texten und Zahlen beantwortet die Frage "welches Projekt braucht mich"
+  // nicht -- die Karte zeigt Name, Satz, wer dort arbeitet und den Stand.
+  if (seite === "projekte" && liste.length) {
+    return kopf + werkzeug + HD.projektNetzHTML(liste);
+  }
 
   // PROJEKTLISTE: der Live-Stand statt der Dokumentzahl [Owner 27.08.2026].
   // Die Messung liefert je Projekt eine Dokumentzahl -- gefragt ist, welche
@@ -399,6 +387,16 @@ HD.boardHTML = function (liste) {
 };
 
 // --- Control Center -------------------------------------------------------
+// Der Weg aus einem Widget in seine tiefe Ansicht [01-product.md: "Jedes Widget
+// ist die Klein-Fassung einer tiefen Ansicht und verlinkt dorthin"]. Mit Pfeil,
+// damit man sieht, dass es weitergeht.
+HD.widgetWeg = function (ziel, wort) {
+  // Nur das Wort: der Kopf traegt links bereits einen Aufklapp-Winkel, ein
+  // zweiter Winkel rechts sind zwei Zeichen fuer zwei verschiedene Dinge
+  // dicht nebeneinander.
+  return '<button class="widget-link" data-ziel="' + HD.esc(ziel) + '">' + HD.esc(wort) + "</button>";
+};
+
 // [Owner 25.08.2026 abends] Widgets verdichten nach oben, die Reiter
 // verbreitern nach unten: Gesundheit (Haekchenliste), Deine drei (die
 // wichtigsten offenen Punkte), Logbuch heute (was lief wann), Sitzungen,
@@ -424,9 +422,9 @@ HD.wGesundheit = function () {
     // Wort und Zahl beschreiben DASSELBE: die Zeile heisst jetzt, was sie misst.
     { status: !hooks.length ? null : (hooksAbweichung === 0 ? "ok" : "hinweis"),
       text: hooks.length ? HD.fuellen(HD.W.ccHooksOhneBefund, { n: hooks.length }) : HD.W.ccHooksKeine,
-      // KEINE Zahl rechts: sie stuende ein zweites Mal, der Satz nennt sie schon
-      // [ui-standard: eine Sache, eine Beschreibung, ein Ort].
-      wert: "", ziel: "hooks" },
+      // Der Wert rechts ist der BELEG zur Aussage links [Entwurf d-cc.html:
+      // "Hooks geladen 11/11"] -- er zeigt, woran die Zeile gemessen wurde.
+      wert: hooks.length ? hooks.length + "/" + alleEintraege.length : "", ziel: "hooks" },
     { status: alterLesbar === null ? null : (alterMin <= 60 ? "ok" : "hinweis"),
       text: alterLesbar === null ? HD.W.ccMessungUnbekannt : HD.fuellen(HD.W.ccMessungFrisch, { dauer: alterLesbar }),
       wert: HD.zeitpunkt(HD.D.gemessenAm), ziel: null },
@@ -437,9 +435,9 @@ HD.wGesundheit = function () {
       text: !z.repos ? HD.W.ccSicherungUnbekannt
         : (z.reposOffen === 0 ? HD.fuellen(HD.W.ccSicherungOk, { n: z.repos })
           : (z.reposOffen === 1 ? HD.W.ccSicherungLueckeEins : HD.fuellen(HD.W.ccSicherungLuecke, { n: z.reposOffen }))),
-      // Die 22 rechts war die Zahl ALLER Repos neben dem Satz ueber das EINE mit
-      // Luecke -- zwei Zahlen zu einer Zeile, von denen keine erklaert war.
-      wert: "", ziel: "backup" },
+      // Rechts steht, WORAUF sich der Satz bezieht: die Zahl der geprueften
+      // Repos, nicht noch einmal die Zahl der Luecken.
+      wert: z.repos ? z.repos + " Repos" : "", ziel: "backup" },
   ];
   var offenAn = HD.S.abschnitt["gruppe:" + HD.W.ccGesundheit] !== false;
   var rumpf = zeilen.map(function (r) {
@@ -457,23 +455,52 @@ HD.wGesundheit = function () {
         + '<span class="zeilen-pfeil" aria-hidden="true">' + HD.icon("chevron-right") + "</span></button>"
       : '<div class="check-reihe check-reihe-still' + achtung + '">' + kern + "</div>";
   }).join("");
-  return "<section>" + HD.gruppeHTML(HD.W.ccGesundheit, null, offenAn)
+  // Jedes Widget traegt seinen Weg in die Tiefe [01-product.md: "nichts
+  // existiert nur oben"].
+  var weg = HD.widgetWeg("hooks", HD.W.ccZuHarness);
+  return "<section>" + HD.gruppeHTML(HD.W.ccGesundheit, null, offenAn, false, weg)
     + (offenAn ? '<div class="widget-rumpf">' + rumpf + "</div>" : "") + "</section>";
 };
 
 // Logbuch: was lief, wann. Der Titel behauptet nicht mehr "heute" -- gezeigt
 // wird die letzte Messung, und die kann aelter sein [Befund 26.08.2026].
 // Der Leerzustand traegt eine HANDLUNG, keine blosse Feststellung.
+// AUTOMATIK HEUTE als ZEITLEISTE [01-product.md W3: "Laeufe mit Uhrzeit,
+// letzter/naechster Lauf"; Entwurf mockups/d-cc.html]. Vorher stand hier eine
+// einzelne Zeile "Messung gelaufen" ohne Uhrzeit und ohne den Blick nach vorn --
+// die Frage "wann laeuft das naechste Mal etwas" blieb unbeantwortet.
 HD.wLogbuch = function () {
   var offenAn = HD.S.abschnitt["gruppe:" + HD.W.ccLogbuch] !== false;
-  var rumpf = '<div class="logbuch">'
-    + '<div class="logbuch-halt"><time class="mono" datetime="' + HD.esc(HD.D.gemessenAm || "") + '">'
-    + HD.esc(HD.zeitpunkt(HD.D.gemessenAm)) + "</time>"
-    + "<b>" + HD.esc(HD.W.ccMessungGelaufen) + "</b></div></div>"
-    + '<p class="leer-kompakt">' + HD.esc(HD.W.ccKeinLauf) + " "
-    + '<button class="widget-link" data-ziel="hooks">' + HD.esc(HD.W.ccAutomatikZeigen) + "</button></p>";
-  return "<section>" + HD.gruppeHTML(HD.W.ccLogbuch, null, offenAn)
-    + (offenAn ? '<div class="widget-rumpf">' + rumpf + "</div>" : "") + "</section>";
+  var halt = function (zeit, was, geplant) {
+    return '<div class="logbuch-halt"' + (geplant ? ' data-geplant="ja"' : "") + ">"
+      + '<time class="mono">' + HD.esc(zeit) + "</time>"
+      + (geplant ? "<span>" + HD.esc(was) + "</span>" : "<b>" + HD.esc(was) + "</b>")
+      + "</div>";
+  };
+  // Der letzte Lauf ist gemessen: die Messzeit selbst. Ein zweiter Halt kommt
+  // aus der Automatik-Messung, sobald dort etwas eingerichtet ist.
+  var halte = halt(HD.uhrzeitVon(HD.D.gemessenAm), HD.W.ccMessungGelaufen, false);
+  var laeufe = ((HD.bridgeData || {}).automatik || {}).laeufe || [];
+  var naechster = laeufe.filter(function (l) { return l.naechster; })[0];
+  halte += naechster
+    ? halt(HD.zeitpunkt(naechster.naechster), naechster.name, true)
+    : halt(HD.W.ccLaufNaechster, HD.W.ccKeinNaechster, true);
+  var weg = HD.widgetWeg("automatik", HD.W.ccZuAutomatik);
+  return "<section>" + HD.gruppeHTML(HD.W.ccLogbuch, null, offenAn, false, weg)
+    + (offenAn ? '<div class="widget-rumpf"><div class="logbuch">' + halte + "</div></div>" : "") + "</section>";
+};
+
+// Uhrzeit eines Zeitpunkts -- die Zeitleiste zeigt IMMER eine Uhrzeit, auch
+// wenn der Halt nicht von heute ist [Audit-Befund B18].
+HD.uhrzeitVon = function (iso) {
+  if (!iso) return "—";
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  var heute = new Date();
+  var gleich = d.toDateString() === heute.toDateString();
+  var z = function (n) { return (n < 10 ? "0" : "") + n; };
+  var uhr = z(d.getHours()) + ":" + z(d.getMinutes());
+  return gleich ? uhr : HD.zeitpunkt(iso) + " " + uhr;
 };
 
 // Deine drei: die drei wichtigsten OFFENEN Punkte. Erledigtes wird
@@ -489,13 +516,46 @@ HD.wDrei = function () {
     var rb = (HD.D.status[b.status] || {}).rang;
     return (rb == null ? -1 : rb) - (ra == null ? -1 : ra);
   });
-  var gezeigt = offene.slice(0, 3);
+  // QUELLENUEBERGREIFEND [01-product.md W2: "die drei wichtigsten, abhakbar,
+  // quellenuebergreifend priorisiert"]: Messbefunde UND offene Schritte aus den
+  // Arbeitspaketen stehen nebeneinander. Ein Messbefund ist nicht abhakbar --
+  // er verschwindet, wenn die Ursache weg ist; ein Paket-Schritt schon, und der
+  // bekommt sein Kaestchen (dieselbe Schreibung wie auf der Paket-Karte).
+  var schritte = [];
+  ((HD.bridgeData || {}).packages || []).forEach(function (pk) {
+    if (pk.error) return;
+    (pk.steps || []).forEach(function (st, i) {
+      if (st.done) return;
+      schritte.push({
+        id: "schritt:" + pk.file + ":" + i,
+        name: st.text,
+        datei: pk.file,
+        index: i,
+        // Der Paket-NAME reicht als Kontext -- ein ganzer Titel wird in der
+        // schmalen Spalte ohnehin gekuerzt und sagt dann weniger als der Name.
+        kontext: String(pk.file).split("/").pop().replace(/[.]md$/, ""),
+        abhakbar: true,
+      });
+    });
+  });
+  // Erst die Messbefunde nach Rang, dann die Paket-Schritte -- ein roter Befund
+  // wiegt schwerer als ein offener Haken.
+  var gezeigt = offene.slice(0, 3).concat(schritte).slice(0, 3);
   var offenAn = HD.S.abschnitt["gruppe:" + HD.W.ccDrei] !== false;
   var rumpf = gezeigt.length
     ? gezeigt.map(function (e) {
+        // Abhakbar: ein Kaestchen, das wirklich in die Datei schreibt.
+        if (e.abhakbar) {
+          return '<div class="drei-zeile">'
+            + '<input type="checkbox" data-bridge-toggle="' + HD.esc(e.datei) + '"'
+            + ' data-bridge-index="' + e.index + '" aria-label="' + HD.esc(e.name) + '">'
+            + '<span class="drei-text" title="' + HD.esc(e.name) + '">' + HD.esc(HD.aufEineZeile(e.name, 64)) + "</span>"
+            + '<span class="drei-kontext" title="' + HD.esc(e.kontext) + '">' + HD.esc(HD.aufEineZeile(e.kontext, 22)) + "</span>"
+            + "</div>";
+        }
         return '<button class="drei-zeile" data-id="' + HD.esc(e.id) + '">'
           + '<span class="drei-glyphe">' + HD.statusGlyphe(e.status) + "</span>"
-          + '<span class="drei-text" title="' + HD.esc(e.name) + '">' + HD.esc(e.name) + "</span>"
+          + '<span class="drei-text" title="' + HD.esc(e.name) + '">' + HD.esc(HD.aufEineZeile(e.name, 64)) + "</span>"
           + '<span class="zeilen-pfeil" aria-hidden="true">' + HD.icon("chevron-right") + "</span>"
           + "</button>";
       }).join("")
