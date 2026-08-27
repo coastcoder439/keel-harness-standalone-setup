@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-27T09:50:40.015Z",
-  "posten": 96,
+  "gebautAm": "2026-08-27T11:40:58.686Z",
+  "posten": 97,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 77762,
-      "sha256": "ce189f5d009f8cb9"
+      "bytes": 78113,
+      "sha256": "c2684ba2afa39e1a"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -148,8 +148,8 @@
       "herkunft": ".claude/commands/tell-session.md",
       "quellordner": "werkbank",
       "gesaeubert": 2,
-      "bytes": 1498,
-      "sha256": "83dc5f141efb1e54"
+      "bytes": 1735,
+      "sha256": "873c9759a7ba647d"
     },
     {
       "datei": "payload/claude/commit-pathspec-guard.js",
@@ -220,8 +220,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 8347,
-      "sha256": "80c938e5721c55f3"
+      "bytes": 8554,
+      "sha256": "05d3bd5492d7ceff"
     },
     {
       "datei": "payload/claude/repo-status.js",
@@ -268,16 +268,16 @@
       "herkunft": ".claude/hooks/session-roles.js",
       "quellordner": "werkbank",
       "gesaeubert": 3,
-      "bytes": 5440,
-      "sha256": "19b84c78180f955d"
+      "bytes": 6859,
+      "sha256": "e2f986d344e8f57c"
     },
     {
       "datei": "payload/claude/sessionpost-guard.js",
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 4943,
-      "sha256": "0971cdfd82f42b52"
+      "bytes": 6184,
+      "sha256": "a0b69cdde5ba6999"
     },
     {
       "datei": "payload/claude/skills/completeness/SKILL.md",
@@ -292,8 +292,8 @@
       "herkunft": ".claude/skills/i-have-adhd/SKILL.md",
       "quellordner": "werkbank",
       "gesaeubert": 0,
-      "bytes": 7663,
-      "sha256": "639677dfa4742a02"
+      "bytes": 8503,
+      "sha256": "b79af92ed54944b9"
     },
     {
       "datei": "payload/claude/statusline.js",
@@ -620,8 +620,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 22110,
-      "sha256": "65194ba5b31f9880"
+      "bytes": 22112,
+      "sha256": "8a845c3494df75dc"
     },
     {
       "datei": "payload/dashboard/test/icons.test.js",
@@ -748,8 +748,16 @@
       "herkunft": "docs/10-nachbau-anleitung.md",
       "quellordner": "werkbank",
       "gesaeubert": 11,
-      "bytes": 220246,
-      "sha256": "2c495e52d8c59785"
+      "bytes": 221902,
+      "sha256": "581400a282c8ec55"
+    },
+    {
+      "datei": "payload/docs/session-notes/README.md",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 993,
+      "sha256": "33fe7bce970f547b"
     },
     {
       "datei": "payload/docs/tool-landscape.md",

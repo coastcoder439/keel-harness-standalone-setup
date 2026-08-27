@@ -59,6 +59,36 @@ function zeilen() {
 // docs/08-sessions-rollen.md) stieg der Hook damit aus, BEVOR der /i-have-adhd-Aufruf
 // kam; frische Sessions bekamen den Antwortform-Skill NIE. Jetzt: Rollen-Tabelle nur,
 // wenn vorhanden -- aber der Skill-Aufruf laeuft bei jedem "startup" unabhaengig davon.
+// Offene Sitzungs-Notizen sichtbar machen [Paket session-messages, Owner-Entscheid
+// 27.08.2026: Senden abstellen]. Ohne diesen Block waere "abstellen" ein Verlust --
+// Befunde laegen in Dateien, die niemand oeffnet. Gemeldet wird nur Datei, Anzahl und
+// juengster Kopf, nie der Inhalt: der Sitzungsstart bleibt billig, gelesen wird auf Zuruf.
+function notizen() {
+  const dir = path.join(WURZEL, "docs", "session-notes");
+  let dateien;
+  try {
+    dateien = fs.readdirSync(dir).filter((n) => n.endsWith(".md") && n !== "README.md");
+  } catch {
+    return null; // Ordner fehlt (frischer Nachbau) -> still
+  }
+  const raus = [];
+  for (const name of dateien.sort()) {
+    let text;
+    try {
+      text = fs.readFileSync(path.join(dir, name), "utf8");
+    } catch {
+      continue;
+    }
+    const koepfe = text.split(/\r?\n/).filter((z) => z.startsWith("## "));
+    if (!koepfe.length) continue;
+    const letzter = koepfe[koepfe.length - 1].replace(/^##\s*/, "").trim();
+    raus.push(`- docs/session-notes/${name}: ${koepfe.length} Notiz(en), zuletzt ${letzter}`);
+  }
+  return raus.length
+    ? ["", "OFFENE SITZUNGS-NOTIZEN (lies die Datei, wenn deine Rolle betroffen ist):", ...raus]
+    : null;
+}
+
 const rollen = zeilen();
 const rollenText = rollen
   ? [
@@ -66,10 +96,13 @@ const rollenText = rollen
       "Es arbeiten mehrere Sitzungen parallel im selben Ordner:",
       ...rollen,
       "",
-      "MELDE-REGEL: Aenderst oder findest du einen Fakt, auf dem eine ANDERE Rolle aufbaut",
-      "(Pfad, Repo-/Branch-Name, Datenbank, ein Beschluss), dann schick ihn ihr per /tell-session,",
-      "statt ihn nur zu notieren. Gehoert eine Aufgabe erkennbar einer anderen Rolle: dorthin",
-      "uebergeben, nicht selbst machen. Ueberblick: /session-map",
+      "MELDE-REGEL [Owner 27.08.2026 -- Nachrichten ZWISCHEN Sitzungen sind abgestellt]:",
+      "Aenderst oder findest du einen Fakt, auf dem eine ANDERE Rolle aufbaut (Pfad,",
+      "Repo-/Branch-Name, Datenbank, ein Beschluss), dann LEGE IHN AB per /tell-session --",
+      "der Befehl schreibt docs/session-notes/<rolle>.md. Kein Senden: die andere Sitzung",
+      "liest die Notiz beim naechsten Start. Gehoert eine Aufgabe erkennbar einer anderen",
+      "Rolle: dorthin uebergeben, nicht selbst machen. Ueberblick: /session-map",
+      ...(notizen() || []),
     ].join("\n")
   : null;
 

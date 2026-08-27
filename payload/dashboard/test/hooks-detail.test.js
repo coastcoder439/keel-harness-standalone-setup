@@ -247,10 +247,10 @@ test("der Beleg fuer startup zeigt auf die Schaltstelle, nicht auf einen Komment
     const e = ergebnis.eintraege.find((x) => x.skript === name);
     return e.ausloeser.find((a) => a.wort === "startup").zeile;
   };
-  assert.strictEqual(nach("session-roles.js"), 98);
+  assert.strictEqual(nach("session-roles.js"), 131);
   assert.strictEqual(nach("onboarding-start.js"), 47);
   assert.strictEqual(nach("project-context.js"), 33);
-  for (const [name, zeile] of [["session-roles.js", 98], ["onboarding-start.js", 47], ["project-context.js", 33]]) {
+  for (const [name, zeile] of [["session-roles.js", 131], ["onboarding-start.js", 47], ["project-context.js", 33]]) {
     const quelle = zeilenVon(`.claude/${name}`)[zeile - 1];
     assert.ok(!/^\s*\/\//.test(quelle), `${name}:${zeile} ist eine Kommentarzeile: ${quelle}`);
   }

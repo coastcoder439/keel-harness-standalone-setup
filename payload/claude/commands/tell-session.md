@@ -1,26 +1,32 @@
 ---
-description: Send a finding or handoff to another session in this workspace (it arrives there as a labelled message)
+description: Befund oder Uebergabe fuer eine andere Session ablegen (sie liest ihn bei ihrem naechsten Start)
 ---
 
-Schicke einer anderen Session dieses Workspace eine Nachricht. Argument (optional):
-Zielsession und/oder Inhalt; fehlt beides, aus dem Verlauf ableiten.
+Lege einer anderen Rolle dieses Workspace einen Befund ab. Argument (optional):
+Ziel-Rolle und/oder Inhalt; fehlt beides, aus dem Verlauf ableiten.
 
-1. `mcp__ccd_session_mgmt__list_sessions` — Zielsession am Titel finden. Passt keiner
-   eindeutig: Kandidaten zeigen und fragen, nie raten.
-2. Nachricht formulieren — **drei Zeilen, mehr nicht** (der Empfaenger ist eine Maschine
-   mit eigenem Kontextfenster; Verweis statt Inhalt, sie hat dieselben Dateien):
+**Senden ist abgestellt** [Owner-Entscheid 27.08.2026, Paket `docs/packages/session-messages.md`]:
+Eine gesendete Nachricht erscheint beim Owner im Vordergrund und unterbricht beim
+Empfaenger die laufende Arbeit. Der `sessionpost-guard` blockt
+`mcp__ccd_session_mgmt__send_message`.
 
+1. Ziel-Rolle in `docs/08-sessions-rollen.md` bestimmen. Passt keine eindeutig:
+   Kandidaten zeigen und fragen, nie raten.
+2. Notiz formulieren — **drei Zeilen, mehr nicht** (die Gegenseite ist eine Maschine mit
+   eigenem Kontextfenster und denselben Dateien; Verweis statt Inhalt):
+
+       ## <JJJJ-MM-TT> — von <deine Rolle>
        <Fakt> — <was sich fuer DICH aendert>.
        Beleg: <datei:zeile | commit | befehl>
        Zu tun: <eine Sache>            (weglassen, wenn nichts zu tun ist)
 
-   **Pruefsatz: Weiss die andere Session nach der ERSTEN Zeile, was sich fuer SIE
-   aendert?** Der `sessionpost-guard` erzwingt die Knappheit.
-3. Sind Ziel UND Anlass eindeutig: direkt senden, nicht rueckfragen — die Melderegel in
-   `docs/08-sessions-rollen.md` ist die stehende Freigabe [Auftraggeber 31.07.2026].
-   Nur bei erratenem Ziel/Inhalt vorher zeigen und bestaetigen lassen.
-4. `mcp__ccd_session_mgmt__send_message`, danach bestaetigen: welche Session, welcher Kern.
+   **Pruefsatz: Weiss die andere Rolle nach der ERSTEN Zeile, was sich fuer SIE aendert?**
+3. Eintrag ans ENDE von `docs/session-notes/<ziel-rolle>.md` haengen (Datei anlegen,
+   wenn sie fehlt) und committen:
+   `git commit -m "notiz(<ziel>): <kern>" -- docs/session-notes/<ziel-rolle>.md`
+4. Bestaetigen: welche Rolle, welcher Kern, welche Datei.
 
-Wann: ein Fakt aendert sich, den eine andere Session als Grundlage nutzt, oder eine
-Aufgabe gehoert erkennbar einer anderen Rolle. Nicht zum Fernsteuern; in
-unbeaufsichtigten Laeufen ist Senden gesperrt — Befund stattdessen in eine Datei im Repo.
+Wann: ein Fakt aendert sich, den eine andere Rolle als Grundlage nutzt, oder eine Aufgabe
+gehoert erkennbar einer anderen Rolle. Die Zielsitzung sieht beim naechsten Start, dass
+ihre Datei Eintraege hat (`.claude/session-roles.js`, Funktion `notizen()`); gelesen und
+erledigt heisst: Eintrag streichen, die Historie steht in git.
