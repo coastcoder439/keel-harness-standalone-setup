@@ -7,9 +7,11 @@ Vor der Arbeit die Zieldefinition in drei Saetzen: **Problem** (was ist konkret 
 offen ist, und nennt Kandidaten. Schleife je
 Arbeitspaket: Zieldefinition → Plan → Bau → Verify → Ship; sichern per Push ist immer erlaubt.
 **Verify bei UI-Code heisst: echter Screenshot im Browser gegen `docs/ui-standard.md`
-geprueft** [Owner, 25.08.2026: "du hast anscheinend keine optische Abnahme gemacht"] —
-DOM-Text lesen ersetzt das Hinsehen nicht; ein fehlgeschlagener Screenshot ist ein
-Blocker, kein uebersprungener Schritt.
+UND `docs/ui-standard-werkzeug.md` geprueft** [Owner, 25.08.2026: "du hast anscheinend
+keine optische Abnahme gemacht"] — DOM-Text lesen ersetzt das Hinsehen nicht; ein
+fehlgeschlagener Screenshot ist ein Blocker, kein uebersprungener Schritt. Das Werkzeug
+dafuer ist `node dashboard/screenshots.js` (jede Seite in hell und dunkel), die
+Bedienzusagen prueft `node dashboard/klickpfad.js`.
 
 **Jedes Arbeitspaket lebt als sichtbares Artefakt IM REPO SEINES PROJEKTS** [Owner,
 24.08.2026]: `<projekt-repo>/docs/packages/<paket>.md` — Projekt-Arbeit unter
