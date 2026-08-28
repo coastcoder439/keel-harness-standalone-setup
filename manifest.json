@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-27T19:08:42.863Z",
-  "posten": 102,
+  "gebautAm": "2026-08-28T00:20:49.043Z",
+  "posten": 100,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 79281,
-      "sha256": "65105d4edaea23ce"
+      "bytes": 78469,
+      "sha256": "af3768634eacb4f2"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -806,22 +806,6 @@
       "gesaeubert": 1,
       "bytes": 4507,
       "sha256": "9f49df5c3e851c00"
-    },
-    {
-      "datei": "payload/docs/ui-standard-werkzeug.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 25613,
-      "sha256": "352b1a6537223afd"
-    },
-    {
-      "datei": "payload/docs/ui-standard.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 2792,
-      "sha256": "2300ae42adb29118"
     },
     {
       "datei": "templates/CLAUDE.md",
