@@ -202,7 +202,7 @@ const DASHBOARD = [
   // das Dashboard selbst laeuft weiter mit Bordmitteln.
   "klickpfad.js",
   // Abnahme-Werkzeug (27.08.2026): schiesst jede Seite in beiden Themes fuer die
-  // optische Abnahme gegen docs/ui-standard.md. Braucht ebenfalls playwright.
+  // optische Abnahme gegen die genehmigten Entwuerfe. Braucht ebenfalls playwright.
   "screenshots.js",
   // Abnahme-Werkzeug (27.08.2026): misst je Seite, ob ein Element aus seinem
   // Kasten ragt, zwei einander ueberdecken oder ein Text gekuerzt wird, obwohl
@@ -303,18 +303,6 @@ const BEILEGER = [
   // vier Rubriken CLI/MCP/API/Zugaenge. Wird nach docs/ kopiert, dort traegt der
   // Onboarding-Befehl die erkannten Werkzeuge ein.
   "tool-landscape.md",
-  // UI-Standard des Dashboards -- sieben Punkte, gegen die jede Seite gebaut UND
-  // optisch abgenommen wird (Owner 25.08.2026: "es waren bereits regeln fuer ui
-  // festgelegt"). Ohne diese Datei im frischen Klon baut die naechste Sitzung wieder
-  // am Vokabular vorbei -- genau der Fund, der dieses Paket ausgeloest hat.
-  "ui-standard.md",
-  // Regelwerk fuer WERKZEUG-Oberflaechen (27.08.2026): 104 pruefbare Regeln zu
-  // Tabellen, Filtern, Leerzustaenden, Zustandsanzeige und Dichte, destilliert
-  // aus IBM Carbon (Apache-2.0), SAP content-density (Apache-2.0) und GitHub
-  // Primer (MIT). Es sagt, WANN welches Muster genommen wird; ui-standard.md
-  // sagt, wie es hier heisst. Ohne diese Datei baut die naechste Sitzung
-  // Tabellen und Leerzustaende wieder nach Gefuehl.
-  "ui-standard-werkzeug.md",
 ];
 
 // LICENSE-mattpocock-skills.txt am 25.08.2026 entfernt: die zwei mattpocock-
