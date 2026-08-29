@@ -1,7 +1,7 @@
 {
   "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-28T00:20:49.043Z",
-  "posten": 100,
+  "gebautAm": "2026-08-29T03:37:24.659Z",
+  "posten": 101,
   "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
   "ersetzungen": 71,
   "bewusstNichtEnthalten": [
@@ -100,8 +100,8 @@
       "herkunft": "onboarding.mjs",
       "quellordner": "installer",
       "gesaeubert": 0,
-      "bytes": 78469,
-      "sha256": "af3768634eacb4f2"
+      "bytes": 78714,
+      "sha256": "60c8191ab089b73c"
     },
     {
       "datei": "licenses/LICENSE-i-have-adhd.txt",
@@ -116,8 +116,8 @@
       "herkunft": null,
       "quellordner": "bausatz",
       "gesaeubert": 0,
-      "bytes": 5624,
-      "sha256": "c937337d5110119c"
+      "bytes": 5873,
+      "sha256": "678ca773b0141bc4"
     },
     {
       "datei": "payload/claude/commands/repo-status.md",
@@ -750,6 +750,14 @@
       "gesaeubert": 2,
       "bytes": 25131,
       "sha256": "1e463158ff88983d"
+    },
+    {
+      "datei": "payload/docs/google-zugang.md",
+      "herkunft": null,
+      "quellordner": "bausatz",
+      "gesaeubert": 0,
+      "bytes": 3441,
+      "sha256": "dbe51ebc35baa7ab"
     },
     {
       "datei": "payload/docs/guard-abdeckung.md",
