@@ -54,6 +54,9 @@ du traegst ein.
      (gitignoriert; anlegen, falls sie fehlt).
    - Ergebnis nach `docs/tool-landscape.md` (Vorlage liegt bereit), ergaenzt statt
      ueberschrieben -- nichts, was der Mensch nicht bestaetigt hat.
+   - **Google (Gmail/Drive/Docs/Sheets/Kalender/Tasks/Kontakte/YouTube):** kein
+     Einzel-Dienst suchen -- es gibt einen fertigen Weg, `docs/google-zugang.md`
+     (Workspace-MCP + YouTube-CLI, ein OAuth-User-Token). Bei Bedarf dorthin verweisen.
 4. Danach die Punkte, die nur der Mensch entscheiden kann -- je ein kurzer Absatz mit
    Handlung und Wirkung, dann seine Entscheidung abwarten, nichts selbst annehmen:
    - **Sicherung:** `git -C . remote -v` -- kein Remote? Dann ist Remote anlegen und pushen

@@ -303,6 +303,10 @@ const BEILEGER = [
   // vier Rubriken CLI/MCP/API/Zugaenge. Wird nach docs/ kopiert, dort traegt der
   // Onboarding-Befehl die erkannten Werkzeuge ein.
   "tool-landscape.md",
+  // Fertige Google-Zugang-Anleitung (Workspace-MCP + YouTube-CLI). Der YouTube-CLI-
+  // Code ist owner-spezifisch und lebt im Referenz-Repo; die Anleitung beschreibt den
+  // Weg. Verwiesen aus onboarding.md (Schritt 3).
+  "google-zugang.md",
 ];
 
 // LICENSE-mattpocock-skills.txt am 25.08.2026 entfernt: die zwei mattpocock-
