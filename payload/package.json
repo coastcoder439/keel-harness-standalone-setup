@@ -1,0 +1,12 @@
+{
+  "name": "keel-harness-installed",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Project-local Keel Harness with integrated Unlazy package bundles.",
+  "scripts": {
+    "test": "npm run test:dashboard:runtime && node checks/installed-harness.mjs && node vendor/unlazy/tests/self-check.mjs && node vendor/unlazy/tests/package-contract-tests.mjs",
+    "test:dashboard:runtime": "node dashboard/runtime-check.mjs",
+    "test:unlazy": "npm test --prefix vendor/unlazy",
+    "dashboard": "node dashboard/serve.mjs"
+  }
+}

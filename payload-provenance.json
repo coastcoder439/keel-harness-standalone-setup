@@ -1,0 +1,22 @@
+{
+  "schema": "keel-harness-v2-setup-provenance.v1",
+  "source": {
+    "repository": "harness-lab",
+    "standalonePath": "test-harness/standalone",
+    "commit": "deff2ccafd3257929c110614f22b29ccc0a1b399",
+    "workingTreeDirtyFiles": 17,
+    "standaloneSubtreeDirtyFiles": 0,
+    "freshStandaloneBuild": false
+  },
+  "product": {
+    "id": "keel-harness",
+    "name": "Keel Harness",
+    "version": "1.1.0"
+  },
+  "payload": {
+    "fileCount": 169,
+    "treeSha256": "5df18a5d42b4e7eccdf2dd47f9bef3937de4f7854d34dc5303b23783034cfdaa"
+  },
+  "manifestSha256": "fdfe3b9ab315ec5522463ca20df54d94c0a39b6c4212e76598f8083a1b2a8946",
+  "builtAt": "2026-09-02T00:50:27.686Z"
+}

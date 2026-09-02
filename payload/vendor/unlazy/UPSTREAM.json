@@ -1,0 +1,9 @@
+{
+  "schema": "keel-vendored-upstream.v1",
+  "repository": "https://github.com/Leonxlnx/unlazy",
+  "revision": "da0b00a3a6b706b471797cd4ef579ae1001ff6d7",
+  "tree": "477c5f9145295a9ea9fcf2ce2b57eba8d735bb57",
+  "version": "2.1.0",
+  "commitObject": "UPSTREAM-COMMIT.txt",
+  "treeManifest": "UPSTREAM-TREE.txt"
+}
