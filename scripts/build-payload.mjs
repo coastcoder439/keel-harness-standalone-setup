@@ -16,12 +16,20 @@
 //   payload-provenance.json  Quell-Commit und Fingerabdruck dieses Laufs
 //
 // Aufruf:
-//   node scripts/build-payload.mjs [--source <harness-lab-checkout>] [--build] [--dry-run]
-//   --source   Standard: ../harness-lab neben diesem Repo
-//   --build    fuehrt vorher `npm run standalone:build` im Checkout aus
-//              (braucht einen frischen Dashboard-Production-Build, dauert Minuten);
-//              ohne --build wird der eingecheckte Distribution-Stand verwendet.
-//   --dry-run  zeigt nur, was passieren wuerde, und schreibt nichts.
+//   node scripts/build-payload.mjs [--source <harness-lab-checkout>] [--build]
+//                                  [--require-clean] [--dry-run]
+//   --source        Standard: ../harness-lab neben diesem Repo
+//   --build         fuehrt vorher `npm run standalone:build` im Checkout aus
+//                   (braucht einen frischen Dashboard-Production-Build, dauert Minuten);
+//                   ohne --build wird der eingecheckte Distribution-Stand verwendet.
+//   --require-clean bricht ab, wenn die Quelle nicht ausliefer-rein ist: unbekannter
+//                   Commit oder ungesicherte Dateien. ZUSAMMEN MIT --build heisst das:
+//                   der frische Bau hat NICHTS veraendert -- der eingecheckte
+//                   Standalone-Stand ist wirklich der gebaute. Genau das ist die
+//                   Bedingung der Auslieferung (Provenance: freshStandaloneBuild=true,
+//                   dirty files=0).
+//   --dry-run       zeigt nur, was passieren wuerde, und schreibt nichts;
+//                   --require-clean wird trotzdem geprueft.
 
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -31,6 +39,9 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import process from "node:process";
+import { assertNodeVersion } from "../checks/node-version.mjs";
+
+assertNodeVersion("scripts/build-payload.mjs");
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const GENERATED = [
@@ -41,12 +52,12 @@ const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
 function usage(message) {
   if (message) console.error("build-payload: " + message);
-  console.error("Aufruf: node scripts/build-payload.mjs [--source <harness-lab-checkout>] [--build] [--dry-run]");
+  console.error("Aufruf: node scripts/build-payload.mjs [--source <harness-lab-checkout>] [--build] [--require-clean] [--dry-run]");
   process.exit(2);
 }
 
 function parse(argv) {
-  const options = { source: resolve(repoRoot, "..", "harness-lab"), build: false, dryRun: false };
+  const options = { source: resolve(repoRoot, "..", "harness-lab"), build: false, dryRun: false, requireClean: false };
   const values = [...argv];
   while (values.length) {
     const option = values.shift();
@@ -55,6 +66,7 @@ function parse(argv) {
       if (!value || value.startsWith("--")) usage("--source braucht einen Pfad");
       options.source = resolve(value);
     } else if (option === "--build") options.build = true;
+    else if (option === "--require-clean") options.requireClean = true;
     else if (option === "--dry-run") options.dryRun = true;
     else if (option === "--help" || option === "-h") usage();
     else usage("unbekannte Option " + option);
@@ -115,6 +127,31 @@ const summary = {
   treeSha256: artifact.manifest.payload.treeSha256,
   commit: commit || "unbekannt (Quelle ist kein Git-Checkout)",
 };
+
+// AUSLIEFER-BEDINGUNG. Bewusst NACH dem optionalen --build gemessen: erst wenn der
+// frische Bau nichts veraendert hat, ist der eingecheckte Stand der gebaute. Ein
+// spaeterer "das war schon sauber"-Satz waere Erinnerung, das hier ist eine Messung.
+if (options.requireClean) {
+  const gruende = [];
+  if (!/^[0-9a-f]{40}$/u.test(String(commit ?? ""))) {
+    gruende.push("die Quelle ist kein Git-Checkout mit lesbarem HEAD (" + summary.commit + ")");
+  }
+  const arbeitsbaum = countLines(porcelain);
+  const unterbaum = countLines(porcelainStandalone);
+  if (arbeitsbaum !== 0) gruende.push(arbeitsbaum + " ungesicherte Datei(en) im Arbeitsbaum " + options.source);
+  if (unterbaum !== 0) gruende.push(unterbaum + " ungesicherte Datei(en) in test-harness/standalone");
+  if (gruende.length) {
+    console.error("build-payload: --require-clean nicht erfuellt --");
+    for (const grund of gruende) console.error("  " + grund);
+    console.error(options.build
+      ? "  (mit --build heisst das: der frische Bau hat den eingecheckten Stand veraendert;"
+      : "  (ohne --build ist der eingecheckte Stand ungeprueft;");
+    console.error("   in der Quelle committen und den Lauf wiederholen.)");
+    process.exit(1);
+  }
+  console.log("build-payload: Quelle ist ausliefer-rein (Commit " + commit + ", 0 ungesicherte Dateien)"
+    + (options.build ? " -- und der frische Bau hat nichts veraendert." : "."));
+}
 
 if (options.dryRun) {
   console.log("build-payload (Trockenlauf) -- nichts wird geschrieben:");
