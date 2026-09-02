@@ -1,0 +1,15 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "dashboard/serve.mjs",
+        "--port",
+        "8766"
+      ],
+      "port": 8766
+    }
+  ]
+}
