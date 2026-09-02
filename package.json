@@ -1,0 +1,16 @@
+{
+  "name": "keel-harness-v2-setup",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Setup-Bausatz des Keel Harness (Version 2). Keine Abhaengigkeiten -- nur Node-Bordmittel und Git.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node checks/run-all.mjs",
+    "check": "node checks/run-all.mjs",
+    "check:full": "node checks/run-all.mjs --voll",
+    "build:payload": "node scripts/build-payload.mjs",
+    "release": "node scripts/release-payload.mjs"
+  }
+}
