@@ -110,8 +110,53 @@ Fingerabdruck jedes Laufs stehen in `payload-provenance.json`.
 
 ## Voraussetzungen
 
-- Node ≥ 20 (LTS empfohlen) und Git — kein npm-Install, kein Bauschritt
-- Claude Code nur für den Agenten-Weg; von Hand geht es ohne
+- Node ≥ 20 (LTS empfohlen) und Git — kein npm-Install, kein Bauschritt.
+  Die Untergrenze steht in `package.json` (`engines.node`) und wird erzwungen:
+  jeder Prüfer und jedes Skript dieses Repos bricht unter älterem Node mit
+  `NODE_TOO_OLD` ab, bevor irgendetwas geschrieben wird.
+- Claude Code nur für den Agenten-Weg; von Hand geht es ohne. Die Codex-Route
+  (`AGENTS.md` bytegleich zu `CLAUDE.md`, `.codex/`-Hooks) wird immer mitinstalliert.
+
+## Prüfen
+
+```text
+node checks/run-all.mjs        # alle Prüfer nacheinander (auch: npm test)
+node checks/run-all.mjs --voll # zusätzlich echte Probe-Installation
+```
+
+| Prüfer | Was er bindet |
+|---|---|
+| `checks/node-version.mjs` | die laufende Node-Fassung an `engines.node` |
+| `checks/payload-provenance.mjs` | `payload-provenance.json` an `manifest.json` und den echten Payload-Bestand (`--release`: verlangt zusätzlich frisch gebaute, saubere Quelle) |
+| `checks/anleitung-sync.mjs` | jede Zahl, Ausgabemarke und Pfadangabe von `PAKET-ANLEITUNG.md` und `README.md` an eine gemessene Quelle; erzeugt die Abschnitte „Was installiert wird", „Was bewusst fehlt", „Stand dieser Auslieferung" aus dem Manifest (`--nachziehen`) |
+| `checks/fresh-clone.mjs` | Artefakt-Integrität, Onboarding-Verdrahtung, Installer-Trockenlauf, die Zahl `managed=` der Anleitung (`--voll`: echte Installation, `--installed-checks`: die installierten Prüfungen der Auslieferung) |
+
+## Ausliefer-Lauf — ein Befehl
+
+Wenn die Werkbank ihren finalen Stand hat (alles in `harness-lab` committet), wird die
+Auslieferung mit **einem** Befehl neu gebaut und bewiesen:
+
+```text
+node scripts/release-payload.mjs
+```
+
+Er macht der Reihe nach: Payload aus dem Quell-HEAD **frisch** bauen und dabei
+verlangen, dass die Quelle sauber bleibt (`--build --require-clean`, schreibt
+`freshStandaloneBuild=true` und `dirty files 0/0` in `payload-provenance.json`) ·
+die Menschen-Anleitung an die neuen Zahlen angleichen · alle Prüfer streng laufen
+lassen (`--release`) · in ein leeres Wegwerf-Verzeichnis frisch installieren und dort
+die **installierten** Prüfungen der Auslieferung fahren.
+
+Erfolg ist die letzte Zeile und Rückgabewert 0:
+
+```text
+RELEASE_READY payload=<n> version=<v> commit=<sha> fresh=true dirty=0/0
+```
+
+Der Beweis dazwischen ist die Zeile `KEEL_HARNESS_OK` aus dem Wegwerf-Verzeichnis —
+die Erfolgszeile der **installierten** Auslieferung, nicht die des Quellbaums.
+`--dry-run` zeigt nur den Plan; `--source` und `--target` setzen Quelle und
+Wegwerf-Verzeichnis. Der Lauf **committet nichts** und sagt am Ende, was zu sichern ist.
 
 ## Enthalten
 
@@ -123,9 +168,11 @@ Fingerabdruck jedes Laufs stehen in `payload-provenance.json`.
 | `lib/` | Transaktions-Lebenszyklus des Installers (`distribution-lifecycle.mjs`, `generic-content.mjs`) |
 | `DISTRIBUTION.md`, `UPDATE.md` | Die technischen Originale der Distribution: Transaktionsmodell, Upgrade-Vertrag, Deprecations |
 | `payload-provenance.json` | Quell-Commit, Schmutzstand und Fingerabdruck der letzten Payload-Erzeugung |
-| `PAKET-ANLEITUNG.md` | Der Weg von Hand, Windows zuerst, mit Fehlertabelle |
-| `checks/fresh-clone.mjs` | Abnahmetest des geklonten Bausatzes (`--voll`: echte Probe-Installation) |
-| `scripts/build-payload.mjs` | Erzeugt die Auslieferung neu aus einem harness-lab-Checkout — keine Hand-Kopien |
+| `PAKET-ANLEITUNG.md` | Der Weg von Hand, Windows zuerst, mit Windows-Eigenheiten, Codex-Route, Abnahme-Schritt und Fehlertabelle |
+| `checks/` | Die vier Prüfer dieses Repos, gemeinsamer Einstieg `checks/run-all.mjs` (siehe „Prüfen") |
+| `package.json` | `engines.node` als einziger Ort der Node-Untergrenze, `npm test` als Einstieg |
+| `scripts/build-payload.mjs` | Erzeugt die Auslieferung neu aus einem harness-lab-Checkout — keine Hand-Kopien (`--require-clean` für den Ausliefer-Lauf) |
+| `scripts/release-payload.mjs` | Der Ausliefer-Lauf in einem Befehl: neu bauen, Anleitung nachziehen, alles prüfen, frisch installieren, installierte Prüfungen fahren |
 | `docs/packages/` | Verweis auf das Arbeitspaket in der Werkbank |
 
 ## Installer-Befehle
