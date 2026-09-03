@@ -215,6 +215,30 @@ welche Phase gescheitert ist. Das Dashboard startest du mit `npm run dashboard`
 Damit ist die Einrichtung abgeschlossen. `<PAKET>` wird ab jetzt nicht mehr gebraucht.
 Behalten oder löschen — beides ist in Ordnung; in `<HARNESS>` liegt nichts vom Bausatz.
 
+## 9. Optional — Google verbinden
+
+Dieser Schritt ist **ausdrücklich optional**. Das Dashboard läuft ohne ihn vollständig;
+nur seine Google-Fähigkeiten (Kalender, Aufgaben, Gmail) bleiben inaktiv, bis der Zugang
+steht. Meldet das Dashboard „Google OAuth ist nicht konfiguriert", ist genau dieser
+Schritt der Weg.
+
+Es wird **keine fremde Google-Identität mitgeliefert oder vorausgesetzt** — jede
+Installation bringt ihr eigenes Google-Cloud-Projekt und ihren eigenen OAuth-Client mit.
+Die vollständige Klick-Anleitung liegt nach der Installation im Harness selbst:
+
+```
+<HARNESS>\docs\google-onboarding.md
+```
+
+Kurzfassung: eigenes Google-Cloud-Projekt anlegen, die drei benötigten APIs (Gmail,
+Calendar, Tasks) aktivieren, OAuth-Consent-Screen auf **External** stellen und sich selbst
+als Testnutzer eintragen, einen OAuth-Client vom Typ **Desktop app** erstellen und die
+`client_secrets`-JSON herunterladen. Diese über `GOOGLE_CLIENT_SECRETS` oder am
+dokumentierten Ablagepfad hinterlegen und im Dashboard **„Google verbinden"** klicken.
+Beim ersten Onboarding bietet der Agent diesen Schritt von selbst an und führt durch die
+Anleitung. Hinweis: Im Testing-Status läuft der Google-Token nach 7 Tagen ab und wird per
+„Google neu verbinden" erneuert; Details stehen in der Anleitung.
+
 ---
 
 ## Was installiert wird
