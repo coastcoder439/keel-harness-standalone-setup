@@ -101,7 +101,7 @@ node C:\w\keel-harness-v2-setup\install.mjs --target C:\w\mein-harness --dry-run
 Gemessene Ausgabe an einem frischen Ziel (Rückgabewert 0, geschrieben wird nichts):
 
 ```
-keel harness distribution: command=install state=planned version=1.1.0 dry-run=true managed=173
+keel harness distribution: command=install state=planned version=1.1.0 dry-run=true managed=174
 ```
 
 `managed=` ist die Zahl der Dateien, die der Installer im Ziel verwalten würde —
@@ -118,7 +118,7 @@ node <PAKET>\install.mjs --target <HARNESS>
 Gemessener Erfolg:
 
 ```
-keel harness distribution: command=install state=installed version=1.1.0 promotions=173 managed=173 rollback=available
+keel harness distribution: command=install state=installed version=1.1.0 promotions=174 managed=174 rollback=available
 ```
 
 Der Lauf ist transaktional und wiederholbar — ein zweiter Aufruf schreibt nichts
