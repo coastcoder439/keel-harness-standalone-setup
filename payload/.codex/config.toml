@@ -1,0 +1,11 @@
+# Project-safe Codex configuration.
+#
+# Connectors, account identifiers, OAuth client data, and other credentials are
+# machine-local. They must be configured through the user's Codex environment,
+# never copied into this repository or the standalone payload.
+
+model = "gpt-5.6-sol"
+model_reasoning_effort = "max"
+
+[features]
+hooks = true

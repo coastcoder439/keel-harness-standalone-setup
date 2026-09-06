@@ -1,0 +1,4 @@
+# Byte-exakt ausliefern: der Installer verifiziert jede Payload-Datei per
+# SHA-256 gegen manifest.json. Jede Zeilenenden-Konvertierung beim Klonen
+# (core.autocrlf) wuerde die Installation hart scheitern lassen.
+* -text

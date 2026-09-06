@@ -1,0 +1,6 @@
+tree 477c5f9145295a9ea9fcf2ce2b57eba8d735bb57
+parent 265fbd5dfff09b5c29004ddaf50be94dab83fb4e
+author Leon Lin <lexn.lin8@gmail.com> 1787589993 +0800
+committer Leon Lin <lexn.lin8@gmail.com> 1787589993 +0800
+
+fix: harden skill execution boundaries

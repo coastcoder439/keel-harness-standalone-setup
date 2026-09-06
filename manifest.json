@@ -1,843 +1,1796 @@
 {
-  "schema": "harness.paket.v1",
-  "gebautAm": "2026-08-29T03:37:24.659Z",
-  "posten": 101,
-  "hinweisZurZaehlung": "posten = alle Dateien im Paket ausser manifest.json selbst (ohne .git und node_modules). bytes und sha256 messen den auf LF vereinheitlichten Inhalt, damit sie plattformstabil sind. Erzeugt von checks/paket-manifest.mjs --nachziehen; in der Abnahme wird gegengeprueft.",
-  "ersetzungen": 71,
-  "bewusstNichtEnthalten": [
+  "schema": "keel-harness-standalone.v2",
+  "product": {
+    "id": "keel-harness",
+    "name": "Keel Harness",
+    "version": "1.1.0"
+  },
+  "payload": {
+    "treeSha256": "e8401b9a79ccf502374488b156f70cc3f67d85d0ff08d6caf51ed623dd6b0907"
+  },
+  "provenance": {
+    "unlazy": {
+      "repository": "https://github.com/Leonxlnx/unlazy",
+      "revision": "da0b00a3a6b706b471797cd4ef579ae1001ff6d7",
+      "tree": "477c5f9145295a9ea9fcf2ce2b57eba8d735bb57",
+      "version": "2.1.0",
+      "commitObjectVerified": true,
+      "treeObjectVerified": true,
+      "upstreamFileCount": 37,
+      "vendoredFileCount": 63,
+      "reconciliation": {
+        "unchanged": 0,
+        "adapted": 37,
+        "added": 26,
+        "removed": 0,
+        "sha256": "9545928927f1cbbeebea94573b6c6ec8d4ab69b0f657ec6acd335ca45f34eab2"
+      },
+      "vendoredTreeSha256": "8fdcb35cbe02ca8dce6badaa8868dd83f169c354ca2aca1ba626d0393c8a47e8",
+      "adaptation": "The exact upstream base is pinned by revision; the delivered adapted tree is pinned separately by its deterministic tree digest."
+    }
+  },
+  "maintenance": {
+    "updateOwner": "Keel Harness distribution maintainer",
+    "upgradeContract": {
+      "command": "node install.mjs install --target <repository> --upgrade",
+      "versionPolicy": "monotonic-semver",
+      "requiresCleanManagedFiles": true,
+      "preservesOriginalBackups": true,
+      "rollback": "Every upgrade uses the same staged transaction and restores the previously installed version on failure."
+    },
+    "deprecations": [
+      {
+        "id": "unlazy-explicit-legacy-diagnostics",
+        "surface": "vendored Unlazy --legacy diagnostic mode",
+        "removalDate": "2026-10-31",
+        "owner": "Keel Harness distribution maintainer",
+        "replacement": "Repo-owned docs/packages/<packageId>/ bundles plus vendor/unlazy/scripts/package-migrate.mjs."
+      }
+    ]
+  },
+  "fileCount": 170,
+  "files": [
     {
-      "was": ".claude/pruefstand-warn.js",
-      "grund": "braucht zwei Pruefwerkzeuge, die ihrerseits den ECC-Fremd-Klon brauchen; ohne sie meldet der Stop-Hook bei jedem Lauf einen Stacktrace als Befund"
+      "source": "test-harness/.agents/skills/completeness/SKILL.md",
+      "target": ".agents/skills/completeness/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 3222,
+      "sourceSha256": "da13633cb53cd1263a75799f6837edf1ae1014ca70c5c872a5042a9a74752897",
+      "bytes": 3222,
+      "sha256": "da13633cb53cd1263a75799f6837edf1ae1014ca70c5c872a5042a9a74752897"
     },
     {
-      "was": "docs/workflows/*.js",
-      "grund": "Werkbank-eigene Pruefer; einer bricht ohne .ecc-src/ mit Exit 2 ab, der andere prueft eine Zusage, die nur in der Ursprungs-Werkbank gilt"
+      "source": "test-harness/.agents/skills/frontend-design/LICENSE.txt",
+      "target": ".agents/skills/frontend-design/LICENSE.txt",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 10351,
+      "sourceSha256": "eb3d7b5485466acbd81f2b496f595ab637d2792e268206b27d99e793bdb67549",
+      "bytes": 10351,
+      "sha256": "eb3d7b5485466acbd81f2b496f595ab637d2792e268206b27d99e793bdb67549"
     },
     {
-      "was": ".claude/skills/skill-library/",
-      "grund": "Index von 245 Skills des ECC-Fremd-Klons; im Paket zeigt jeder Eintrag ins Leere"
+      "source": "test-harness/.agents/skills/frontend-design/SKILL.md",
+      "target": ".agents/skills/frontend-design/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 8315,
+      "sourceSha256": "35c43b9d10c2388dbb228047ad028c989a14033750812125f351c85aa42c7a4a",
+      "bytes": 8315,
+      "sha256": "35c43b9d10c2388dbb228047ad028c989a14033750812125f351c85aa42c7a4a"
     },
     {
-      "was": ".ecc-src/ und die Kopien daraus",
-      "grund": "Fremd-Klon (eigene Lizenz, 227 MB) — wird beim Onboarding selbst geholt, nicht mitgeliefert"
+      "source": "test-harness/.agents/skills/i-have-adhd/SKILL.md",
+      "target": ".agents/skills/i-have-adhd/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 8503,
+      "sourceSha256": "b79af92ed54944b92f11f1c7ae65871b1a8b0a0d56737fea752def9ac1765673",
+      "bytes": 8503,
+      "sha256": "b79af92ed54944b92f11f1c7ae65871b1a8b0a0d56737fea752def9ac1765673"
     },
     {
-      "was": "permissions / skillOverrides / enabledPlugins",
-      "grund": "rechner- und personenbezogen; ausgeliefert erteilten sie stillschweigend Rechte"
+      "source": "test-harness/.agents/skills/package-execution/SKILL.md",
+      "target": ".agents/skills/package-execution/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4516,
+      "sourceSha256": "d0f6bf46a74eebfe839f8d0d547121c21a201ba350f42cceb967363dc00d4bf6",
+      "bytes": 4516,
+      "sha256": "d0f6bf46a74eebfe839f8d0d547121c21a201ba350f42cceb967363dc00d4bf6"
     },
     {
-      "was": "docs/08-sessions-rollen.md",
-      "grund": "Rollen der Ursprungs-Werkbank; fehlt die Datei, bleibt der Hook still — das ist das richtige Verhalten"
+      "source": "test-harness/.agents/skills/software-factory/SKILL.md",
+      "target": ".agents/skills/software-factory/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 9449,
+      "sourceSha256": "c0fde48cba19df15f1c4c5bb4aa44ecee39da2187992d1e6f1683f7b689a09eb",
+      "bytes": 9449,
+      "sha256": "c0fde48cba19df15f1c4c5bb4aa44ecee39da2187992d1e6f1683f7b689a09eb"
+    },
+    {
+      "source": "test-harness/.agents/skills/source-command-onboarding/SKILL.md",
+      "target": ".agents/skills/source-command-onboarding/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1699,
+      "sourceSha256": "dc629e5de9651a327b0c0cf7d326dc84dbcfa21035ab866e407afe1a2a1585d5",
+      "bytes": 1699,
+      "sha256": "dc629e5de9651a327b0c0cf7d326dc84dbcfa21035ab866e407afe1a2a1585d5"
+    },
+    {
+      "source": "test-harness/.agents/skills/source-command-repo-status/SKILL.md",
+      "target": ".agents/skills/source-command-repo-status/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 590,
+      "sourceSha256": "0adf823b29f38baf6d8db9f0308854f078350f78fcd31b738a5a3501937a5f09",
+      "bytes": 590,
+      "sha256": "0adf823b29f38baf6d8db9f0308854f078350f78fcd31b738a5a3501937a5f09"
+    },
+    {
+      "source": "test-harness/.agents/skills/source-command-save-work/SKILL.md",
+      "target": ".agents/skills/source-command-save-work/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1553,
+      "sourceSha256": "3e71dbf7f2d5ab43dec18a5034b84bcc8bbc5d1fe81aed1e06030748ae2c349f",
+      "bytes": 1553,
+      "sha256": "3e71dbf7f2d5ab43dec18a5034b84bcc8bbc5d1fe81aed1e06030748ae2c349f"
+    },
+    {
+      "source": "test-harness/.agents/skills/source-command-session-map/SKILL.md",
+      "target": ".agents/skills/source-command-session-map/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1180,
+      "sourceSha256": "1e5963bf6016fd18e705e968b76c0a679ae269abd0bd27bf3dc29f9149fcbd63",
+      "bytes": 1180,
+      "sha256": "1e5963bf6016fd18e705e968b76c0a679ae269abd0bd27bf3dc29f9149fcbd63"
+    },
+    {
+      "source": "test-harness/.agents/skills/source-command-tell-session/SKILL.md",
+      "target": ".agents/skills/source-command-tell-session/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 802,
+      "sourceSha256": "74d7223fcfe7a18f49bbb82330ce22cf822e18717a8c4cb6da386e6c3bd075bb",
+      "bytes": 802,
+      "sha256": "74d7223fcfe7a18f49bbb82330ce22cf822e18717a8c4cb6da386e6c3bd075bb"
+    },
+    {
+      "source": "test-harness/.agents/skills/web-design-guidelines/rules.md",
+      "target": ".agents/skills/web-design-guidelines/rules.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 7760,
+      "sourceSha256": "5a775e6411f790f518dbc9c1fa7c50a89e6873502d9a3530a6eb223a590bcfe8",
+      "bytes": 7760,
+      "sha256": "5a775e6411f790f518dbc9c1fa7c50a89e6873502d9a3530a6eb223a590bcfe8"
+    },
+    {
+      "source": "test-harness/.agents/skills/web-design-guidelines/SKILL.md",
+      "target": ".agents/skills/web-design-guidelines/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2280,
+      "sourceSha256": "f503264969228cc3c3ec84eeacbe813de52ef469a94028dcbb954b35c2771f09",
+      "bytes": 2280,
+      "sha256": "f503264969228cc3c3ec84eeacbe813de52ef469a94028dcbb954b35c2771f09"
+    },
+    {
+      "source": "test-harness/.claude/commands/onboarding.md",
+      "target": ".claude/commands/onboarding.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1706,
+      "sourceSha256": "b96c4f069942176b74ff84cb4a4ba7e0f5fdc65eaff4ff8da86b0b434ce7e935",
+      "bytes": 1706,
+      "sha256": "b96c4f069942176b74ff84cb4a4ba7e0f5fdc65eaff4ff8da86b0b434ce7e935"
+    },
+    {
+      "source": "test-harness/.claude/commands/package-close.md",
+      "target": ".claude/commands/package-close.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1383,
+      "sourceSha256": "2dcd8b5ed230307aa2ba5cb66fe5fa3b9b7e4394ff3c91e1ee232c3ad86643c3",
+      "bytes": 1383,
+      "sha256": "2dcd8b5ed230307aa2ba5cb66fe5fa3b9b7e4394ff3c91e1ee232c3ad86643c3"
+    },
+    {
+      "source": "test-harness/.claude/commands/package-create.md",
+      "target": ".claude/commands/package-create.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1533,
+      "sourceSha256": "c813253d5a412849a71ccf36fc85573d8474ee6271389d9809871c0fdcafa81e",
+      "bytes": 1533,
+      "sha256": "c813253d5a412849a71ccf36fc85573d8474ee6271389d9809871c0fdcafa81e"
+    },
+    {
+      "source": "test-harness/.claude/commands/package-dispatch.md",
+      "target": ".claude/commands/package-dispatch.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 735,
+      "sourceSha256": "305aab432ef00fc471fb25f25bb127f54f9bf01d8432a4f96706c5be59a5a672",
+      "bytes": 735,
+      "sha256": "305aab432ef00fc471fb25f25bb127f54f9bf01d8432a4f96706c5be59a5a672"
+    },
+    {
+      "source": "test-harness/.claude/commands/package-duties.md",
+      "target": ".claude/commands/package-duties.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 728,
+      "sourceSha256": "38592b03ef93466e40b3eb252784e02b42e0a81c78fe40153696995a16040991",
+      "bytes": 728,
+      "sha256": "38592b03ef93466e40b3eb252784e02b42e0a81c78fe40153696995a16040991"
+    },
+    {
+      "source": "test-harness/.claude/commands/package-integrate.md",
+      "target": ".claude/commands/package-integrate.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1173,
+      "sourceSha256": "8f20137abefa967141e07469649a5103c67a33a251a4401bc7bfe2b2e8962016",
+      "bytes": 1173,
+      "sha256": "8f20137abefa967141e07469649a5103c67a33a251a4401bc7bfe2b2e8962016"
+    },
+    {
+      "source": "test-harness/.claude/commands/package-next.md",
+      "target": ".claude/commands/package-next.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 925,
+      "sourceSha256": "c299c52917dca01a467bec66efa31fda09d32bf7932a8577cedfcab79ecdd83e",
+      "bytes": 925,
+      "sha256": "c299c52917dca01a467bec66efa31fda09d32bf7932a8577cedfcab79ecdd83e"
+    },
+    {
+      "source": "test-harness/.claude/commands/package-publish.md",
+      "target": ".claude/commands/package-publish.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1079,
+      "sourceSha256": "1dd3870afdb8d1c791df25a54c7f5368b78ddfc5ceb3df945dab8c5776de2def",
+      "bytes": 1079,
+      "sha256": "1dd3870afdb8d1c791df25a54c7f5368b78ddfc5ceb3df945dab8c5776de2def"
+    },
+    {
+      "source": "test-harness/.claude/commands/package-recovery.md",
+      "target": ".claude/commands/package-recovery.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1265,
+      "sourceSha256": "4724256f67b77504325bfa907cc4f15e2b0521e29cf139edb30dd46e3f09878a",
+      "bytes": 1265,
+      "sha256": "4724256f67b77504325bfa907cc4f15e2b0521e29cf139edb30dd46e3f09878a"
+    },
+    {
+      "source": "test-harness/.claude/commands/package-resume.md",
+      "target": ".claude/commands/package-resume.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 483,
+      "sourceSha256": "a96ddd005452ed1ad294d2a9be45c950beb46f36b929186d01503afd9db3331d",
+      "bytes": 483,
+      "sha256": "a96ddd005452ed1ad294d2a9be45c950beb46f36b929186d01503afd9db3331d"
+    },
+    {
+      "source": "test-harness/.claude/commands/package-return.md",
+      "target": ".claude/commands/package-return.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 429,
+      "sourceSha256": "d41afa7b8cc9600d1921ac6f31eb80154ffbb2543ab1a573aebc8aaf2722daa9",
+      "bytes": 429,
+      "sha256": "d41afa7b8cc9600d1921ac6f31eb80154ffbb2543ab1a573aebc8aaf2722daa9"
+    },
+    {
+      "source": "test-harness/.claude/commands/package-status.md",
+      "target": ".claude/commands/package-status.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 462,
+      "sourceSha256": "337899421b1b706223de2c63d03f131645d314a74e8c5d5c8b0a49cd0ec9f3d5",
+      "bytes": 462,
+      "sha256": "337899421b1b706223de2c63d03f131645d314a74e8c5d5c8b0a49cd0ec9f3d5"
+    },
+    {
+      "source": "test-harness/.claude/commands/package-verify.md",
+      "target": ".claude/commands/package-verify.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 459,
+      "sourceSha256": "c2ec92b09f857253805ac152524b968456254ae8b1a0934ff6df4cc695c53b12",
+      "bytes": 459,
+      "sha256": "c2ec92b09f857253805ac152524b968456254ae8b1a0934ff6df4cc695c53b12"
+    },
+    {
+      "source": "test-harness/.claude/commands/repo-status.md",
+      "target": ".claude/commands/repo-status.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 421,
+      "sourceSha256": "9380e8c309261218cf42867fb758710f10bdba82f40362b77308b1f59167a582",
+      "bytes": 421,
+      "sha256": "9380e8c309261218cf42867fb758710f10bdba82f40362b77308b1f59167a582"
+    },
+    {
+      "source": "test-harness/.claude/commands/save-work.md",
+      "target": ".claude/commands/save-work.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2068,
+      "sourceSha256": "f46269d281d989f61af427463b7e4772e4b7b8218148ed5098fff56d1fc02ee3",
+      "bytes": 2068,
+      "sha256": "f46269d281d989f61af427463b7e4772e4b7b8218148ed5098fff56d1fc02ee3"
+    },
+    {
+      "source": "test-harness/.claude/commands/session-map.md",
+      "target": ".claude/commands/session-map.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1013,
+      "sourceSha256": "ee785a31268208fab97a4c2f023b1a437608bc17e8f21bf6ce0381781c03c896",
+      "bytes": 1013,
+      "sha256": "ee785a31268208fab97a4c2f023b1a437608bc17e8f21bf6ce0381781c03c896"
+    },
+    {
+      "source": "test-harness/.claude/commands/tell-session.md",
+      "target": ".claude/commands/tell-session.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 959,
+      "sourceSha256": "fdee0787d079024e771b428346c96e0761e77a22ac776f4b02a4838a7c599392",
+      "bytes": 959,
+      "sha256": "fdee0787d079024e771b428346c96e0761e77a22ac776f4b02a4838a7c599392"
+    },
+    {
+      "source": "test-harness/.claude/danger-guard.js",
+      "target": ".claude/danger-guard.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 18190,
+      "sourceSha256": "6e390f40608cf3d5962579b3aee0a628d95fee5f557e26388aa01a742f12444c",
+      "bytes": 18190,
+      "sha256": "6e390f40608cf3d5962579b3aee0a628d95fee5f557e26388aa01a742f12444c"
+    },
+    {
+      "source": "test-harness/.claude/dod-guard.js",
+      "target": ".claude/dod-guard.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 7782,
+      "sourceSha256": "257a66d6c636860167aa0608749702830ff2d30abcc37837d84e392010068f2d",
+      "bytes": 7782,
+      "sha256": "257a66d6c636860167aa0608749702830ff2d30abcc37837d84e392010068f2d"
+    },
+    {
+      "source": "test-harness/.claude/git-intent-guard.js",
+      "target": ".claude/git-intent-guard.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 15662,
+      "sourceSha256": "c402c62a97afc7c2f6b8af892390bee68d76c821dc8503375738792b29a95533",
+      "bytes": 15662,
+      "sha256": "c402c62a97afc7c2f6b8af892390bee68d76c821dc8503375738792b29a95533"
+    },
+    {
+      "source": "test-harness/.claude/launch.json",
+      "target": ".claude/launch.json",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 209,
+      "sourceSha256": "be2cdcbf0b1d8c1cc8403e9c9a2bfe3cae65195ff99ca7243be46f88f2e9d6fd",
+      "bytes": 241,
+      "sha256": "e3dc305d4b3b9e8150b041f192a35ee48339f2f73c9bb955fc0135b33ab4ff86"
+    },
+    {
+      "source": "test-harness/.claude/onboarding-start.js",
+      "target": ".claude/onboarding-start.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2305,
+      "sourceSha256": "8c0a00f500c73a6c64d3e9143cc96b14eeae7bbfe2f9a3a3cd12dd7bc5629de3",
+      "bytes": 2305,
+      "sha256": "8c0a00f500c73a6c64d3e9143cc96b14eeae7bbfe2f9a3a3cd12dd7bc5629de3"
+    },
+    {
+      "source": "test-harness/.claude/package-context.js",
+      "target": ".claude/package-context.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1604,
+      "sourceSha256": "86b9c798ec64b1c868d518eaae590a11fc1467330e2ce8c1e00ede24af6f65bb",
+      "bytes": 1604,
+      "sha256": "86b9c798ec64b1c868d518eaae590a11fc1467330e2ce8c1e00ede24af6f65bb"
+    },
+    {
+      "source": "test-harness/.claude/paket-gate.js",
+      "target": ".claude/paket-gate.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6069,
+      "sourceSha256": "b4893542e2c93724334b547f6e5ed13792d37924ee8330d4013bdfeb76844606",
+      "bytes": 6069,
+      "sha256": "b4893542e2c93724334b547f6e5ed13792d37924ee8330d4013bdfeb76844606"
+    },
+    {
+      "source": "test-harness/.claude/pollution-warn.js",
+      "target": ".claude/pollution-warn.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2531,
+      "sourceSha256": "fd082a4c3ba49f7127b776596d4fee13f681f8006578bfbffcefa8f40470b6d0",
+      "bytes": 2531,
+      "sha256": "fd082a4c3ba49f7127b776596d4fee13f681f8006578bfbffcefa8f40470b6d0"
+    },
+    {
+      "source": "test-harness/.claude/project-context.js",
+      "target": ".claude/project-context.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2311,
+      "sourceSha256": "bed03749c3fe9e049adccc51cc7436f21b3d46cffe6f9318b55e7115ecc78285",
+      "bytes": 2311,
+      "sha256": "bed03749c3fe9e049adccc51cc7436f21b3d46cffe6f9318b55e7115ecc78285"
+    },
+    {
+      "source": "test-harness/.claude/prompt-form.js",
+      "target": ".claude/prompt-form.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 7614,
+      "sourceSha256": "f855a66823d5b5ba81359af43044ab9c2bdde2875eb49dd4dae909a3669daa0d",
+      "bytes": 7614,
+      "sha256": "f855a66823d5b5ba81359af43044ab9c2bdde2875eb49dd4dae909a3669daa0d"
+    },
+    {
+      "source": "test-harness/.claude/repo-status.js",
+      "target": ".claude/repo-status.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 10374,
+      "sourceSha256": "980d2fcb8f47f3b367554a5cc9a1346424deeeb484135af0410c0754ab8de6d7",
+      "bytes": 10374,
+      "sha256": "980d2fcb8f47f3b367554a5cc9a1346424deeeb484135af0410c0754ab8de6d7"
+    },
+    {
+      "source": "test-harness/.claude/rules/keel/no-oneshot.md",
+      "target": ".claude/rules/keel/no-oneshot.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 395,
+      "sourceSha256": "721cd9fce17fddd49cc741fd1b83efee7921a6e75c1729a7b0c5dd02a3414c27",
+      "bytes": 395,
+      "sha256": "721cd9fce17fddd49cc741fd1b83efee7921a6e75c1729a7b0c5dd02a3414c27"
+    },
+    {
+      "source": "test-harness/.claude/rules/keel/read-before-act.md",
+      "target": ".claude/rules/keel/read-before-act.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 660,
+      "sourceSha256": "f48cfd139d403079a475c032790dbe0e0c0d8f37bc10b46e090a1850b9e9dac2",
+      "bytes": 660,
+      "sha256": "f48cfd139d403079a475c032790dbe0e0c0d8f37bc10b46e090a1850b9e9dac2"
+    },
+    {
+      "source": "test-harness/.claude/rules/keel/tools.md",
+      "target": ".claude/rules/keel/tools.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1201,
+      "sourceSha256": "5aa75e6210faa22f9edfffdb0dd82a92137c436a6557bd355876bee98898d485",
+      "bytes": 1201,
+      "sha256": "5aa75e6210faa22f9edfffdb0dd82a92137c436a6557bd355876bee98898d485"
+    },
+    {
+      "source": "test-harness/.claude/rules/keel/working-method.md",
+      "target": ".claude/rules/keel/working-method.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 3343,
+      "sourceSha256": "edc57682e102e0018fe89e4f5ca4b8f54c4bfbd7d3059bd99edf9409e3c07bca",
+      "bytes": 3343,
+      "sha256": "edc57682e102e0018fe89e4f5ca4b8f54c4bfbd7d3059bd99edf9409e3c07bca"
+    },
+    {
+      "source": "test-harness/.claude/session-roles.js",
+      "target": ".claude/session-roles.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 7403,
+      "sourceSha256": "102a464e885bf6b4b2d3c19efb1ed578862e7987db5170094b48eaaf3da2dc94",
+      "bytes": 7403,
+      "sha256": "102a464e885bf6b4b2d3c19efb1ed578862e7987db5170094b48eaaf3da2dc94"
+    },
+    {
+      "source": "test-harness/.claude/sessionpost-guard.js",
+      "target": ".claude/sessionpost-guard.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6184,
+      "sourceSha256": "a0b69cdde5ba699952922e3bb0d57b048efed9793435c01ac989c24bcdc3b1db",
+      "bytes": 6184,
+      "sha256": "a0b69cdde5ba699952922e3bb0d57b048efed9793435c01ac989c24bcdc3b1db"
+    },
+    {
+      "source": "test-harness/.claude/settings.json",
+      "target": ".claude/settings.json",
+      "mode": "merge-hooks",
+      "generated": false,
+      "sourceBytes": 4228,
+      "sourceSha256": "e7dbe4834d9838c20438202b9b89ae03417e6d4071c6ebeb3302f720911c78d0",
+      "bytes": 4228,
+      "sha256": "e7dbe4834d9838c20438202b9b89ae03417e6d4071c6ebeb3302f720911c78d0"
+    },
+    {
+      "source": "test-harness/.claude/shell-mutation-guard.js",
+      "target": ".claude/shell-mutation-guard.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 18318,
+      "sourceSha256": "c87b4ca531d2d00e554922633d821d827397e598a971c80fea9d1de49a647495",
+      "bytes": 18318,
+      "sha256": "c87b4ca531d2d00e554922633d821d827397e598a971c80fea9d1de49a647495"
+    },
+    {
+      "source": "test-harness/.claude/skills/completeness/SKILL.md",
+      "target": ".claude/skills/completeness/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 3222,
+      "sourceSha256": "da13633cb53cd1263a75799f6837edf1ae1014ca70c5c872a5042a9a74752897",
+      "bytes": 3222,
+      "sha256": "da13633cb53cd1263a75799f6837edf1ae1014ca70c5c872a5042a9a74752897"
+    },
+    {
+      "source": "test-harness/.claude/skills/frontend-design/LICENSE.txt",
+      "target": ".claude/skills/frontend-design/LICENSE.txt",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 10351,
+      "sourceSha256": "eb3d7b5485466acbd81f2b496f595ab637d2792e268206b27d99e793bdb67549",
+      "bytes": 10351,
+      "sha256": "eb3d7b5485466acbd81f2b496f595ab637d2792e268206b27d99e793bdb67549"
+    },
+    {
+      "source": "test-harness/.claude/skills/frontend-design/SKILL.md",
+      "target": ".claude/skills/frontend-design/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 8315,
+      "sourceSha256": "35c43b9d10c2388dbb228047ad028c989a14033750812125f351c85aa42c7a4a",
+      "bytes": 8315,
+      "sha256": "35c43b9d10c2388dbb228047ad028c989a14033750812125f351c85aa42c7a4a"
+    },
+    {
+      "source": "test-harness/.claude/skills/i-have-adhd/SKILL.md",
+      "target": ".claude/skills/i-have-adhd/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 8503,
+      "sourceSha256": "b79af92ed54944b92f11f1c7ae65871b1a8b0a0d56737fea752def9ac1765673",
+      "bytes": 8503,
+      "sha256": "b79af92ed54944b92f11f1c7ae65871b1a8b0a0d56737fea752def9ac1765673"
+    },
+    {
+      "source": "test-harness/.claude/skills/package-execution/SKILL.md",
+      "target": ".claude/skills/package-execution/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4516,
+      "sourceSha256": "d0f6bf46a74eebfe839f8d0d547121c21a201ba350f42cceb967363dc00d4bf6",
+      "bytes": 4516,
+      "sha256": "d0f6bf46a74eebfe839f8d0d547121c21a201ba350f42cceb967363dc00d4bf6"
+    },
+    {
+      "source": "test-harness/.claude/skills/software-factory/SKILL.md",
+      "target": ".claude/skills/software-factory/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 9449,
+      "sourceSha256": "e93fb70bfe4760ff692803e842959e9829fae2b958897983b2b166e5e5a3c5bc",
+      "bytes": 9449,
+      "sha256": "e93fb70bfe4760ff692803e842959e9829fae2b958897983b2b166e5e5a3c5bc"
+    },
+    {
+      "source": "test-harness/.claude/skills/web-design-guidelines/rules.md",
+      "target": ".claude/skills/web-design-guidelines/rules.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 7760,
+      "sourceSha256": "5a775e6411f790f518dbc9c1fa7c50a89e6873502d9a3530a6eb223a590bcfe8",
+      "bytes": 7760,
+      "sha256": "5a775e6411f790f518dbc9c1fa7c50a89e6873502d9a3530a6eb223a590bcfe8"
+    },
+    {
+      "source": "test-harness/.claude/skills/web-design-guidelines/SKILL.md",
+      "target": ".claude/skills/web-design-guidelines/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2280,
+      "sourceSha256": "94b7472d729fae900388eae9b788d1fabb1059078b249d4d76f577f4ef425429",
+      "bytes": 2280,
+      "sha256": "94b7472d729fae900388eae9b788d1fabb1059078b249d4d76f577f4ef425429"
+    },
+    {
+      "source": "test-harness/.claude/statusline.js",
+      "target": ".claude/statusline.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4790,
+      "sourceSha256": "2e799acb18537fe3d34490339cd362afd02d90c05c06af3659435e5ed5bb933c",
+      "bytes": 4790,
+      "sha256": "2e799acb18537fe3d34490339cd362afd02d90c05c06af3659435e5ed5bb933c"
+    },
+    {
+      "source": "test-harness/.claude/uncommitted-warn.js",
+      "target": ".claude/uncommitted-warn.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 7222,
+      "sourceSha256": "86bb5b29f6e69d6f400bcf48a81e721cb8f8d08d894ac4ae649d12da61fdacf0",
+      "bytes": 7222,
+      "sha256": "86bb5b29f6e69d6f400bcf48a81e721cb8f8d08d894ac4ae649d12da61fdacf0"
+    },
+    {
+      "source": "test-harness/.claude/unlazy-stop.js",
+      "target": ".claude/unlazy-stop.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2329,
+      "sourceSha256": "76f25e7ad16d1b88ec30658fc383b9d708964efb2667502018f9100c3ff295e3",
+      "bytes": 2329,
+      "sha256": "76f25e7ad16d1b88ec30658fc383b9d708964efb2667502018f9100c3ff295e3"
+    },
+    {
+      "source": "test-harness/.claude/write-guard.js",
+      "target": ".claude/write-guard.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 10439,
+      "sourceSha256": "47e49c8c8de79e9545d762e53945bbaf4fb036c9df93e3fd200a7a08a478c942",
+      "bytes": 10439,
+      "sha256": "47e49c8c8de79e9545d762e53945bbaf4fb036c9df93e3fd200a7a08a478c942"
+    },
+    {
+      "source": "test-harness/.codex/apply-patch-guard.cjs",
+      "target": ".codex/apply-patch-guard.cjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4425,
+      "sourceSha256": "bc4245b200174feb243673de9833bd96f6185e2e925681113578e0dd619a24fc",
+      "bytes": 4425,
+      "sha256": "bc4245b200174feb243673de9833bd96f6185e2e925681113578e0dd619a24fc"
+    },
+    {
+      "source": "test-harness/.codex/config.toml",
+      "target": ".codex/config.toml",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 339,
+      "sourceSha256": "17b0a83338cab8a465ce2deff591bcce02716e83c7a06e5478b96a56edd3c9de",
+      "bytes": 339,
+      "sha256": "17b0a83338cab8a465ce2deff591bcce02716e83c7a06e5478b96a56edd3c9de"
+    },
+    {
+      "source": "test-harness/.codex/dod-guard.cjs",
+      "target": ".codex/dod-guard.cjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 3972,
+      "sourceSha256": "5424243c59f1424cb0653963ad63ece204afd82a182c0c0fce22c21ffe8e8d11",
+      "bytes": 3972,
+      "sha256": "5424243c59f1424cb0653963ad63ece204afd82a182c0c0fce22c21ffe8e8d11"
+    },
+    {
+      "source": "test-harness/.codex/hook-runner.cjs",
+      "target": ".codex/hook-runner.cjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2275,
+      "sourceSha256": "397171f3300ab76e4d06ea9372e9e675c4c8dc951535a28383fa0913968a2bfe",
+      "bytes": 2275,
+      "sha256": "397171f3300ab76e4d06ea9372e9e675c4c8dc951535a28383fa0913968a2bfe"
+    },
+    {
+      "source": "test-harness/.codex/hooks.json",
+      "target": ".codex/hooks.json",
+      "mode": "merge-hooks",
+      "generated": false,
+      "sourceBytes": 7542,
+      "sourceSha256": "c3fb361f3a83c5bfad51b9a13e2e40d01c7457230e5443183e877220c1453af5",
+      "bytes": 7542,
+      "sha256": "c3fb361f3a83c5bfad51b9a13e2e40d01c7457230e5443183e877220c1453af5"
+    },
+    {
+      "source": "test-harness/.gitignore",
+      "target": ".gitignore",
+      "mode": "merge-lines",
+      "generated": false,
+      "sourceBytes": 391,
+      "sourceSha256": "7267d4cb78e991e5124de82fa82af25382f2effccd84137373b6fc78d630590f",
+      "bytes": 391,
+      "sha256": "7267d4cb78e991e5124de82fa82af25382f2effccd84137373b6fc78d630590f"
+    },
+    {
+      "source": "test-harness/.keel-harness.json",
+      "target": ".keel-harness.json",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 87,
+      "sourceSha256": "25d764228bdb6259105ad9483c5233d7378f44cd784b56ffe68e42d51fed0a34",
+      "bytes": 87,
+      "sha256": "25d764228bdb6259105ad9483c5233d7378f44cd784b56ffe68e42d51fed0a34"
+    },
+    {
+      "source": "test-harness/AGENTS.md",
+      "target": "AGENTS.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 7584,
+      "sourceSha256": "295b9d14be25b9dfd3252b60fb8faeb4a9782cf9da4ddae33ad0b0e98c31250d",
+      "bytes": 7584,
+      "sha256": "295b9d14be25b9dfd3252b60fb8faeb4a9782cf9da4ddae33ad0b0e98c31250d"
+    },
+    {
+      "source": "test-harness/checks/bounded-runner.mjs",
+      "target": "checks/bounded-runner.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 10023,
+      "sourceSha256": "3be9b724bc2edbf5dc51aec86c25d583797928bd914026a9f01b737e2f0de16b",
+      "bytes": 10023,
+      "sha256": "3be9b724bc2edbf5dc51aec86c25d583797928bd914026a9f01b737e2f0de16b"
+    },
+    {
+      "source": "test-harness/checks/installed-harness.mjs",
+      "target": "checks/installed-harness.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 9944,
+      "sourceSha256": "22ff58f224220587f411847c094a06a0cf3064f68da97fa04bf44fc025caf1f4",
+      "bytes": 9944,
+      "sha256": "22ff58f224220587f411847c094a06a0cf3064f68da97fa04bf44fc025caf1f4"
+    },
+    {
+      "source": "test-harness/checks/onboarding-ready.mjs",
+      "target": "checks/onboarding-ready.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1421,
+      "sourceSha256": "00ea8a74baf8f9593f8b5b9693678ee3e51cbff3985ff5c9b62807d5f58375d0",
+      "bytes": 1421,
+      "sha256": "00ea8a74baf8f9593f8b5b9693678ee3e51cbff3985ff5c9b62807d5f58375d0"
+    },
+    {
+      "source": "test-harness/checks/run-all.mjs",
+      "target": "checks/run-all.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4709,
+      "sourceSha256": "3cb88f8953533862ed987ff7d03b120258a263d6d78eae5f1010f77a78a226dc",
+      "bytes": 1428,
+      "sha256": "0fe66d61f1cc920dc2a449e1d9a175539135614988ac58e0851a027226cc50e3"
+    },
+    {
+      "source": "test-harness/checks/windows-smoke.cmd",
+      "target": "checks/windows-smoke.cmd",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 123,
+      "sourceSha256": "506dc557a955f5d1478732cc496d9f39c46f6047d085130078a79653fddcbcd0",
+      "bytes": 123,
+      "sha256": "506dc557a955f5d1478732cc496d9f39c46f6047d085130078a79653fddcbcd0"
+    },
+    {
+      "source": "test-harness/checks/windows-smoke.ps1",
+      "target": "checks/windows-smoke.ps1",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 173,
+      "sourceSha256": "92ea8395fab0290a0f8c9d1a78a7f7b9595cc71455f9ff462461479de4b5fde8",
+      "bytes": 173,
+      "sha256": "92ea8395fab0290a0f8c9d1a78a7f7b9595cc71455f9ff462461479de4b5fde8"
+    },
+    {
+      "source": "test-harness/CLAUDE.md",
+      "target": "CLAUDE.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 7584,
+      "sourceSha256": "295b9d14be25b9dfd3252b60fb8faeb4a9782cf9da4ddae33ad0b0e98c31250d",
+      "bytes": 7584,
+      "sha256": "295b9d14be25b9dfd3252b60fb8faeb4a9782cf9da4ddae33ad0b0e98c31250d"
+    },
+    {
+      "source": "test-harness/standalone/templates/dashboard-runtime-archive.mjs",
+      "target": "dashboard/runtime-archive.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 15006,
+      "sourceSha256": "a092ed64efb61912f7e7a6b840f3f843aa9bda33a2a8bc4854b3f46b5084ea74",
+      "bytes": 15006,
+      "sha256": "a092ed64efb61912f7e7a6b840f3f843aa9bda33a2a8bc4854b3f46b5084ea74"
+    },
+    {
+      "source": "test-harness/standalone/templates/dashboard-runtime-check.mjs",
+      "target": "dashboard/runtime-check.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6344,
+      "sourceSha256": "7efef4ac8f9be72c5a98844a6f5e4e6b7b37b5a8c8194c0ab5fef35671f5eb4d",
+      "bytes": 6344,
+      "sha256": "7efef4ac8f9be72c5a98844a6f5e4e6b7b37b5a8c8194c0ab5fef35671f5eb4d"
+    },
+    {
+      "source": "generated/dashboard/runtime-manifest.json",
+      "target": "dashboard/runtime-manifest.json",
+      "mode": "copy",
+      "generated": true,
+      "sourceBytes": 334,
+      "sourceSha256": "018d2e88569d4343bd4e9f5af97df2183319728357f2af5b9559935be5f6f0d3",
+      "bytes": 334,
+      "sha256": "018d2e88569d4343bd4e9f5af97df2183319728357f2af5b9559935be5f6f0d3"
+    },
+    {
+      "source": "generated/dashboard/runtime.keel.gz",
+      "target": "dashboard/runtime.keel.gz",
+      "mode": "copy",
+      "generated": true,
+      "sourceBytes": 13516656,
+      "sourceSha256": "8a7f46b29bf839d33dc95df87c9a614eb44b182619462aac727a58cee18689ed",
+      "bytes": 13516656,
+      "sha256": "8a7f46b29bf839d33dc95df87c9a614eb44b182619462aac727a58cee18689ed"
+    },
+    {
+      "source": "test-harness/standalone/templates/dashboard-serve.mjs",
+      "target": "dashboard/serve.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2056,
+      "sourceSha256": "aa3801df46ee8d0637dac730578a58c53c7a246bb80ee144b3e47b41be430102",
+      "bytes": 2056,
+      "sha256": "aa3801df46ee8d0637dac730578a58c53c7a246bb80ee144b3e47b41be430102"
+    },
+    {
+      "source": "test-harness/docs/08-sessions-rollen.md",
+      "target": "docs/08-sessions-rollen.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 541,
+      "sourceSha256": "5e7a821f0c86f30df5fba9b18c7e7b8d700caccf9d33da08701b9b8ac6e4763c",
+      "bytes": 541,
+      "sha256": "5e7a821f0c86f30df5fba9b18c7e7b8d700caccf9d33da08701b9b8ac6e4763c"
+    },
+    {
+      "source": "test-harness/standalone/templates/active-harness-inventory.md",
+      "target": "docs/active-harness-inventory.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6493,
+      "sourceSha256": "3296022fd4ebb7019872aa63ba65731606ca1c4f861f4d70bd55deedca83e20f",
+      "bytes": 6493,
+      "sha256": "3296022fd4ebb7019872aa63ba65731606ca1c4f861f4d70bd55deedca83e20f"
+    },
+    {
+      "source": "test-harness/docs/completeness-check.md",
+      "target": "docs/completeness-check.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2281,
+      "sourceSha256": "371f09e04c503f1438139e146d75c4b35268e4e66c608491f94ec85761f28330",
+      "bytes": 2271,
+      "sha256": "d8da9d4e8d4b9df2e83d41bf8d328de2bcae9843907211c034b49561432f26a3"
+    },
+    {
+      "source": "test-harness/docs/google-onboarding.md",
+      "target": "docs/google-onboarding.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 12341,
+      "sourceSha256": "12ff2022a62b87a0462b10dc5f21b75e584e205ece27504eb9510a00f7abc2da",
+      "bytes": 12341,
+      "sha256": "12ff2022a62b87a0462b10dc5f21b75e584e205ece27504eb9510a00f7abc2da"
+    },
+    {
+      "source": "test-harness/docs/guard-abdeckung.md",
+      "target": "docs/guard-abdeckung.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 3469,
+      "sourceSha256": "698d79b899b0042aab656af2da05737920e5872d8c7b7b007c28c820a7f2cbd0",
+      "bytes": 3469,
+      "sha256": "698d79b899b0042aab656af2da05737920e5872d8c7b7b007c28c820a7f2cbd0"
+    },
+    {
+      "source": "test-harness/standalone/templates/harness-instance.md",
+      "target": "docs/harness-instance.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 532,
+      "sourceSha256": "21cab8de55f46e4415ac0bf9bc37c0ff12e17460ebc33521d01eca64f2c68c5f",
+      "bytes": 532,
+      "sha256": "21cab8de55f46e4415ac0bf9bc37c0ff12e17460ebc33521d01eca64f2c68c5f"
+    },
+    {
+      "source": "test-harness/docs/packages/TEMPLATE.md",
+      "target": "docs/packages/TEMPLATE.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2143,
+      "sourceSha256": "d82342442b33b8350aaa3cf1cf67a13aeb9d24ef365d2ce17bd3c7eae7827a34",
+      "bytes": 2143,
+      "sha256": "d82342442b33b8350aaa3cf1cf67a13aeb9d24ef365d2ce17bd3c7eae7827a34"
+    },
+    {
+      "source": "test-harness/docs/session-notes/README.md",
+      "target": "docs/session-notes/README.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1040,
+      "sourceSha256": "deef5520918234883cc394bc948d042b65c2028d50d017c081a8baa2bdad34c8",
+      "bytes": 1040,
+      "sha256": "deef5520918234883cc394bc948d042b65c2028d50d017c081a8baa2bdad34c8"
+    },
+    {
+      "source": "test-harness/standalone/templates/tool-landscape.md",
+      "target": "docs/tool-landscape.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 883,
+      "sourceSha256": "f322a2caf149898180fb39741f6aa730362c033844f20b375c0f5556ef1ff47b",
+      "bytes": 883,
+      "sha256": "f322a2caf149898180fb39741f6aa730362c033844f20b375c0f5556ef1ff47b"
+    },
+    {
+      "source": "test-harness/docs/tool-sourcing.md",
+      "target": "docs/tool-sourcing.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4630,
+      "sourceSha256": "8def705c6e129349a224998d86d0f71693accf811e5ee20df73d2af5739f3938",
+      "bytes": 4630,
+      "sha256": "8def705c6e129349a224998d86d0f71693accf811e5ee20df73d2af5739f3938"
+    },
+    {
+      "source": "test-harness/harness-core/binding/owner-contract.cjs",
+      "target": "harness-core/binding/owner-contract.cjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 643,
+      "sourceSha256": "7063166231a300daf9f201846557264595572b1f03519b808b036f285faab154",
+      "bytes": 643,
+      "sha256": "7063166231a300daf9f201846557264595572b1f03519b808b036f285faab154"
+    },
+    {
+      "source": "test-harness/harness-core/binding/package-binding.cjs",
+      "target": "harness-core/binding/package-binding.cjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 14962,
+      "sourceSha256": "f166938ee6bc1bd639b26f65891bb3cf0ed367976a7b723cbf65d251a769de26",
+      "bytes": 14962,
+      "sha256": "f166938ee6bc1bd639b26f65891bb3cf0ed367976a7b723cbf65d251a769de26"
+    },
+    {
+      "source": "test-harness/harness-core/binding/package-bootstrap.cjs",
+      "target": "harness-core/binding/package-bootstrap.cjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 9975,
+      "sourceSha256": "e56fb4c3ca178dc51d24f9a09c8709537d993a045bbd66e52cbd389320edf5f2",
+      "bytes": 9975,
+      "sha256": "e56fb4c3ca178dc51d24f9a09c8709537d993a045bbd66e52cbd389320edf5f2"
+    },
+    {
+      "source": "test-harness/harness-core/binding/repository.cjs",
+      "target": "harness-core/binding/repository.cjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 752,
+      "sourceSha256": "24c4c806ec8ffc1de7d90d6a9adb20af1c97fd1b5bece856a3775e709c1c1380",
+      "bytes": 752,
+      "sha256": "24c4c806ec8ffc1de7d90d6a9adb20af1c97fd1b5bece856a3775e709c1c1380"
+    },
+    {
+      "source": "test-harness/harness-core/execution/atomic-file.mjs",
+      "target": "harness-core/execution/atomic-file.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1046,
+      "sourceSha256": "1ec6af26f861039d30fdb72b15c85c4b4ba6d690b2b06c88d07f7158e38ebd44",
+      "bytes": 1046,
+      "sha256": "1ec6af26f861039d30fdb72b15c85c4b4ba6d690b2b06c88d07f7158e38ebd44"
+    },
+    {
+      "source": "test-harness/harness-core/execution/codex-plugin-bootstrap.mjs",
+      "target": "harness-core/execution/codex-plugin-bootstrap.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 13141,
+      "sourceSha256": "f3119ad85e20b35457ec3f5848d7dbf2cddacd4ad3449cdb5a637ed1f12bb77f",
+      "bytes": 13141,
+      "sha256": "f3119ad85e20b35457ec3f5848d7dbf2cddacd4ad3449cdb5a637ed1f12bb77f"
+    },
+    {
+      "source": "test-harness/harness-core/execution/owner-approval.mjs",
+      "target": "harness-core/execution/owner-approval.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 15030,
+      "sourceSha256": "d8bcb3847bef75ded31ebd86fb306c409a762f1488141203f757ffa88662d1bd",
+      "bytes": 15030,
+      "sha256": "d8bcb3847bef75ded31ebd86fb306c409a762f1488141203f757ffa88662d1bd"
+    },
+    {
+      "source": "test-harness/harness-core/execution/package-bootstrap.mjs",
+      "target": "harness-core/execution/package-bootstrap.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2196,
+      "sourceSha256": "0f18f25e564bbca238882025d0b3f0e515e3ee57dcb41fb386a2a77c27be74bd",
+      "bytes": 2196,
+      "sha256": "0f18f25e564bbca238882025d0b3f0e515e3ee57dcb41fb386a2a77c27be74bd"
+    },
+    {
+      "source": "test-harness/harness-core/execution/package-executor.mjs",
+      "target": "harness-core/execution/package-executor.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 87244,
+      "sourceSha256": "63cbb5d9dca363168de7cc8bfab337f6a5359e6ab5389e2fbec864ab25e3d665",
+      "bytes": 87244,
+      "sha256": "63cbb5d9dca363168de7cc8bfab337f6a5359e6ab5389e2fbec864ab25e3d665"
+    },
+    {
+      "source": "test-harness/harness-core/execution/provider-runtime.mjs",
+      "target": "harness-core/execution/provider-runtime.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 21613,
+      "sourceSha256": "13ee27a846198465fb687e66971e7622fd5bd3bb55cfac808ede84b0f4a28469",
+      "bytes": 21613,
+      "sha256": "13ee27a846198465fb687e66971e7622fd5bd3bb55cfac808ede84b0f4a28469"
+    },
+    {
+      "source": "test-harness/harness-core/git/git-intent.mjs",
+      "target": "harness-core/git/git-intent.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 84200,
+      "sourceSha256": "45d5e51239c23e73f911fcafba690ba1cdb28b03dd1160eb69e4c111e44e8db0",
+      "bytes": 84200,
+      "sha256": "45d5e51239c23e73f911fcafba690ba1cdb28b03dd1160eb69e4c111e44e8db0"
+    },
+    {
+      "source": "test-harness/licenses/LICENSE-i-have-adhd.txt",
+      "target": "licenses/LICENSE-i-have-adhd.txt",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1069,
+      "sourceSha256": "8acbb618089b738404f76ac60fca1aaa995d9a87995eddf95f0b777acd7f7d2c",
+      "bytes": 1069,
+      "sha256": "8acbb618089b738404f76ac60fca1aaa995d9a87995eddf95f0b777acd7f7d2c"
+    },
+    {
+      "source": "test-harness/standalone/templates/package.json",
+      "target": "package.json",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 532,
+      "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
+      "bytes": 571,
+      "sha256": "420c835a3482089a8e08741fe1a5d1c7af42a7ed04802795bc99114a552dfb07"
+    },
+    {
+      "source": "test-harness/templates/GATES-LEAF.md",
+      "target": "templates/GATES-LEAF.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 295,
+      "sourceSha256": "d648141c60ad474668a1b4f71f017cee4b2f9d74fb5998cbc67b893201917fc9",
+      "bytes": 295,
+      "sha256": "d648141c60ad474668a1b4f71f017cee4b2f9d74fb5998cbc67b893201917fc9"
+    },
+    {
+      "source": "test-harness/templates/GATES-ROOT.md",
+      "target": "templates/GATES-ROOT.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 251,
+      "sourceSha256": "5635181e8bf11b467970b92f996b9395f7b4904d029edd84565436d0a6ecd171",
+      "bytes": 251,
+      "sha256": "5635181e8bf11b467970b92f996b9395f7b4904d029edd84565436d0a6ecd171"
+    },
+    {
+      "source": "test-harness/templates/OWNER.md",
+      "target": "templates/OWNER.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 301,
+      "sourceSha256": "ca21dda4c9325027b4324570fba53cff0d1c255790abc1d83f0e811bfce2e38e",
+      "bytes": 301,
+      "sha256": "ca21dda4c9325027b4324570fba53cff0d1c255790abc1d83f0e811bfce2e38e"
+    },
+    {
+      "source": "vendor/unlazy/.github/workflows/test.yml",
+      "target": "vendor/unlazy/.github/workflows/test.yml",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 756,
+      "sourceSha256": "321907ffa2f33b76bc5d8ea37232380c4bfe269b2b63e88c4a3b0facb8ae32fb",
+      "bytes": 756,
+      "sha256": "321907ffa2f33b76bc5d8ea37232380c4bfe269b2b63e88c4a3b0facb8ae32fb"
+    },
+    {
+      "source": "vendor/unlazy/.gitignore",
+      "target": "vendor/unlazy/.gitignore",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 160,
+      "sourceSha256": "ecc5cc90ab70ad104a6c2839fd5f9657b8e812df82b03a728d43a4f04fdcd4ce",
+      "bytes": 160,
+      "sha256": "ecc5cc90ab70ad104a6c2839fd5f9657b8e812df82b03a728d43a4f04fdcd4ce"
+    },
+    {
+      "source": "vendor/unlazy/agents/openai.yaml",
+      "target": "vendor/unlazy/agents/openai.yaml",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 256,
+      "sourceSha256": "97f1983d603e2b7e81fa31187a620dbf850b73c68b6dc807077bd79c0b1f5d6d",
+      "bytes": 256,
+      "sha256": "97f1983d603e2b7e81fa31187a620dbf850b73c68b6dc807077bd79c0b1f5d6d"
+    },
+    {
+      "source": "vendor/unlazy/CHANGELOG.md",
+      "target": "vendor/unlazy/CHANGELOG.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 12861,
+      "sourceSha256": "4b7bc6b37b7474d12fd53157f8d8295df7716df47f7861c288979a5e1830ed5b",
+      "bytes": 12861,
+      "sha256": "4b7bc6b37b7474d12fd53157f8d8295df7716df47f7861c288979a5e1830ed5b"
+    },
+    {
+      "source": "vendor/unlazy/CONTRIBUTING.md",
+      "target": "vendor/unlazy/CONTRIBUTING.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4784,
+      "sourceSha256": "0d1e5ed4965e9fc05360fa04a09d4e69714e23342b300f4af1299b403713cff3",
+      "bytes": 4784,
+      "sha256": "0d1e5ed4965e9fc05360fa04a09d4e69714e23342b300f4af1299b403713cff3"
+    },
+    {
+      "source": "vendor/unlazy/LICENSE",
+      "target": "vendor/unlazy/LICENSE",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1086,
+      "sourceSha256": "3c9f63518df3378772203cc64d38d9e381d2a4723b93d2c3849b2bf3d464de0c",
+      "bytes": 1086,
+      "sha256": "3c9f63518df3378772203cc64d38d9e381d2a4723b93d2c3849b2bf3d464de0c"
+    },
+    {
+      "source": "vendor/unlazy/package.json",
+      "target": "vendor/unlazy/package.json",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 295,
+      "sourceSha256": "dfed1c4e7c33f309636fed2da1fd819b4c9d910ccddaee5ed98f67766d85472b",
+      "bytes": 295,
+      "sha256": "dfed1c4e7c33f309636fed2da1fd819b4c9d910ccddaee5ed98f67766d85472b"
+    },
+    {
+      "source": "vendor/unlazy/README.md",
+      "target": "vendor/unlazy/README.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 18209,
+      "sourceSha256": "aeb4a3cfafb018ffe5bd016a739dfb2d25d42a031ed621dbc6c916303aa3dd9a",
+      "bytes": 18209,
+      "sha256": "aeb4a3cfafb018ffe5bd016a739dfb2d25d42a031ed621dbc6c916303aa3dd9a"
+    },
+    {
+      "source": "vendor/unlazy/references/dispatch.md",
+      "target": "vendor/unlazy/references/dispatch.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6148,
+      "sourceSha256": "62b26e2c3c0b1c24ec2bb5e48351ffde5b025f6f52e0e1fd60c60ceb80ea6099",
+      "bytes": 6148,
+      "sha256": "62b26e2c3c0b1c24ec2bb5e48351ffde5b025f6f52e0e1fd60c60ceb80ea6099"
+    },
+    {
+      "source": "vendor/unlazy/references/gates.md",
+      "target": "vendor/unlazy/references/gates.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 13782,
+      "sourceSha256": "e40d94c75628b7b2118b21173e66894b8fbf78ec309aa22529b8ee95daee029f",
+      "bytes": 13782,
+      "sha256": "e40d94c75628b7b2118b21173e66894b8fbf78ec309aa22529b8ee95daee029f"
+    },
+    {
+      "source": "vendor/unlazy/references/method.md",
+      "target": "vendor/unlazy/references/method.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4313,
+      "sourceSha256": "4a2dfc4d7bde60294bb17c1aa1bbd1310173f827f39ea5136958f73ee9588139",
+      "bytes": 4313,
+      "sha256": "4a2dfc4d7bde60294bb17c1aa1bbd1310173f827f39ea5136958f73ee9588139"
+    },
+    {
+      "source": "vendor/unlazy/references/orchestration.md",
+      "target": "vendor/unlazy/references/orchestration.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 7030,
+      "sourceSha256": "00c10bb35d516bb3761b59d3ce27caedbad040c4c245fa1ae8cb1b3417741ac7",
+      "bytes": 7030,
+      "sha256": "00c10bb35d516bb3761b59d3ce27caedbad040c4c245fa1ae8cb1b3417741ac7"
+    },
+    {
+      "source": "vendor/unlazy/references/package-bundles.md",
+      "target": "vendor/unlazy/references/package-bundles.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 8752,
+      "sourceSha256": "edf1e28f728a894e4031aef2ed30cd1886266ce483e725221678a924ab13a003",
+      "bytes": 8752,
+      "sha256": "edf1e28f728a894e4031aef2ed30cd1886266ce483e725221678a924ab13a003"
+    },
+    {
+      "source": "vendor/unlazy/references/parallel.md",
+      "target": "vendor/unlazy/references/parallel.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6506,
+      "sourceSha256": "47b26319887697d5df2dcb9c8cde6b6258e94a0b9300d2e2cefc6a7138e32c05",
+      "bytes": 6506,
+      "sha256": "47b26319887697d5df2dcb9c8cde6b6258e94a0b9300d2e2cefc6a7138e32c05"
+    },
+    {
+      "source": "vendor/unlazy/references/token-economy.md",
+      "target": "vendor/unlazy/references/token-economy.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2731,
+      "sourceSha256": "0456cd17b682d088a29f04461606bf2da23e544afccd9ae3244eff545e6b0335",
+      "bytes": 2731,
+      "sha256": "0456cd17b682d088a29f04461606bf2da23e544afccd9ae3244eff545e6b0335"
+    },
+    {
+      "source": "vendor/unlazy/research/validation-protocol.md",
+      "target": "vendor/unlazy/research/validation-protocol.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4523,
+      "sourceSha256": "5219fbe64e2aff815fd5f43fb62e425f20039b83e43760a94a31affedd90a6c3",
+      "bytes": 4523,
+      "sha256": "5219fbe64e2aff815fd5f43fb62e425f20039b83e43760a94a31affedd90a6c3"
+    },
+    {
+      "source": "vendor/unlazy/scripts/dispatch-check.mjs",
+      "target": "vendor/unlazy/scripts/dispatch-check.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 8562,
+      "sourceSha256": "70c9a23eb3d4b54e54fb566e19936997bd05d9f1c1e6a280af3e6b2c05c525bb",
+      "bytes": 8562,
+      "sha256": "70c9a23eb3d4b54e54fb566e19936997bd05d9f1c1e6a280af3e6b2c05c525bb"
+    },
+    {
+      "source": "vendor/unlazy/scripts/gate-check.mjs",
+      "target": "vendor/unlazy/scripts/gate-check.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 45561,
+      "sourceSha256": "b4d3b8a9cf569fbcdce0224fae84ca725cdd31201a7bda867b563481ae80b037",
+      "bytes": 45561,
+      "sha256": "b4d3b8a9cf569fbcdce0224fae84ca725cdd31201a7bda867b563481ae80b037"
+    },
+    {
+      "source": "vendor/unlazy/scripts/gate-lint.mjs",
+      "target": "vendor/unlazy/scripts/gate-lint.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 8938,
+      "sourceSha256": "2bedd9c785ba157eb25078a75710298e078e901f82d2d5c2ea240227e595d4a8",
+      "bytes": 8938,
+      "sha256": "2bedd9c785ba157eb25078a75710298e078e901f82d2d5c2ea240227e595d4a8"
+    },
+    {
+      "source": "vendor/unlazy/scripts/install-hooks.mjs",
+      "target": "vendor/unlazy/scripts/install-hooks.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 10800,
+      "sourceSha256": "51a37468cc16a2adf02dbe0e41bdac0843aaf35c8a346f75e717bb46dd327f79",
+      "bytes": 10800,
+      "sha256": "51a37468cc16a2adf02dbe0e41bdac0843aaf35c8a346f75e717bb46dd327f79"
+    },
+    {
+      "source": "vendor/unlazy/scripts/lib/check-supervisor.mjs",
+      "target": "vendor/unlazy/scripts/lib/check-supervisor.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2649,
+      "sourceSha256": "24b01a01f9735b32bbc6cf34cf28cab5c6e5fcb886651e2db7241285101724ce",
+      "bytes": 2649,
+      "sha256": "24b01a01f9735b32bbc6cf34cf28cab5c6e5fcb886651e2db7241285101724ce"
+    },
+    {
+      "source": "vendor/unlazy/scripts/lib/dispatch.mjs",
+      "target": "vendor/unlazy/scripts/lib/dispatch.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 16584,
+      "sourceSha256": "14f8b4505d6656e8d058ab63c091091a32627c43ed0ed7a28e4c0dbf44b02ed0",
+      "bytes": 16584,
+      "sha256": "14f8b4505d6656e8d058ab63c091091a32627c43ed0ed7a28e4c0dbf44b02ed0"
+    },
+    {
+      "source": "vendor/unlazy/scripts/lib/gates.mjs",
+      "target": "vendor/unlazy/scripts/lib/gates.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 28093,
+      "sourceSha256": "5c1611898c8dc3a4888d7e8dae83afa90e0900139f479cf201a11f8513563069",
+      "bytes": 28093,
+      "sha256": "5c1611898c8dc3a4888d7e8dae83afa90e0900139f479cf201a11f8513563069"
+    },
+    {
+      "source": "vendor/unlazy/scripts/lib/owner-contract.cjs",
+      "target": "vendor/unlazy/scripts/lib/owner-contract.cjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 8796,
+      "sourceSha256": "edca5a802459798657a864b197fd5a4731c4861ce067b3f5645b5b7b93915bf0",
+      "bytes": 8796,
+      "sha256": "edca5a802459798657a864b197fd5a4731c4861ce067b3f5645b5b7b93915bf0"
+    },
+    {
+      "source": "vendor/unlazy/scripts/lib/package-context.cjs",
+      "target": "vendor/unlazy/scripts/lib/package-context.cjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 8114,
+      "sourceSha256": "b93b6bc7b61f9ee966aaa2f4bad16486e0fb026470534ff971da07a66074599d",
+      "bytes": 8114,
+      "sha256": "b93b6bc7b61f9ee966aaa2f4bad16486e0fb026470534ff971da07a66074599d"
+    },
+    {
+      "source": "vendor/unlazy/scripts/lib/package-lifecycle.mjs",
+      "target": "vendor/unlazy/scripts/lib/package-lifecycle.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 39860,
+      "sourceSha256": "a23def8f684a7cfd5720f2824db2743a5dcfa415b0ee4cdda5249ec29a8e4441",
+      "bytes": 39860,
+      "sha256": "a23def8f684a7cfd5720f2824db2743a5dcfa415b0ee4cdda5249ec29a8e4441"
+    },
+    {
+      "source": "vendor/unlazy/scripts/lib/package-migration.mjs",
+      "target": "vendor/unlazy/scripts/lib/package-migration.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 26379,
+      "sourceSha256": "9016c155bbc92aef2b0f2222093674f9b0e85ae6f40f2e38a46dad20b34f5456",
+      "bytes": 26379,
+      "sha256": "9016c155bbc92aef2b0f2222093674f9b0e85ae6f40f2e38a46dad20b34f5456"
+    },
+    {
+      "source": "vendor/unlazy/scripts/lib/package-schema.mjs",
+      "target": "vendor/unlazy/scripts/lib/package-schema.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 37991,
+      "sourceSha256": "25b82d70e7eca8fe9ff3d37d954c689882000b4b38c21c9ada2c9d86f94a6916",
+      "bytes": 37991,
+      "sha256": "25b82d70e7eca8fe9ff3d37d954c689882000b4b38c21c9ada2c9d86f94a6916"
+    },
+    {
+      "source": "vendor/unlazy/scripts/lib/packages.mjs",
+      "target": "vendor/unlazy/scripts/lib/packages.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 11328,
+      "sourceSha256": "7a75980ea5ca66defc4de60f61786b7f9524c1b6df6c4fa4dc94cba22f9dc2bf",
+      "bytes": 11328,
+      "sha256": "7a75980ea5ca66defc4de60f61786b7f9524c1b6df6c4fa4dc94cba22f9dc2bf"
+    },
+    {
+      "source": "vendor/unlazy/scripts/lib/process-tree.mjs",
+      "target": "vendor/unlazy/scripts/lib/process-tree.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6613,
+      "sourceSha256": "4aa583aca03a3d67d570b8d44665cc3869e93ad0b3ae77b1b0519a7989d0ef9b",
+      "bytes": 6613,
+      "sha256": "4aa583aca03a3d67d570b8d44665cc3869e93ad0b3ae77b1b0519a7989d0ef9b"
+    },
+    {
+      "source": "vendor/unlazy/scripts/lib/regex-worker.mjs",
+      "target": "vendor/unlazy/scripts/lib/regex-worker.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 291,
+      "sourceSha256": "1085938bbd54da71d12cc38ac6d22a948db4b0b57d9d876185e183b69155e668",
+      "bytes": 291,
+      "sha256": "1085938bbd54da71d12cc38ac6d22a948db4b0b57d9d876185e183b69155e668"
+    },
+    {
+      "source": "vendor/unlazy/scripts/lib/repository.cjs",
+      "target": "vendor/unlazy/scripts/lib/repository.cjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6898,
+      "sourceSha256": "627e602449e7e248bab98b819230d00df1388625506086453f533dca09f89f45",
+      "bytes": 6898,
+      "sha256": "627e602449e7e248bab98b819230d00df1388625506086453f533dca09f89f45"
+    },
+    {
+      "source": "vendor/unlazy/scripts/lib/windows-acl.mjs",
+      "target": "vendor/unlazy/scripts/lib/windows-acl.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 7530,
+      "sourceSha256": "f32dbac37610df34a8c16929cacd601bcb9cd67958c6c62f72e03b0bf17845f9",
+      "bytes": 7530,
+      "sha256": "f32dbac37610df34a8c16929cacd601bcb9cd67958c6c62f72e03b0bf17845f9"
+    },
+    {
+      "source": "vendor/unlazy/scripts/package-cli.mjs",
+      "target": "vendor/unlazy/scripts/package-cli.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 15036,
+      "sourceSha256": "0eb1fb3c19b45fa60ead3151b1aaa538bccc54aaf3c49c2bbba0cb1c921f9006",
+      "bytes": 15036,
+      "sha256": "0eb1fb3c19b45fa60ead3151b1aaa538bccc54aaf3c49c2bbba0cb1c921f9006"
+    },
+    {
+      "source": "vendor/unlazy/scripts/package-migrate.mjs",
+      "target": "vendor/unlazy/scripts/package-migrate.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 3049,
+      "sourceSha256": "8d2c5c5ad4f19780c34dde3ba7a8250006ea9659764112bb5bbd7a7604666a5e",
+      "bytes": 3049,
+      "sha256": "8d2c5c5ad4f19780c34dde3ba7a8250006ea9659764112bb5bbd7a7604666a5e"
+    },
+    {
+      "source": "vendor/unlazy/scripts/stop-hook.mjs",
+      "target": "vendor/unlazy/scripts/stop-hook.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 10515,
+      "sourceSha256": "8833f756c69f74badec46d745667fe8f1b73c207987ed73811f8dce86e40da84",
+      "bytes": 10515,
+      "sha256": "8833f756c69f74badec46d745667fe8f1b73c207987ed73811f8dce86e40da84"
+    },
+    {
+      "source": "vendor/unlazy/SECURITY.md",
+      "target": "vendor/unlazy/SECURITY.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 10994,
+      "sourceSha256": "922f16e5ddf31650cc36850c9800f5a360140e2756f12895da94393f544662f3",
+      "bytes": 10994,
+      "sha256": "922f16e5ddf31650cc36850c9800f5a360140e2756f12895da94393f544662f3"
+    },
+    {
+      "source": "vendor/unlazy/SKILL.md",
+      "target": "vendor/unlazy/SKILL.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 10257,
+      "sourceSha256": "28e01097c81ac4ca9453067a907a1c04f8b87d6167b27abebf457eb7803fe0aa",
+      "bytes": 10257,
+      "sha256": "28e01097c81ac4ca9453067a907a1c04f8b87d6167b27abebf457eb7803fe0aa"
+    },
+    {
+      "source": "vendor/unlazy/templates/gates-leaf.md",
+      "target": "vendor/unlazy/templates/gates-leaf.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2312,
+      "sourceSha256": "1ba8405c7f8fae7e8aecfc1175352e68ada2db211a218762ed49735fc8cc896e",
+      "bytes": 2312,
+      "sha256": "1ba8405c7f8fae7e8aecfc1175352e68ada2db211a218762ed49735fc8cc896e"
+    },
+    {
+      "source": "vendor/unlazy/templates/gates-node.md",
+      "target": "vendor/unlazy/templates/gates-node.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2076,
+      "sourceSha256": "76e1a0eeb03a98af73dbf7e010f61fb402692c5d3aafc3b8e7612ad63eddd788",
+      "bytes": 2076,
+      "sha256": "76e1a0eeb03a98af73dbf7e010f61fb402692c5d3aafc3b8e7612ad63eddd788"
+    },
+    {
+      "source": "vendor/unlazy/templates/PLAN.md",
+      "target": "vendor/unlazy/templates/PLAN.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 3844,
+      "sourceSha256": "fbc416fdadd021257ef5208e9c73be431c937b481cef6ac80faecef6922a8e47",
+      "bytes": 3844,
+      "sha256": "fbc416fdadd021257ef5208e9c73be431c937b481cef6ac80faecef6922a8e47"
+    },
+    {
+      "source": "vendor/unlazy/tests/contract-tests.mjs",
+      "target": "vendor/unlazy/tests/contract-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4964,
+      "sourceSha256": "d33cd486f36c8c1aad6472966ffa7dee982e7cf052548082a0f0ce51dc74bcad",
+      "bytes": 4964,
+      "sha256": "d33cd486f36c8c1aad6472966ffa7dee982e7cf052548082a0f0ce51dc74bcad"
+    },
+    {
+      "source": "vendor/unlazy/tests/dispatch-tests.mjs",
+      "target": "vendor/unlazy/tests/dispatch-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 24302,
+      "sourceSha256": "e534d03cc50e85527b562c7709632ab2b1d537503dd302582bb7f8758ad8a82a",
+      "bytes": 24302,
+      "sha256": "e534d03cc50e85527b562c7709632ab2b1d537503dd302582bb7f8758ad8a82a"
+    },
+    {
+      "source": "vendor/unlazy/tests/full-suite.mjs",
+      "target": "vendor/unlazy/tests/full-suite.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 3653,
+      "sourceSha256": "9329b47c9cebfb5f7644c3d78afbb784e27224a2f65b0764d0bf42f10987fc66",
+      "bytes": 3653,
+      "sha256": "9329b47c9cebfb5f7644c3d78afbb784e27224a2f65b0764d0bf42f10987fc66"
+    },
+    {
+      "source": "vendor/unlazy/tests/hardening-tests.mjs",
+      "target": "vendor/unlazy/tests/hardening-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 45879,
+      "sourceSha256": "0228f009b9da85b80102aab93d49360b109ab7e63a95a5a97925ecfc5f48c7b0",
+      "bytes": 45879,
+      "sha256": "0228f009b9da85b80102aab93d49360b109ab7e63a95a5a97925ecfc5f48c7b0"
+    },
+    {
+      "source": "vendor/unlazy/tests/helpers/git-repo.mjs",
+      "target": "vendor/unlazy/tests/helpers/git-repo.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1038,
+      "sourceSha256": "1f84816b6d88ef49b22841dc75d85ff0d3615d150b65aabd15dc4035873d47a4",
+      "bytes": 1038,
+      "sha256": "1f84816b6d88ef49b22841dc75d85ff0d3615d150b65aabd15dc4035873d47a4"
+    },
+    {
+      "source": "vendor/unlazy/tests/helpers/test-counts.mjs",
+      "target": "vendor/unlazy/tests/helpers/test-counts.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 830,
+      "sourceSha256": "c7f91039265951ac4c42afabd7d8b1c5a22e397cf05fe667455a4b20bec3befa",
+      "bytes": 830,
+      "sha256": "c7f91039265951ac4c42afabd7d8b1c5a22e397cf05fe667455a4b20bec3befa"
+    },
+    {
+      "source": "vendor/unlazy/tests/lint-tests.mjs",
+      "target": "vendor/unlazy/tests/lint-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 8208,
+      "sourceSha256": "94522f527345f157ad448c03f820d2e18da60c7c3696520f8d4eae9c07e24ae5",
+      "bytes": 8208,
+      "sha256": "94522f527345f157ad448c03f820d2e18da60c7c3696520f8d4eae9c07e24ae5"
+    },
+    {
+      "source": "vendor/unlazy/tests/mvp-workbench-tests.mjs",
+      "target": "vendor/unlazy/tests/mvp-workbench-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4804,
+      "sourceSha256": "5ca43cbc5e678fa6b7ef399bb7f1641c167674f2f7cee51ba8f0613c14be21f0",
+      "bytes": 4804,
+      "sha256": "5ca43cbc5e678fa6b7ef399bb7f1641c167674f2f7cee51ba8f0613c14be21f0"
+    },
+    {
+      "source": "vendor/unlazy/tests/package-contract-tests.mjs",
+      "target": "vendor/unlazy/tests/package-contract-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6887,
+      "sourceSha256": "f7afa720e0f56a30a1d796ae8539b03b2876477295357d1ae770e8dcdaaab8c0",
+      "bytes": 6887,
+      "sha256": "f7afa720e0f56a30a1d796ae8539b03b2876477295357d1ae770e8dcdaaab8c0"
+    },
+    {
+      "source": "vendor/unlazy/tests/package-fanout-tests.mjs",
+      "target": "vendor/unlazy/tests/package-fanout-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 13731,
+      "sourceSha256": "27b3a60bba12f6f2a159d8c7e88d8ec706d940ff783d87424fc00714c596d89a",
+      "bytes": 13731,
+      "sha256": "27b3a60bba12f6f2a159d8c7e88d8ec706d940ff783d87424fc00714c596d89a"
+    },
+    {
+      "source": "vendor/unlazy/tests/package-gate-tests.mjs",
+      "target": "vendor/unlazy/tests/package-gate-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 11443,
+      "sourceSha256": "1c7ec2a0bfdadace244915abca30345f2990d4ea61c6c19d00975c3b82c7708e",
+      "bytes": 11443,
+      "sha256": "1c7ec2a0bfdadace244915abca30345f2990d4ea61c6c19d00975c3b82c7708e"
+    },
+    {
+      "source": "vendor/unlazy/tests/package-hook-tests.mjs",
+      "target": "vendor/unlazy/tests/package-hook-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 12841,
+      "sourceSha256": "8b212bb108f1252d4d17f98f8d4d006cf02d0c0dd8943c510c3e6ed2b19b6fac",
+      "bytes": 12841,
+      "sha256": "8b212bb108f1252d4d17f98f8d4d006cf02d0c0dd8943c510c3e6ed2b19b6fac"
+    },
+    {
+      "source": "vendor/unlazy/tests/package-lifecycle-tests.mjs",
+      "target": "vendor/unlazy/tests/package-lifecycle-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 22024,
+      "sourceSha256": "f4113fd315f77d6ca957f30ed26ea6b16b311e089d952f634760190296a52d2d",
+      "bytes": 22024,
+      "sha256": "f4113fd315f77d6ca957f30ed26ea6b16b311e089d952f634760190296a52d2d"
+    },
+    {
+      "source": "vendor/unlazy/tests/package-migrate-tests.mjs",
+      "target": "vendor/unlazy/tests/package-migrate-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 12900,
+      "sourceSha256": "3388c29057ef52bb838f0fc145ab2a71a07499962f59c4ca8051d0335aa00856",
+      "bytes": 12900,
+      "sha256": "3388c29057ef52bb838f0fc145ab2a71a07499962f59c4ca8051d0335aa00856"
+    },
+    {
+      "source": "vendor/unlazy/tests/package-resolver-tests.mjs",
+      "target": "vendor/unlazy/tests/package-resolver-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 9641,
+      "sourceSha256": "d10a2d94afab84a16b1e72e4794350ab0559363e8d034e6749145c7bd217018a",
+      "bytes": 9641,
+      "sha256": "d10a2d94afab84a16b1e72e4794350ab0559363e8d034e6749145c7bd217018a"
+    },
+    {
+      "source": "vendor/unlazy/tests/package-schema-tests.mjs",
+      "target": "vendor/unlazy/tests/package-schema-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 14595,
+      "sourceSha256": "fe7bc7ed77f2beadbbdb6262d298f05a88d17b3e2f3f67fb6578ea0ce72fa68e",
+      "bytes": 14595,
+      "sha256": "fe7bc7ed77f2beadbbdb6262d298f05a88d17b3e2f3f67fb6578ea0ce72fa68e"
+    },
+    {
+      "source": "vendor/unlazy/tests/run-tests.mjs",
+      "target": "vendor/unlazy/tests/run-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 26584,
+      "sourceSha256": "0c384334516e3363d0cac12b0340600549678db1355f6c2887350e95ced4c10f",
+      "bytes": 26584,
+      "sha256": "0c384334516e3363d0cac12b0340600549678db1355f6c2887350e95ced4c10f"
+    },
+    {
+      "source": "vendor/unlazy/tests/self-check.mjs",
+      "target": "vendor/unlazy/tests/self-check.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 8834,
+      "sourceSha256": "a380b1fb5a1b1fcbc743b897159681228e146d341d0e78f9b679a6d3ab85c2f1",
+      "bytes": 8834,
+      "sha256": "a380b1fb5a1b1fcbc743b897159681228e146d341d0e78f9b679a6d3ab85c2f1"
+    },
+    {
+      "source": "vendor/unlazy/tests/stress-tests.mjs",
+      "target": "vendor/unlazy/tests/stress-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 18099,
+      "sourceSha256": "9ce222135a9cee17521415b3920d4d128e35bfbcafdda9e33225d4e58653a6ea",
+      "bytes": 18099,
+      "sha256": "9ce222135a9cee17521415b3920d4d128e35bfbcafdda9e33225d4e58653a6ea"
+    },
+    {
+      "source": "vendor/unlazy/UPSTREAM-COMMIT.txt",
+      "target": "vendor/unlazy/UPSTREAM-COMMIT.txt",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 247,
+      "sourceSha256": "0319c1f652cf027ecf1fe7a6447c831093f8de0d3fa3f041249b88063f7e6484",
+      "bytes": 247,
+      "sha256": "0319c1f652cf027ecf1fe7a6447c831093f8de0d3fa3f041249b88063f7e6484"
+    },
+    {
+      "source": "vendor/unlazy/UPSTREAM-TREE.txt",
+      "target": "vendor/unlazy/UPSTREAM-TREE.txt",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2759,
+      "sourceSha256": "75a27d21175820569b7d5067b998be34fbf708c85454940fb192c670f41e1fed",
+      "bytes": 2759,
+      "sha256": "75a27d21175820569b7d5067b998be34fbf708c85454940fb192c670f41e1fed"
+    },
+    {
+      "source": "vendor/unlazy/UPSTREAM.json",
+      "target": "vendor/unlazy/UPSTREAM.json",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 312,
+      "sourceSha256": "e6984e6ac8e9d70731deaf583d64424615644ecc23eae6c975a7cdcd0e607917",
+      "bytes": 312,
+      "sha256": "e6984e6ac8e9d70731deaf583d64424615644ecc23eae6c975a7cdcd0e607917"
     }
   ],
-  "dateien": [
+  "excluded": [
     {
-      "datei": ".gitignore",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 24,
-      "sha256": "6c7d15d2ab1a0b51"
+      "source": "test-harness/.claude/settings.local.json",
+      "reason": "machine-local permissions and plugin choices are not delivery truth"
     },
     {
-      "datei": "AENDERUNGEN-ANLEITUNG-2026-08-18.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 12130,
-      "sha256": "9406f46ca6b03d14"
+      "source": "test-harness/.unlazy/**",
+      "reason": "disposable runtime and evidence state must never be delivered"
     },
     {
-      "datei": "PAKET-ANLEITUNG.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 8838,
-      "sha256": "b5611a249b735e31"
+      "source": "test-harness/dashboard/** except the compiled runtime archive",
+      "reason": "recipient installs one verified production React runtime through dashboard/serve.mjs, never a second source or legacy renderer tree"
     },
     {
-      "datei": "README.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 5777,
-      "sha256": "8bf8b3378b40cfa3"
+      "source": "test-harness/dashboard/.next/standalone/node_modules/{@img,sharp}/**",
+      "reason": "optional image optimization is disabled; platform-specific Sharp binaries cannot enter the platform-neutral runtime archive"
     },
     {
-      "datei": "checks/anleitung-sync.mjs",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 15384,
-      "sha256": "6cd123ffa8637b45"
+      "source": "test-harness/docs/packages/<lab-package>/**",
+      "reason": "Lab work packages are not recipient project content; the installer creates a fresh bundle"
     },
     {
-      "datei": "checks/dashboard-liste.mjs",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 4470,
-      "sha256": "e524381b3f07c880"
+      "source": "test-harness/docs/harness-instance.md",
+      "reason": "the Lab instance profile is replaced by the fresh-install onboarding template"
     },
     {
-      "datei": "checks/frisch-geklont.mjs",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 15630,
-      "sha256": "f66e15ec4aeb5068"
+      "source": "test-harness/docs/rebuild-guide.md and source-only Lab docs",
+      "reason": "reference-build guidance is not recipient-project runtime or package truth"
     },
     {
-      "datei": "checks/paket-manifest.mjs",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 5330,
-      "sha256": "fdc5232050581222"
+      "source": "test-harness/checks/<source-reference-gates>.mjs",
+      "reason": "source, distribution, native-runtime, Lab-package, and external-repository gates bind the distributor's build package and are not recipient-project runtime"
     },
     {
-      "datei": "install.mjs",
-      "herkunft": "onboarding.mjs",
-      "quellordner": "installer",
-      "gesaeubert": 0,
-      "bytes": 78714,
-      "sha256": "60c8191ab089b73c"
+      "source": "test-harness/checks/governance-hardening.mjs and source active-harness-inventory.md",
+      "reason": "the source governance gate imports distributor-only modules; recipients receive an installed-specific inventory whose commands are validated by checks/installed-harness.mjs"
     },
     {
-      "datei": "licenses/LICENSE-i-have-adhd.txt",
-      "herkunft": "user-projects/harness-lab/vendor/LICENSE-i-have-adhd.txt",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 1069,
-      "sha256": "8acbb618089b7384"
-    },
-    {
-      "datei": "payload/claude/commands/onboarding.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 5873,
-      "sha256": "678ca773b0141bc4"
-    },
-    {
-      "datei": "payload/claude/commands/repo-status.md",
-      "herkunft": ".claude/commands/repo-status.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 415,
-      "sha256": "5f9776d3a26b179c"
-    },
-    {
-      "datei": "payload/claude/commands/save-work.md",
-      "herkunft": ".claude/commands/save-work.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 1,
-      "bytes": 1598,
-      "sha256": "5ff0acba9020772f"
-    },
-    {
-      "datei": "payload/claude/commands/session-map.md",
-      "herkunft": ".claude/commands/session-map.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 994,
-      "sha256": "4c2f791102b5788d"
-    },
-    {
-      "datei": "payload/claude/commands/tell-session.md",
-      "herkunft": ".claude/commands/tell-session.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 2,
-      "bytes": 1735,
-      "sha256": "873c9759a7ba647d"
-    },
-    {
-      "datei": "payload/claude/commit-pathspec-guard.js",
-      "herkunft": ".claude/hooks/commit-pathspec-guard.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 1,
-      "bytes": 9097,
-      "sha256": "0b551f0f47e7f311"
-    },
-    {
-      "datei": "payload/claude/danger-guard.js",
-      "herkunft": ".claude/hooks/danger-guard.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 1,
-      "bytes": 23151,
-      "sha256": "9385e5bbe8c779ba"
-    },
-    {
-      "datei": "payload/claude/dod-guard.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 7104,
-      "sha256": "face0fd2f086aa10"
-    },
-    {
-      "datei": "payload/claude/git-guard.js",
-      "herkunft": ".claude/hooks/git-guard.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 12325,
-      "sha256": "30d35b752dd8fd39"
-    },
-    {
-      "datei": "payload/claude/onboarding-start.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 2647,
-      "sha256": "a92868c376a4ce19"
-    },
-    {
-      "datei": "payload/claude/paket-gate.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 7349,
-      "sha256": "d1b7ce2a20ec411d"
-    },
-    {
-      "datei": "payload/claude/pollution-warn.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 2577,
-      "sha256": "b63de8ffc838ec80"
-    },
-    {
-      "datei": "payload/claude/project-context.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 2311,
-      "sha256": "bed03749c3fe9e04"
-    },
-    {
-      "datei": "payload/claude/prompt-form.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 8554,
-      "sha256": "05d3bd5492d7ceff"
-    },
-    {
-      "datei": "payload/claude/repo-status.js",
-      "herkunft": ".claude/repo-status.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 10159,
-      "sha256": "7aab5ee23b22c48b"
-    },
-    {
-      "datei": "payload/claude/rules/keel/no-oneshot.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 459,
-      "sha256": "1c7629e729cb227d"
-    },
-    {
-      "datei": "payload/claude/rules/keel/read-before-act.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 1039,
-      "sha256": "608cbd0527d03af0"
-    },
-    {
-      "datei": "payload/claude/rules/keel/tools.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 1201,
-      "sha256": "5aa75e6210faa22f"
-    },
-    {
-      "datei": "payload/claude/rules/keel/working-method.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 2678,
-      "sha256": "e15581801b989d25"
-    },
-    {
-      "datei": "payload/claude/session-roles.js",
-      "herkunft": ".claude/hooks/session-roles.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 3,
-      "bytes": 6859,
-      "sha256": "e2f986d344e8f57c"
-    },
-    {
-      "datei": "payload/claude/sessionpost-guard.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 6184,
-      "sha256": "a0b69cdde5ba6999"
-    },
-    {
-      "datei": "payload/claude/skills/completeness/SKILL.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 3222,
-      "sha256": "da13633cb53cd126"
-    },
-    {
-      "datei": "payload/claude/skills/i-have-adhd/SKILL.md",
-      "herkunft": ".claude/skills/i-have-adhd/SKILL.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 0,
-      "bytes": 8503,
-      "sha256": "b79af92ed54944b9"
-    },
-    {
-      "datei": "payload/claude/statusline.js",
-      "herkunft": ".claude/statusline.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 3,
-      "bytes": 4679,
-      "sha256": "be78411805ff97f7"
-    },
-    {
-      "datei": "payload/claude/uncommitted-warn.js",
-      "herkunft": ".claude/hooks/uncommitted-warn.js",
-      "quellordner": "werkbank",
-      "gesaeubert": 3,
-      "bytes": 4920,
-      "sha256": "f176607a121967ea"
-    },
-    {
-      "datei": "payload/claude/write-guard.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 7973,
-      "sha256": "15fcc6e1d3eab51f"
-    },
-    {
-      "datei": "payload/dashboard/README.md",
-      "herkunft": "zustand/README.md",
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 6187,
-      "sha256": "38a946136028d6e0"
-    },
-    {
-      "datei": "payload/dashboard/access-filter.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 10258,
-      "sha256": "69e165f3cd4b9376"
-    },
-    {
-      "datei": "payload/dashboard/ausrichtung.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 6111,
-      "sha256": "428c40bde9402d0f"
-    },
-    {
-      "datei": "payload/dashboard/autostart-einrichten.cmd",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 1936,
-      "sha256": "e9c5b17b3050d534"
-    },
-    {
-      "datei": "payload/dashboard/bridge.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 11234,
-      "sha256": "07ecc91050c4579f"
-    },
-    {
-      "datei": "payload/dashboard/classify.js",
-      "herkunft": "zustand/einordnen.js",
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 15403,
-      "sha256": "c5eb1fccae341e2d"
-    },
-    {
-      "datei": "payload/dashboard/file-inventory.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 35787,
-      "sha256": "3f554c50ed44c3df"
-    },
-    {
-      "datei": "payload/dashboard/history.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 2198,
-      "sha256": "998990089eb1ea04"
-    },
-    {
-      "datei": "payload/dashboard/hooks-detail.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 20997,
-      "sha256": "9ccbfbb07348c549"
-    },
-    {
-      "datei": "payload/dashboard/index.js",
-      "herkunft": "zustand/zustand.js",
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 6862,
-      "sha256": "bdf672fa5caa4f1a"
-    },
-    {
-      "datei": "payload/dashboard/inventory.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 4203,
-      "sha256": "df4c732fba0e7f38"
-    },
-    {
-      "datei": "payload/dashboard/klickpfad.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 33683,
-      "sha256": "ec70d8fe0be08172"
-    },
-    {
-      "datei": "payload/dashboard/measure.js",
-      "herkunft": "zustand/messen.js",
-      "quellordner": "bausatz",
-      "gesaeubert": 2,
-      "bytes": 49780,
-      "sha256": "5394fa5d0be1ca48"
-    },
-    {
-      "datei": "payload/dashboard/projects.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 11970,
-      "sha256": "9d20578235fb70f1"
-    },
-    {
-      "datei": "payload/dashboard/related.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 16040,
-      "sha256": "a578e92169e594af"
-    },
-    {
-      "datei": "payload/dashboard/render/client/bridge.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 39449,
-      "sha256": "65a1ceb0b7285d9a"
-    },
-    {
-      "datei": "payload/dashboard/render/client/core.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 31824,
-      "sha256": "5985778b28404c05"
-    },
-    {
-      "datei": "payload/dashboard/render/client/detail.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 26293,
-      "sha256": "01c55ce047770e93"
-    },
-    {
-      "datei": "payload/dashboard/render/client/pages.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 42581,
-      "sha256": "8507d0c1a207b4f8"
-    },
-    {
-      "datei": "payload/dashboard/render/client/projekte.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 9389,
-      "sha256": "e1b1a835ddf90aba"
-    },
-    {
-      "datei": "payload/dashboard/render/client/start.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 24319,
-      "sha256": "d0ad6a3ee07ab205"
-    },
-    {
-      "datei": "payload/dashboard/render/data.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 16414,
-      "sha256": "ea0005dc7413aeef"
-    },
-    {
-      "datei": "payload/dashboard/render/helpers.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 3383,
-      "sha256": "828dea5bd46da5b3"
-    },
-    {
-      "datei": "payload/dashboard/render/icons.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 14198,
-      "sha256": "92fe8424cb059328"
-    },
-    {
-      "datei": "payload/dashboard/render/labels.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 37290,
-      "sha256": "09c4d12d7401a197"
-    },
-    {
-      "datei": "payload/dashboard/render/markdown.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 21518,
-      "sha256": "c3008186375f274b"
-    },
-    {
-      "datei": "payload/dashboard/render/shell.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 7590,
-      "sha256": "ebe8d63cdd2204a9"
-    },
-    {
-      "datei": "payload/dashboard/render/styles-extra.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 24527,
-      "sha256": "f8011d5cf8d9d59b"
-    },
-    {
-      "datei": "payload/dashboard/render/styles.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 46341,
-      "sha256": "5fadd103649e3c72"
-    },
-    {
-      "datei": "payload/dashboard/render/views.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 30480,
-      "sha256": "f24111b402d51a9e"
-    },
-    {
-      "datei": "payload/dashboard/rules.js",
-      "herkunft": "zustand/regeln.js",
-      "quellordner": "bausatz",
-      "gesaeubert": 2,
-      "bytes": 12108,
-      "sha256": "5e90c5a4907fdf00"
-    },
-    {
-      "datei": "payload/dashboard/screenshots.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 3528,
-      "sha256": "5a53ff172876754b"
-    },
-    {
-      "datei": "payload/dashboard/serve.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 19995,
-      "sha256": "d157c2c860d418c0"
-    },
-    {
-      "datei": "payload/dashboard/start-server-hidden.vbs",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 2175,
-      "sha256": "1ba367f6a04d75fd"
-    },
-    {
-      "datei": "payload/dashboard/start-server.cmd",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 468,
-      "sha256": "3361edc213f76ba9"
-    },
-    {
-      "datei": "payload/dashboard/test/access-filter.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 8032,
-      "sha256": "ef0612a99522138e"
-    },
-    {
-      "datei": "payload/dashboard/test/bridge.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 7684,
-      "sha256": "f4a42a95bea78f12"
-    },
-    {
-      "datei": "payload/dashboard/test/client.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 15523,
-      "sha256": "cef4b9033200dcd4"
-    },
-    {
-      "datei": "payload/dashboard/test/completeness.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 16829,
-      "sha256": "412065a009089fd5"
-    },
-    {
-      "datei": "payload/dashboard/test/data.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 25887,
-      "sha256": "b44dadfadc72e41a"
-    },
-    {
-      "datei": "payload/dashboard/test/file-inventory.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 26426,
-      "sha256": "ecc402aba6a56b2e"
-    },
-    {
-      "datei": "payload/dashboard/test/hooks-detail.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 22112,
-      "sha256": "8a845c3494df75dc"
-    },
-    {
-      "datei": "payload/dashboard/test/icons.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 7426,
-      "sha256": "67e6b05cf4ef15a5"
-    },
-    {
-      "datei": "payload/dashboard/test/labels.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 8471,
-      "sha256": "22ea4bf9c72596b4"
-    },
-    {
-      "datei": "payload/dashboard/test/markdown.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 11817,
-      "sha256": "694d87ae7f868777"
-    },
-    {
-      "datei": "payload/dashboard/test/projects.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 12729,
-      "sha256": "2ed31dc234ef6b85"
-    },
-    {
-      "datei": "payload/dashboard/test/related.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 15843,
-      "sha256": "5e137ac64e5390db"
-    },
-    {
-      "datei": "payload/dashboard/test/rule-loading.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 4614,
-      "sha256": "1b609205fb68fcb4"
-    },
-    {
-      "datei": "payload/dashboard/test/serve.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 13508,
-      "sha256": "3584efe83285154b"
-    },
-    {
-      "datei": "payload/dashboard/test/shell.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 11067,
-      "sha256": "4246ca37114d2aaf"
-    },
-    {
-      "datei": "payload/dashboard/test/styles.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 16498,
-      "sha256": "71e86cc90fe4104f"
-    },
-    {
-      "datei": "payload/dashboard/test/todo-docs.test.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 11867,
-      "sha256": "caf570702a4c599b"
-    },
-    {
-      "datei": "payload/dashboard/todo-docs.js",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 9277,
-      "sha256": "abc7bb57c89bff64"
-    },
-    {
-      "datei": "payload/docs/completeness-check.md",
-      "herkunft": "docs/11-vollstaendigkeitspruefung.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 2,
-      "bytes": 25131,
-      "sha256": "1e463158ff88983d"
-    },
-    {
-      "datei": "payload/docs/google-zugang.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 3441,
-      "sha256": "dbe51ebc35baa7ab"
-    },
-    {
-      "datei": "payload/docs/guard-abdeckung.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 3272,
-      "sha256": "d88ca4c977d491cf"
-    },
-    {
-      "datei": "payload/docs/harness-issues.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 480,
-      "sha256": "890530cf21b0cda3"
-    },
-    {
-      "datei": "payload/docs/packages/TEMPLATE.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 1602,
-      "sha256": "d6f18c0ca4fa3ae3"
-    },
-    {
-      "datei": "payload/docs/rebuild-guide.md",
-      "herkunft": "docs/10-nachbau-anleitung.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 11,
-      "bytes": 221902,
-      "sha256": "581400a282c8ec55"
-    },
-    {
-      "datei": "payload/docs/session-notes/README.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 993,
-      "sha256": "33fe7bce970f547b"
-    },
-    {
-      "datei": "payload/docs/tool-landscape.md",
-      "herkunft": null,
-      "quellordner": "bausatz",
-      "gesaeubert": 0,
-      "bytes": 1640,
-      "sha256": "31ad14520007f8e3"
-    },
-    {
-      "datei": "payload/docs/tool-sourcing.md",
-      "herkunft": "docs/12-werkzeug-beschaffung.md",
-      "quellordner": "werkbank",
-      "gesaeubert": 1,
-      "bytes": 4507,
-      "sha256": "9f49df5c3e851c00"
-    },
-    {
-      "datei": "templates/CLAUDE.md",
-      "herkunft": "erzeugt von paketieren.mjs",
-      "quellordner": "erzeugt",
-      "gesaeubert": 0,
-      "bytes": 2737,
-      "sha256": "46d5e77d14d84892"
-    },
-    {
-      "datei": "templates/gitignore-block.txt",
-      "herkunft": "erzeugt von paketieren.mjs",
-      "quellordner": "erzeugt",
-      "gesaeubert": 0,
-      "bytes": 1752,
-      "sha256": "617fc5f40df934c7"
-    },
-    {
-      "datei": "templates/settings.json",
-      "herkunft": "erzeugt von paketieren.mjs",
-      "quellordner": "erzeugt",
-      "gesaeubert": 0,
-      "bytes": 3825,
-      "sha256": "456edbac957f30ed"
+      "source": "**/.git/** and source node_modules/**",
+      "reason": "repository internals and source dependencies are excluded; only traced pure-JavaScript runtime dependencies inside dashboard/runtime.keel.gz are delivered"
     }
   ]
 }

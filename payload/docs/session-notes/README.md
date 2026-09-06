@@ -1,8 +1,9 @@
 # Sitzungs-Notizen — Befunde zwischen den Rollen
 
-Nachrichten ZWISCHEN Sitzungen sind abgestellt [Owner-Entscheid 27.08.2026, Paket
-`docs/packages/session-messages.md`]: Sie erschienen beim Owner im Vordergrund und
-rissen beim Empfaenger die laufende Arbeit auseinander.
+Nachrichten ZWISCHEN Sitzungen sind abgestellt: Sie können beim Owner im
+Vordergrund erscheinen und beim Empfänger die gebundene Leaf-Arbeit
+unterbrechen. Diese Datei beschreibt den aktiven Ersatz; ein altes Paket ist
+keine zweite Begründungs- oder Statuswahrheit.
 
 Ersatz ohne Verlust: Eine Datei je Ziel-Rolle, benannt nach der Rolle
 (`harness-control.md`, `dashboard.md`, `karriereplanung.md`). Neue Eintraege kommen
