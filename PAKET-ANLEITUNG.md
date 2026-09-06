@@ -18,7 +18,7 @@ in welchem Verzeichnis du gerade stehst.
 
 | Platzhalter | Bedeutung | Windows (Beispiel) |
 |---|---|---|
-| `<PAKET>` | dieser Bausatz, wie geklont oder entpackt | `C:\w\keel-harness-v2-setup` |
+| `<PAKET>` | dieser Bausatz, wie geklont oder entpackt | `C:\w\keel-harness-standalone-setup` |
 | `<HARNESS>` | dein Ziel — neu oder ein bestehendes Projekt-Repo | `C:\w\mein-harness` |
 
 Regel: **`<PAKET>` liegt nicht in `<HARNESS>`, und `<HARNESS>` nicht in `<PAKET>`.**
@@ -31,7 +31,7 @@ PowerShell setzt du die zwei Pfade am bequemsten als Variablen — dann sind all
 weiteren Befehle wörtlich übertragbar:
 
 ```powershell
-$PAKET   = "C:\w\keel-harness-v2-setup"
+$PAKET   = "C:\w\keel-harness-standalone-setup"
 $HARNESS = "C:\w\mein-harness"
 node $PAKET\install.mjs --target $HARNESS --dry-run
 ```
@@ -100,7 +100,7 @@ node <PAKET>\install.mjs --target <HARNESS> --dry-run
 Windows, ausgeschrieben:
 
 ```
-node C:\w\keel-harness-v2-setup\install.mjs --target C:\w\mein-harness --dry-run
+node C:\w\keel-harness-standalone-setup\install.mjs --target C:\w\mein-harness --dry-run
 ```
 
 Gemessene Ausgabe an einem frischen Ziel (Rückgabewert 0, geschrieben wird nichts):
@@ -302,10 +302,10 @@ woraus die Payload in deinen Händen entstanden ist.
 | Payload-Posten | 170 |
 | Baum-Fingerabdruck | `e8401b9a79ccf502...` |
 | Quelle | `harness-lab`, Unterbaum `test-harness/standalone` |
-| Quell-Commit | `9d10bfa42e45cba77de650fb1266228584352504` |
+| Quell-Commit | `c3c8e23bc61edc36ae87c9b92febaf10abae857f` |
 | Standalone frisch gebaut | ja |
 | Ungesicherte Dateien der Quelle beim Bau | Arbeitsbaum 0, `test-harness/standalone` 0 |
-| Erzeugt am | 2026-09-06T14:43:44.948Z |
+| Erzeugt am | 2026-09-06T16:13:29.587Z |
 <!-- /ERZEUGT:stand-der-auslieferung -->
 
 ---
@@ -318,11 +318,11 @@ verifiziert** — was hier steht, ist die erwartete Übertragung, kein Messwert.
 
 | Platzhalter | macOS / Linux (Beispiel, unverifiziert) |
 |---|---|
-| `<PAKET>` | `~/Downloads/keel-harness-v2-setup` |
+| `<PAKET>` | `~/Downloads/keel-harness-standalone-setup` |
 | `<HARNESS>` | `~/workspaces/mein-harness` |
 
 Die Befehle sind dieselben, nur mit `/` statt `\`; in der Shell bewährt sich
-`PAKET=~/Downloads/keel-harness-v2-setup` und dann `node "$PAKET/install.mjs" …`.
+`PAKET=~/Downloads/keel-harness-standalone-setup` und dann `node "$PAKET/install.mjs" …`.
 MAX_PATH gibt es dort nicht.
 
 Die plattformneutrale Härtung samt Mac-Abnahme läuft als eigenes Arbeitspaket in der

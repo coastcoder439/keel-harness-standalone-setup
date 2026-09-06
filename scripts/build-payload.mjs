@@ -189,7 +189,7 @@ if (copied.files.length !== artifact.files.length || copied.manifestDigest !== s
 
 // 5. Herkunft festschreiben.
 const provenance = {
-  schema: "keel-harness-v2-setup-provenance.v1",
+  schema: "keel-harness-setup-provenance.v1",
   source: {
     repository: "harness-lab",
     standalonePath: "test-harness/standalone",
