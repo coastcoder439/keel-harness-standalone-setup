@@ -109,7 +109,7 @@ function dateienZaehlen(ordner) {
 }
 const aufPlatte = dateienZaehlen(join(repoRoot, "payload"));
 
-pruefe("schema", provenance.schema === "keel-harness-v2-setup-provenance.v1",
+pruefe("schema", provenance.schema === "keel-harness-setup-provenance.v1",
   "unerwartetes Schema " + provenance.schema);
 pruefe("produkt-identisch",
   JSON.stringify(provenance.product) === JSON.stringify(manifest.product),

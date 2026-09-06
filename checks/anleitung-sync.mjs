@@ -230,7 +230,7 @@ const PFAD_AUSNAHMEN = new Map([
   ["docs/packages/", "im Ziel erst nach der Installation vorhanden (Onboarding legt das Bundle an)"],
   [".keel-harness/runtime/dashboard/", "Laufzeit-Ordner, entsteht erst beim ersten Dashboard-Start"],
   [".unlazy/", "Laufzeit-Zustand im Ziel, absichtlich nicht ausgeliefert (siehe Was bewusst fehlt)"],
-  ["github.com/coastcoder439/keel-harness-v2-setup", "Fernkopie dieses Repos"],
+  ["github.com/coastcoder439/keel-harness-standalone-setup", "Fernkopie dieses Repos"],
 ]);
 
 // ---------------------------------------------------------------------------
