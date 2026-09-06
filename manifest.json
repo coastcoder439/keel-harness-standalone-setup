@@ -6,7 +6,7 @@
     "version": "1.1.0"
   },
   "payload": {
-    "treeSha256": "5df18a5d42b4e7eccdf2dd47f9bef3937de4f7854d34dc5303b23783034cfdaa"
+    "treeSha256": "c3567c152a08d02b02908e657db58cde8c6186b1c9c1871d5c00201e132006f9"
   },
   "provenance": {
     "unlazy": {
@@ -48,7 +48,7 @@
       }
     ]
   },
-  "fileCount": 169,
+  "fileCount": 170,
   "files": [
     {
       "source": "test-harness/.agents/skills/completeness/SKILL.md",
@@ -95,10 +95,10 @@
       "target": ".agents/skills/package-execution/SKILL.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 3938,
-      "sourceSha256": "031cde5828532d4f378c243c18cc4ce72b08a9833ca41072f4f0b1df2a3ea656",
-      "bytes": 3938,
-      "sha256": "031cde5828532d4f378c243c18cc4ce72b08a9833ca41072f4f0b1df2a3ea656"
+      "sourceBytes": 4516,
+      "sourceSha256": "d0f6bf46a74eebfe839f8d0d547121c21a201ba350f42cceb967363dc00d4bf6",
+      "bytes": 4516,
+      "sha256": "d0f6bf46a74eebfe839f8d0d547121c21a201ba350f42cceb967363dc00d4bf6"
     },
     {
       "source": "test-harness/.agents/skills/software-factory/SKILL.md",
@@ -115,10 +115,10 @@
       "target": ".agents/skills/source-command-onboarding/SKILL.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 1117,
-      "sourceSha256": "80fd238f7d5b3bf0b3b962098d28a4a7fcf453412fe1fc87b92c6c555576e32c",
-      "bytes": 1117,
-      "sha256": "80fd238f7d5b3bf0b3b962098d28a4a7fcf453412fe1fc87b92c6c555576e32c"
+      "sourceBytes": 1699,
+      "sourceSha256": "dc629e5de9651a327b0c0cf7d326dc84dbcfa21035ab866e407afe1a2a1585d5",
+      "bytes": 1699,
+      "sha256": "dc629e5de9651a327b0c0cf7d326dc84dbcfa21035ab866e407afe1a2a1585d5"
     },
     {
       "source": "test-harness/.agents/skills/source-command-repo-status/SKILL.md",
@@ -235,10 +235,10 @@
       "target": ".claude/commands/package-integrate.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 927,
-      "sourceSha256": "ec4d5187bed2a7057b7a4eed4ed7f0fdf36ef25c11b36d82a4a0511ad5c7058c",
-      "bytes": 927,
-      "sha256": "ec4d5187bed2a7057b7a4eed4ed7f0fdf36ef25c11b36d82a4a0511ad5c7058c"
+      "sourceBytes": 1173,
+      "sourceSha256": "8f20137abefa967141e07469649a5103c67a33a251a4401bc7bfe2b2e8962016",
+      "bytes": 1173,
+      "sha256": "8f20137abefa967141e07469649a5103c67a33a251a4401bc7bfe2b2e8962016"
     },
     {
       "source": "test-harness/.claude/commands/package-next.md",
@@ -495,10 +495,10 @@
       "target": ".claude/rules/keel/working-method.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 2749,
-      "sourceSha256": "16c73d3cc85dacd319a8e35f007751f355d40f4f174ca560344b37fe40d644a4",
-      "bytes": 2749,
-      "sha256": "16c73d3cc85dacd319a8e35f007751f355d40f4f174ca560344b37fe40d644a4"
+      "sourceBytes": 3343,
+      "sourceSha256": "edc57682e102e0018fe89e4f5ca4b8f54c4bfbd7d3059bd99edf9409e3c07bca",
+      "bytes": 3343,
+      "sha256": "edc57682e102e0018fe89e4f5ca4b8f54c4bfbd7d3059bd99edf9409e3c07bca"
     },
     {
       "source": "test-harness/.claude/session-roles.js",
@@ -585,10 +585,10 @@
       "target": ".claude/skills/package-execution/SKILL.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 3938,
-      "sourceSha256": "031cde5828532d4f378c243c18cc4ce72b08a9833ca41072f4f0b1df2a3ea656",
-      "bytes": 3938,
-      "sha256": "031cde5828532d4f378c243c18cc4ce72b08a9833ca41072f4f0b1df2a3ea656"
+      "sourceBytes": 4516,
+      "sourceSha256": "d0f6bf46a74eebfe839f8d0d547121c21a201ba350f42cceb967363dc00d4bf6",
+      "bytes": 4516,
+      "sha256": "d0f6bf46a74eebfe839f8d0d547121c21a201ba350f42cceb967363dc00d4bf6"
     },
     {
       "source": "test-harness/.claude/skills/software-factory/SKILL.md",
@@ -715,10 +715,10 @@
       "target": ".gitignore",
       "mode": "merge-lines",
       "generated": false,
-      "sourceBytes": 343,
-      "sourceSha256": "9307cc68c5bf03529badf5dc16529f2b222af16f95110573c21e5dd4fa560322",
-      "bytes": 343,
-      "sha256": "9307cc68c5bf03529badf5dc16529f2b222af16f95110573c21e5dd4fa560322"
+      "sourceBytes": 391,
+      "sourceSha256": "7267d4cb78e991e5124de82fa82af25382f2effccd84137373b6fc78d630590f",
+      "bytes": 391,
+      "sha256": "7267d4cb78e991e5124de82fa82af25382f2effccd84137373b6fc78d630590f"
     },
     {
       "source": "test-harness/.keel-harness.json",
@@ -735,10 +735,10 @@
       "target": "AGENTS.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 6513,
-      "sourceSha256": "49b6e1d3e90bb0fd8e82f61bb6e4290cb83b6743d147b09674d34d7c7a37ae34",
-      "bytes": 6513,
-      "sha256": "49b6e1d3e90bb0fd8e82f61bb6e4290cb83b6743d147b09674d34d7c7a37ae34"
+      "sourceBytes": 7584,
+      "sourceSha256": "295b9d14be25b9dfd3252b60fb8faeb4a9782cf9da4ddae33ad0b0e98c31250d",
+      "bytes": 7584,
+      "sha256": "295b9d14be25b9dfd3252b60fb8faeb4a9782cf9da4ddae33ad0b0e98c31250d"
     },
     {
       "source": "test-harness/checks/bounded-runner.mjs",
@@ -805,10 +805,10 @@
       "target": "CLAUDE.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 6513,
-      "sourceSha256": "49b6e1d3e90bb0fd8e82f61bb6e4290cb83b6743d147b09674d34d7c7a37ae34",
-      "bytes": 6513,
-      "sha256": "49b6e1d3e90bb0fd8e82f61bb6e4290cb83b6743d147b09674d34d7c7a37ae34"
+      "sourceBytes": 7584,
+      "sourceSha256": "295b9d14be25b9dfd3252b60fb8faeb4a9782cf9da4ddae33ad0b0e98c31250d",
+      "bytes": 7584,
+      "sha256": "295b9d14be25b9dfd3252b60fb8faeb4a9782cf9da4ddae33ad0b0e98c31250d"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-runtime-archive.mjs",
@@ -825,10 +825,10 @@
       "target": "dashboard/runtime-check.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 5528,
-      "sourceSha256": "662252d2e015f14dd7313fd19e8b3f01db30e5990569fd2ad3102cc1d2fb00f0",
-      "bytes": 5528,
-      "sha256": "662252d2e015f14dd7313fd19e8b3f01db30e5990569fd2ad3102cc1d2fb00f0"
+      "sourceBytes": 6344,
+      "sourceSha256": "7efef4ac8f9be72c5a98844a6f5e4e6b7b37b5a8c8194c0ab5fef35671f5eb4d",
+      "bytes": 6344,
+      "sha256": "7efef4ac8f9be72c5a98844a6f5e4e6b7b37b5a8c8194c0ab5fef35671f5eb4d"
     },
     {
       "source": "generated/dashboard/runtime-manifest.json",
@@ -836,19 +836,19 @@
       "mode": "copy",
       "generated": true,
       "sourceBytes": 334,
-      "sourceSha256": "b166fd72f4b9f3aa21a4d0e585853e749a02a4520aa3e2d3e314fc5513807f29",
+      "sourceSha256": "018d2e88569d4343bd4e9f5af97df2183319728357f2af5b9559935be5f6f0d3",
       "bytes": 334,
-      "sha256": "b166fd72f4b9f3aa21a4d0e585853e749a02a4520aa3e2d3e314fc5513807f29"
+      "sha256": "018d2e88569d4343bd4e9f5af97df2183319728357f2af5b9559935be5f6f0d3"
     },
     {
       "source": "generated/dashboard/runtime.keel.gz",
       "target": "dashboard/runtime.keel.gz",
       "mode": "copy",
       "generated": true,
-      "sourceBytes": 13463687,
-      "sourceSha256": "d5a40f6573f315e90a0606ae44a83bfd2364abcb6b98400469043e0cd13a6879",
-      "bytes": 13463687,
-      "sha256": "d5a40f6573f315e90a0606ae44a83bfd2364abcb6b98400469043e0cd13a6879"
+      "sourceBytes": 13516656,
+      "sourceSha256": "8a7f46b29bf839d33dc95df87c9a614eb44b182619462aac727a58cee18689ed",
+      "bytes": 13516656,
+      "sha256": "8a7f46b29bf839d33dc95df87c9a614eb44b182619462aac727a58cee18689ed"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-serve.mjs",
@@ -889,6 +889,16 @@
       "sourceSha256": "371f09e04c503f1438139e146d75c4b35268e4e66c608491f94ec85761f28330",
       "bytes": 2271,
       "sha256": "d8da9d4e8d4b9df2e83d41bf8d328de2bcae9843907211c034b49561432f26a3"
+    },
+    {
+      "source": "test-harness/docs/google-onboarding.md",
+      "target": "docs/google-onboarding.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 12341,
+      "sourceSha256": "12ff2022a62b87a0462b10dc5f21b75e584e205ece27504eb9510a00f7abc2da",
+      "bytes": 12341,
+      "sha256": "12ff2022a62b87a0462b10dc5f21b75e584e205ece27504eb9510a00f7abc2da"
     },
     {
       "source": "test-harness/docs/guard-abdeckung.md",
@@ -965,10 +975,10 @@
       "target": "harness-core/binding/package-binding.cjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 14292,
-      "sourceSha256": "59812a7874ab5ba5b6c4be676faa6ed61cf494c2afb1118f58eccfeba8ca85ce",
-      "bytes": 14292,
-      "sha256": "59812a7874ab5ba5b6c4be676faa6ed61cf494c2afb1118f58eccfeba8ca85ce"
+      "sourceBytes": 14962,
+      "sourceSha256": "f166938ee6bc1bd639b26f65891bb3cf0ed367976a7b723cbf65d251a769de26",
+      "bytes": 14962,
+      "sha256": "f166938ee6bc1bd639b26f65891bb3cf0ed367976a7b723cbf65d251a769de26"
     },
     {
       "source": "test-harness/harness-core/binding/package-bootstrap.cjs",
@@ -1005,20 +1015,20 @@
       "target": "harness-core/execution/codex-plugin-bootstrap.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 11063,
-      "sourceSha256": "815995a14214e249cf0b812df5c8c5740f666ac85cbf5cff26a85bb6ac93ca62",
-      "bytes": 11063,
-      "sha256": "815995a14214e249cf0b812df5c8c5740f666ac85cbf5cff26a85bb6ac93ca62"
+      "sourceBytes": 13141,
+      "sourceSha256": "f3119ad85e20b35457ec3f5848d7dbf2cddacd4ad3449cdb5a637ed1f12bb77f",
+      "bytes": 13141,
+      "sha256": "f3119ad85e20b35457ec3f5848d7dbf2cddacd4ad3449cdb5a637ed1f12bb77f"
     },
     {
       "source": "test-harness/harness-core/execution/owner-approval.mjs",
       "target": "harness-core/execution/owner-approval.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 11583,
-      "sourceSha256": "d8517b24d662f481806332842cefc116c3f520dadbb0f93ae2e3a4fcd450b96c",
-      "bytes": 11583,
-      "sha256": "d8517b24d662f481806332842cefc116c3f520dadbb0f93ae2e3a4fcd450b96c"
+      "sourceBytes": 15030,
+      "sourceSha256": "d8bcb3847bef75ded31ebd86fb306c409a762f1488141203f757ffa88662d1bd",
+      "bytes": 15030,
+      "sha256": "d8bcb3847bef75ded31ebd86fb306c409a762f1488141203f757ffa88662d1bd"
     },
     {
       "source": "test-harness/harness-core/execution/package-bootstrap.mjs",
@@ -1035,10 +1045,10 @@
       "target": "harness-core/execution/package-executor.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 65368,
-      "sourceSha256": "ed5a8f701db3da810cc5c83cf875ddde0dbfeb1dd4f7dc749c0eb21e87a670bc",
-      "bytes": 65368,
-      "sha256": "ed5a8f701db3da810cc5c83cf875ddde0dbfeb1dd4f7dc749c0eb21e87a670bc"
+      "sourceBytes": 87244,
+      "sourceSha256": "63cbb5d9dca363168de7cc8bfab337f6a5359e6ab5389e2fbec864ab25e3d665",
+      "bytes": 87244,
+      "sha256": "63cbb5d9dca363168de7cc8bfab337f6a5359e6ab5389e2fbec864ab25e3d665"
     },
     {
       "source": "test-harness/harness-core/execution/provider-runtime.mjs",
@@ -1055,10 +1065,10 @@
       "target": "harness-core/git/git-intent.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 53013,
-      "sourceSha256": "7a571bdd5096c874cd01a96346c1a6e8393860790110a121350e2f5210543500",
-      "bytes": 53013,
-      "sha256": "7a571bdd5096c874cd01a96346c1a6e8393860790110a121350e2f5210543500"
+      "sourceBytes": 84200,
+      "sourceSha256": "45d5e51239c23e73f911fcafba690ba1cdb28b03dd1160eb69e4c111e44e8db0",
+      "bytes": 84200,
+      "sha256": "45d5e51239c23e73f911fcafba690ba1cdb28b03dd1160eb69e4c111e44e8db0"
     },
     {
       "source": "test-harness/licenses/LICENSE-i-have-adhd.txt",

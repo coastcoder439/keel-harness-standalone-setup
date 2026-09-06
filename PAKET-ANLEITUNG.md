@@ -64,11 +64,11 @@ gegen den tatsächlichen Bestand und macht einen Trockenlauf des Installers gege
 Wegwerf-Repo. Gemessener Erfolg (Rückgabewert 0), letzte Zeile:
 
 ```
-SETUP_REPO_SUITE_OK payload=169 version=1.1.0
+SETUP_REPO_SUITE_OK payload=170 version=1.1.0
 ```
 
 Wer nur den Installer-Teil will: `node <PAKET>\checks\fresh-clone.mjs` endet bei
-gesundem Klon mit `SETUP_REPO_OK payload=169 version=1.1.0 dry-run=ok`.
+gesundem Klon mit `SETUP_REPO_OK payload=170 version=1.1.0 dry-run=ok`.
 
 `manifest.json` ist die Stückliste — jede Datei mit Herkunft, Größe und Prüfsumme;
 unter `excluded` steht, was **absichtlich** fehlt (unten als Tabelle).
@@ -255,11 +255,11 @@ Die Tabelle ist aus `manifest.json` erzeugt; die Zahlen sind gezählt, nicht ges
 | `vendor/` | Eingebettete Unlazy-Fassung: Paket-Bundles, Skripte, Tests | 63 |
 | `dashboard/` | React-Dashboard: Starter, geprüftes Laufzeit-Archiv, Runtime-Check | 5 |
 | `checks/` | Installierte Prüfungen der Auslieferung (`checks/run-all.mjs` und Einzelprüfer) | 6 |
-| `docs/` | Doku, Instanzdatei mit `[AUSFUELLEN]`-Marke, Paketvorlage | 9 |
+| `docs/` | Doku, Instanzdatei mit `[AUSFUELLEN]`-Marke, Paketvorlage | 10 |
 | `templates/` | Vorlagen für Paket-Bundles (OWNER, GATES) | 3 |
 | `licenses/` | Lizenztexte übernommener Fremdteile | 1 |
 | (Wurzel) | Wurzeldateien: `.gitignore`, `.keel-harness.json`, `AGENTS.md`, `CLAUDE.md`, `package.json` | 5 |
-| **Summe** | | **169** |
+| **Summe** | | **170** |
 <!-- /ERZEUGT:was-installiert-wird -->
 
 ## Was bewusst fehlt
@@ -294,13 +294,13 @@ woraus die Payload in deinen Händen entstanden ist.
 | Feld | Wert |
 |---|---|
 | Produkt und Version | `keel-harness` 1.1.0 |
-| Payload-Posten | 169 |
-| Baum-Fingerabdruck | `5df18a5d42b4e7ec...` |
+| Payload-Posten | 170 |
+| Baum-Fingerabdruck | `c3567c152a08d02b...` |
 | Quelle | `harness-lab`, Unterbaum `test-harness/standalone` |
-| Quell-Commit | `deff2ccafd3257929c110614f22b29ccc0a1b399` |
-| Standalone frisch gebaut | nein |
-| Ungesicherte Dateien der Quelle beim Bau | Arbeitsbaum 17, `test-harness/standalone` 0 |
-| Erzeugt am | 2026-09-02T00:50:27.686Z |
+| Quell-Commit | `7df8bcaaf7a69a7b5cc6bb7c9d896113f2f9700a` |
+| Standalone frisch gebaut | ja |
+| Ungesicherte Dateien der Quelle beim Bau | Arbeitsbaum 8, `test-harness/standalone` 0 |
+| Erzeugt am | 2026-09-06T14:06:58.749Z |
 <!-- /ERZEUGT:stand-der-auslieferung -->
 
 ---

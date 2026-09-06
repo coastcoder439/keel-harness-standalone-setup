@@ -16,7 +16,14 @@ an. Fehlt es, wird nicht geschrieben.
    Verbindungen. Zugangs-Werte kommen nie in Dateien.
 4. Remote, Schreibziele, versionierte Einstellungen und Sitzungsrollen bleiben
    manuelle Owner-Gates.
-5. Verifiziere das Leaf lokal, nimm es mit `package-executor return` an und integriere
+5. Biete das Google-Onboarding als OPTIONALEN Schritt an: das Dashboard laeuft ohne ihn,
+   nur seine Google-Faehigkeiten (Kalender, Aufgaben, Gmail) brauchen ihn. Stimmt der
+   Mensch zu, fuehre ihn Schritt fuer Schritt durch `docs/google-onboarding.md` (eigenes
+   Google-Cloud-Projekt, OAuth-Client "Desktop app", client_secrets ablegen, im Dashboard
+   verbinden). Lehnt er ab oder vertagt, blockiert das den Rest des Onboardings NICHT.
+   Ein `harness-onboarding`-Paket existiert erst nach der Installation; verweise dann von
+   dort ebenfalls auf `docs/google-onboarding.md`.
+6. Verifiziere das Leaf lokal, nimm es mit `package-executor return` an und integriere
    genau einmal mit `package-executor integrate`. Kein rohes Git und kein Auto-Push.
-6. Berichte offene Platzhalter, Gate-Evidence und den naechsten Paket-Schritt. Publish
+7. Berichte offene Platzhalter, Gate-Evidence und den naechsten Paket-Schritt. Publish
    bleibt ein separat freizugebender Save-work-Schritt.
