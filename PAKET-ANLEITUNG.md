@@ -86,6 +86,11 @@ git init -b main C:\w\mein-harness
 
 Bestehendes Projekt: erst ungesicherte Änderungen committen, dann weiter.
 
+> **Windows-Pfadlaenge:** Waehle eine KURZE Installationswurzel (z. B. `C:\harness`).
+> Ab etwa 158 Zeichen Wurzelpfad reisst der Start der Dashboard-Runtime an der
+> Windows-MAX_PATH-Grenze mit einem irrefuehrenden ENOENT auf node.exe ab
+> (gemessen 06.09.2026: Wurzel 146 Zeichen laeuft, 161 Zeichen scheitert).
+
 ## 3. Trocken laufen lassen
 
 ```
