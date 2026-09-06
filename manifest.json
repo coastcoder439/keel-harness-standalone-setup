@@ -6,7 +6,7 @@
     "version": "1.1.0"
   },
   "payload": {
-    "treeSha256": "c3567c152a08d02b02908e657db58cde8c6186b1c9c1871d5c00201e132006f9"
+    "treeSha256": "e8401b9a79ccf502374488b156f70cc3f67d85d0ff08d6caf51ed623dd6b0907"
   },
   "provenance": {
     "unlazy": {
@@ -777,8 +777,8 @@
       "generated": false,
       "sourceBytes": 4709,
       "sourceSha256": "3cb88f8953533862ed987ff7d03b120258a263d6d78eae5f1010f77a78a226dc",
-      "bytes": 1072,
-      "sha256": "1d60a8bb075d5f637b08e1b1e7aa42412b2b11046286489f304987483c5e89d4"
+      "bytes": 1428,
+      "sha256": "0fe66d61f1cc920dc2a449e1d9a175539135614988ac58e0851a027226cc50e3"
     },
     {
       "source": "test-harness/checks/windows-smoke.cmd",
@@ -1087,8 +1087,8 @@
       "generated": false,
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
-      "bytes": 532,
-      "sha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087"
+      "bytes": 571,
+      "sha256": "420c835a3482089a8e08741fe1a5d1c7af42a7ed04802795bc99114a552dfb07"
     },
     {
       "source": "test-harness/templates/GATES-LEAF.md",
