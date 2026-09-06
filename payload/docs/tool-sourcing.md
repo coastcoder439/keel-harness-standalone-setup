@@ -84,4 +84,4 @@ Information, die eine Zeile Shell liefert.
 
 Fehlt eines, ist der erste Schritt die Installation — nicht der Umweg.
 
-→ Nachbau: [rebuild-guide.md](rebuild-guide.md)
+→ Aktiver Produktvertrag: [active-harness-inventory.md](active-harness-inventory.md)
