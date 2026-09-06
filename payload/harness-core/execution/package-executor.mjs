@@ -24,7 +24,16 @@ import {
   createApprovalChallenge,
   readExecutionReceipt,
   writeConsequentialReceipt,
+  writeWritebackWitness,
 } from "./owner-approval.mjs";
+import {
+  isBundleLedger,
+  loadGateParser,
+  locateUnlazy,
+  normalizedLedger,
+  oracleWritebackDeclarations,
+  toleratedWriteback,
+} from "../git/git-intent.mjs";
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -122,19 +131,6 @@ function parseArgs(argv) {
   return options;
 }
 
-function locateUnlazy(repoRoot, explicit) {
-  const candidates = explicit ? [path.resolve(explicit)] : [
-    path.join(path.resolve(here, "..", "..", ".."), "vendor", "unlazy"),
-    path.join(repoRoot, "vendor", "unlazy"),
-  ];
-  const real = [...new Set(candidates.filter((candidate) =>
-    fs.existsSync(path.join(candidate, "scripts", "package-cli.mjs")) &&
-    fs.existsSync(path.join(candidate, "scripts", "gate-check.mjs")),
-  ).map((candidate) => fs.realpathSync(candidate)))];
-  if (real.length !== 1) fail("UNLAZY_ROOT", "expected exactly one Unlazy runtime; found " + real.length);
-  return real[0];
-}
-
 function runNode(script, args, options = {}) {
   const result = spawnSync(process.execPath, [script, ...args], {
     cwd: options.cwd,
@@ -193,6 +189,51 @@ function ledgerRecord(packageInfo, leaf) {
   if (!gates.length) fail("LEAF_CONTRACT", "leaf ledger has no gates: " + leaf);
   const open = gates.some((match) => match[1] === " ") || /EVIDENCE:\s*pending\s*$/mu.test(text);
   return { file, text, open };
+}
+
+function bundleLedgerFiles(packageInfo, leaf) {
+  if (leaf) return [path.join(packageInfo.packageDir, "gates", id(leaf, "leaf") + ".md")];
+  const gatesDir = path.join(packageInfo.packageDir, "gates");
+  const files = [path.join(packageInfo.packageDir, "GATES.md")];
+  if (fs.existsSync(gatesDir)) {
+    for (const entry of fs.readdirSync(gatesDir, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith(".md")) files.push(path.join(gatesDir, entry.name));
+    }
+  }
+  return files;
+}
+
+// The gate runner executes every CHECK serially, so --timeout is the per-CHECK
+// budget and the wall clock has to cover all of them: a single (timeout + 10)s
+// wall kills a legitimate re-verification as soon as a bundle has more than one
+// slow gate. Counting indented CHECK lines is deliberately an upper bound
+// (fenced or unreachable lines only lengthen the wall), and the floor of one
+// gate keeps the wall at least as long as the previous behaviour.
+// Indent and separator match the vendored parser's own classes: ATTR_RE indents
+// with `\s+` and consumes one whitespace character after the colon inside an
+// already split line, which is [^\S\n] here, so a gate indented or separated
+// with any whitespace is counted rather than silently dropped from the budget --
+// undercounting is the one direction that kills a legitimate run (measured
+// 02.09.2026: a [ \t]-only counter read a two-gate ledger whose second gate is
+// indented with U+00A0 as one gate while the parser executed both).
+// Proven by "the re-verification wall counts every CHECK line the vendored
+// parser accepts" in test/package-execution.test.js, which compares this count
+// with the parser's own executable-gate count.
+export function executableGateCount(packageInfo, leaf = null) {
+  let count = 0;
+  for (const file of bundleLedgerFiles(packageInfo, leaf)) {
+    if (!fs.existsSync(file)) continue;
+    count += (fs.readFileSync(file, "utf8").match(/^[^\S\n]+CHECK:[^\S\n]*\S[^\n]*$/gmu) || []).length;
+  }
+  return Math.max(1, count);
+}
+
+export function reverifyWallMs(packageInfo, timeout, { leaf = null, marginSeconds = 30 } = {}) {
+  // An unusable --timeout is the gate runner's usage error to report; keep the
+  // wall a valid number so that error reaches the caller instead of a spawn
+  // range error that hides it.
+  const perCheck = Number.isFinite(Number(timeout)) && Number(timeout) > 0 ? Number(timeout) : 120;
+  return (perCheck * executableGateCount(packageInfo, leaf) + marginSeconds) * 1_000;
 }
 
 function statePath(repoRoot, scope) {
@@ -585,7 +626,7 @@ function verifyLeaf(context, entry, options) {
   const timeout = String(options.timeout || "120");
   const result = runNode(context.tools.gateCheck, ["--reverify", "--timeout", timeout, "--root", context.repoRoot,
     "--package", context.packageId, "--scope", context.scope, "--leaf", entry.leaf],
-  { cwd: context.repoRoot, timeoutMs: (Number(timeout) + 10) * 1_000 });
+  { cwd: context.repoRoot, timeoutMs: reverifyWallMs(context.packageInfo, timeout, { leaf: entry.leaf }) });
   childOk(result, "local leaf re-verification");
   return String(result.stdout || "");
 }
@@ -962,7 +1003,157 @@ function acceptedResultConstraint(context, state, options) {
   };
 }
 
-function integrate(context, options) {
+// Every regular file of the bundle with its current digest. Cheap enough to run
+// three times around one oracle run: a package bundle is a handful of files.
+function bundleFileDigests(context) {
+  const digests = new Map();
+  const walk = (directory) => {
+    if (!fs.existsSync(directory)) return;
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const absolute = path.join(directory, entry.name);
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) { walk(absolute); continue; }
+      if (!entry.isFile()) continue;
+      digests.set(path.relative(context.repoRoot, absolute).replaceAll("\\", "/"),
+        digest(fs.readFileSync(absolute)));
+    }
+  };
+  walk(path.join(context.repoRoot, "docs", "packages", context.packageId));
+  return digests;
+}
+
+// The witness the writeback tolerance rests on. A ledger declaration says which
+// artifacts an oracle MAY refresh; it can never say that THIS run refreshed
+// them, and the two differ exactly where it matters -- an Owner proof that sits
+// under evidence/ inside a declared surface but that no oracle ever writes. So a
+// candidate counts only when its bytes changed ACROSS the mandated
+// re-verification (before != after) and the file still carries the bytes that
+// run left behind (after == current). A hand edit before the run fails the first
+// half, a hand edit after it fails the second.
+function oracleRunWitness(before, after, current) {
+  const witnessed = [];
+  for (const [relative, afterDigest] of after) {
+    if (before.get(relative) === afterDigest) continue;
+    if (current.get(relative) !== afterDigest) continue;
+    witnessed.push(relative);
+  }
+  return witnessed.sort((left, right) => left.localeCompare(right, "en"));
+}
+
+// Ledger texts read from the CHECKPOINT COMMIT, never from the working tree.
+// A ledger whose gate is manual was CLEAN when the checkpoint froze its exact
+// path set, so it can never appear in that set's turnover below -- a
+// working-tree read would therefore honour an OWNS or WRITES line the probe
+// itself never sees, and the ledger's own bytes would go unnoticed.
+// (A ledger PLANTED from nothing does not even get this far: measured
+// 02.09.2026, an extra gates/leaf-evil.md makes `package-cli activate` refuse
+// the run with PACKAGE_DEPTH_TREE_UNMAPPED_LEDGER and PACKAGE_OWNERSHIP_OVERLAP
+// before any gate executes. This read is defence in depth behind the run
+// witness: reverting only it to a working-tree read leaves the suite green,
+// because the witness already refuses bytes this run did not write.)
+function committedBundleLedgers(context, commit) {
+  const prefix = "docs/packages/" + context.packageId + "/";
+  const listed = spawnSync("git", ["-C", context.repoRoot, "ls-tree", "-r", "--name-only", "-z", commit,
+    "--", prefix], { cwd: context.repoRoot, encoding: "utf8", windowsHide: true, timeout: 30_000 });
+  if (listed.error || listed.status !== 0) {
+    fail("POST_VERIFY_DIRTY", "the checkpoint bundle cannot be listed for its ledger declarations", 1);
+  }
+  const ledgers = [];
+  for (const item of String(listed.stdout || "").split("\0").filter(Boolean)) {
+    const relative = item.replaceAll("\\", "/");
+    if (!isBundleLedger(relative, context.packageId)) continue;
+    const shown = spawnSync("git", ["-C", context.repoRoot, "show", commit + ":" + relative],
+      { cwd: context.repoRoot, encoding: "utf8", windowsHide: true, timeout: 30_000 });
+    if (shown.error || shown.status !== 0) {
+      fail("POST_VERIFY_DIRTY", "the checkpoint ledger cannot be read: " + relative, 1);
+    }
+    ledgers.push({ relative, text: String(shown.stdout) });
+  }
+  return ledgers;
+}
+
+// What the working tree holds differently from the checkpoint commit, over the
+// checkpoint's exact recorded path set. The pair is the same one git-intent's
+// closureCheckpoint uses, and both halves are needed: `git diff` never reports an
+// UNTRACKED file, so a path the checkpoint committed as a DELETION and that
+// something recreates afterwards was invisible to the diff alone (measured
+// 02.09.2026 in a scratch repository: after committing the deletion of a.txt and
+// recreating it, `git diff --name-only <commit> -- a.txt` printed nothing while
+// `git status --porcelain -- a.txt` printed "?? a.txt"). The deletion half is
+// proven by "two verified leaves receive one integration checkpoint, bottom-up
+// reverify, plan completion and close" in test/package-execution.test.js, which
+// recreates a deleted evidence artifact before a repeat integrate.
+// An empty recorded path set is refused instead of probed: with no pathspec both
+// commands silently answer for the WHOLE worktree instead of the recorded set
+// (measured 02.09.2026 in the same scratch repository).
+function checkpointTurnover(context, checkpoint) {
+  const paths = [...new Set((checkpoint.paths || []).map((item) => String(item)))];
+  if (!paths.length) {
+    fail("POST_VERIFY_DIRTY", "the integration checkpoint recorded no path set to compare against", 1);
+  }
+  const probe = (args) => {
+    const result = spawnSync("git", ["-C", context.repoRoot, ...args, "--", ...paths], {
+      cwd: context.repoRoot, encoding: "utf8", windowsHide: true, timeout: 30_000,
+    });
+    if (result.error || result.status !== 0) {
+      fail("POST_VERIFY_DIRTY", "the integrated paths cannot be compared against their checkpoint", 1);
+    }
+    return String(result.stdout || "").split("\0").filter(Boolean).map((item) => item.replaceAll("\\", "/"));
+  };
+  return [...new Set([
+    ...probe(["diff", "--name-only", "-z", checkpoint.commit]),
+    ...probe(["ls-files", "--others", "--exclude-standard", "-z"]),
+  ])];
+}
+
+function sameNormalizedLedger(context, commit, relative) {
+  const committed = spawnSync("git", ["-C", context.repoRoot, "show", commit + ":" + relative], {
+    cwd: context.repoRoot, encoding: "utf8", windowsHide: true, timeout: 30_000,
+  });
+  if (committed.error || committed.status !== 0) return false;
+  const absolute = path.join(context.repoRoot, relative);
+  if (!fs.existsSync(absolute) || !fs.lstatSync(absolute).isFile()) return false;
+  return normalizedLedger(String(committed.stdout)) === normalizedLedger(fs.readFileSync(absolute, "utf8"));
+}
+
+// The first integration commits the Evidence its own re-execution produced, so
+// nothing may differ from the checkpoint afterwards -- that stays an exact-path
+// cleanliness check. A repeat integrate re-runs the same oracles against the
+// already-committed tree, and their mandated writeback (ledger checkboxes and
+// EVIDENCE values, plus the evidence artifacts a gate declares it regenerates)
+// is exactly the turnover the closure checkpoint tolerates, decided by the same
+// helper and the same run witness. Everything outside that window still fails: a
+// gate input, a deliverable or an evidence proof that moved after the checkpoint
+// without this run rewriting it is POST_VERIFY_DIRTY on the repeat too.
+async function assertCheckpointClean(context, checkpoint, repeated, witnessBefore, witnessAfter) {
+  const changed = checkpointTurnover(context, checkpoint);
+  if (!changed.length) return;
+  if (!repeated) {
+    fail("POST_VERIFY_DIRTY", "local re-verification changed integrated paths after their checkpoint", 1);
+  }
+  const ledgers = committedBundleLedgers(context, checkpoint.commit);
+  const declared = oracleWritebackDeclarations(await loadGateParser(context.repoRoot, context.unlazyRoot),
+    context.packageId, ledgers, changed);
+  // The integration re-verification runs the WHOLE bundle in one invocation
+  // (gate-check --reverify without --leaf), so its witness covers every ledger
+  // of the checkpoint bundle. That is the documented ledger granularity here:
+  // the gate runner offers an exact selector for leaf ledgers only, and the
+  // bundle run is the one integrate is required to make.
+  const witnessed = {
+    ledgers: new Set(ledgers.map((ledger) => ledger.relative)),
+    files: new Set(oracleRunWitness(witnessBefore, witnessAfter, bundleFileDigests(context))),
+  };
+  const tolerated = toleratedWriteback(declared, [witnessed]);
+  for (const relative of changed) {
+    if (tolerated.has(relative)) continue;
+    if (isBundleLedger(relative, context.packageId) &&
+        sameNormalizedLedger(context, checkpoint.commit, relative)) continue;
+    fail("POST_VERIFY_DIRTY", "the repeated bottom-up re-verification changed integrated content outside the " +
+      "writeback surface it declared and actually rewrote: " + relative, 1);
+  }
+}
+
+async function integrate(context, options) {
   ensureActive(context);
   const state = readState(context);
   if (!Object.keys(state.sessions).length || Object.values(state.sessions).some((entry) => entry.state !== "verified")) {
@@ -973,11 +1164,42 @@ function integrate(context, options) {
   }
   const acceptedResult = acceptedResultConstraint(context, state, options);
   const timeout = String(options.timeout || "120");
-  const gateMode = options.approveChecks ? "--approve" : "--reverify";
-  const verified = runNode(context.tools.gateCheck, [gateMode, "--timeout", timeout, "--root", context.repoRoot,
+  // Whether this call REPEATS an existing checkpoint is git-intent's answer, not
+  // a guess taken beforehand from .unlazy/<scope>/executor.json: that file is
+  // plain unauthenticated JSON any agent in the repository may write. Every
+  // git-intent branch that returns `recovered: true` first proves the recorded
+  // commit against HEAD and its recorded path set against the commit's own tree
+  // (assertIntegrationTree against the commit's own parent, plus
+  // assertCommittedResultBlob for an accepted result). Proven by the forged
+  // committed-checkpoint and rival-commit cases of "two verified leaves receive
+  // one integration checkpoint, bottom-up reverify, plan completion and close"
+  // in test/package-execution.test.js.
+  // The relaxation never decides whether the oracles run; they always do.
+  // The complete bottom-up re-execution runs BEFORE the checkpoint on EVERY
+  // integrate, the repeat included: runtime Evidence that oracles legitimately
+  // refresh while re-running (ledger EVIDENCE lines, bundle evidence reports
+  // with volatile timestamps) becomes part of the committed tree, and a failing
+  // oracle stops integration before any commit exists. --approve-checks
+  // additionally authorizes the first execution of still-unapproved oracles; it
+  // never skips re-running met gates.
+  // The read-only status audit after the checkpoint can NEVER stand in for this
+  // run: it reads the ledger checkboxes and EVIDENCE strings the agent itself
+  // writes, so an integrate that skipped the oracles would attest gates it never
+  // executed (measured 02.09.2026: overwriting a committed gate input that no
+  // checkpoint path covers makes a direct gate-check --reverify exit 1 while a
+  // status-only repeat call still exits 0). What actually broke the repeat call
+  // was never this re-execution but the exact-path cleanliness probe below --
+  // the re-run refreshes the very Evidence the first call committed. So the
+  // repeat keeps the oracles and relaxes only that probe, and only for bytes
+  // this run is DECLARED to rewrite and WITNESSED rewriting: the digests taken
+  // immediately before and after the run below are that witness.
+  const gateModes = options.approveChecks ? ["--reverify", "--approve"] : ["--reverify"];
+  const witnessBefore = bundleFileDigests(context);
+  const verified = runNode(context.tools.gateCheck, [...gateModes, "--timeout", timeout, "--root", context.repoRoot,
     "--package", context.packageId, "--scope", context.scope], { cwd: context.repoRoot,
-    timeoutMs: (Number(timeout) + 10) * 1_000 });
+    timeoutMs: reverifyWallMs(context.packageInfo, timeout) });
   childOk(verified, "bottom-up integration re-verification");
+  const witnessAfter = bundleFileDigests(context);
   if (acceptedResult) acceptedResultConstraint(context, state, options);
   const planCompleted = completePlanFromEvidence(context);
   const message = String(options.message || "").trim();
@@ -988,17 +1210,19 @@ function integrate(context, options) {
   const result = runNode(context.tools.gitIntent, integrationArgs,
   { cwd: context.repoRoot, timeoutMs: 180_000 });
   const checkpoint = parseIntentOutput(childOk(result, "integration checkpoint"));
-  const postCommit = runNode(context.tools.gateCheck, ["--reverify", "--timeout", timeout, "--root", context.repoRoot,
+  // The committed tree already carries the Evidence that the pre-checkpoint
+  // re-execution produced on identical content (the hook-free checkpoint cannot
+  // change it). The post-checkpoint pass is therefore deliberately read-only:
+  // gate-check --status never executes, approves, or writes, so it cannot
+  // regenerate volatile evidence bytes, and the exact-path cleanliness check
+  // below stays meaningful. It still fails when any gate is no longer met.
+  const postCommit = runNode(context.tools.gateCheck, ["--status", "--root", context.repoRoot,
     "--package", context.packageId, "--scope", context.scope], { cwd: context.repoRoot,
-    timeoutMs: (Number(timeout) + 10) * 1_000 });
-  childOk(postCommit, "post-checkpoint local re-verification");
-  const dirty = spawnSync("git", ["-C", context.repoRoot, "status", "--porcelain=v1", "--", ...checkpoint.paths], {
-    cwd: context.repoRoot, encoding: "utf8", windowsHide: true, timeout: 30_000,
-  });
-  if (dirty.error || dirty.status !== 0 || String(dirty.stdout || "").trim()) {
-    fail("POST_VERIFY_DIRTY", "local re-verification changed integrated paths after their checkpoint", 1);
-  }
-  return { ...checkpoint, locallyReverified: true, planCompleted,
+    timeoutMs: 60_000 });
+  childOk(postCommit, "post-checkpoint gate status audit");
+  const reintegration = checkpoint.recovered === true;
+  await assertCheckpointClean(context, checkpoint, reintegration, witnessBefore, witnessAfter);
+  return { ...checkpoint, locallyReverified: true, gateStatusAudited: true, planCompleted, reintegration,
     gateOutputDigest: digest(String(postCommit.stdout || "")) };
 }
 
@@ -1045,7 +1269,7 @@ function planClose(context, options) {
   const timeout = String(options.timeout || "120");
   const verified = runNode(context.tools.gateCheck, ["--reverify", "--timeout", timeout, "--root", context.repoRoot,
     "--package", context.packageId, "--scope", context.scope], { cwd: context.repoRoot,
-    timeoutMs: (Number(timeout) + 10) * 1_000 });
+    timeoutMs: reverifyWallMs(context.packageInfo, timeout) });
   childOk(verified, "bottom-up package re-verification");
   const duties = readDuties(context);
   assertDutiesReady(duties);
@@ -1059,6 +1283,17 @@ function planClose(context, options) {
     scope: context.scope,
     subject: {
       planReceipt: planned.receipt,
+      // The plan receipt's own BYTES, not just its path. That receipt lists the
+      // package file set, each file's digest and the normalized PACKAGE.md
+      // digest the closure checkpoint compares the closed bundle against, and it
+      // lives in agent-writable .unlazy/.global-receipts/ with no digest-derived
+      // identity of its own -- so without this the Owner approved a path whose
+      // content anyone could rewrite afterwards. git-intent's closureCheckpoint
+      // re-derives this digest and refuses a mismatch. Proven by the
+      // edited-plan-receipt probe of "two verified leaves receive one integration
+      // checkpoint, bottom-up reverify, plan completion and close" in
+      // test/package-execution.test.js.
+      planDigest: digest(fs.readFileSync(path.resolve(context.repoRoot, planned.receipt))),
       head: currentHead(context.repoRoot),
       packageDigest: digest(fs.readFileSync(context.packageInfo.packageFile, "utf8")),
       ownerDigest: context.packageInfo.owner.digest,
@@ -1067,6 +1302,34 @@ function planClose(context, options) {
   });
   return { ...planned, ...challenge, duties, locallyReverified: true, providerOutputEvidence: false,
     next: "Owner creates one external approval artifact bound to challengeDigest; package-executor cannot create it." };
+}
+
+// Every bundle ledger of this package as its repo-relative path. A bundle-wide
+// gate-runner invocation covers exactly this set.
+function bundleLedgerRelatives(context) {
+  return bundleLedgerFiles(context.packageInfo, null)
+    .filter((file) => fs.existsSync(file))
+    .map((file) => path.relative(context.repoRoot, file).replaceAll("\\", "/"))
+    .filter((relative) => isBundleLedger(relative, context.packageId))
+    .sort((left, right) => left.localeCompare(right, "en"));
+}
+
+// The witness of ONE mandated re-verification, written as an execution receipt
+// and handed to git-intent by receipt path. git-intent verifies the receipt
+// itself (plan-close identity, HEAD, and each recorded digest against the file's
+// current bytes) and intersects it with the ledger declarations it reads itself,
+// so neither half alone can widen the closure writeback window -- and neither
+// half is a claim this executor makes on the command line any more.
+// `ledgers` names what the invocation covered: the vendored close and the
+// recovery re-verification both run the WHOLE bundle in one process, which is
+// the documented limit here -- the gate runner's exact selector (--leaf) exists
+// for leaf ledgers only, and neither close path may skip the root ledger.
+function closureWitnessArgs(context, planReceipt, head, before, after) {
+  const files = oracleRunWitness(before, after, bundleFileDigests(context))
+    .map((relative) => ({ relative, digest: after.get(relative) }));
+  const witness = writeWritebackWitness({ repoRoot: context.repoRoot, packageId: context.packageId,
+    scope: context.scope, planReceipt, head, ledgers: bundleLedgerRelatives(context), files });
+  return ["--writeback-receipt", witness.receipt];
 }
 
 async function close(context, options) {
@@ -1081,10 +1344,16 @@ async function close(context, options) {
   if (consumed.action !== "close") fail("OWNER_APPROVAL_MISMATCH", "approval does not authorize close", 1);
   const closeMessage = String(options.message || ("chore: close package " + context.packageId)).trim();
   const timeout = String(options.timeout || "120");
+  // The vendored close re-verifies the whole bundle, so the digests taken around
+  // it are the witness of what that mandated run actually rewrote. Without it a
+  // file hand-edited between the approved close plan and this call would ride
+  // through the declared writeback window unchanged.
+  const witnessBefore = bundleFileDigests(context);
   const closed = runNode(context.tools.packageCli, ["close", "--timeout", timeout, "--root", context.repoRoot,
     "--package", context.packageId, "--scope", context.scope, "--authorization-receipt", consumed.approvalReceipt,
     "--json"], { cwd: context.repoRoot,
-    timeoutMs: (Number(timeout) + 20) * 1_000 });
+    timeoutMs: reverifyWallMs(context.packageInfo, timeout, { marginSeconds: 60 }) });
+  const witnessAfter = bundleFileDigests(context);
   let packageClose;
   try { packageClose = JSON.parse(childOk(closed, "package close")); }
   catch (error) { if (error.code) throw error; fail("CHILD_FAILED", "package close returned invalid JSON"); }
@@ -1095,7 +1364,11 @@ async function close(context, options) {
   try {
     closure = parseIntentOutput(childOk(runNode(context.tools.gitIntent,
       ["closure-checkpoint", "--root", context.repoRoot, "--package", context.packageId,
-        "--message", closeMessage, "--receipt", consumed.subject.planReceipt],
+        "--message", closeMessage, "--receipt", consumed.subject.planReceipt,
+        "--approval-receipt", consumed.approvalReceipt,
+        "--unlazy-root", context.unlazyRoot,
+        ...closureWitnessArgs(context, consumed.subject.planReceipt, consumed.subject.head,
+          witnessBefore, witnessAfter)],
       { cwd: context.repoRoot, timeoutMs: 180_000 }), "closure checkpoint"));
   } catch (error) {
     error.message += "; package is closed and recoverable with close receipt " + durableClose.receipt;
@@ -1116,16 +1389,46 @@ function recoverClose(context, options) {
   if (source.value.packageId !== context.packageId || source.value.scope !== context.scope ||
       source.value.result?.packageClosed !== true) fail("CLOSE_RECOVERY", "receipt does not bind this closed package");
   if (source.value.result.closure) return { recovered: true, idempotent: true, closeReceipt: source.file,
-    closure: source.value.result.closure };
+    closure: source.value.result.closure, locallyReverified: false };
+  // recover-close writes the same closure commit close writes, so it carries
+  // the same duty: close re-verifies bottom-up through its package-cli run, and
+  // the recovery must not become the one closure path that commits a package
+  // whose gates were only ever green before the interruption. The successful
+  // close already removed the scope runtime, so this run addresses the exact
+  // bundle by package identity; the ledger set and the resolved CWD are the
+  // same ones close re-verified.
+  const timeout = String(options.timeout || "120");
+  const witnessBefore = bundleFileDigests(context);
+  const reverified = runNode(context.tools.gateCheck, ["--reverify", "--timeout", timeout, "--root", context.repoRoot,
+    "--package", context.packageId], { cwd: context.repoRoot,
+    timeoutMs: reverifyWallMs(context.packageInfo, timeout) });
+  // A red recovery re-verification must not read as "the harness broke". The
+  // close approval is spent (its nonce is one-time), so recovery is the only
+  // route left to the missing closure commit, and refusing it silently would
+  // strand the package half closed. Name the state and the Owner route instead
+  // of failing with the generic child error.
+  if (reverified.status !== 0) {
+    const detail = String(reverified.stderr || reverified.stdout || "").trim().slice(0, 1_000);
+    fail("CLOSE_RECOVERY_REVERIFY", "bottom-up close recovery re-verification is red, so the interrupted closure " +
+      "checkpoint stays unwritten and the package stays half closed: " + (detail || "exit " + reverified.status) +
+      ". Repair the red gate and repeat recover-close with the same close receipt; if it cannot go green again, the " +
+      "Owner route is a NEW close approval (plan-close, then close) -- recovery never commits an unverified bundle.",
+    1);
+  }
+  const witnessAfter = bundleFileDigests(context);
   const closeMessage = String(options.message || ("chore: close package " + context.packageId)).trim();
   const closure = parseIntentOutput(childOk(runNode(context.tools.gitIntent,
     ["closure-checkpoint", "--root", context.repoRoot, "--package", context.packageId,
-      "--message", closeMessage, "--receipt", source.value.result.planReceipt],
+      "--message", closeMessage, "--receipt", source.value.result.planReceipt,
+      "--approval-receipt", source.value.approvalReceipt,
+      "--unlazy-root", context.unlazyRoot,
+      ...closureWitnessArgs(context, source.value.result.planReceipt, currentHead(context.repoRoot),
+        witnessBefore, witnessAfter)],
     { cwd: context.repoRoot, timeoutMs: 180_000 }), "closure checkpoint recovery"));
   const completed = writeConsequentialReceipt({ repoRoot: context.repoRoot, action: "close",
     packageId: context.packageId, scope: context.scope, approvalReceipt: source.value.approvalReceipt,
     duties: source.value.duties, result: { ...source.value.result, closure, recovered: true } });
-  return { recovered: true, idempotent: false, closeReceipt: completed.receipt, closure };
+  return { recovered: true, idempotent: false, closeReceipt: completed.receipt, closure, locallyReverified: true };
 }
 
 function planPublish(context, options) {
@@ -1186,14 +1489,25 @@ commands:
   plan-duty-waiver --duty ID
   duty-waive --duty ID --challenge PATH --approval-file EXTERNAL_PATH
   plan-close [--timeout S]
-  close --challenge PATH --approval-file EXTERNAL_PATH [--message TEXT]
-  recover-close --receipt CLOSE_RECEIPT [--message TEXT]
+  close --challenge PATH --approval-file EXTERNAL_PATH [--message TEXT] [--timeout S]
+  recover-close --receipt CLOSE_RECEIPT [--message TEXT] [--timeout S]
   plan-publish --closure-receipt PATH
   publish --challenge PATH --approval-file EXTERNAL_PATH
 
-Codex defaults to gpt-5.6-sol with effort max. A provider return is accepted
-only after local gate re-verification. First execution of pending integration
-oracles requires the explicit integrate --approve-checks switch.`;
+--timeout S is the per-CHECK budget the gate runner receives, not the budget for
+a whole re-verification: the runner executes CHECKs serially, so the wall clock
+allows S seconds for every executable gate of the addressed ledgers plus a fixed
+margin. Codex defaults to gpt-5.6-sol with effort max. A provider return is
+accepted only after local gate re-verification. First execution of pending
+integration oracles requires the explicit integrate --approve-checks switch.
+integrate is idempotent: a repeat call runs the same bottom-up re-verification
+again and returns the same checkpoint receipt instead of a second checkpoint.
+recover-close continues an interrupted closure checkpoint and re-verifies
+bottom-up like close before writing it; once that commit exists it returns
+unchanged and without re-verifying (locallyReverified: false). A red recovery
+re-verification writes no closure commit and reports CLOSE_RECOVERY_REVERIFY:
+repair the gate and repeat, or ask the Owner for a new close approval through
+plan-close and close.`;
 
 async function main() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
@@ -1242,7 +1556,7 @@ async function main() {
     result = dutyTransition(context, options);
   } else if (options.command === "plan-duty-waiver") result = planDutyWaiver(context, options);
   else if (options.command === "duty-waive") result = await waiveDuty(context, options);
-  else if (options.command === "integrate") result = integrate(context, options);
+  else if (options.command === "integrate") result = await integrate(context, options);
   else if (options.command === "status") result = await status(context);
   else if (options.command === "plan-close") result = planClose(context, options);
   else if (options.command === "close") result = await close(context, options);
@@ -1253,10 +1567,27 @@ async function main() {
   else process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 }
 
-main().catch((error) => {
-  const code = error.code || "PACKAGE_EXECUTOR";
-  const output = { error: { code, message: error.message } };
-  if (process.argv.includes("--json")) process.stderr.write(JSON.stringify(output) + "\n");
-  else console.error("package-executor: " + code + ": " + error.message);
-  process.exitCode = error.exitCode || 2;
-});
+// Run the CLI only when this module IS the process entry, exactly like
+// git-intent.mjs. Without the guard an `import` of this module ran main(), which
+// failed with USAGE and set a non-zero exit code on its importer -- so nothing
+// could unit-test the helpers above. The comparison is by realpath so a relative
+// or 8.3-short spelling of the same file still counts as the entry, and a
+// missing argv[1] falls back to running: a false "imported" verdict would make
+// the CLI exit silently without doing its work.
+function isProcessEntry() {
+  const entry = process.argv[1];
+  if (!entry) return true;
+  const self = fileURLToPath(import.meta.url);
+  try { return fs.realpathSync(entry) === fs.realpathSync(self); }
+  catch { return path.resolve(entry) === path.resolve(self); }
+}
+
+if (isProcessEntry()) {
+  main().catch((error) => {
+    const code = error.code || "PACKAGE_EXECUTOR";
+    const output = { error: { code, message: error.message } };
+    if (process.argv.includes("--json")) process.stderr.write(JSON.stringify(output) + "\n");
+    else console.error("package-executor: " + code + ": " + error.message);
+    process.exitCode = error.exitCode || 2;
+  });
+}

@@ -30,7 +30,7 @@ Jeder Aufruf nennt `--harness-root <HARNESS_ROOT>` und `--root <ECHTES_GIT_REPO>
   --replacement-wave <VOLLSTÄNDIG>`.
 - Ein Rücklauf benutzt `return --session <SESSION> --json`; `resume --session
   <SESSION> --json` liest ausschließlich den dauerhaft gebundenen Lauf.
-- Provider-Ausgabe ist nie Evidence. Nur lokale Gate-Reverify darf ein Leaf zurückgeben; `integrate --approve-checks` erzeugt genau einen gemeinsamen Checkpoint und prüft Node und Root bottom-up; `close` reverifiziert erneut.
+- Provider-Ausgabe ist nie Evidence. Nur lokale Gate-Reverify darf ein Leaf zurückgeben; `integrate --approve-checks` prüft zuerst Node und Root bottom-up, leitet daraus die Planhaken ab und erzeugt danach genau einen gemeinsamen Checkpoint. Ein erneuter `integrate` führt dieselbe Reverify erneut aus und liefert denselben Checkpoint statt eines zweiten -- er ist idempotent, aber nicht billig. `close` reverifiziert erneut.
 - Git-Mutationen laufen ausschließlich über `harness-core/git/git-intent.mjs`.
 - Leaf-Agenten committen nicht mitten in einer parallelen Welle. Sichere Rücknahme nutzt ausschließlich die Receipt-basierten Git-Intents.
 - Follow-up-Duties sind strukturiert: erst `duty-assess --gate <LEDGER:GATE>`;
@@ -45,6 +45,10 @@ Jeder Aufruf nennt `--harness-root <HARNESS_ROOT>` und `--root <ECHTES_GIT_REPO>
   Die Agentenroute kann dieses Artefakt nicht erstellen und akzeptiert keinen Boolean.
 - Nach Close: `plan-publish --closure-receipt <RECEIPT> --json`, neue separate
   Owner-Freigabe und `publish --challenge <RECEIPT> --approval-file <EXTERN> --json`.
-  `recover-close --receipt <CLOSE_RECEIPT>` setzt nur einen unterbrochenen
-  Closure-Checkpoint fort. Close- und Publish-Receipts sind unveränderlich und
-  verbrauchen ihre Nonce genau einmal.
+  `recover-close --receipt <CLOSE_RECEIPT>` setzt einen unterbrochenen
+  Closure-Checkpoint fort und reverifiziert davor bottom-up wie `close` selbst:
+  der Lauf führt alle CHECKs des Bundles aus und schreibt dabei Evidence, ist
+  also kein billiger Wiederanlauf. `--timeout S` ist bei `integrate`,
+  `plan-close`, `close` und `recover-close` das Budget je CHECK; die Wanduhr
+  deckt alle CHECKs der adressierten Ledger ab. Close- und Publish-Receipts sind
+  unveränderlich und verbrauchen ihre Nonce genau einmal.

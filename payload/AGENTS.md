@@ -53,10 +53,17 @@ eine Dispatch-Welle, startet alle Mitglieder, registriert ihre nativen Handles
 und versiegelt die Welle vor dem ersten Wait.
 
 Provider-Rücklauf ist keine Evidence. Der Parent reverifiziert jedes Leaf lokal.
-Nach allen Returns erzeugt integrate genau einen Integrations-Checkpoint,
-führt mit expliziter Check-Ausführungsfreigabe Node- und Root-Gates bottom-up
-aus und leitet erst aus grüner Evidence die Planhaken ab. close reverifiziert
-erneut und schließt nur bei vollständiger Coverage und Fulfillment.
+Nach allen Returns führt integrate mit expliziter Check-Ausführungsfreigabe
+Node- und Root-Gates bottom-up aus, leitet erst aus grüner Evidence die
+Planhaken ab und erzeugt danach genau einen Integrations-Checkpoint; ein
+erneuter Aufruf führt dieselbe Reverify erneut aus und liefert denselben
+Checkpoint statt eines zweiten. close reverifiziert erneut, und recover-close
+reverifiziert vor seinem Closure-Checkpoint genauso bottom-up; ist dieser
+Commit bereits geschrieben, kehrt der Aufruf unverändert und ohne erneute
+Reverify zurück. Bleibt die Reverify der Recovery rot, entsteht kein
+Closure-Commit; der Ausweg ist eine neue Owner-Freigabe über plan-close und
+close. --timeout ist dabei das Budget je CHECK, nicht für den ganzen Lauf.
+Geschlossen wird nur bei vollständiger Coverage und Fulfillment.
 
 ## Sieben Schritte, je eine verantwortliche Schnittstelle
 
@@ -131,5 +138,11 @@ ein ausdrücklich freigegebener Publish erfolgen.
 - Nächstes Leaf/Fan-out: next|start, dann dispatch
 - Rücklauf: return; Integration: integrate --approve-checks
 - Abschluss: close
-- Dashboard: npm run dashboard (einzige React-Oberflaeche, lokal auf 127.0.0.1)
+- Dashboard-Betrieb: npm run dashboard — der einzige Startweg; dashboard/serve.mjs
+  startet die gebaute Runtime als einen Prozess lokal auf 127.0.0.1; Pruefung:
+  npm run test:dashboard:runtime
+- Dashboard-Entwicklung (nur Quellbaum): npm run dashboard:dev — setzt
+  KEEL_ACCOUNTABILITY_NEXT_DIST_DIR=.next-dev nur fuer seinen Kindprozess und
+  bindet 127.0.0.1; ohne die Variable baut next dev in .next und zerstoert den
+  standalone-Build; Regeln in dashboard/README.md des Quellbaums
 - Harness prüfen: node checks/run-all.mjs

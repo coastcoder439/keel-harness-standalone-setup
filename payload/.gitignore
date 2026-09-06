@@ -8,6 +8,8 @@ dashboard.html
 dashboard.json
 dashboard/.screenshots/
 dashboard/.next/
+.next-dev/
+.next-verify/
 dashboard/.test-build/
 dashboard/tsconfig.tsbuildinfo
 node_modules/

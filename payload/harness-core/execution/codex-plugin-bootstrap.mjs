@@ -83,11 +83,11 @@ export function contract(repoRoot, harnessRoot) {
   };
 }
 
-function run(executable, args, cwd, timeout = 120_000) {
+function run(executable, args, cwd, timeout = 120_000, missingCode = "CLAUDE_CLI_MISSING") {
   const result = spawnSync(executable, args, { cwd, encoding: "utf8", windowsHide: true, timeout });
   if (result.error) {
     const missing = result.error.code === "ENOENT";
-    fail(result.error.message, 1, missing ? "CLAUDE_CLI_MISSING" : "CODEX_ROUTE_PROCESS");
+    fail(result.error.message, 1, missing ? missingCode : "CODEX_ROUTE_PROCESS");
   }
   return result;
 }
@@ -126,8 +126,42 @@ export function resolveClaudeExecutable(requested, env = process.env, platform =
   return "claude";
 }
 
+// Codex publishes no PATH-visible executable on Windows: npm installs a
+// .cmd/.ps1 shim around bin/codex.js and the desktop app keeps codex.exe outside
+// PATH, so a bare "codex" reaches Node as ENOENT. Resolve a real program the same
+// way the Claude shim is resolved, without introducing shell parsing.
+export function resolveCodexCommand(requested, env = process.env, platform = process.platform) {
+  const plain = (command) => ({ command, prefixArgs: [] });
+  if (requested && requested !== "codex") return plain(requested);
+  if (platform !== "win32") return plain("codex");
+  const configured = regularFile(String(env.CODEX_EXECUTABLE || ""));
+  if (configured) return plain(configured);
+  for (const raw of String(env.PATH || "").split(path.delimiter)) {
+    const directory = raw.trim().replace(/^"|"$/gu, "");
+    if (!directory) continue;
+    const direct = regularFile(path.join(directory, "codex.exe"));
+    if (direct) return plain(direct);
+    if (!regularFile(path.join(directory, "codex.cmd")) && !regularFile(path.join(directory, "codex.ps1"))) continue;
+    const entry = regularFile(path.join(directory, "node_modules", "@openai", "codex", "bin", "codex.js"));
+    if (entry) return { command: process.execPath, prefixArgs: [entry] };
+  }
+  // Same off-PATH desktop location that checks/codex-runtime-smoke.mjs reads.
+  const desktop = path.join(String(env.LOCALAPPDATA || ""), "OpenAI", "Codex", "bin");
+  const candidates = [];
+  try {
+    for (const entry of fs.readdirSync(desktop, { withFileTypes: true })) {
+      const file = entry.isDirectory() ? path.join(desktop, entry.name, "codex.exe")
+        : entry.name.toLowerCase() === "codex.exe" ? path.join(desktop, entry.name) : null;
+      const found = file ? regularFile(file) : null;
+      if (found) candidates.push(found);
+    }
+  } catch { /* the Codex desktop CLI is optional */ }
+  return plain(candidates.length === 1 ? candidates[0] : "codex");
+}
+
 export function runtime(root, options) {
-  const codex = run(options.codex || "codex", ["--version"], root);
+  const codexCommand = resolveCodexCommand(options.codex);
+  const codex = run(codexCommand.command, [...codexCommand.prefixArgs, "--version"], root, 120_000, "CODEX_CLI_MISSING");
   if (codex.status !== 0) fail("Codex CLI is not runnable: " + String(codex.stderr || codex.stdout).trim(), 1, "CODEX_CLI_UNAVAILABLE");
   const claudeExecutable = resolveClaudeExecutable(options.claude);
   const claude = run(claudeExecutable, ["plugin", "list", "--json"], root);

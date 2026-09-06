@@ -9,14 +9,114 @@ import process from "node:process";
 import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { readExecutionReceipt } from "../execution/owner-approval.mjs";
 
 const require = createRequire(import.meta.url);
+const here = path.dirname(fileURLToPath(import.meta.url));
 const repository = require("../binding/repository.cjs");
 const packageBinding = require("../binding/package-binding.cjs");
 const ownerContract = require("../binding/owner-contract.cjs");
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
+
+// ONE resolver for the Unlazy tree, shared by the gate parser below and by the
+// gate RUNNER in package-executor.mjs (it imports locateUnlazy from here). Two
+// resolvers meant an explicit --unlazy-root could hand the tolerance decision to
+// a different parser than the one that executed the gates; the shared candidate
+// list and the shared boundary below remove that second answer.
+// The boundary is a realpath containment test, not a string prefix: an explicit
+// root is accepted only when its own scripts/ files really live under the
+// addressed repository's vendor/unlazy or under the Harness tree that ships
+// next to this file. Proven by "the gate parser resolves from the Unlazy tree
+// the caller runs, lazily and inside the bound trees" in test/git-intent.test.js,
+// which drives both shipped layouts.
+const harnessTree = path.resolve(here, "..", "..");
+
+function unlazyBases(repoRoot) {
+  const root = repoRoot ? path.resolve(repoRoot) : null;
+  const bases = [path.join(harnessTree, "vendor", "unlazy")];
+  if (root) bases.push(path.join(root, "vendor", "unlazy"));
+  // The source layout keeps the Harness tree as a SUBDIRECTORY of the repository
+  // that vendors Unlazy at its own root, so the directory ABOVE the Harness tree
+  // is a base there. The standalone layout ships harness-core/ and vendor/ as
+  // siblings AT the repository root, where that same directory sits outside the
+  // repository -- so it is a base only while the Harness tree is not itself the
+  // addressed repository root. Measured 02.09.2026 in the standalone-shaped
+  // fixture of the test above: without this condition locateUnlazy accepted a
+  // vendor/unlazy copy one level above the repository.
+  if (!root || !repository.samePath(harnessTree, root)) {
+    bases.push(path.join(path.dirname(harnessTree), "vendor", "unlazy"));
+  }
+  return [...new Set(bases)];
+}
+
+function insideAnyBase(bases, candidate) {
+  for (const base of bases) {
+    let resolvedBase = path.resolve(base);
+    try { resolvedBase = fs.realpathSync(resolvedBase); } catch { /* absent base cannot contain anything */ }
+    const relative = path.relative(resolvedBase, candidate);
+    if (relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative)) return true;
+  }
+  return false;
+}
+
+// The single existence probe for an Unlazy tree: the parser this module needs
+// and the two runner entry points package-executor.mjs spawns.
+const UNLAZY_MARKERS = [
+  ["scripts", "lib", "gates.mjs"],
+  ["scripts", "package-cli.mjs"],
+  ["scripts", "gate-check.mjs"],
+];
+
+export function unlazyRootCandidates(repoRoot, explicit) {
+  // An explicit root is the ONLY candidate: silently falling back to another
+  // vendored tree would let a different parser decide the tolerance than the one
+  // that executed the gates, which is the whole reason this is bound at all.
+  return explicit ? [path.resolve(explicit)] : unlazyBases(repoRoot);
+}
+
+export function locateUnlazy(repoRoot, explicit) {
+  const bases = unlazyBases(repoRoot);
+  const found = [...new Set(unlazyRootCandidates(repoRoot, explicit)
+    .filter((root) => UNLAZY_MARKERS.every((marker) => fs.existsSync(path.join(root, ...marker))))
+    .map((root) => fs.realpathSync(root)))];
+  // Without an explicit root, two differing vendored trees are an ambiguity to
+  // refuse rather than to resolve by candidate order.
+  if (found.length !== 1) {
+    fail("GATE_PARSER", "expected exactly one canonical Unlazy runtime; found " + found.length);
+  }
+  const resolved = found[0];
+  if (!insideAnyBase(bases, fs.realpathSync(path.join(resolved, ...UNLAZY_MARKERS[0])))) {
+    fail("GATE_PARSER", "Unlazy runtime is outside the repository vendor tree and the Harness tree: " + resolved);
+  }
+  return resolved;
+}
+
+// The close writeback tolerance below reads ledgers with the SAME parser
+// gate-check runs, never with a private regex scan: a hand-written scan
+// honours declarations the gate runner ignores. Measured 02.09.2026 on a
+// ledger carrying a fenced example block before its first gate -- the vendored
+// parser returned one CHECK and owns=["src/beta/**"], the regex scan two CHECKs
+// and a second OWNS glob that turned every evidence/ file into a free-byte
+// window during close.
+// It loads LAZILY: a top-level await import made an unusual vendor location
+// break every package-executor command at all, since package-executor.mjs
+// imports this module statically.
+const gateParsers = new Map();
+
+export function gateParserCandidates(repoRoot, explicit) {
+  return unlazyRootCandidates(repoRoot, explicit).map((root) => path.join(root, "scripts", "lib", "gates.mjs"));
+}
+
+export async function loadGateParser(repoRoot, explicit) {
+  const resolved = fs.realpathSync(path.join(locateUnlazy(repoRoot, explicit), "scripts", "lib", "gates.mjs"));
+  if (!gateParsers.has(resolved)) {
+    const module = await import(pathToFileURL(resolved).href);
+    if (typeof module.parseGates !== "function") fail("GATE_PARSER", "Unlazy gate parser exports no parseGates");
+    gateParsers.set(resolved, module.parseGates);
+  }
+  return gateParsers.get(resolved);
+}
 
 function fail(code, message, exitCode = 2) {
   const error = new Error(message);
@@ -56,13 +156,13 @@ function gitBytes(repoRoot, args, options = {}) {
   if (result.error) fail("GIT_EXECUTION_FAILED", result.error.message);
   if (result.status !== 0) {
     const detail = String(result.stderr || result.stdout || "").trim().split(/\r?\n/u)[0] || "exit " + result.status;
-    fail("GIT_ACCEPTED_RESULT_STAGE_FAILED", detail, 1);
+    fail(options.failCode || "GIT_ACCEPTED_RESULT_STAGE_FAILED", detail, 1);
   }
   return result.stdout || Buffer.alloc(0);
 }
 
 function parseArgs(argv) {
-  const values = { paths: [] };
+  const values = { paths: [], writebackReceipts: [] };
   const args = [...argv];
   values.intent = args.shift() || "";
   while (args.length) {
@@ -78,6 +178,8 @@ function parseArgs(argv) {
     else if (option === "--operation") values.operation = args.shift();
     else if (option === "--receipt") values.receipt = args.shift();
     else if (option === "--approval-receipt") values.approvalReceipt = args.shift();
+    else if (option === "--unlazy-root") values.unlazyRoot = args.shift();
+    else if (option === "--writeback-receipt") values.writebackReceipts.push(args.shift());
     else if (option === "--json") values.json = true;
     else fail("USAGE", "unknown option " + option);
   }
@@ -563,9 +665,29 @@ export function integrationTreePathArgs(tree, headBefore) {
     : ["ls-tree", "-r", "--name-only", "-z", tree];
 }
 
-function assertIntegrationTree(context, tree, paths, constraint) {
+// The recorded diff base, proven against Git instead of read out of the
+// agent-writable executor state: a checkpoint commit's parent IS its base, so a
+// recovery branch that hands over a commit gets its base from `rev-parse
+// <commit>^` and refuses a recorded headBefore that disagrees. Without it the
+// recorded base could name the checkpoint commit itself, where the tree diff is
+// empty by construction and an empty recorded path set then matched anything
+// (measured 02.09.2026: `git diff-tree --no-commit-id --name-only -r -z <commit>
+// <commit>^{tree}` prints nothing). An empty recorded path set is refused
+// outright for the same reason. Proven by "two verified leaves receive one
+// integration checkpoint, bottom-up reverify, plan completion and close" in
+// test/package-execution.test.js.
+function assertIntegrationTree(context, tree, paths, constraint, commit = null) {
+  const headBefore = String(context.state.integration.headBefore || "");
+  if (commit) {
+    const parent = git(context.snapshot.repoRoot, ["rev-parse", "--verify", "--quiet", commit + "^"]);
+    const recorded = parent.status === 0 ? String(parent.stdout).trim() : "";
+    if (recorded !== headBefore) {
+      fail("INTEGRATION_RECOVERY", "recorded integration base is not the checkpoint commit's parent", 1);
+    }
+  }
+  if (!paths.length) fail("INTEGRATION_PATHS_CHANGED", "integration checkpoint recorded an empty path set", 1);
   const changed = parseZeroList(commandResult(git(context.snapshot.repoRoot,
-    integrationTreePathArgs(tree, context.state.integration.headBefore)),
+    integrationTreePathArgs(tree, headBefore || null)),
   "integration-tree"));
   if (!samePathSet(changed, paths)) {
     fail("INTEGRATION_PATHS_CHANGED", "integration tree contains paths outside the exact prepared set", 1);
@@ -596,11 +718,26 @@ function integrationCheckpoint(options) {
     fail("USAGE", "--message must be one line of 1..200 characters");
   }
   if (context.state.integration?.state === "committed") {
-    if (currentHead(context.binding) !== context.state.integration.commit) {
+    const committed = context.state.integration.commit;
+    if (currentHead(context.binding) !== committed) {
       fail("INTEGRATION_STALE", "HEAD moved after the integration checkpoint", 1);
     }
-    assertCommittedResultBlob(context, context.state.integration.commit, resultConstraint);
-    return integrationReceipt(context, context.state.integration.commit, context.state.integration.paths, true);
+    // The same evidence the two prepared-recovery branches below demand, and for
+    // the same reason: everything this branch reads out of executor.json is
+    // agent-writable, so "recovered: true" has to be proven against Git objects.
+    // The commit's own tree is compared with the recorded path set INDEPENDENTLY
+    // of an accepted-result constraint -- without a --result-file there was no
+    // constraint and therefore no check at all, so a rewritten commit/paths pair
+    // in executor.json turned any commit that happened to be HEAD into an
+    // approved checkpoint. assertIntegrationTree takes the diff base from the
+    // commit's own parent, so the recorded headBefore cannot make that comparison
+    // vacuous. Proven by "two verified leaves receive one integration checkpoint,
+    // bottom-up reverify, plan completion and close" in test/package-execution.test.js.
+    const committedTree = commandResult(git(context.snapshot.repoRoot,
+      ["rev-parse", "--verify", committed + "^{tree}"]), "integration-recovery").trim();
+    assertIntegrationTree(context, committedTree, context.state.integration.paths, resultConstraint, committed);
+    assertCommittedResultBlob(context, committed, resultConstraint);
+    return integrationReceipt(context, committed, context.state.integration.paths, true);
   }
   if (context.state.integration?.state === "prepared") {
     const head = currentHead(context.binding);
@@ -613,7 +750,7 @@ function integrationCheckpoint(options) {
       const committedTree = commandResult(git(context.snapshot.repoRoot,
         ["rev-parse", "--verify", head + "^{tree}"]), "integration-recovery").trim();
       if (committedTree !== expectedTree) fail("INTEGRATION_RECOVERY", "prepared integration tree identity changed", 1);
-      assertIntegrationTree(context, expectedTree, context.state.integration.paths, resultConstraint);
+      assertIntegrationTree(context, expectedTree, context.state.integration.paths, resultConstraint, head);
       assertCommittedResultBlob(context, head, resultConstraint);
       context.state.integration = { ...context.state.integration, state: "committed", commit: head,
         committedAt: new Date().toISOString(), recovered: true };
@@ -626,7 +763,8 @@ function integrationCheckpoint(options) {
       if (preparedTree !== context.state.integration.expectedTree) {
         fail("INTEGRATION_RECOVERY", "prepared commit no longer resolves to its exact tree", 1);
       }
-      assertIntegrationTree(context, preparedTree, context.state.integration.paths, resultConstraint);
+      assertIntegrationTree(context, preparedTree, context.state.integration.paths, resultConstraint,
+        context.state.integration.expectedCommit);
       commandResult(git(context.snapshot.repoRoot,
         integrationUpdateRefArgs(context.state.integration.expectedCommit, context.state.integration.headBefore)),
       "integration-head");
@@ -696,11 +834,36 @@ function integrationCheckpoint(options) {
   return integrationReceipt(context, commit, paths, false);
 }
 
+function ledgerPathPattern(packageId) {
+  const exact = packageId.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp("^docs/packages/" + exact + "/(?:GATES\\.md|gates/[^/]+\\.md)$", "u");
+}
+
+// Mirrors the exact ledger writeback surface of the vendored gate-check and the
+// evidence-fingerprint normalization: only gate checkboxes and EVIDENCE values
+// are runtime state. Every contract line (gate ids, titles, CHECK, EXPECT, CWD,
+// OWNS) stays byte-bound. The EVIDENCE indent class is the vendored parser's own
+// (ATTR_RE indents with `\s+` inside one already split line, so [^\S\n] is that
+// class here, and the swap in writebackDeclarations below reads the same one):
+// an evidence line the gate runner writes back is runtime state here too,
+// whatever whitespace indents it. Every pattern stays strictly line-local
+// ([^\S\n] and [^\n] never span a newline): a pattern that could span one lets
+// an empty EVIDENCE line swallow the following line, which masks a tampered gate
+// title. Proven by "ledger normalization stays line-local so an empty EVIDENCE
+// cannot mask the next contract line" in test/git-intent.test.js.
+export function normalizedLedger(value) {
+  return String(value)
+    .replace(/\r\n?/gu, "\n")
+    .replace(/^([ \t]*-[ \t]+)\[[ xX]\]([ \t]+[^\n]+)$/gmu, "$1[ ]$2")
+    .replace(/^([^\S\n]*EVIDENCE:)[^\n]*$/gmu, "$1 <runtime-evidence>");
+}
+
 function packageFiles(repoRoot, packageId) {
   const packageDir = path.join(repoRoot, "docs", "packages", packageId);
   if (!fs.existsSync(packageDir) || !fs.lstatSync(packageDir).isDirectory() || fs.lstatSync(packageDir).isSymbolicLink()) {
     fail("CLOSE_PACKAGE", "package directory is missing or unsafe");
   }
+  const ledger = ledgerPathPattern(packageId);
   const records = [];
   const walk = (directory) => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
@@ -709,12 +872,212 @@ function packageFiles(repoRoot, packageId) {
       if (entry.isDirectory()) walk(absolute);
       else if (entry.isFile()) {
         const relative = path.relative(repoRoot, absolute).replaceAll("\\", "/");
-        records.push({ relative, digest: sha256(fs.readFileSync(absolute)) });
+        const bytes = fs.readFileSync(absolute);
+        records.push({ relative, digest: sha256(bytes),
+          ...(ledger.test(relative) ? { normalizedDigest: sha256(normalizedLedger(bytes.toString("utf8"))) } : {}) });
       } else fail("CLOSE_PACKAGE", "package bundle contains a non-regular entry");
     }
   };
   walk(packageDir);
   return records.sort((left, right) => left.relative.localeCompare(right.relative, "en"));
+}
+
+// Anchored to the one pattern that decides normalizedDigest above, so a nested
+// docs/packages/<id>/evidence/gates/*.md can never act as a bundle ledger.
+export function isBundleLedger(relative, packageId) {
+  return ledgerPathPattern(packageId).test(relative);
+}
+
+// The bundle's before-state at an anchor commit, read from Git objects instead
+// of from a receipt under .unlazy/: the anchor commit is a trust anchor, the
+// receipt is agent-writable JSON (welle-2c-design.md, threat model).
+//   carried  -- the bundle paths the anchor commit holds.
+//   changed  -- those whose working-tree content differs from the anchor, asked
+//               of Git itself (`git diff <anchor>`), so a repository that checks
+//               text files out with CRLF while the blob holds LF is compared
+//               exactly the way Git checked it out. Comparing sha256 over the
+//               two byte strings instead would call every text file changed
+//               there (measured 02.09.2026 with core.autocrlf=true: a freshly
+//               cloned file reads CRLF from the worktree and LF from `git show`
+//               while `git diff --name-only` reports it unchanged).
+//   normalized -- the runtime-normalized digest of every anchor ledger, which is
+//               EOL-independent because normalizedLedger folds CRLF first.
+function anchorBundleState(repoRoot, packageId, head) {
+  const prefix = "docs/packages/" + packageId + "/";
+  const carried = parseZeroList(commandResult(git(repoRoot,
+    ["ls-tree", "-r", "--name-only", "-z", head, "--", prefix]), "closure-anchor"))
+    .filter((relative) => relative.startsWith(prefix));
+  const changed = new Set(parseZeroList(commandResult(git(repoRoot,
+    ["diff", "--name-only", "-z", head, "--", prefix]), "closure-anchor")));
+  const normalized = new Map();
+  for (const relative of carried) {
+    if (!isBundleLedger(relative, packageId)) continue;
+    normalized.set(relative, sha256(normalizedLedger(
+      gitBytes(repoRoot, ["show", head + ":" + relative], { failCode: "CLOSE_ANCHOR" }).toString("utf8"))));
+  }
+  return { carried: new Set(carried), changed, normalized };
+}
+
+function bundleLedgerPaths(repoRoot, packageId) {
+  const prefix = "docs/packages/" + packageId + "/";
+  const packageDir = path.join(repoRoot, "docs", "packages", packageId);
+  const relatives = [];
+  const rootLedger = path.join(packageDir, "GATES.md");
+  if (fs.existsSync(rootLedger) && fs.lstatSync(rootLedger).isFile()) relatives.push(prefix + "GATES.md");
+  const gatesDir = path.join(packageDir, "gates");
+  if (fs.existsSync(gatesDir) && fs.lstatSync(gatesDir).isDirectory()) {
+    for (const entry of fs.readdirSync(gatesDir, { withFileTypes: true })) {
+      if (entry.isFile() && entry.name.endsWith(".md")) relatives.push(prefix + "gates/" + entry.name);
+    }
+  }
+  return relatives.sort((left, right) => left.localeCompare(right, "en"));
+}
+
+// Every ledger of the bundle as {relative, text}, read from the working tree.
+// Callers that must not trust the working tree pass their own texts instead.
+export function bundleLedgers(repoRoot, packageId) {
+  return bundleLedgerPaths(repoRoot, packageId).map((relative) => ({
+    relative, text: fs.readFileSync(path.join(repoRoot, relative), "utf8"),
+  }));
+}
+
+// A gate declares the exact artifacts its own CHECK rewrites with an indented
+// WRITES: line, next to CHECK/EXPECT/CWD. The vendored gate parser accepts only
+// CHECK/EXPECT/EVIDENCE/CWD as gate attributes, so a WRITES: line is invisible
+// to gate-check and changes no gate execution -- and it is byte-bound like every
+// other contract line, because normalizedLedger below rewrites only checkboxes
+// and EVIDENCE values.
+// It is read through EXACTLY the vendored parser's gate segmentation, fence
+// handling and indentation rule -- never a private scan -- by parsing the ledger
+// a second time through a line-local, line-count preserving swap: WRITES takes
+// the EVIDENCE attribute's place while the real EVIDENCE line becomes an ignored
+// line. Both halves use the parser's own indent class ([^\S\n], the whitespace
+// ATTR_RE accepts inside one already split line), because a narrower [ \t] left
+// an EVIDENCE line indented with any other whitespace untouched by the first
+// half and read back as the gate's declaration by the second (measured
+// 02.09.2026 with a U+00A0 indent: one declared path from a line the gate runner
+// reads as ordinary runtime evidence). Anything but a
+// literal repo-relative path under the bundle's evidence/ directory is dropped,
+// so a malformed or glob-shaped declaration declares nothing (the close then
+// names the file it refused).
+export function writebackDeclarations(parseGates, packageId, ledgerRelative, text) {
+  const evidencePrefix = "docs/packages/" + packageId + "/evidence/";
+  const swapped = String(text)
+    .replace(/^([^\S\n]+)EVIDENCE:/gmu, "$1x-EVIDENCE:")
+    .replace(/^([^\S\n]+)WRITES:/gmu, "$1EVIDENCE:");
+  const parsed = parseGates(swapped, { requireGates: false });
+  // A ledger whose WRITES lines do not survive the swap is refused instead of
+  // read half-way: two WRITES lines on one gate become two EVIDENCE lines, and
+  // the vendored parser then keeps only the LAST value while reporting a
+  // duplicate error. Silently dropping the first would let a bundle declare a
+  // second artifact that this tolerance never sees. gate-check itself exits on
+  // ledger errors (vendor/unlazy/scripts/gate-check.mjs, doc.errors branch), so
+  // every ledger the runner accepts passes this parse too.
+  if (parsed.errors.length) {
+    fail("GATE_PARSER", "WRITES declarations of " + ledgerRelative + " do not parse as one line per gate: " +
+      parsed.errors[0]);
+  }
+  const declared = new Set();
+  for (const gate of parsed.gates) {
+    if (gate.evidence === null) continue;
+    for (const item of String(gate.evidence).split(",").map((value) => value.trim()).filter(Boolean)) {
+      if (item.includes("\\") || item.startsWith("/") || /^[A-Za-z]:/u.test(item) ||
+          /[*?[\]{}]/u.test(item) || item.split("/").some((part) => part === ".." || part === "." || part === "")) {
+        continue;
+      }
+      if (item.startsWith(evidencePrefix) && item.length > evidencePrefix.length) declared.add(item);
+    }
+  }
+  return declared;
+}
+
+// The bundle marker that opts a legacy bundle into the wide OWNS fallback. It
+// starts at column 1, so the vendored parser reads it as neither a gate
+// attribute nor an OWNS line, and normalizedLedger below leaves it byte-bound.
+// The trailing [ \t\r]* is the Windows half of the portability rule: these
+// ledgers are checked out with CRLF endings, and a bare `$` would never match
+// the marker line there.
+const LEGACY_WRITEBACK_MARKER = /^WRITEBACK:[ \t]+legacy-owns[ \t\r]*$/mu;
+
+// Which ledger of this bundle declares that an oracle regenerates which evidence
+// artifact. The answer is a MAP from artifact to the declaring ledgers, not a
+// flat set, because the caller intersects it with a per-ledger run witness: the
+// tolerance needs to know WHICH ledger's re-verification would legitimately have
+// rewritten those bytes.
+//   WRITES -- the per-gate declaration above, and the only automatic source. It
+//     says "an oracle rewrites these bytes", which is the question asked here.
+//   OWNS -- legacy fallback for a bundle that has not migrated. It is OPT-IN
+//     through the WRITEBACK: legacy-owns marker, never a silent default: OWNS is
+//     a leaf's write authority DURING EXECUTION, not a statement that a
+//     re-verification rewrites those bytes, and the two are measurably different
+//     sets (02.09.2026, reference bundle
+//     keel-harness-reference-completeness-repair: its evidence leaf OWNS the
+//     whole docs/packages/<id>/evidence/** surface while its oracles regenerate
+//     two named reports).
+// A CHECK line that happens to contain a path declares NOTHING here. Substring
+// matching over a shell command line is guessing, not a declaration: it turned
+// every path a CHECK mentions for any reason -- an input, a --exclude argument,
+// a longer path this one is a prefix of -- into a free-byte window.
+// Read this together with the run witness the caller applies on top: a
+// declaration says which artifacts an oracle MAY refresh, never that this run
+// did refresh them, so a file hand-edited before the run is refused even while
+// its declaration stands.
+// No declaration can widen during a close: WRITES, OWNS and the marker all
+// survive normalizedLedger below, so an injected line changes the ledger's
+// normalized digest and fails the same close.
+export function oracleWritebackDeclarations(parseGates, packageId, ledgers, candidates) {
+  const prefix = "docs/packages/" + packageId + "/";
+  const evidencePrefix = prefix + "evidence/";
+  const writesByLedger = new Map();
+  const ownsByLedger = new Map();
+  let legacy = false;
+  for (const ledger of ledgers) {
+    const relative = String(ledger.relative);
+    if (!isBundleLedger(relative, packageId)) continue;
+    const text = String(ledger.text);
+    if (LEGACY_WRITEBACK_MARKER.test(text)) legacy = true;
+    writesByLedger.set(relative, writebackDeclarations(parseGates, packageId, relative, text));
+    const name = relative.slice(prefix.length);
+    if (!/^gates\/leaf-[A-Za-z0-9][A-Za-z0-9._-]{0,58}\.md$/u.test(name)) continue;
+    try {
+      ownsByLedger.set(relative,
+        packageBinding.leafOwnsFromText(text).map((pattern) => packageBinding.globRegex(pattern)));
+    } catch { continue; }
+  }
+  const declarations = new Map();
+  const declare = (relative, ledger) => {
+    if (!declarations.has(relative)) declarations.set(relative, new Set());
+    declarations.get(relative).add(ledger);
+  };
+  for (const relative of candidates) {
+    if (!relative.startsWith(evidencePrefix)) continue;
+    for (const [ledger, writes] of writesByLedger) if (writes.has(relative)) declare(relative, ledger);
+    if (!legacy) continue;
+    for (const [ledger, patterns] of ownsByLedger) {
+      if (patterns.some((pattern) => pattern.test(relative))) declare(relative, ledger);
+    }
+  }
+  return declarations;
+}
+
+// The intersection of declaration and witness, ledger by ledger. A witness is
+// one gate-runner invocation the executor started itself: `ledgers` are the
+// bundle ledgers that invocation covered (an exact --leaf run covers one, a
+// bundle run covers all of them) and `files` are the bundle paths whose bytes it
+// actually rewrote. An artifact is tolerable only when the SAME invocation that
+// rewrote it also ran the ledger that declares it, so a declaration in ledger A
+// can never license bytes only ledger B's re-verification touched.
+export function toleratedWriteback(declarations, witnesses) {
+  const tolerated = new Set();
+  for (const [relative, declaring] of declarations) {
+    for (const witness of witnesses) {
+      if (!witness.files.has(relative)) continue;
+      if (![...declaring].some((ledger) => witness.ledgers.has(ledger))) continue;
+      tolerated.add(relative);
+      break;
+    }
+  }
+  return tolerated;
 }
 
 function normalizedClosure(text) {
@@ -751,12 +1114,81 @@ function planClose(options) {
     head: context.state.integration.commit, receipt };
 }
 
-function closureCheckpoint(options) {
+// The witnesses of the mandated re-verification, read as EXECUTION RECEIPTS
+// rather than taken from the command line. The previous surface was a free
+// --oracle-writeback path list: the caller simply named the files it wanted
+// tolerated, so the "witness" half of the tolerance was the caller's own word.
+// A receipt cannot be reduced to a word: readExecutionReceipt binds it to its
+// immutable digest-derived path and operation, and every receipt has to name
+// THIS close plan, THIS HEAD and the exact ledgers its run covered -- exactly
+// how publish below verifies its Owner-approval consumption receipt.
+// A receipt is still written by the same OS user as the repository, so it is the
+// sanctioned chain, not cryptography (welle-2c-design.md, threat model). What it
+// buys over argv is that the executor must have RUN the re-verification whose
+// digests it records, and that the recorded digest must still be the file's
+// current digest at close time.
+function writebackWitnesses(repoRoot, packageId, source, planReceipt, receiptPaths) {
+  const witnesses = [];
+  for (const value of receiptPaths || []) {
+    let record;
+    try { record = readExecutionReceipt(repoRoot, value, "oracle-writeback-witness"); }
+    catch (error) { fail(error.code || "WRITEBACK_WITNESS", error.message, error.exitCode || 2); }
+    const witness = record.value;
+    const boundPlan = path.resolve(repoRoot, String(witness.planReceipt || ""));
+    if (witness.packageId !== packageId || (witness.scope || null) !== (source.scope || null) ||
+        witness.head !== source.head || !repository.samePath(boundPlan, path.resolve(repoRoot, planReceipt))) {
+      fail("WRITEBACK_WITNESS", "writeback witness receipt does not bind this exact close plan and HEAD", 1);
+    }
+    const ledgers = new Set((Array.isArray(witness.ledgers) ? witness.ledgers : [])
+      .map((item) => String(item)).filter((item) => isBundleLedger(item, packageId)));
+    const files = new Map();
+    for (const item of Array.isArray(witness.files) ? witness.files : []) {
+      if (!item || typeof item.relative !== "string" || !/^sha256:[a-f0-9]{64}$/u.test(String(item.digest || ""))) continue;
+      files.set(item.relative, String(item.digest));
+    }
+    witnesses.push({ ledgers, files });
+  }
+  return witnesses;
+}
+
+async function closureCheckpoint(options) {
   const snapshot = repository.repositorySnapshot(options.root || process.cwd());
   const packageId = identifier(options.packageId, "package");
   const source = globalReceiptRecord(snapshot.repoRoot, options.receipt, "plan-close").value;
   if (source.packageId !== packageId || source.head !== snapshot.headOid) {
     fail("CLOSE_PLAN_STALE", "package or HEAD changed after the close plan", 1);
+  }
+  // The same Owner bar publish carries. A closure checkpoint writes a commit for
+  // a package the Owner approved closing, so it verifies the consumed one-time
+  // approval receipt itself instead of trusting that its caller did: the
+  // executor's own state file is plain agent-writable JSON, and without this
+  // check a direct git-intent call closed a package with no approval at all.
+  if (!options.approvalReceipt) {
+    fail("OWNER_APPROVAL_REQUIRED", "closure-checkpoint requires a consumed, one-time --approval-receipt from package execution", 1);
+  }
+  let approval;
+  try { approval = readExecutionReceipt(snapshot.repoRoot, options.approvalReceipt, "owner-approval-consumption"); }
+  catch (error) { fail(error.code || "OWNER_APPROVAL_RECEIPT", error.message, error.exitCode || 2); }
+  const approvedPlan = path.resolve(snapshot.repoRoot, String(approval.value.subject?.planReceipt || ""));
+  if (approval.value.action !== "close" || approval.value.packageId !== packageId ||
+      approval.value.scope !== source.scope || approval.value.subject?.head !== source.head ||
+      !repository.samePath(approvedPlan, path.resolve(snapshot.repoRoot, options.receipt))) {
+    fail("OWNER_APPROVAL_MISMATCH", "approval receipt does not bind this exact close plan", 1);
+  }
+  // The approval binds the plan receipt's BYTES, not just its path. The plan
+  // receipt lives under .unlazy/.global-receipts/ and is plain agent-writable
+  // JSON with no digest-derived identity, so without this the file set, the
+  // per-file digests and the normalized PACKAGE.md digest this close compares
+  // against were all supplied by whoever could edit that file (measured
+  // 02.09.2026: rewriting one files[] digest made a close carrying hand-edited
+  // design/notes.md exit 0). package-executor.mjs planClose puts planDigest into
+  // the challenge subject, so the Owner's approval covers those bytes. Proven by
+  // the edited-plan-receipt probe of "two verified leaves receive one integration
+  // checkpoint, bottom-up reverify, plan completion and close" in
+  // test/package-execution.test.js.
+  const planBytes = fs.readFileSync(path.resolve(snapshot.repoRoot, options.receipt));
+  if (sha256(planBytes) !== String(approval.value.subject?.planDigest || "")) {
+    fail("OWNER_APPROVAL_MISMATCH", "close plan receipt bytes changed after the Owner approved them", 1);
   }
   const message = String(options.message || "").trim();
   if (!message || message.length > 200 || /[\r\n\0]/u.test(message)) {
@@ -776,19 +1208,69 @@ function closureCheckpoint(options) {
   if (JSON.stringify(currentFiles.map((item) => item.relative)) !== JSON.stringify(source.files.map((item) => item.relative))) {
     fail("CLOSE_WRITEBACK", "package file set changed during close", 1);
   }
-  const beforeByFile = new Map(source.files.map((item) => [item.relative, item.digest]));
-  for (const current of currentFiles) {
-    if (current.relative !== "docs/packages/" + packageId + "/PACKAGE.md" &&
-        beforeByFile.get(current.relative) !== current.digest) {
-      fail("CLOSE_WRITEBACK", "package close changed non-PACKAGE metadata: " + current.relative, 1);
+  // The package close MUST re-verify gates after the Owner approval (the
+  // vendored close always runs its gate runner), and that mandated re-execution
+  // legitimately refreshes runtime evidence: ledger checkboxes/EVIDENCE values
+  // and exactly those evidence/ artifacts a gate of this bundle declares it
+  // regenerates. Only that turnover is tolerated here; the file set stays locked
+  // above, and every contract byte (OWNER.md, ledger contract lines, undeclared
+  // evidence proof, everything else in the bundle) stays bound to the approved
+  // close plan.
+  // Two independent conditions have to agree, because a declaration alone is a
+  // permission, not a fact: the witness receipts record which paths the mandated
+  // re-verification actually rewrote (digest before the run != digest after it),
+  // and this close re-checks that each recorded digest is still the file's
+  // CURRENT digest. Without that witness the tolerance is empty, which is why a
+  // file hand-edited between the approved close plan and the run -- an Owner
+  // proof no oracle ever writes -- is refused even inside a bundle whose
+  // declaration would cover it.
+  // The ledgers are read from the working tree here on purpose: a widened WRITES
+  // or OWNS line survives normalizedLedger, so it changes the ledger's own
+  // normalized digest, and the loop below refuses that ledger (ledgers never sit
+  // under evidence/ and are therefore never tolerable). Proven by "two verified
+  // leaves receive one integration checkpoint, bottom-up reverify, plan
+  // completion and close" in test/package-execution.test.js, which rewrites a
+  // gate title after the approved close plan.
+  // The BEFORE state of every path the anchor commit carries comes from that
+  // commit (source.head is asserted to be HEAD above), not from the plan
+  // receipt: the receipt is agent-writable, the commit is not. The receipt stays
+  // the before state only for a path the anchor does not carry -- an artifact the
+  // mandated re-verification created after the checkpoint -- and its bytes are
+  // bound to the Owner approval by the planDigest check above.
+  const anchor = anchorBundleState(snapshot.repoRoot, packageId, source.head);
+  const beforeByFile = new Map(source.files.map((item) => [item.relative, item]));
+  const witnesses = writebackWitnesses(snapshot.repoRoot, packageId, source, options.receipt,
+    options.writebackReceipts);
+  const currentDigests = new Map(currentFiles.map((item) => [item.relative, item.digest]));
+  for (const witness of witnesses) {
+    for (const [relative, digest] of [...witness.files]) {
+      if (currentDigests.get(relative) !== digest) witness.files.delete(relative);
     }
+  }
+  const declared = oracleWritebackDeclarations(await loadGateParser(snapshot.repoRoot, options.unlazyRoot),
+    packageId, bundleLedgers(snapshot.repoRoot, packageId), currentFiles.map((item) => item.relative));
+  const oracleWriteback = toleratedWriteback(declared, witnesses);
+  for (const current of currentFiles) {
+    if (current.relative === "docs/packages/" + packageId + "/PACKAGE.md") continue;
+    if (anchor.carried.has(current.relative)) {
+      if (!anchor.changed.has(current.relative)) continue;
+      const anchorNormalized = anchor.normalized.get(current.relative);
+      if (anchorNormalized && current.normalizedDigest && anchorNormalized === current.normalizedDigest) continue;
+    } else {
+      const before = beforeByFile.get(current.relative);
+      if (before.digest === current.digest) continue;
+      if (before.normalizedDigest && current.normalizedDigest &&
+          before.normalizedDigest === current.normalizedDigest) continue;
+    }
+    if (oracleWriteback.has(current.relative)) continue;
+    fail("CLOSE_WRITEBACK", "package close changed non-PACKAGE metadata: " + current.relative, 1);
   }
   const contractIds = [...packageText.matchAll(/^- (C\d+) -> /gmu)].map((match) => match[1]);
   const owner = ownerContract.inspectOwnerContract(snapshot.repoRoot, packageDir, packageId, contractIds);
   if (!owner.complete || owner.digest !== source.ownerDigest || owner.requestDigest !== source.ownerRequestDigest) {
     fail("CLOSE_OWNER", "Owner contract changed during close", 1);
   }
-  for (const item of currentFiles.filter((entry) => /(?:^|\/)GATES\.md$|\/gates\/[^/]+\.md$/u.test(entry.relative))) {
+  for (const item of currentFiles.filter((entry) => isBundleLedger(entry.relative, packageId))) {
     const ledger = fs.readFileSync(path.join(snapshot.repoRoot, item.relative), "utf8");
     if (/^- \[ \]/mu.test(ledger) || /^\s*EVIDENCE:\s*pending\s*$/imu.test(ledger) || /^ABANDON:/imu.test(ledger)) {
       fail("CLOSE_GATES", "closed package contains an unmet or abandoned gate: " + item.relative, 1);
@@ -805,16 +1287,31 @@ function closureCheckpoint(options) {
   if (!paths.length || paths.some((item) => !item.startsWith(prefix))) {
     fail("CLOSE_NOTHING", "closure checkpoint found no exact package metadata change", 1);
   }
+  // Hook-free, exactly like the integration checkpoint: `git commit` would run
+  // the repository's commit hooks, and a hook can stage and commit files far
+  // outside the approved closure path set. write-tree/diff-tree/commit-tree/
+  // update-ref writes the same commit without ever handing control to a hook,
+  // and the diff-tree assertion binds the committed tree to those exact paths.
   commandResult(git(snapshot.repoRoot, ["add", "--", ...paths]), "closure-stage");
-  const committed = git(snapshot.repoRoot, ["commit", "-m", message, "--", ...paths], { timeoutMs: 120_000 });
-  if (committed.status !== 0) {
+  let commit;
+  try {
+    const tree = commandResult(git(snapshot.repoRoot, ["write-tree"]), "closure-tree").trim();
+    const changed = parseZeroList(commandResult(git(snapshot.repoRoot,
+      integrationTreePathArgs(tree, snapshot.headOid)), "closure-tree"));
+    if (!samePathSet(changed, paths)) {
+      fail("CLOSE_PATHS_CHANGED", "closure tree contains paths outside the exact package metadata set", 1);
+    }
+    commit = commandResult(git(snapshot.repoRoot,
+      integrationCommitTreeArgs(tree, snapshot.headOid, message), { timeoutMs: 120_000 }), "closure-commit").trim();
+    commandResult(git(snapshot.repoRoot, integrationUpdateRefArgs(commit, snapshot.headOid)), "closure-head");
+  } catch (error) {
     git(snapshot.repoRoot, ["reset", "--", ...paths]);
-    commandResult(committed, "closure-commit");
+    throw error;
   }
-  const commit = commandResult(git(snapshot.repoRoot, ["rev-parse", "--verify", "HEAD"]), "closure-head").trim();
   const receipt = writeGlobalReceipt(snapshot.repoRoot, { operation: "closure-checkpoint", packageId,
     scope: source.scope,
-    headBefore: source.head, head: commit, commit, paths, planReceipt: options.receipt });
+    headBefore: source.head, head: commit, commit, paths, planReceipt: options.receipt,
+    approvalReceipt: approval.file, approvalDigest: approval.value.approvalDigest });
   return { operation: "closure-checkpoint", packageId, commit, paths, receipt };
 }
 
@@ -936,7 +1433,7 @@ export const CANONICAL_INTENTS = Object.freeze([
   { name: "plan-close", mutates: true,
     syntax: "plan-close --root <repo> --package <packageId> --scope <scope>" },
   { name: "closure-checkpoint", mutates: true,
-    syntax: "closure-checkpoint --root <repo> --package <packageId> --receipt <closePlanReceipt> --message <message>" },
+    syntax: "closure-checkpoint --root <repo> --package <packageId> --receipt <closePlanReceipt> --approval-receipt <consumedApprovalReceipt> --message <message> [--unlazy-root <dir>] [--writeback-receipt <witnessReceipt> ...]" },
   { name: "plan-publish", mutates: true,
     syntax: "plan-publish --root <repo> (--session <sessionId> | --receipt <closureReceipt>)" },
   { name: "publish", mutates: true,

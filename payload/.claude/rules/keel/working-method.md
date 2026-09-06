@@ -41,3 +41,11 @@ Owner-freigegebener Publish haben je genau einen getesteten Intent.
 
 UI-Verifikation braucht einen echten Browser-Screenshot gegen den vereinbarten
 Maßstab. DOM-Text allein erfüllt kein visuelles Gate.
+
+Portabilität wird beim Schreiben entschieden, nicht nachträglich: Windows ist
+die erste Zielplattform, deshalb setzt jeder neue Code Pfade über `path.join`
+statt über zusammengesetzte Strings zusammen, führt plattformabhängiges
+Verhalten über eine ausdrückliche `process.platform`-Weiche und verwendet
+POSIX-Dateimodi nur hinter genau dieser Weiche. Der Nachweis auf macOS ist
+nachgelagert und gehört in das Paket `new-harness-portability`; bis er vorliegt,
+behauptet kein Kommentar und kein Bericht eine dort ungemessene Plattform.

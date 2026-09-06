@@ -29,15 +29,26 @@ async function freePort() {
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+// Bereitschaft und Antwortdauer sind zwei Budgets. Eine einzelne Antwort darf
+// so lange brauchen wie das restliche Bereitschaftsfenster: /api/state misst das
+// gesamte Repository und antwortet gemessen (02.09.2026, dieser Rechner) in
+// 6,5-7,2 s. Ein kuerzeres Abbruchlimit pro Versuch verwirft genau diese
+// erfolgreiche Antwort und laesst die Pruefung nie gruen werden.
+const READY_BUDGET_MS = 60_000;
+// Statische Assets kommen von der Platte und antworten in Millisekunden; ihr
+// Limit bleibt eng, damit ein haengender Server nicht Asset fuer Asset das
+// Phasenbudget aufbraucht.
+const ASSET_TIMEOUT_MS = 10_000;
+
 async function readyResponse(url, child, diagnostics) {
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + READY_BUDGET_MS;
   let lastError = null;
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
       throw new Error(`Dashboard-Runtime endete vor dem Healthcheck mit ${child.exitCode}: ${diagnostics()}`);
     }
     try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(2_000) });
+      const response = await fetch(url, { signal: AbortSignal.timeout(Math.max(1_000, deadline - Date.now())) });
       if (response.ok) return response;
       lastError = new Error(`${url} antwortete mit HTTP ${response.status}`);
     } catch (error) {
@@ -57,7 +68,7 @@ async function assertStaticAssets(origin, html, diagnostics) {
   assert.ok(references.some((reference) => reference.endsWith(".css")), "Dashboard HTML references no CSS asset");
   assert.ok(references.some((reference) => reference.endsWith(".js")), "Dashboard HTML references no JavaScript asset");
   for (const reference of references) {
-    const response = await fetch(`${origin}${reference}`, { signal: AbortSignal.timeout(2_000) });
+    const response = await fetch(`${origin}${reference}`, { signal: AbortSignal.timeout(ASSET_TIMEOUT_MS) });
     assert.equal(response.status, 200, `Dashboard asset ${reference} returned HTTP ${response.status}: ${diagnostics()}`);
   }
   return references.length;
