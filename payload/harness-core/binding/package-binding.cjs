@@ -55,14 +55,11 @@ function bundle(repoRoot, packageId) {
   return { packageDir, packageFile, packageText, gatesFile, owner };
 }
 
-function leafLedger(packageDir, leaf) {
-  const name = String(leaf || "").replace(/^gates\//u, "").replace(/\.md$/u, "");
-  if (!/^leaf-[A-Za-z0-9][A-Za-z0-9._-]{0,58}$/u.test(name)) {
-    bindingError("leaf must name one gates/leaf-*.md ledger");
-  }
-  const ledger = path.join(packageDir, "gates", name + ".md");
-  const text = readRegular(ledger, "leaf ledger");
-  const ownsLines = [...text.matchAll(/^OWNS:\s*(.+)$/gmu)].map((match) => match[1].trim());
+// The single place that turns a leaf ledger's OWNS line into write authority.
+// It takes TEXT, not a path, so a caller that must read the ledger from a bound
+// Git object instead of the working tree still gets the identical rules.
+function leafOwnsFromText(text) {
+  const ownsLines = [...String(text).matchAll(/^OWNS:\s*(.+)$/gmu)].map((match) => match[1].trim());
   if (ownsLines.length !== 1) bindingError("leaf ledger must declare exactly one OWNS line");
   const owns = ownsLines[0].split(",").map((item) => item.trim()).filter(Boolean);
   if (!owns.length) bindingError("leaf OWNS declaration is empty");
@@ -72,7 +69,17 @@ function leafLedger(packageDir, leaf) {
       bindingError("unsafe OWNS pattern: " + pattern);
     }
   }
-  return { leaf: name, ledger, text, owns };
+  return owns;
+}
+
+function leafLedger(packageDir, leaf) {
+  const name = String(leaf || "").replace(/^gates\//u, "").replace(/\.md$/u, "");
+  if (!/^leaf-[A-Za-z0-9][A-Za-z0-9._-]{0,58}$/u.test(name)) {
+    bindingError("leaf must name one gates/leaf-*.md ledger");
+  }
+  const ledger = path.join(packageDir, "gates", name + ".md");
+  const text = readRegular(ledger, "leaf ledger");
+  return { leaf: name, ledger, text, owns: leafOwnsFromText(text) };
 }
 
 function activePackage(repoRoot, scope) {
@@ -304,6 +311,8 @@ module.exports = {
   createBinding,
   findSessionBinding,
   globRegex,
+  leafLedger,
+  leafOwnsFromText,
   sessionIndexPath,
   validateBinding,
 };

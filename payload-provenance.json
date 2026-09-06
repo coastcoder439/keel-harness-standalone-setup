@@ -3,10 +3,10 @@
   "source": {
     "repository": "harness-lab",
     "standalonePath": "test-harness/standalone",
-    "commit": "deff2ccafd3257929c110614f22b29ccc0a1b399",
-    "workingTreeDirtyFiles": 17,
+    "commit": "7df8bcaaf7a69a7b5cc6bb7c9d896113f2f9700a",
+    "workingTreeDirtyFiles": 8,
     "standaloneSubtreeDirtyFiles": 0,
-    "freshStandaloneBuild": false
+    "freshStandaloneBuild": true
   },
   "product": {
     "id": "keel-harness",
@@ -14,9 +14,9 @@
     "version": "1.1.0"
   },
   "payload": {
-    "fileCount": 169,
-    "treeSha256": "5df18a5d42b4e7eccdf2dd47f9bef3937de4f7854d34dc5303b23783034cfdaa"
+    "fileCount": 170,
+    "treeSha256": "c3567c152a08d02b02908e657db58cde8c6186b1c9c1871d5c00201e132006f9"
   },
-  "manifestSha256": "fdfe3b9ab315ec5522463ca20df54d94c0a39b6c4212e76598f8083a1b2a8946",
-  "builtAt": "2026-09-02T00:50:27.686Z"
+  "manifestSha256": "01d7a07607112b28c1c4665182c0674743bb2da6ac8fe235e119aa61026e4c56",
+  "builtAt": "2026-09-06T14:06:58.749Z"
 }

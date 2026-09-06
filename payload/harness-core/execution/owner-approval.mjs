@@ -88,6 +88,29 @@ function writeReceipt(repoRoot, value) {
   return { file, value: record };
 }
 
+// SELF-CONSISTENCY, NOT IDENTITY -- the limit of what a receipt can prove.
+//
+// This function verifies exactly three things: the file is one direct, regular
+// entry of the repository receipt directory (no symlink, no hardlink, no file
+// smuggled in from elsewhere), its bytes still hash to the recordDigest they
+// carry, and that digest still derives the path the file actually occupies. An
+// EXISTING receipt therefore cannot be edited, renamed or swapped unnoticed,
+// and atomicImmutableJson refuses to rewrite one with different bytes.
+//
+// It proves nothing about WHO wrote the receipt. `.unlazy/` is agent-writable
+// (welle-2c-design.md, threat model): whoever can write that directory can mint
+// a fresh receipt whose digest and path are correct by construction -- the
+// fixture `closeAuthorization` in test/endgoal-e2e.test.js does exactly that
+// with plain fs writes, and it is accepted. A receipt is thus a PROCESS control
+// over the executor's own steps, not a cryptographic anchor.
+//
+// The anchors are the other two named in that model: `origin/main`, reachable
+// only through an Owner-released publish, and Git objects at an anchor commit
+// (`origin/main` or the `headBefore` bound in the receipt). The external Owner
+// approval artifact is likewise a process control on the same OS user, hardened
+// by file ACLs -- not cryptography and not proof of a person. Consequence for
+// callers: a check that could read its before-state from an anchor must do so;
+// a receipt is only ever the sanctioned chain BETWEEN two anchor reads.
 export function readExecutionReceipt(repoRoot, file, operation = null) {
   const directory = executionReceiptDirectory(repoRoot);
   const candidate = path.resolve(file || "");
@@ -114,6 +137,35 @@ export function readExecutionReceipt(repoRoot, file, operation = null) {
 
 function subjectDigest(subject) {
   return sha256(JSON.stringify(canonical(subject)));
+}
+
+// One gate-runner invocation the executor started itself, recorded as an
+// execution receipt so that git-intent can verify the witness of a closure
+// writeback instead of accepting a path list on its command line.
+// `ledgers` are the bundle ledgers that invocation covered (an exact --leaf run
+// covers one, a bundle run covers all of them) and `files` are the bundle paths
+// whose bytes it rewrote, each with the digest it left behind. git-intent
+// re-checks those digests against the working tree, so a file changed again
+// after the run loses its witness. Proven by the CLOSE_WRITEBACK probes of "two
+// verified leaves receive one integration checkpoint, bottom-up reverify, plan
+// completion and close" in test/package-execution.test.js.
+export function writeWritebackWitness(options) {
+  const files = [...(options.files || [])]
+    .map((item) => ({ relative: String(item.relative), digest: String(item.digest) }))
+    .sort((left, right) => left.relative.localeCompare(right.relative, "en"));
+  const ledgers = [...new Set((options.ledgers || []).map((item) => String(item)))]
+    .sort((left, right) => left.localeCompare(right, "en"));
+  const receipt = writeReceipt(options.repoRoot, {
+    operation: "oracle-writeback-witness",
+    packageId: String(options.packageId || ""),
+    scope: String(options.scope || ""),
+    planReceipt: String(options.planReceipt || ""),
+    head: String(options.head || ""),
+    ledgers,
+    files,
+    recordedAt: options.recordedAt || new Date().toISOString(),
+  });
+  return { receipt: receipt.file, value: receipt.value };
 }
 
 export function createApprovalChallenge(options) {
