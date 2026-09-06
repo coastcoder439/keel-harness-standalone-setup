@@ -1,5 +1,5 @@
 {
-  "name": "keel-harness-v2-setup",
+  "name": "keel-harness-standalone-setup",
   "version": "0.0.0",
   "private": true,
   "description": "Setup-Bausatz des Keel Harness (Version 2). Keine Abhaengigkeiten -- nur Node-Bordmittel und Git.",

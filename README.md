@@ -1,4 +1,4 @@
-# keel-harness-v2-setup
+# keel-harness-standalone-setup
 
 Dies ist der **Setup-Bausatz des neuen Keel Harness**: eine projektlokale
 Ausstattung für Claude Code und Codex — Wächter-Hooks, paketgebundene Arbeitsweise
@@ -9,7 +9,7 @@ kein Dienst: ein Bausatz, von außen angewendet, danach entbehrlich.
 ## Für dich als Mensch: so geht es
 
 1. Öffne Claude Code. In welchem Ordner, ist egal.
-2. Gib dem Agenten diesen Link: `https://github.com/coastcoder439/keel-harness-v2-setup`
+2. Gib dem Agenten diesen Link: `https://github.com/coastcoder439/keel-harness-standalone-setup`
    und schreib dazu: **„Installiere diesen Harness."**
 3. Der Agent fragt dich, wie dein Harness-Ordner heißen und wo er liegen soll. Alles
    Weitere macht er selbst und meldet sich nur, wenn etwas im Weg liegt.
@@ -42,7 +42,7 @@ entscheidest und erledigst du selbst.
    Beispiel ins Temp-Verzeichnis des Systems, nie in `<HARNESS>` und nie als ähnlich
    benannter Nachbarordner:
    ```
-   git clone https://github.com/coastcoder439/keel-harness-v2-setup.git <ARBEIT>
+   git clone https://github.com/coastcoder439/keel-harness-standalone-setup.git <ARBEIT>
    ```
 
 3. **Prüfe still, ob etwas im Weg liegt.** Der Installer nimmt nur die **Wurzel eines
