@@ -6,6 +6,15 @@ import { fileURLToPath } from "node:url";
 import { runBounded } from "./bounded-runner.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+
+// Die Anleitung verlangt Node >= 20; ohne diesen Guard stirbt eine fremde
+// Installation auf altem Node erst tief in einer Teilpruefung, unverstaendlich.
+const nodeMajor = Number(process.versions.node.split(".")[0]);
+if (!(nodeMajor >= 20)) {
+  process.stderr.write("NODE_TOO_OLD running=" + process.version + " required=>=20\n");
+  process.exit(1);
+}
+
 const phases = [
   { name: "installed contract", command: process.execPath,
     args: [path.join(root, "checks", "installed-harness.mjs")], timeoutMs: 60_000 },

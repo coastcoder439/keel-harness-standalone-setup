@@ -8,5 +8,8 @@
     "test:dashboard:runtime": "node dashboard/runtime-check.mjs",
     "test:unlazy": "npm test --prefix vendor/unlazy",
     "dashboard": "node dashboard/serve.mjs"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
