@@ -300,12 +300,12 @@ woraus die Payload in deinen Händen entstanden ist.
 |---|---|
 | Produkt und Version | `keel-harness` 1.1.0 |
 | Payload-Posten | 170 |
-| Baum-Fingerabdruck | `c3567c152a08d02b...` |
+| Baum-Fingerabdruck | `e8401b9a79ccf502...` |
 | Quelle | `harness-lab`, Unterbaum `test-harness/standalone` |
-| Quell-Commit | `7df8bcaaf7a69a7b5cc6bb7c9d896113f2f9700a` |
+| Quell-Commit | `9d10bfa42e45cba77de650fb1266228584352504` |
 | Standalone frisch gebaut | ja |
-| Ungesicherte Dateien der Quelle beim Bau | Arbeitsbaum 8, `test-harness/standalone` 0 |
-| Erzeugt am | 2026-09-06T14:06:58.749Z |
+| Ungesicherte Dateien der Quelle beim Bau | Arbeitsbaum 0, `test-harness/standalone` 0 |
+| Erzeugt am | 2026-09-06T14:43:44.948Z |
 <!-- /ERZEUGT:stand-der-auslieferung -->
 
 ---

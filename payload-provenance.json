@@ -3,8 +3,8 @@
   "source": {
     "repository": "harness-lab",
     "standalonePath": "test-harness/standalone",
-    "commit": "7df8bcaaf7a69a7b5cc6bb7c9d896113f2f9700a",
-    "workingTreeDirtyFiles": 8,
+    "commit": "9d10bfa42e45cba77de650fb1266228584352504",
+    "workingTreeDirtyFiles": 0,
     "standaloneSubtreeDirtyFiles": 0,
     "freshStandaloneBuild": true
   },
@@ -15,8 +15,8 @@
   },
   "payload": {
     "fileCount": 170,
-    "treeSha256": "c3567c152a08d02b02908e657db58cde8c6186b1c9c1871d5c00201e132006f9"
+    "treeSha256": "e8401b9a79ccf502374488b156f70cc3f67d85d0ff08d6caf51ed623dd6b0907"
   },
-  "manifestSha256": "01d7a07607112b28c1c4665182c0674743bb2da6ac8fe235e119aa61026e4c56",
-  "builtAt": "2026-09-06T14:06:58.749Z"
+  "manifestSha256": "0681b392f1c8d4eda6b01f3dcdaffb04befe09cabeafdd3e38a651e42b38f05a",
+  "builtAt": "2026-09-06T14:43:44.948Z"
 }
