@@ -18,3 +18,5 @@ description: Schließt ein vollständig integriertes Paket nach erneuter Root-Re
 5. Gib Close-, Recovery- und Closure-Receipt aus. Sie erlauben noch keinen Push;
    ein unterbrochener Closure-Checkpoint darf nur mit `recover-close --receipt
    <CLOSE_RECEIPT>` fortgesetzt werden.
+
+Hinweis: Die JSON-Ausgabe des Plans enthaelt unter `ownerApproval` das ausgefuellte Artefakt-Template (Schema, challengeDigest, Paket, Scope, Zeitfenster), den Befehl zur Nonce-Erzeugung, den Ablageort-Vorschlag ausserhalb des Repos, unter Windows den ACL-Haertungsbefehl und den exakten Folgebefehl. Der Owner fuellt nur die Nonce ein und speichert die Datei ausserhalb des Repos.

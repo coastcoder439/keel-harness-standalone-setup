@@ -27,6 +27,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import process from "node:process";
 import { assertNodeVersion } from "./node-version.mjs";
+import { spawnSync } from "node:child_process";
 
 assertNodeVersion("checks/payload-provenance.mjs");
 
@@ -84,6 +85,23 @@ for (const eintrag of ERZEUGT) {
 const manifestBytes = readFileSync(join(repoRoot, "manifest.json"));
 const manifest = JSON.parse(manifestBytes.toString("utf8"));
 const provenance = JSON.parse(readFileSync(join(repoRoot, "payload-provenance.json"), "utf8"));
+
+// Versions-Schranke (Audit B9): eine geaenderte Auslieferung ohne Versionssprung ist kein
+// Release (UPDATE.md verspricht monotonic-semver). Vergleich gegen den zuletzt versionierten
+// Stand dieses Repos (HEAD:payload-provenance.json); ohne Historie entfaellt die Pruefung.
+let vorherigeHerkunft = null;
+try {
+  const gezeigt = spawnSync("git", ["-C", repoRoot, "show", "HEAD:payload-provenance.json"], { encoding: "utf8", windowsHide: true });
+  if (gezeigt.status === 0 && String(gezeigt.stdout).trim()) vorherigeHerkunft = JSON.parse(gezeigt.stdout);
+} catch { vorherigeHerkunft = null; }
+if (vorherigeHerkunft && vorherigeHerkunft.payload && vorherigeHerkunft.product) {
+  const baumGeaendert = vorherigeHerkunft.payload.treeSha256 !== provenance.payload.treeSha256;
+  const versionGleich = vorherigeHerkunft.product.version === provenance.product.version;
+  ausliefern("versions-sprung", !(baumGeaendert && versionGleich),
+    "Payload-Baum geaendert (" + String(vorherigeHerkunft.payload.treeSha256).slice(0, 12) + " -> " +
+    String(provenance.payload.treeSha256).slice(0, 12) + "), Version " + provenance.product.version +
+    " aber unveraendert -- PRODUCT.version im Quell-Generator anheben");
+}
 const manifestSha256 = createHash("sha256").update(manifestBytes).digest("hex");
 
 // Der Payload-Bestand wird mit der MITGELIEFERTEN Bibliothek gelesen, nicht mit
