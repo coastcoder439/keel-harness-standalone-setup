@@ -14,3 +14,5 @@ description: Plant einen sicheren Publish nach Close und verbraucht dafür eine 
    `node <HARNESS_ROOT>/harness-core/execution/package-executor.mjs publish --harness-root <HARNESS_ROOT> --root <REPO> --package <ID> --scope <SCOPE> --challenge <CHALLENGE_RECEIPT> --approval-file <EXTERNES_ARTEFAKT> --json`
    aus. Bei jeder Änderung an HEAD, Branch oder Remote neu planen. Kein
    `--owner-approved` und kein roher Git-Push.
+
+Hinweis: Die JSON-Ausgabe des Plans enthaelt unter `ownerApproval` das ausgefuellte Artefakt-Template (Schema, challengeDigest, Paket, Scope, Zeitfenster), den Befehl zur Nonce-Erzeugung, den Ablageort-Vorschlag ausserhalb des Repos, unter Windows den ACL-Haertungsbefehl und den exakten Folgebefehl. Der Owner fuellt nur die Nonce ein und speichert die Datei ausserhalb des Repos.

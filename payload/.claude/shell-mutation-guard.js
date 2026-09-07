@@ -33,15 +33,22 @@ const VERIFIER_PATHS = new Set([
   "checks/distribution-lifecycle.mjs",
   "checks/evidence-integrity.mjs",
   "checks/execution-lifecycle.mjs",
+  "checks/external-boundary.mjs",
   "checks/governance-hardening.mjs",
   "checks/installed-harness.mjs",
   "checks/integration-contract.mjs",
+  "checks/lifecycle-gate-evidence.mjs",
   "checks/mutation-boundary.mjs",
+  "checks/no-google-identity.mjs",
   "checks/onboarding-ready.mjs",
+  "checks/package-runtime-audit.mjs",
   "checks/reference-boundary.mjs",
+  "checks/refresh-inventory.mjs",
   "checks/requirements-audit.mjs",
   "checks/run-all.mjs",
   "checks/test-matrix.mjs",
+  "standalone/checks/dashboard-list.mjs",
+  "standalone/checks/fresh-install.mjs",
   "standalone/checks/manifest-check.mjs",
   "standalone/checks/run-all.mjs",
   "vendor/unlazy/scripts/dispatch-check.mjs",
@@ -50,20 +57,52 @@ const VERIFIER_PATHS = new Set([
 ]);
 
 const TEST_PATHS = new Set([
+  "test/bounded-runner-hardening.test.js",
   "test/bounded-runner.test.js",
+  "test/claude-fanout-e2e.test.js",
   "test/codex-hooks.test.js",
+  "test/codex-plugin-e2e.test.js",
   "test/codex-plugin-integration.test.js",
+  "test/dashboard-runtime-archive.test.js",
+  "test/distribution-lifecycle.test.js",
   "test/endgoal-e2e.test.js",
+  "test/evidence-integrity.test.js",
+  "test/external-boundary.test.js",
   "test/final-audits.test.js",
   "test/full-harness-contract.test.js",
+  "test/git-intent-empty-repository.test.js",
   "test/git-intent-hardening.test.js",
   "test/git-intent.test.js",
+  "test/governance-hardening.test.js",
   "test/guard-lifecycle.test.js",
+  "test/installed-run-all-counts.test.js",
+  "test/inventory-refresh.test.js",
+  "test/lifecycle-gate-evidence.test.js",
+  "test/no-google-identity.test.js",
   "test/package-bootstrap.test.js",
+  "test/package-execution-lifecycle.test.js",
   "test/package-execution.test.js",
+  "test/package-runtime-audit.test.js",
+  "test/reference-boundary.test.js",
   "test/repository-binding.test.js",
   "test/shell-mutation-boundary.test.js",
+  "test/standalone-build-transaction.test.js",
   "test/windows-launchers.test.js",
+]);
+
+// Bibliotheken unter checks/: keine Einstiegspunkte, deshalb nicht ausfuehrbar und nicht in
+// VERIFIER_PATHS -- aber ausdruecklich benannt, damit der Pflegetest jeden Pfad unter checks/,
+// standalone/checks/ und test/ entweder hier oder dort findet (Audit B8).
+const LIBRARY_PATHS = new Set([
+  "checks/audit-lib.mjs",
+  "checks/bounded-runner.mjs",
+]);
+
+// Langlaufende, empfaengerseitige Dienste: der einzige Dashboard-Startweg des Vertrags.
+// Ohne diese Deklaration war `node dashboard/serve.mjs` fuer jeden Agenten gesperrt
+// (Audit H5). Erlaubt ist ausschliesslich die Form `node dashboard/serve.mjs [--port <n>]`.
+const SERVICE_PATHS = new Set([
+  "dashboard/serve.mjs",
 ]);
 
 const CANONICAL_MUTATION_PATHS = new Set([
@@ -207,6 +246,14 @@ function classifyNode(words, start, context) {
   if (!script) return denial("NODE_SCRIPT_REQUIRED", "Node would start an unrestricted REPL", verifierRoute(context.projectRoot));
   const verifier = declaredPath(script, context.cwd, context.projectRoot, VERIFIER_PATHS);
   if (verifier) return { allowed: true, code: "DECLARED_VERIFIER", path: verifier };
+  const service = declaredPath(script, context.cwd, context.projectRoot, SERVICE_PATHS);
+  if (service) {
+    const rest = args.slice(scriptIndex + 1);
+    const portForm = rest.length === 0 || (rest.length === 2 && rest[0] === "--port" && /^[0-9]{1,5}$/u.test(rest[1]));
+    return portForm
+      ? { allowed: true, code: "DECLARED_SERVICE", path: service }
+      : denial("SERVICE_ARGUMENTS", "the Dashboard service accepts only --port <n>", "Run: node dashboard/serve.mjs [--port <n>].");
+  }
   const mutation = declaredPath(script, context.cwd, context.projectRoot, CANONICAL_MUTATION_PATHS);
   if (mutation) return { allowed: true, code: "CANONICAL_MUTATION_TOOL", path: mutation };
   const guard = declaredPath(script, context.cwd, context.projectRoot, GUARD_SELF_TESTS);
@@ -377,6 +424,8 @@ if (require.main === module) {
 
 module.exports = {
   CANONICAL_MUTATION_PATHS,
+  LIBRARY_PATHS,
+  SERVICE_PATHS,
   TEST_PATHS,
   VERIFIER_PATHS,
   declaredPath,

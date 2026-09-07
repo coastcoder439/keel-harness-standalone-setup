@@ -10,7 +10,7 @@ import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import { pathToFileURL, fileURLToPath } from "node:url";
 import { replaceFileSync } from "./atomic-file.mjs";
 import { resolveClaudeExecutable } from "./codex-plugin-bootstrap.mjs";
 import {
@@ -1301,7 +1301,43 @@ function planClose(context, options) {
     },
   });
   return { ...planned, ...challenge, duties, locallyReverified: true, providerOutputEvidence: false,
-    next: "Owner creates one external approval artifact bound to challengeDigest; package-executor cannot create it." };
+    ownerApproval: ownerApprovalGuide(context, challenge, "close", "close"),
+    next: "Owner creates one external approval artifact bound to challengeDigest (see ownerApproval.template and ownerApproval.nextCommand); package-executor may not create it." };
+}
+
+// Der Owner erstellt das Freigabe-Artefakt ausserhalb des Repos; diese Route darf es nicht
+// erzeugen. Damit ein fremder Owner das ohne Quellcode-Studium kann, liefert jeder Plan das
+// Schema ausgefuellt mit -- samt Nonce-Befehl, Zeitfenster, Windows-ACL-Haertung und dem
+// exakten Folgebefehl (Audit B3). Die Werte stammen aus der soeben erzeugten Challenge.
+function ownerApprovalGuide(context, challenge, action, followUp) {
+  const issuedAt = new Date();
+  const expiresAt = new Date(issuedAt.getTime() + 60 * 60_000);
+  const executorFile = path.resolve(process.argv[1] || "package-executor.mjs");
+  const location = process.platform === "win32"
+    ? `%LOCALAPPDATA%\\KeelHarness\\approvals\\${context.packageId}-${action}.json`
+    : `$HOME/.keel-harness/approvals/${context.packageId}-${action}.json`;
+  return {
+    rule: "Only the human Owner writes this file, outside the repository and readable only by the Owner; the agent route never creates it and no boolean flag is accepted.",
+    template: {
+      schemaVersion: 1,
+      kind: "keel-owner-approval",
+      owner: "Owner",
+      action,
+      packageId: context.packageId,
+      scope: context.scope,
+      challengeDigest: challenge.challengeDigest,
+      nonce: "<43-128 URL-safe characters, single use: run nonceCommand>",
+      issuedAt: issuedAt.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+    },
+    nonceCommand: "node -e \"process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))\"",
+    expiryRule: "issuedAt at most 5 minutes in the future; expiresAt after now and at most 24 hours after issuedAt; the nonce is consumed once",
+    suggestedLocation: location,
+    windowsHardenCommand: process.platform === "win32"
+      ? `node -e "import('${pathToFileURL(path.join(context.unlazyRoot, "scripts", "lib", "windows-acl.mjs")).href}').then((m) => m.hardenWindowsPrivateDirectory(process.argv[1]))" "<directory of the approval file>"`
+      : null,
+    nextCommand: `node "${executorFile}" ${followUp} --harness-root "${context.harnessRoot}" --root "${context.repoRoot}" --package ${context.packageId} --scope ${context.scope} --challenge "${challenge.challenge}" --approval-file "<EXTERNAL_PATH>" --json`,
+  };
 }
 
 // Every bundle ledger of this package as its repo-relative path. A bundle-wide
@@ -1442,7 +1478,8 @@ function planPublish(context, options) {
       branch: planned.branch, remote: planned.remote },
   });
   return { ...planned, ...challenge,
-    next: "Owner creates one external approval artifact bound to challengeDigest; no boolean approval is accepted." };
+    ownerApproval: ownerApprovalGuide(context, challenge, "publish", "publish"),
+    next: "Owner creates one external approval artifact bound to challengeDigest (see ownerApproval.template and ownerApproval.nextCommand); no boolean approval is accepted." };
 }
 
 async function publish(context, options) {
