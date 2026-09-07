@@ -8,7 +8,7 @@ import path from "node:path";
 import process from "node:process";
 import { pathToFileURL } from "node:url";
 
-const ACTIONS = new Set(["close", "publish", "waive-duty"]);
+const ACTIONS = new Set(["close", "publish", "waive-duty", "accept"]);
 const DIGEST = /^sha256:[a-f0-9]{64}$/u;
 const NONCE = /^[A-Za-z0-9_-]{43,128}$/u;
 
@@ -302,4 +302,27 @@ export function writeConsequentialReceipt(options) {
     completedAt: new Date().toISOString(),
   });
   return { receipt: receipt.file, value: receipt.value };
+}
+
+// Immutable records outside the receipt directory (audit 06.09.2026, B23 and B21): the close
+// mirror inside the package bundle and the recorded Owner acceptance carry the same
+// self-identifying shape as execution receipts, so any reader proves their bytes from the record
+// itself instead of trusting their location.
+export function immutableRecord(value) {
+  return recordValue(value);
+}
+
+export function writeImmutableRecordFile(file, value) {
+  return atomicImmutableJson(file, recordValue(value));
+}
+
+export function validateImmutableRecord(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) || value.schemaVersion !== 1) {
+    throw approvalError("RECEIPT_IDENTITY", "immutable record has the wrong schema");
+  }
+  const { recordDigest, ...body } = value;
+  if (!DIGEST.test(String(recordDigest || "")) || sha256(JSON.stringify(canonical(body))) !== recordDigest) {
+    throw approvalError("RECEIPT_DIGEST", "immutable record bytes do not match their identity");
+  }
+  return value;
 }

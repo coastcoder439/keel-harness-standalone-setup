@@ -109,8 +109,9 @@ Aktiv verdrahtet sind:
   Scope-Verschmutzung; das Produkt liefert keine vorgegebenen Sessions aus.
 - UserPromptSubmit: knappe Antwortform und bereits gebundene Paketidentität.
 - PreToolUse: git-intent-guard, endliche shell-mutation-guard-Schnittstelle,
-  nicht-Git-danger-guard, write-guard, exakte Leaf-paket-gate-Bindung und
-  Sessionpost-Regel.
+  nicht-Git-danger-guard, write-guard, exakte Leaf-paket-gate-Bindung,
+  Sessionpost-Regel und MCP-Schreibgrenze (mcp-write-guard; Owner-Erweiterungen
+  und MCP-Allowlist in .claude/mutation-policy.json).
 - Stop: vollständiger Unlazy-Gate-/Dispatch-Schutz, Berichtsformat durch
   dod-guard und lokaler Backup-Hinweis.
 - Statusline: tatsächliches Repo, Branch und Sicherungszustand.
