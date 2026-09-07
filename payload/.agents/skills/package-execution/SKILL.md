@@ -32,7 +32,7 @@ Jeder Aufruf nennt `--harness-root <HARNESS_ROOT>` und `--root <ECHTES_GIT_REPO>
   <SESSION> --json` liest ausschließlich den dauerhaft gebundenen Lauf.
 - Provider-Ausgabe ist nie Evidence. Nur lokale Gate-Reverify darf ein Leaf zurückgeben; `integrate --approve-checks` prüft zuerst Node und Root bottom-up, leitet daraus die Planhaken ab und erzeugt danach genau einen gemeinsamen Checkpoint. Ein erneuter `integrate` führt dieselbe Reverify erneut aus und liefert denselben Checkpoint statt eines zweiten -- er ist idempotent, aber nicht billig. `close` reverifiziert erneut.
 - Git-Mutationen laufen ausschließlich über `harness-core/git/git-intent.mjs`.
-- Leaf-Agenten committen nicht mitten in einer parallelen Welle. Sichere Rücknahme nutzt ausschließlich die Receipt-basierten Git-Intents.
+- Leaf-Agenten committen nicht mitten in einer parallelen Welle (der git-intent checkpoint verweigert WAVE_IN_PROGRESS, solange die Welle offen oder versiegelt ist). Sichere Rücknahme nutzt ausschließlich die Receipt-basierten Git-Intents.
 - Follow-up-Duties sind strukturiert: erst `duty-assess --gate <LEDGER:GATE>`;
   bekannte Arbeit mit `duty-add --duty <ID> --owner "<OWNER>" --trigger
   "<TRIGGER>" --due-state open|due --gate <LEDGER:GATE>` und später

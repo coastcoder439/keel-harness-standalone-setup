@@ -7,6 +7,7 @@ import {
   DistributionError, distributionStatus, doctorDistribution, installDistribution,
   rollbackDistribution, uninstallDistribution,
 } from "./lib/distribution-lifecycle.mjs";
+import { purgeAccountabilityData } from "./lib/accountability-data.mjs";
 
 const distributionRoot = dirname(fileURLToPath(import.meta.url));
 const commands = new Set(["install", "uninstall", "rollback", "status", "doctor"]);
@@ -15,7 +16,7 @@ function usage(message) {
   if (message) console.error("keel harness installer: " + message);
   console.error(`usage:
   node install.mjs [install] --target DIR [--dry-run] [--force] [--upgrade] [--install-codex-plugin] [--claude FILE] [--json]
-  node install.mjs uninstall --target DIR [--dry-run] [--force] [--claude FILE] [--json]
+  node install.mjs uninstall --target DIR [--dry-run] [--force] [--purge-accountability-data] [--claude FILE] [--json]
   node install.mjs rollback --target DIR [--json]
   node install.mjs status --target DIR [--json]
   node install.mjs doctor --target DIR [--json]`);
@@ -37,6 +38,7 @@ function parse(argv) {
       options[option === "--target" ? "target" : "claude"] = value;
     } else if (option === "--dry-run") options.dryRun = true;
     else if (option === "--force") options.force = true;
+    else if (option === "--purge-accountability-data") options.purgeAccountabilityData = true;
     else if (option === "--upgrade") options.upgrade = true;
     else if (option === "--install-codex-plugin") options.installCodexPlugin = true;
     else if (option === "--json") options.json = true;
@@ -46,7 +48,7 @@ function parse(argv) {
   if (!options.target) usage("--target is required");
   const allowed = {
     install: new Set(["dryRun", "force", "upgrade", "installCodexPlugin", "json", "claude"]),
-    uninstall: new Set(["dryRun", "force", "json", "claude"]),
+    uninstall: new Set(["dryRun", "force", "json", "claude", "purgeAccountabilityData"]),
     rollback: new Set(["json"]),
     status: new Set(["json"]),
     doctor: new Set(["json"]),
@@ -72,6 +74,12 @@ function render(result) {
     Number.isInteger(result.managedFiles) ? `managed=${result.managedFiles}` : null,
     result.doctor ? `doctor=${result.doctor}` : null,
     result.rollback ? `rollback=${result.rollback}` : null,
+    result.accountabilityData ? `accountability-data=${result.accountabilityData.directory}` : null,
+    result.accountabilityData ? (result.accountabilityData.purged
+      ? `accountability-data-purged=${result.accountabilityData.removedFiles.length}-files revoke=${result.accountabilityData.revoke}`
+      : `accountability-data-left=${result.accountabilityData.exists
+        ? `${result.accountabilityData.files.length}-files(credentials:${result.accountabilityData.credentialFiles.length})`
+        : "absent"}`) : null,
   ].filter(Boolean);
   return "keel harness distribution: " + values.join(" ");
 }
@@ -89,7 +97,15 @@ export function run(argv = process.argv.slice(2)) {
 if (process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(process.argv[1])) {
   try {
     const options = parse(process.argv.slice(2));
-    const result = run(process.argv.slice(2));
+    let result = run(process.argv.slice(2));
+    if (options.command === "uninstall" && options.purgeAccountabilityData && !options.dryRun) {
+      result = { ...result, accountabilityData: await purgeAccountabilityData(resolve(options.target), { env: process.env }) };
+    }
+    const data = result.accountabilityData;
+    if (data && !data.purged && data.credentialFiles?.length) {
+      console.error("keel harness installer: Google credentials of this installation remain outside the repository: " +
+        data.directory + " (" + data.credentialFiles.join(", ") + "). Disconnect in the Dashboard first, or rerun uninstall with --purge-accountability-data.");
+    }
     process.stdout.write((options.json ? JSON.stringify(result, null, 2) : render(result)) + "\n");
   } catch (error) {
     const prefix = error instanceof DistributionError ? "keel harness installer" : "keel harness installer internal error";

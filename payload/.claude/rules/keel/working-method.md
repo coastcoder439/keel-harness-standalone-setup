@@ -35,7 +35,7 @@ keinen dieser Schritte. Coverage und Fulfillment sind getrennte Messungen.
 Geprueft gegen: und Offen: sind Berichtsformat, niemals Ersatz für Evidence.
 
 Git-Mutationen laufen ausschließlich über harness-core/git/git-intent.mjs.
-Leaf-Sessions committen nicht in einer parallelen Welle. Recoverable
+Leaf-Sessions committen nicht in einer parallelen Welle (erzwungen: git-intent checkpoint, WAVE_IN_PROGRESS). Recoverable
 discard/recover, letzter eigener Checkpoint-Revert, Integration und
 Owner-freigegebener Publish haben je genau einen getesteten Intent.
 
