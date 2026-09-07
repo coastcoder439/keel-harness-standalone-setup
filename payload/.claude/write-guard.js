@@ -89,6 +89,12 @@ function pruefen(toolInput, deps) {
       `danger-guard erlaubteWurzeln() UND die Spiegel-Liste hier ein.`
     );
   }
+  if (deps.werkbank && zielNorm === norm(path.join(deps.werkbank, ".claude", "mutation-policy.json"))) {
+    return (
+      `W4: "${ziel}" ist die Owner-Politikdatei der Mutationsgrenze (.claude/mutation-policy.json). ` +
+      `Nur der Owner aendert sie, ausserhalb einer Agentensitzung; der Agent nennt ihm den gewuenschten Eintrag.`
+    );
+  }
 
   // W2 -- Zugaenge
   if (!W2_AUSNAHMEN.some((re) => re.test(zielNorm))) {

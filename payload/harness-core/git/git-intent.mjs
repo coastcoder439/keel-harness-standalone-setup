@@ -10,7 +10,7 @@ import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { readExecutionReceipt } from "../execution/owner-approval.mjs";
+import { readExecutionReceipt, validateImmutableRecord } from "../execution/owner-approval.mjs";
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -1186,6 +1186,37 @@ function writebackWitnesses(repoRoot, packageId, source, planReceipt, receiptPat
   return witnesses;
 }
 
+// The close mirror (audit 06.09.2026, B23): package execution copies its own immutable receipts
+// -- the close challenge, the consumed Owner approval, the close receipt and the duty state --
+// into docs/packages/<id>/evidence/close/ so that follow-up duties and the approval survive the
+// runtime cleanup of .unlazy/. The closure checkpoint admits exactly these files, each proven by
+// its own record digest and bound to this package and scope; anything else under the bundle that
+// the close plan did not snapshot still fails CLOSE_WRITEBACK.
+export const CLOSE_MIRROR_FILES = Object.freeze({
+  "owner-approval-challenge.json": "owner-approval-challenge",
+  "owner-approval-consumption.json": "owner-approval-consumption",
+  "close-receipt.json": "close-receipt",
+  "duties-state.json": "duties-state",
+});
+
+export function closeMirrorRecord(repoRoot, relative, packageId, scope) {
+  const prefix = "docs/packages/" + packageId + "/evidence/close/";
+  if (!relative.startsWith(prefix)) return { ok: false, reason: "outside the close mirror" };
+  const name = relative.slice(prefix.length);
+  const operation = CLOSE_MIRROR_FILES[name];
+  if (!operation) return { ok: false, reason: "not a close mirror record" };
+  let value;
+  try { value = JSON.parse(fs.readFileSync(path.join(repoRoot, ...relative.split("/")), "utf8")); }
+  catch (error) { return { ok: false, reason: "invalid JSON: " + error.message }; }
+  try { validateImmutableRecord(value); }
+  catch (error) { return { ok: false, reason: error.message }; }
+  if (value.operation !== operation) return { ok: false, reason: "operation " + value.operation + " does not belong to " + name };
+  if (value.packageId !== packageId || (value.scope || null) !== (scope || null)) {
+    return { ok: false, reason: "record binds another package or scope" };
+  }
+  return { ok: true, operation };
+}
+
 async function closureCheckpoint(options) {
   const snapshot = repository.repositorySnapshot(options.root || process.cwd());
   const packageId = identifier(options.packageId, "package");
@@ -1240,7 +1271,13 @@ async function closureCheckpoint(options) {
     fail("CLOSE_WRITEBACK", "package close changed content outside the four closure fields", 1);
   }
   const currentFiles = packageFiles(snapshot.repoRoot, packageId);
-  if (JSON.stringify(currentFiles.map((item) => item.relative)) !== JSON.stringify(source.files.map((item) => item.relative))) {
+  const plannedRelatives = new Set(source.files.map((item) => item.relative));
+  for (const extra of currentFiles.filter((item) => !plannedRelatives.has(item.relative))) {
+    const verdict = closeMirrorRecord(snapshot.repoRoot, extra.relative, packageId, source.scope);
+    if (!verdict.ok) fail("CLOSE_WRITEBACK", "package file set changed during close: " + extra.relative + " (" + verdict.reason + ")", 1);
+  }
+  const currentPlanned = currentFiles.map((item) => item.relative).filter((relative) => plannedRelatives.has(relative));
+  if (JSON.stringify(currentPlanned) !== JSON.stringify(source.files.map((item) => item.relative))) {
     fail("CLOSE_WRITEBACK", "package file set changed during close", 1);
   }
   // The package close MUST re-verify gates after the Owner approval (the
@@ -1287,6 +1324,7 @@ async function closureCheckpoint(options) {
   const oracleWriteback = toleratedWriteback(declared, witnesses);
   for (const current of currentFiles) {
     if (current.relative === "docs/packages/" + packageId + "/PACKAGE.md") continue;
+    if (!plannedRelatives.has(current.relative)) continue;
     if (anchor.carried.has(current.relative)) {
       if (!anchor.changed.has(current.relative)) continue;
       const anchorNormalized = anchor.normalized.get(current.relative);

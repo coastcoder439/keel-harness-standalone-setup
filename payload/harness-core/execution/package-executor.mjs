@@ -12,6 +12,7 @@ import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { pathToFileURL, fileURLToPath } from "node:url";
 import { replaceFileSync } from "./atomic-file.mjs";
+import { writeImmutableRecordFile } from "./owner-approval.mjs";
 import { resolveClaudeExecutable } from "./codex-plugin-bootstrap.mjs";
 import {
   launchProviderRun,
@@ -38,6 +39,7 @@ import {
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const packageBinding = require("../binding/package-binding.cjs");
+const packageOwnership = require("../binding/package-ownership.cjs");
 const repository = require("../binding/repository.cjs");
 const ownerContracts = require("../binding/owner-contract.cjs");
 const packageBootstrap = require("../binding/package-bootstrap.cjs");
@@ -328,6 +330,15 @@ function ensureActive(context) {
   childOk(runNode(context.tools.packageCli, args, { cwd: context.repoRoot }), "package activation");
   childOk(runNode(context.tools.packageCli, ["doctor", "--root", context.repoRoot, "--package", context.packageId],
     { cwd: context.repoRoot }), "package doctor");
+  // Audit 06.09.2026, B1: the schema proves disjoint OWNS inside one package only. Two packages
+  // active in the same repository must not claim the same files, or every "bound leaf owns this
+  // path" authorization would accept both. Measured by "[ownership] a second active package with
+  // overlapping OWNS blocks activation until it is gone".
+  const overlaps = packageOwnership.crossPackageOverlaps(context.repoRoot, context.packageId, context.scope);
+  if (overlaps.length) {
+    fail("PACKAGE_CROSS_OWNERSHIP_OVERLAP", "another active package claims ownership this package needs: " +
+      overlaps.slice(0, 5).map(packageOwnership.describeConflict).join("; "), 1);
+  }
 }
 
 function contextFor(options, requirePackage = true) {
@@ -1396,6 +1407,7 @@ async function close(context, options) {
   const durableClose = writeConsequentialReceipt({ repoRoot: context.repoRoot, action: "close",
     packageId: context.packageId, scope: context.scope, approvalReceipt: consumed.approvalReceipt, duties,
     result: { packageClosed: true, planReceipt: consumed.subject.planReceipt, packageClose } });
+  const closeEvidence = mirrorCloseEvidence(context, consumed, durableClose.receipt, duties);
   let closure;
   try {
     closure = parseIntentOutput(childOk(runNode(context.tools.gitIntent,
@@ -1416,7 +1428,31 @@ async function close(context, options) {
   return { packageId: context.packageId, scope: context.scope, originalOwnerDigest: state.originalOwnerDigest,
     originalGoalDigest: state.originalGoalDigest, locallyReverified: true, closed: true,
     approvalReceipt: consumed.approvalReceipt, closeReceipt: completed.receipt, recoveryReceipt: durableClose.receipt,
-    closure, providerOutputEvidence: false };
+    closeEvidence, closure, providerOutputEvidence: false };
+}
+
+// Audit 06.09.2026, B23: the durable truth of a close no longer lives only in gitignored
+// .unlazy/. The challenge, the consumed Owner approval, the close receipt and the duty state are
+// mirrored as immutable records into the bundle before the closure checkpoint, which admits
+// exactly them (git-intent closeMirrorRecord) and commits them with the closure.
+function mirrorCloseEvidence(context, consumed, closeReceipt, duties) {
+  const directory = path.join(context.packageInfo.packageDir, "evidence", "close");
+  fs.mkdirSync(directory, { recursive: true });
+  const files = [];
+  for (const [name, source] of [
+    ["owner-approval-challenge.json", consumed.challenge],
+    ["owner-approval-consumption.json", consumed.approvalReceipt],
+    ["close-receipt.json", closeReceipt],
+  ]) {
+    const target = path.join(directory, name);
+    fs.writeFileSync(target, fs.readFileSync(source));
+    files.push(path.relative(context.repoRoot, target).replaceAll("\\", "/"));
+  }
+  const dutiesTarget = path.join(directory, "duties-state.json");
+  fs.rmSync(dutiesTarget, { force: true });
+  writeImmutableRecordFile(dutiesTarget, { operation: "duties-state", packageId: context.packageId, scope: context.scope, duties });
+  files.push(path.relative(context.repoRoot, dutiesTarget).replaceAll("\\", "/"));
+  return { directory: path.relative(context.repoRoot, directory).replaceAll("\\", "/"), files: files.sort() };
 }
 
 function recoverClose(context, options) {

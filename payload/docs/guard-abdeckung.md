@@ -10,6 +10,8 @@ als technischer Zwang gezählt.
 | UserPromptSubmit | `prompt-form.js` | dasselbe Programm über `.codex/hook-runner.cjs` | knappe Kommunikation und Anzeige der bereits gebundenen Identität |
 | Shell vor Ausführung | `git-intent-guard.js`, dann `shell-mutation-guard.js`, dann `danger-guard.js` | identische Reihenfolge für `Bash` | endliche Git-Intents; endliche Shell-Mutationsgrenze (deklarierte Prüfer, Tests, Dienste); Schutz vor sonstiger Zerstörung |
 | Dateischreibung vor Ausführung | `write-guard.js` und `paket-gate.js` für Write/Edit | `apply-patch-guard.cjs` zerlegt Add/Update/Delete/Move und prüft jeden Pfad durch beide gemeinsamen Guards | erlaubte Wurzel, Secrets, exakte Repo/Paket/Session/Leaf-Bindung und `OWNS` |
+| MCP-Werkzeug vor Ausführung | `mcp-write-guard.js` für `mcp__*` | dasselbe Programm über `.codex/hook-runner.cjs` für `^mcp__` | bei aktivem Paket nur Lese-Verben oder exakt vom Owner allowlistete Werkzeuge, sonst fail-closed |
+| Owner-Politik | `.claude/mutation-policy.json` (nur der Owner; write-guard W4) | dieselbe Datei | Owner-Erweiterungen der endlichen Shell-Grenze und die MCP-Allowlist; ungültige Einträge sperren fail-closed |
 | Werkzeug nach Ausführung | Claude-DoD liest seinen Host-Turn | `dod-guard.cjs` merkt stabile PostToolUse-Arbeitsfakten | Berichtsformat, nicht Paket-Fulfillment |
 | Stop | vollständiger Unlazy-Stop, DoD, lokaler Backup-Hinweis | dieselbe Reihenfolge; Codex-DoD nutzt `last_assistant_message` | offene Gates/Leaves/Waves blockieren; Bericht und Warnung bleiben getrennt |
 | Paketaktivierung | colspan | colspan | Schema bindet Originalauftrag, PIG, R→C→Gate, Depth Tree und disjunkte `OWNS` vor Arbeit |

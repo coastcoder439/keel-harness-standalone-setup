@@ -27,6 +27,7 @@ const WRITE_COMMANDS = new Set([
 ]);
 
 const VERIFIER_PATHS = new Set([
+  "checks/owner-acceptance.mjs",
   "checks/codex-runtime-smoke.mjs",
   "checks/completeness-repair.mjs",
   "checks/dashboard-e2e.mjs",
@@ -57,6 +58,9 @@ const VERIFIER_PATHS = new Set([
 ]);
 
 const TEST_PATHS = new Set([
+  "test/mcp-write-guard.test.js",
+  "test/owner-acceptance.test.js",
+  "test/package-ownership.test.js",
   "test/bounded-runner-hardening.test.js",
   "test/bounded-runner.test.js",
   "test/claude-fanout-e2e.test.js",
@@ -124,6 +128,81 @@ const GUARD_SELF_TESTS = new Set([
   ".claude/unlazy-stop.js",
   ".claude/write-guard.js",
 ]);
+
+// Owner mutation policy (audit 06.09.2026, B7). The finite policy above is the product's own;
+// an installation Owner extends it in .claude/mutation-policy.json without touching guard code.
+// Every entry must be a relative path inside the installation root that names one regular file.
+// An invalid policy blocks every executable classification fail-closed (POLICY_INVALID) while
+// read-only inspection keeps working; agents may not edit the file (write-guard W4).
+const POLICY_FILE = ".claude/mutation-policy.json";
+const POLICY_LISTS = { verifierPaths: "verifier", testPaths: "test", servicePaths: "service", mutationPaths: "mutation" };
+const MCP_TOOL_NAME = /^mcp__[A-Za-z0-9_-]+__[A-Za-z0-9_-]+$/u;
+
+function emptyPolicy(file) {
+  return { file, present: false, error: null, verifier: new Set(), test: new Set(), service: new Set(), mutation: new Set(), mcpAllow: new Set() };
+}
+
+function policyPathProblem(root, entry) {
+  if (typeof entry !== "string" || !entry.trim()) return "entries must be non-empty strings";
+  if (entry.includes("\0") || /^[A-Za-z]:/u.test(entry) || /^[\\/]/u.test(entry) ||
+      entry.split(/[\\/]/u).some((part) => part === ".." || part === "." || part === "")) {
+    return "unsafe path " + JSON.stringify(entry);
+  }
+  const full = path.join(root, ...entry.split(/[\\/]/u));
+  if (!normalized(full).startsWith(normalized(root) + "/")) return "path escapes the installation root: " + entry;
+  if (!safeRegular(full)) return "path is not one regular file: " + entry;
+  return null;
+}
+
+function loadMutationPolicy(projectRoot) {
+  const root = path.resolve(projectRoot || process.cwd());
+  const file = path.join(root, ".claude", "mutation-policy.json");
+  const policy = emptyPolicy(file);
+  let info;
+  try { info = fs.lstatSync(file); }
+  catch { return policy; }
+  policy.present = true;
+  const invalid = (error) => ({ ...emptyPolicy(file), present: true, error });
+  if (!info.isFile() || info.isSymbolicLink()) return invalid("policy file must be one regular file");
+  let value;
+  try { value = JSON.parse(fs.readFileSync(file, "utf8")); }
+  catch (error) { return invalid("policy file is not valid JSON: " + error.message); }
+  if (!value || typeof value !== "object" || Array.isArray(value) || value.schemaVersion !== 1) return invalid("schemaVersion must be 1");
+  for (const [key, setName] of Object.entries(POLICY_LISTS)) {
+    const list = value[key] === undefined ? [] : value[key];
+    if (!Array.isArray(list)) return invalid(key + " must be an array");
+    for (const entry of list) {
+      const problem = policyPathProblem(root, entry);
+      if (problem) return invalid(key + ": " + problem);
+      policy[setName].add(String(entry).replace(/\\/g, "/"));
+    }
+  }
+  const mcp = value.mcpWriteTools === undefined ? {} : value.mcpWriteTools;
+  if (!mcp || typeof mcp !== "object" || Array.isArray(mcp)) return invalid("mcpWriteTools must be an object");
+  const allow = mcp.allow === undefined ? [] : mcp.allow;
+  if (!Array.isArray(allow)) return invalid("mcpWriteTools.allow must be an array");
+  for (const name of allow) {
+    if (typeof name !== "string" || !MCP_TOOL_NAME.test(name)) return invalid("mcpWriteTools.allow: not an exact MCP tool name: " + JSON.stringify(name));
+    policy.mcpAllow.add(name);
+  }
+  return policy;
+}
+
+function policyFor(context) {
+  if (!context.policy) context.policy = loadMutationPolicy(context.projectRoot);
+  return context.policy;
+}
+
+function declarations(context, name, builtIn) {
+  const policy = policyFor(context);
+  if (policy.error) return null;
+  return policy[name].size ? new Set([...builtIn, ...policy[name]]) : builtIn;
+}
+
+function policyDenial(context) {
+  return denial("POLICY_INVALID", POLICY_FILE + " is invalid: " + policyFor(context).error,
+    "The Owner repairs " + POLICY_FILE + " (agents may not edit it); executable commands stay blocked while a package is active.");
+}
 
 function normalized(value) {
   const result = path.resolve(String(value || "")).replaceAll("\\", "/");
@@ -235,7 +314,9 @@ function classifyNode(words, start, context) {
       : denial("NODE_CHECK_FORM", "node --check accepts one file in this boundary", "Run: node --check <file>.");
   }
   if (args[0] === "--test") {
-    if (args.length < 2 || args.slice(1).some((arg) => arg.startsWith("-") || !declaredPath(arg, context.cwd, context.projectRoot, TEST_PATHS))) {
+    const tests = declarations(context, "test", TEST_PATHS);
+    if (!tests) return policyDenial(context);
+    if (args.length < 2 || args.slice(1).some((arg) => arg.startsWith("-") || !declaredPath(arg, context.cwd, context.projectRoot, tests))) {
       return denial("UNDECLARED_TEST", "node --test may execute only the finite declared test files", verifierRoute(context.projectRoot));
     }
     return { allowed: true, code: "DECLARED_TESTS" };
@@ -244,9 +325,11 @@ function classifyNode(words, start, context) {
   while (scriptIndex < args.length && ["--no-warnings", "--trace-warnings", "--enable-source-maps"].includes(args[scriptIndex])) scriptIndex += 1;
   const script = args[scriptIndex];
   if (!script) return denial("NODE_SCRIPT_REQUIRED", "Node would start an unrestricted REPL", verifierRoute(context.projectRoot));
-  const verifier = declaredPath(script, context.cwd, context.projectRoot, VERIFIER_PATHS);
+  const verifiers = declarations(context, "verifier", VERIFIER_PATHS);
+  if (!verifiers) return policyDenial(context);
+  const verifier = declaredPath(script, context.cwd, context.projectRoot, verifiers);
   if (verifier) return { allowed: true, code: "DECLARED_VERIFIER", path: verifier };
-  const service = declaredPath(script, context.cwd, context.projectRoot, SERVICE_PATHS);
+  const service = declaredPath(script, context.cwd, context.projectRoot, declarations(context, "service", SERVICE_PATHS));
   if (service) {
     const rest = args.slice(scriptIndex + 1);
     const portForm = rest.length === 0 || (rest.length === 2 && rest[0] === "--port" && /^[0-9]{1,5}$/u.test(rest[1]));
@@ -254,7 +337,7 @@ function classifyNode(words, start, context) {
       ? { allowed: true, code: "DECLARED_SERVICE", path: service }
       : denial("SERVICE_ARGUMENTS", "the Dashboard service accepts only --port <n>", "Run: node dashboard/serve.mjs [--port <n>].");
   }
-  const mutation = declaredPath(script, context.cwd, context.projectRoot, CANONICAL_MUTATION_PATHS);
+  const mutation = declaredPath(script, context.cwd, context.projectRoot, declarations(context, "mutation", CANONICAL_MUTATION_PATHS));
   if (mutation) return { allowed: true, code: "CANONICAL_MUTATION_TOOL", path: mutation };
   const guard = declaredPath(script, context.cwd, context.projectRoot, GUARD_SELF_TESTS);
   if (guard && args.slice(scriptIndex + 1).length === 1 && ["--self-test", "--selbsttest"].includes(args[scriptIndex + 1])) {
@@ -333,7 +416,9 @@ function classifySegment(segment, context) {
     return denial("READ_COMMAND_ESCALATION", name + " option escapes read-only behavior", "Run the same read command without execution or output-file options.");
   }
   if (name === "sed" || name === "find" || READ_ONLY_COMMANDS.has(name)) return { allowed: true, code: "READ_ONLY_COMMAND" };
-  const directVerifier = declaredPath(raw, context.cwd, context.projectRoot, VERIFIER_PATHS);
+  const directVerifiers = declarations(context, "verifier", VERIFIER_PATHS);
+  if (!directVerifiers) return policyDenial(context);
+  const directVerifier = declaredPath(raw, context.cwd, context.projectRoot, directVerifiers);
   if (directVerifier) return { allowed: true, code: "DECLARED_VERIFIER", path: directVerifier };
   return denial("UNDECLARED_EXECUTABLE", name + " is not in the finite read/verifier/mutation policy", verifierRoute(context.projectRoot));
 }
@@ -425,6 +510,8 @@ if (require.main === module) {
 module.exports = {
   CANONICAL_MUTATION_PATHS,
   LIBRARY_PATHS,
+  POLICY_FILE,
+  loadMutationPolicy,
   SERVICE_PATHS,
   TEST_PATHS,
   VERIFIER_PATHS,

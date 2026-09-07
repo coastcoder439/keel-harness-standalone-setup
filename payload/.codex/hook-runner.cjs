@@ -14,6 +14,7 @@ const { spawnSync } = require("node:child_process");
 const ALLOWED = new Set([
   ".claude/danger-guard.js",
   ".claude/git-intent-guard.js",
+  ".claude/mcp-write-guard.js",
   ".claude/shell-mutation-guard.js",
   ".claude/onboarding-start.js",
   ".claude/pollution-warn.js",

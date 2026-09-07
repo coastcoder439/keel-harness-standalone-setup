@@ -88,6 +88,17 @@
             "statusMessage": "Inter-Session-Nachricht pruefen"
           }
         ]
+      },
+      {
+        "matcher": "^mcp__",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"let p=require('path'),f=require('fs'),d=process.cwd();while(!f.existsSync(p.join(d,'.keel-harness.json'))){let n=p.dirname(d);if(n===d)throw Error('Keel Harness root not found');d=n}process.env.KEEL_HOOK_TARGET=process.argv[1];require(p.join(d,'.codex/hook-runner.cjs'))\" \".claude/mcp-write-guard.js\"",
+            "timeout": 10,
+            "statusMessage": "MCP-Schreibgrenze bei aktivem Paket"
+          }
+        ]
       }
     ],
     "PostToolUse": [

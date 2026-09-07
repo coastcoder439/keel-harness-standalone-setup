@@ -64,11 +64,11 @@ gegen den tatsächlichen Bestand und macht einen Trockenlauf des Installers gege
 Wegwerf-Repo. Gemessener Erfolg (Rückgabewert 0), letzte Zeile:
 
 ```
-SETUP_REPO_SUITE_OK payload=170 version=1.1.3
+SETUP_REPO_SUITE_OK payload=174 version=1.1.4
 ```
 
 Wer nur den Installer-Teil will: `node <PAKET>\checks\fresh-clone.mjs` endet bei
-gesundem Klon mit `SETUP_REPO_OK payload=170 version=1.1.3 dry-run=ok`.
+gesundem Klon mit `SETUP_REPO_OK payload=174 version=1.1.4 dry-run=ok`.
 
 `manifest.json` ist die Stückliste — jede Datei mit Herkunft, Größe und Prüfsumme;
 unter `excluded` steht, was **absichtlich** fehlt (unten als Tabelle).
@@ -106,7 +106,7 @@ node C:\w\keel-harness-standalone-setup\install.mjs --target C:\w\mein-harness -
 Gemessene Ausgabe an einem frischen Ziel (Rückgabewert 0, geschrieben wird nichts):
 
 ```
-keel harness distribution: command=install state=planned version=1.1.3 dry-run=true managed=174
+keel harness distribution: command=install state=planned version=1.1.4 dry-run=true managed=174
 ```
 
 `managed=` ist die Zahl der Dateien, die der Installer im Ziel verwalten würde —
@@ -123,7 +123,7 @@ node <PAKET>\install.mjs --target <HARNESS>
 Gemessener Erfolg:
 
 ```
-keel harness distribution: command=install state=installed version=1.1.3 promotions=174 managed=174 rollback=available
+keel harness distribution: command=install state=installed version=1.1.4 promotions=174 managed=174 rollback=available
 ```
 
 Der Lauf ist transaktional und wiederholbar — ein zweiter Aufruf schreibt nichts
@@ -253,18 +253,18 @@ Die Tabelle ist aus `manifest.json` erzeugt; die Zahlen sind gezählt, nicht ges
 <!-- ERZEUGT:was-installiert-wird (node checks/anleitung-sync.mjs --nachziehen; nicht von Hand ändern) -->
 | Teil | Was es ist | Dateien |
 |---|---|---|
-| `.claude/` | Claude-Code-Ausstattung: Wächter-Hooks, Dauer-Regeln, Befehle, Skills | 48 |
+| `.claude/` | Claude-Code-Ausstattung: Wächter-Hooks, Dauer-Regeln, Befehle, Skills | 50 |
 | `.agents/` | Providerneutrale Regeln und Skills — dieselben Inhalte für Claude und Codex | 13 |
 | `.codex/` | Codex-Route: Hooks, Guards, `config.toml` | 5 |
-| `harness-core/` | Paket-Executor, Owner- und Paket-Bindungen, endliche Git-Schnittstelle | 11 |
+| `harness-core/` | Paket-Executor, Owner- und Paket-Bindungen, endliche Git-Schnittstelle | 12 |
 | `vendor/` | Eingebettete Unlazy-Fassung: Paket-Bundles, Skripte, Tests | 63 |
 | `dashboard/` | React-Dashboard: Starter, geprüftes Laufzeit-Archiv, Runtime-Check | 5 |
-| `checks/` | Installierte Prüfungen der Auslieferung (`checks/run-all.mjs` und Einzelprüfer) | 6 |
+| `checks/` | Installierte Prüfungen der Auslieferung (`checks/run-all.mjs` und Einzelprüfer) | 7 |
 | `docs/` | Doku, Instanzdatei mit `[AUSFUELLEN]`-Marke, Paketvorlage | 10 |
 | `templates/` | Vorlagen für Paket-Bundles (OWNER, GATES) | 3 |
 | `licenses/` | Lizenztexte übernommener Fremdteile | 1 |
 | (Wurzel) | Wurzeldateien: `.gitignore`, `.keel-harness.json`, `AGENTS.md`, `CLAUDE.md`, `package.json` | 5 |
-| **Summe** | | **170** |
+| **Summe** | | **174** |
 <!-- /ERZEUGT:was-installiert-wird -->
 
 ## Was bewusst fehlt
@@ -298,14 +298,14 @@ woraus die Payload in deinen Händen entstanden ist.
 <!-- ERZEUGT:stand-der-auslieferung (node checks/anleitung-sync.mjs --nachziehen; nicht von Hand ändern) -->
 | Feld | Wert |
 |---|---|
-| Produkt und Version | `keel-harness` 1.1.3 |
-| Payload-Posten | 170 |
-| Baum-Fingerabdruck | `f2a3776e3c873492...` |
+| Produkt und Version | `keel-harness` 1.1.4 |
+| Payload-Posten | 174 |
+| Baum-Fingerabdruck | `011a75bb896995d9...` |
 | Quelle | `harness-lab`, Unterbaum `test-harness/standalone` |
-| Quell-Commit | `c48bad726f12ba18d7998d74ec376e593522cecf` |
+| Quell-Commit | `8a2adf8c4ee363082a49d1aed9158a8f16e737dc` |
 | Standalone frisch gebaut | ja |
 | Ungesicherte Dateien der Quelle beim Bau | Arbeitsbaum 0, `test-harness/standalone` 0 |
-| Erzeugt am | 2026-09-07T07:34:07.673Z |
+| Erzeugt am | 2026-09-07T16:30:51.360Z |
 <!-- /ERZEUGT:stand-der-auslieferung -->
 
 ---
