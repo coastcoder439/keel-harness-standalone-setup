@@ -1,6 +1,6 @@
 # Completeness contract
 
-„Fertig“ bedeutet im Keel Harness nicht, dass ein Plan vollständig
+„Fertig“ bedeutet im Keel Reference Harness nicht, dass ein Plan vollständig
 abgehakt ist. Fertig ist ein Paket erst, wenn sein unveränderlicher
 Originalauftrag gegen aktuelle, lokal erzeugte Evidence erfüllt ist.
 
@@ -26,17 +26,20 @@ Originalauftrag gegen aktuelle, lokal erzeugte Evidence erfüllt ist.
 
 ## Ausführbare Gegenprobe
 
-Der unabhängige Abgleich läuft in drei Ebenen:
+In einer Installation läuft der unabhängige Abgleich in drei Phasen, alle über den
+einen Gesamtbefehl `node checks/run-all.mjs`:
 
-- `checks/requirements-audit.mjs` prüft jede Anforderung aus `OWNER.md` gegen
-  Contract, Implementierung und Test-Evidence.
-- `checks/integration-contract.mjs` prüft Contract-Abdeckung, Depth Tree,
-  disjunkte `OWNS` und zweite Statuswahrheiten.
-- `checks/test-matrix.mjs` führt Windows-, Multi-Repo-, Worktree-, Parallel-,
-  Crash-, Timeout-, Stale-State-, Dashboard-, Unlazy-, Standalone- und echte
-  Codex-Gegenproben begrenzt aus.
+- `installed contract` — `checks/installed-harness.mjs` prüft den gemeinsamen
+  Hostvertrag, die aktiven Schutzschichten, die Inventur samt Abnahmerouten und
+  diesen Vertrag selbst.
+- `installed React Dashboard runtime` — `dashboard/runtime-check.mjs` startet die
+  gelieferte Dashboard-Laufzeit lokal und prüft ihre Routen.
+- `full installed Unlazy suite` — `vendor/unlazy/tests/full-suite.mjs` führt die
+  vollständige vendorierte Unlazy-Methode aus (acht erklärte Plattform-Skips).
 
-`checks/run-all.mjs` ist der einzige Gesamtbefehl. Er gibt
-`HARNESS_REFERENCE_OK` nur aus, wenn alle drei Ebenen und die isolierte
-Repo-Grenze grün sind. Ein einzelnes grünes Gate beweist ausschließlich das,
-was sein `CHECK` tatsächlich misst.
+`node checks/run-all.mjs` zählt je Phase pass, fail und skip gegen die erwarteten
+Skips und gibt `KEEL_HARNESS_OK` nur aus, wenn alle drei Phasen grün sind. Die
+Quell-Referenz des Harness (requirements-audit, integration-contract, test-matrix und
+der Marker HARNESS_REFERENCE_OK) gehört zum Quellbaum des Harness und ist nicht Teil
+dieser Installation. Ein einzelnes grünes Gate beweist ausschließlich das, was sein
+`CHECK` tatsächlich misst.

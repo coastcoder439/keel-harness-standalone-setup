@@ -41,3 +41,19 @@ therefore be planned as a package with a named owner and a removal date, and the
 must remove the surface, bump the product version, rebuild the standalone payload and
 rerun the complete distribution lifecycle check before that date.
 
+## Uninstall and Accountability data
+
+`node install.mjs uninstall --target <repository>` restores the repository tree
+and reports the installation's Accountability data directory outside the
+repository (Google OAuth token `google-token.json`, OAuth client file
+`google-client-secrets.json`, local assistant store). Nothing outside the
+repository is removed unless the Owner passes `--purge-accountability-data`,
+which revokes the stored token at Google best effort and removes the directory.
+The installer and the Dashboard derive that directory identically (instance key =
+first 16 hex characters of the SHA-256 of the resolved Harness root); the
+Dashboard test `google-credential-paths.test.ts` measures the two derivations
+against each other, so an update that moves the directory must change both. The
+installer checks the canonical and the resolved spelling of the target, because
+a Windows 8.3 short name and the long name of one directory hash to different
+instance keys; every existing instance directory is reported and, on purge,
+removed.

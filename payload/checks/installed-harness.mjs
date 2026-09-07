@@ -114,6 +114,14 @@ if (inventoryHeader >= 0) {
     } else check(false, `inventory acceptance target is missing: ${match[1]}`);
   }
 }
+// The completeness contract may only name checks that exist in THIS installation and must name
+// the installed success marker, never the source-tree marker as its own (audit 06.09.2026, H4).
+const completenessContract = read("docs", "completeness-check.md");
+for (const match of completenessContract.matchAll(/`(?:node )?((?:checks|dashboard|vendor)\/[A-Za-z0-9_./-]+\.mjs)`/gu)) {
+  check(existsSync(resolve(root, ...match[1].split("/"))), "completeness contract names a check that is not installed: " + match[1]);
+}
+check(completenessContract.includes("`KEEL_HARNESS_OK`"), "completeness contract does not name the installed success marker KEEL_HARNESS_OK");
+check(!/`HARNESS_REFERENCE_OK` nur aus/u.test(completenessContract), "completeness contract still presents the source-tree marker as the installed one");
 if (installedPackages) {
   const dashboardFiles = readdirSync(join(root, "dashboard")).sort();
   check(JSON.stringify(dashboardFiles) === JSON.stringify([

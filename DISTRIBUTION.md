@@ -44,6 +44,7 @@ node install.mjs status --target <repository>
 node install.mjs doctor --target <repository>
 node install.mjs rollback --target <repository>
 node install.mjs uninstall --target <repository>
+node install.mjs uninstall --target <repository> --purge-accountability-data
 ```
 
 Uninstall first refuses a live Dashboard lease and verifies that managed files
@@ -51,6 +52,21 @@ still match the receipt, then
 restores exact originals and removes files that did not exist before install.
 It is idempotent. Drift blocks before writes; `--force` is the explicit route
 when the Owner chooses backup restoration over later edits.
+
+Uninstall restores the repository tree only. The Accountability data of the
+installation lives outside the repository -- on Windows under
+`%LOCALAPPDATA%\KeelHarness\accountability\<instance>`, elsewhere under
+`$XDG_DATA_HOME/keel-harness/accountability/<instance>` -- and holds the Google
+OAuth token (`google-token.json`) and the OAuth client file
+(`google-client-secrets.json`) next to the local assistant store. Every uninstall
+result (also `--dry-run`) names that directory and its credential files
+(`accountabilityData` in `--json`, `accountability-data-left=` in plain output)
+and leaves it in place. Disconnect Google in the Dashboard first (that revokes
+the token at Google and deletes it), or run
+`uninstall --purge-accountability-data`: the installer then revokes the stored
+token best effort at `https://oauth2.googleapis.com/revoke` and removes the whole
+instance directory. The grant itself can always be reviewed and withdrawn at
+<https://myaccount.google.com/permissions>.
 
 ## Plugin and upgrade boundaries
 
