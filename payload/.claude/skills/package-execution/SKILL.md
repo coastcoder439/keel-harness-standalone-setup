@@ -42,7 +42,9 @@ Jeder Aufruf nennt `--harness-root <HARNESS_ROOT>` und `--root <ECHTES_GIT_REPO>
 - Close läuft ausschließlich `plan-close --json`, danach erstellt der Owner außerhalb
   des Repos ein kurzlebiges, challenge-gebundenes Freigabe-Artefakt, danach
   `close --challenge <RECEIPT> --approval-file <EXTERN> --message "<TEXT>" --json`.
-  Die Agentenroute kann dieses Artefakt nicht erstellen und akzeptiert keinen Boolean.
+  Die Agentenroute darf dieses Artefakt nicht erstellen und akzeptiert keinen Boolean.
+  Die Schranke ist eine Prozess-Kontrolle desselben OS-Benutzers, gehaertet durch
+  Datei-ACLs -- keine Kryptografie und kein Identitaetsnachweis (owner-approval.mjs).
 - Nach Close: `plan-publish --closure-receipt <RECEIPT> --json`, neue separate
   Owner-Freigabe und `publish --challenge <RECEIPT> --approval-file <EXTERN> --json`.
   `recover-close --receipt <CLOSE_RECEIPT>` setzt einen unterbrochenen

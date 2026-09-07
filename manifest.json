@@ -3,10 +3,10 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.1.0"
+    "version": "1.1.1"
   },
   "payload": {
-    "treeSha256": "e8401b9a79ccf502374488b156f70cc3f67d85d0ff08d6caf51ed623dd6b0907"
+    "treeSha256": "87c73e2f23cee4d9f2b82e19a053aa923dd5527dcff3d6b80b191e943192b1c9"
   },
   "provenance": {
     "unlazy": {
@@ -38,15 +38,7 @@
       "preservesOriginalBackups": true,
       "rollback": "Every upgrade uses the same staged transaction and restores the previously installed version on failure."
     },
-    "deprecations": [
-      {
-        "id": "unlazy-explicit-legacy-diagnostics",
-        "surface": "vendored Unlazy --legacy diagnostic mode",
-        "removalDate": "2026-10-31",
-        "owner": "Keel Harness distribution maintainer",
-        "replacement": "Repo-owned docs/packages/<packageId>/ bundles plus vendor/unlazy/scripts/package-migrate.mjs."
-      }
-    ]
+    "deprecations": []
   },
   "fileCount": 170,
   "files": [
@@ -95,10 +87,10 @@
       "target": ".agents/skills/package-execution/SKILL.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 4516,
-      "sourceSha256": "d0f6bf46a74eebfe839f8d0d547121c21a201ba350f42cceb967363dc00d4bf6",
-      "bytes": 4516,
-      "sha256": "d0f6bf46a74eebfe839f8d0d547121c21a201ba350f42cceb967363dc00d4bf6"
+      "sourceBytes": 4686,
+      "sourceSha256": "1288ecf4b98cf57c1e66dd3d45126be06e0d7160136af2a458f9eaa4769abf1b",
+      "bytes": 4686,
+      "sha256": "1288ecf4b98cf57c1e66dd3d45126be06e0d7160136af2a458f9eaa4769abf1b"
     },
     {
       "source": "test-harness/.agents/skills/software-factory/SKILL.md",
@@ -585,10 +577,10 @@
       "target": ".claude/skills/package-execution/SKILL.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 4516,
-      "sourceSha256": "d0f6bf46a74eebfe839f8d0d547121c21a201ba350f42cceb967363dc00d4bf6",
-      "bytes": 4516,
-      "sha256": "d0f6bf46a74eebfe839f8d0d547121c21a201ba350f42cceb967363dc00d4bf6"
+      "sourceBytes": 4686,
+      "sourceSha256": "1288ecf4b98cf57c1e66dd3d45126be06e0d7160136af2a458f9eaa4769abf1b",
+      "bytes": 4686,
+      "sha256": "1288ecf4b98cf57c1e66dd3d45126be06e0d7160136af2a458f9eaa4769abf1b"
     },
     {
       "source": "test-harness/.claude/skills/software-factory/SKILL.md",
@@ -1088,7 +1080,7 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 571,
-      "sha256": "420c835a3482089a8e08741fe1a5d1c7af42a7ed04802795bc99114a552dfb07"
+      "sha256": "a4c90b347585b98384f3084e0f66a29820f9ec54abc91141a2981a4c37145c11"
     },
     {
       "source": "test-harness/templates/GATES-LEAF.md",
