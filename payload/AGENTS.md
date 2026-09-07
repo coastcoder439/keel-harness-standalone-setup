@@ -138,7 +138,9 @@ ein ausdrücklich freigegebener Publish erfolgen.
 - Nächstes Leaf/Fan-out: next|start, dann dispatch
 - Rücklauf: return; Integration: integrate --approve-checks
 - Abschluss: close
-- Dashboard-Betrieb: npm run dashboard — der einzige Startweg; dashboard/serve.mjs
+- Dashboard-Betrieb: npm run dashboard (Mensch) oder node dashboard/serve.mjs [--port <n>]
+  (Agent; npm-Skripte sind fuer Agenten gesperrt) — beide starten denselben einzigen
+  Startweg; dashboard/serve.mjs
   startet die gebaute Runtime als einen Prozess lokal auf 127.0.0.1; Pruefung:
   npm run test:dashboard:runtime
 - Dashboard-Entwicklung (nur Quellbaum): npm run dashboard:dev — setzt

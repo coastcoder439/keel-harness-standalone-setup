@@ -8,7 +8,7 @@ als technischer Zwang gezählt.
 |---|---|---|---|
 | SessionStart | vier native Hooks | dieselben vier Programme über den root-bewussten Adapter | Rollen, Onboarding, Projektkontext, Verschmutzungswarnung |
 | UserPromptSubmit | `prompt-form.js` | dasselbe Programm über `.codex/hook-runner.cjs` | knappe Kommunikation und Anzeige der bereits gebundenen Identität |
-| Shell vor Ausführung | `git-intent-guard.js`, danach `danger-guard.js` | identische Reihenfolge für `Bash` | endliche Git-Intents; Schutz vor sonstiger Zerstörung |
+| Shell vor Ausführung | `git-intent-guard.js`, dann `shell-mutation-guard.js`, dann `danger-guard.js` | identische Reihenfolge für `Bash` | endliche Git-Intents; endliche Shell-Mutationsgrenze (deklarierte Prüfer, Tests, Dienste); Schutz vor sonstiger Zerstörung |
 | Dateischreibung vor Ausführung | `write-guard.js` und `paket-gate.js` für Write/Edit | `apply-patch-guard.cjs` zerlegt Add/Update/Delete/Move und prüft jeden Pfad durch beide gemeinsamen Guards | erlaubte Wurzel, Secrets, exakte Repo/Paket/Session/Leaf-Bindung und `OWNS` |
 | Werkzeug nach Ausführung | Claude-DoD liest seinen Host-Turn | `dod-guard.cjs` merkt stabile PostToolUse-Arbeitsfakten | Berichtsformat, nicht Paket-Fulfillment |
 | Stop | vollständiger Unlazy-Stop, DoD, lokaler Backup-Hinweis | dieselbe Reihenfolge; Codex-DoD nutzt `last_assistant_message` | offene Gates/Leaves/Waves blockieren; Bericht und Warnung bleiben getrennt |
