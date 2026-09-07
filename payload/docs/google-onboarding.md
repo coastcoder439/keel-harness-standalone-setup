@@ -202,6 +202,31 @@ Solange der Consent-Screen im **Testing**-Status steht, läuft der Token nach **
 umgehbar. Erneuern: im Dashboard **„Google neu verbinden"** und den Consent einmal
 durchlaufen. Projekt und Client bleiben; nur der Token wird neu ausgestellt.
 
+## Abbau — trennen, widerrufen, aufräumen
+
+Der Zugriff ist eine stehende Vollmacht auf dein Google-Konto und lebt nicht im
+Repository. Drei Ebenen, von sanft bis vollständig:
+
+1. **Trennen im Dashboard** (Knopf „Trennen" neben dem Verbindungsstatus): widerruft
+   den Token bei Google und löscht die Token-Datei. Das Cloud-Projekt und die
+   Zugangsdatei bleiben — ein späteres „Verbinden" braucht nur den Consent erneut.
+2. **Deinstallation** (`node install.mjs uninstall --target <repo>`): stellt nur den
+   Repo-Baum wieder her und NENNT das Datenverzeichnis außerhalb des Repos
+   (Windows: `%LOCALAPPDATA%\KeelHarness\accountability\<Instanz>`; darin
+   `google-token.json` und `google-client-secrets.json`). Mit
+   `--purge-accountability-data` widerruft der Installer den Token und entfernt das
+   ganze Verzeichnis samt lokalem Assistenten-Speicher.
+3. **Im Google-Konto selbst**: <https://myaccount.google.com/permissions> zeigt die App
+   und erlaubt „Zugriff entfernen" — das wirkt auch dann, wenn der lokale Rechner
+   weg ist. Das Cloud-Projekt löschst du in der Cloud Console unter „IAM & Verwaltung
+   → Einstellungen → Beenden".
+
+Was im Google-Konto ANGELEGT wurde, bleibt von allen drei Ebenen unberührt: die
+Postfach-Organisation (Labels, serverseitige Filter, archivierte Mails) hat im
+Dashboard einen eigenen Rückbau-Knopf (Mail-Linse, Abschnitt „Rückbau"), der die
+Filter löscht, archivierte Mails in den Posteingang zurücklegt und die vom Dashboard
+angelegten Labels entfernt.
+
 ## Grenzen (ehrlich)
 
 - Ohne bestandenen Google-Audit bleibt der Testing-Status mit dem 7-Tage-Token.

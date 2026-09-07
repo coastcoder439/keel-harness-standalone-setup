@@ -331,8 +331,43 @@ function unstage(options) {
   return { operation: "unstage", paths, receipt: receiptPath };
 }
 
+// Contract sentence (CLAUDE.md/AGENTS.md, skill package-execution): "Leaf-Agenten committen
+// nicht mitten in einer parallelen Welle; der Parent integriert alle verifizierten disjunkten
+// Pfade einmal." Until 07.09.2026 no code enforced it (completeness audit 06.09.2026, H7).
+// The dispatch state of the bound scope is the durable wave truth: a leaf listed in a wave
+// that is still open or sealed may not checkpoint. Unreadable state fails closed. Measured by
+// "checkpoint is refused while the bound leaf is inside an open or sealed dispatch wave".
+function waveInProgressFor(binding) {
+  const file = path.join(binding.repoRoot, ".unlazy", binding.scope, "dispatch.json");
+  if (!fs.existsSync(file)) return null;
+  let state;
+  try {
+    if (fs.lstatSync(file).isSymbolicLink()) throw new Error("dispatch state is a symbolic link");
+    state = JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch (error) {
+    fail("WAVE_STATE_UNREADABLE", "checkpoint refused: dispatch state of scope " + binding.scope +
+      " is unreadable (" + error.message + "); repair .unlazy/" + binding.scope + "/dispatch.json before committing");
+  }
+  const waves = state && typeof state === "object" && state.waves && typeof state.waves === "object" ? state.waves : {};
+  for (const [waveId, wave] of Object.entries(waves)) {
+    if (!wave || typeof wave !== "object") continue;
+    if (wave.state !== "open" && wave.state !== "sealed") continue;
+    if (!Array.isArray(wave.leaves) || !wave.leaves.includes(binding.leaf)) continue;
+    return { waveId, state: wave.state };
+  }
+  return null;
+}
+
+function assertLeafOutsideWave(binding) {
+  const wave = waveInProgressFor(binding);
+  if (!wave) return;
+  fail("WAVE_IN_PROGRESS", "checkpoint refused: leaf " + binding.leaf + " is part of wave " + wave.waveId +
+    " (" + wave.state + "); leaf agents do not commit mid-wave -- return to the parent, which integrates every verified disjoint path once", 1);
+}
+
 function checkpoint(options) {
   const binding = exactBinding(options);
+  assertLeafOutsideWave(binding);
   const paths = authorizedPaths(binding, options.paths);
   const message = String(options.message || "").trim();
   if (!message || message.length > 200 || /[\r\n\0]/u.test(message)) fail("USAGE", "--message must be one line of 1..200 characters");

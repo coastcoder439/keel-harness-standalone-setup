@@ -93,7 +93,8 @@ genau ein Aufruf über harness-core/git/git-intent.mjs:
 
 Breite Historienumschreibungen und nicht recoverable Löschungen bleiben
 Owner-Entscheidungen. Leaf-Agenten committen nicht mitten in einer parallelen
-Welle; der Parent integriert alle verifizierten disjunkten Pfade einmal.
+Welle; der Parent integriert alle verifizierten disjunkten Pfade einmal — der
+git-intent checkpoint erzwingt das aus dem Dispatch-Zustand (WAVE_IN_PROGRESS).
 
 ## Claude, Codex und aktive Schutzschichten
 
