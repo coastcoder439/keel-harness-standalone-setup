@@ -17,13 +17,13 @@ const check = (condition, message) => {
 };
 const read = (...parts) => readFileSync(join(root, ...parts), "utf8");
 const guards = [
-  "danger-guard.js", "dod-guard.js", "git-intent-guard.js", "onboarding-start.js",
+  "danger-guard.js", "dod-guard.js", "git-intent-guard.js", "mcp-write-guard.js", "onboarding-start.js",
   "package-context.js", "paket-gate.js", "pollution-warn.js", "project-context.js",
   "prompt-form.js", "repo-status.js", "session-roles.js", "sessionpost-guard.js",
   "shell-mutation-guard.js",
   "statusline.js", "uncommitted-warn.js", "unlazy-stop.js", "write-guard.js",
 ].sort();
-const selfTests = ["package-context.js", "danger-guard.js", "git-intent-guard.js",
+const selfTests = ["package-context.js", "danger-guard.js", "git-intent-guard.js", "mcp-write-guard.js",
   "write-guard.js", "dod-guard.js", "paket-gate.js", "prompt-form.js",
   "uncommitted-warn.js", "unlazy-stop.js", "shell-mutation-guard.js"];
 
@@ -34,6 +34,16 @@ check(JSON.stringify(actualGuards) === JSON.stringify(guards), "active guard inv
 check(!existsSync(join(root, ".claude", "git-guard.js")) &&
   !existsSync(join(root, ".claude", "commit-pathspec-guard.js")), "superseded Git guards are present");
 check(!existsSync(join(root, ".claude", "settings.local.json")), "machine-local Claude settings entered the payload");
+// Owner mutation policy (audit B7): present, one regular file, valid shape -- the guards read it.
+const policyFile = join(root, ".claude", "mutation-policy.json");
+check(existsSync(policyFile) && lstatSync(policyFile).isFile() && !lstatSync(policyFile).isSymbolicLink(), "Owner mutation policy file is missing");
+try {
+  const policy = JSON.parse(read(".claude", "mutation-policy.json"));
+  check(policy.schemaVersion === 1 && Array.isArray(policy.verifierPaths) && Array.isArray(policy.testPaths) &&
+    policy.mcpWriteTools && Array.isArray(policy.mcpWriteTools.allow), "Owner mutation policy has an invalid shape");
+} catch (error) {
+  check(false, "Owner mutation policy is not valid JSON: " + error.message);
+}
 
 for (const required of [
   [".codex", "hook-runner.cjs"], [".codex", "apply-patch-guard.cjs"], [".codex", "dod-guard.cjs"],
@@ -120,8 +130,14 @@ const completenessContract = read("docs", "completeness-check.md");
 for (const match of completenessContract.matchAll(/`(?:node )?((?:checks|dashboard|vendor)\/[A-Za-z0-9_./-]+\.mjs)`/gu)) {
   check(existsSync(resolve(root, ...match[1].split("/"))), "completeness contract names a check that is not installed: " + match[1]);
 }
-check(completenessContract.includes("`KEEL_HARNESS_OK`"), "completeness contract does not name the installed success marker KEEL_HARNESS_OK");
-check(!/`HARNESS_REFERENCE_OK` nur aus/u.test(completenessContract), "completeness contract still presents the source-tree marker as the installed one");
+// The same check runs in the source tree (matrix phase "installed source contract"), where the
+// source reference and its marker HARNESS_REFERENCE_OK are the truth; only an installation must
+// carry the installed marker.
+const expectedMarker = installedPackages ? "KEEL_HARNESS_OK" : "HARNESS_REFERENCE_OK";
+check(completenessContract.includes("`" + expectedMarker + "`"), "completeness contract does not name the success marker of this layout: " + expectedMarker);
+if (installedPackages) {
+  check(!/`HARNESS_REFERENCE_OK` nur aus/u.test(completenessContract), "completeness contract still presents the source-tree marker as the installed one");
+}
 if (installedPackages) {
   const dashboardFiles = readdirSync(join(root, "dashboard")).sort();
   check(JSON.stringify(dashboardFiles) === JSON.stringify([

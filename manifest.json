@@ -3,10 +3,10 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.1.3"
+    "version": "1.1.4"
   },
   "payload": {
-    "treeSha256": "f2a3776e3c87349221d8edf3d1377ffe64d5cdae2f36b26d5caf9cef804d3c5a"
+    "treeSha256": "011a75bb896995d94b71e738de1742d8e97f0e6466c8ab06f4e2b88fa23eb87d"
   },
   "provenance": {
     "unlazy": {
@@ -40,7 +40,7 @@
     },
     "deprecations": []
   },
-  "fileCount": 170,
+  "fileCount": 174,
   "files": [
     {
       "source": "test-harness/.agents/skills/completeness/SKILL.md",
@@ -383,6 +383,26 @@
       "sha256": "e3dc305d4b3b9e8150b041f192a35ee48339f2f73c9bb955fc0135b33ab4ff86"
     },
     {
+      "source": "test-harness/.claude/mcp-write-guard.js",
+      "target": ".claude/mcp-write-guard.js",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 5322,
+      "sourceSha256": "f4c9582f3b812114d4a4a847353688d2333cf058b68a6a6a6a46d1199ca5d908",
+      "bytes": 5322,
+      "sha256": "f4c9582f3b812114d4a4a847353688d2333cf058b68a6a6a6a46d1199ca5d908"
+    },
+    {
+      "source": "test-harness/.claude/mutation-policy.json",
+      "target": ".claude/mutation-policy.json",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 601,
+      "sourceSha256": "c25cd38f916f0a5debe095f6414f60037c9c0dec267022841b06a36b78976e6a",
+      "bytes": 601,
+      "sha256": "c25cd38f916f0a5debe095f6414f60037c9c0dec267022841b06a36b78976e6a"
+    },
+    {
       "source": "test-harness/.claude/onboarding-start.js",
       "target": ".claude/onboarding-start.js",
       "mode": "copy",
@@ -517,20 +537,20 @@
       "target": ".claude/settings.json",
       "mode": "merge-hooks",
       "generated": false,
-      "sourceBytes": 4228,
-      "sourceSha256": "e7dbe4834d9838c20438202b9b89ae03417e6d4071c6ebeb3302f720911c78d0",
-      "bytes": 4228,
-      "sha256": "e7dbe4834d9838c20438202b9b89ae03417e6d4071c6ebeb3302f720911c78d0"
+      "sourceBytes": 4553,
+      "sourceSha256": "423a1da3a5cdc120f9556e80bee07d0d0e93bc5795bf5b183cb031409a0a6231",
+      "bytes": 4553,
+      "sha256": "423a1da3a5cdc120f9556e80bee07d0d0e93bc5795bf5b183cb031409a0a6231"
     },
     {
       "source": "test-harness/.claude/shell-mutation-guard.js",
       "target": ".claude/shell-mutation-guard.js",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 20919,
-      "sourceSha256": "9793f85fd3523257a5e6deef4eba7e47ae4690957d7f56f5c016e90db5ebcb85",
-      "bytes": 20919,
-      "sha256": "9793f85fd3523257a5e6deef4eba7e47ae4690957d7f56f5c016e90db5ebcb85"
+      "sourceBytes": 24969,
+      "sourceSha256": "1c1fefad890a12183679dcdc7afa2a6d8a2cfc5c613b1937f32d8a28c1ca7550",
+      "bytes": 24969,
+      "sha256": "1c1fefad890a12183679dcdc7afa2a6d8a2cfc5c613b1937f32d8a28c1ca7550"
     },
     {
       "source": "test-harness/.claude/skills/completeness/SKILL.md",
@@ -647,10 +667,10 @@
       "target": ".claude/write-guard.js",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 10439,
-      "sourceSha256": "47e49c8c8de79e9545d762e53945bbaf4fb036c9df93e3fd200a7a08a478c942",
-      "bytes": 10439,
-      "sha256": "47e49c8c8de79e9545d762e53945bbaf4fb036c9df93e3fd200a7a08a478c942"
+      "sourceBytes": 10786,
+      "sourceSha256": "f140e56fe95cb22692ae332cf869ae7a7f66e19df69340d361126bab3c1dd06a",
+      "bytes": 10786,
+      "sha256": "f140e56fe95cb22692ae332cf869ae7a7f66e19df69340d361126bab3c1dd06a"
     },
     {
       "source": "test-harness/.codex/apply-patch-guard.cjs",
@@ -687,20 +707,20 @@
       "target": ".codex/hook-runner.cjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 2275,
-      "sourceSha256": "397171f3300ab76e4d06ea9372e9e675c4c8dc951535a28383fa0913968a2bfe",
-      "bytes": 2275,
-      "sha256": "397171f3300ab76e4d06ea9372e9e675c4c8dc951535a28383fa0913968a2bfe"
+      "sourceBytes": 2307,
+      "sourceSha256": "5e6604d68aa88ae07584deede6180f873737e9a66ffd46ae000b3a3be9d2d84d",
+      "bytes": 2307,
+      "sha256": "5e6604d68aa88ae07584deede6180f873737e9a66ffd46ae000b3a3be9d2d84d"
     },
     {
       "source": "test-harness/.codex/hooks.json",
       "target": ".codex/hooks.json",
       "mode": "merge-hooks",
       "generated": false,
-      "sourceBytes": 7542,
-      "sourceSha256": "c3fb361f3a83c5bfad51b9a13e2e40d01c7457230e5443183e877220c1453af5",
-      "bytes": 7542,
-      "sha256": "c3fb361f3a83c5bfad51b9a13e2e40d01c7457230e5443183e877220c1453af5"
+      "sourceBytes": 8106,
+      "sourceSha256": "5e4fa7b4532cc4bd043b58d5445624888e0ac4cf9a1acd30acacb914a09bebff",
+      "bytes": 8106,
+      "sha256": "5e4fa7b4532cc4bd043b58d5445624888e0ac4cf9a1acd30acacb914a09bebff"
     },
     {
       "source": "test-harness/.gitignore",
@@ -727,10 +747,10 @@
       "target": "AGENTS.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 7648,
-      "sourceSha256": "9f55d24c3819203d5769ca578ab209b5faa40b30dd8517497d27bd2cd935b06c",
-      "bytes": 7648,
-      "sha256": "9f55d24c3819203d5769ca578ab209b5faa40b30dd8517497d27bd2cd935b06c"
+      "sourceBytes": 7758,
+      "sourceSha256": "eb5b98cdccc022f6e9df4d23c8cfcd11c3d7a7144da1ab8a8f8ee3311f4b4c51",
+      "bytes": 7758,
+      "sha256": "eb5b98cdccc022f6e9df4d23c8cfcd11c3d7a7144da1ab8a8f8ee3311f4b4c51"
     },
     {
       "source": "test-harness/checks/bounded-runner.mjs",
@@ -747,10 +767,10 @@
       "target": "checks/installed-harness.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 10761,
-      "sourceSha256": "f842fdf4b38c2386fd0e452163d4d8643b692fc21e5dbf6c0515965c1fd29085",
-      "bytes": 10761,
-      "sha256": "f842fdf4b38c2386fd0e452163d4d8643b692fc21e5dbf6c0515965c1fd29085"
+      "sourceBytes": 11877,
+      "sourceSha256": "3924f9ebd9ea827ac476c089b350610bd690ca6eec179d614c4ab4b1f05cd65c",
+      "bytes": 11877,
+      "sha256": "3924f9ebd9ea827ac476c089b350610bd690ca6eec179d614c4ab4b1f05cd65c"
     },
     {
       "source": "test-harness/checks/onboarding-ready.mjs",
@@ -761,6 +781,16 @@
       "sourceSha256": "00ea8a74baf8f9593f8b5b9693678ee3e51cbff3985ff5c9b62807d5f58375d0",
       "bytes": 1421,
       "sha256": "00ea8a74baf8f9593f8b5b9693678ee3e51cbff3985ff5c9b62807d5f58375d0"
+    },
+    {
+      "source": "test-harness/checks/owner-acceptance.mjs",
+      "target": "checks/owner-acceptance.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 10811,
+      "sourceSha256": "80675c3f8f5fe85a0bd89f0afd5245e8c0525cec0110cbb5718da160891e192b",
+      "bytes": 10811,
+      "sha256": "80675c3f8f5fe85a0bd89f0afd5245e8c0525cec0110cbb5718da160891e192b"
     },
     {
       "source": "test-harness/checks/run-all.mjs",
@@ -797,10 +827,10 @@
       "target": "CLAUDE.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 7648,
-      "sourceSha256": "9f55d24c3819203d5769ca578ab209b5faa40b30dd8517497d27bd2cd935b06c",
-      "bytes": 7648,
-      "sha256": "9f55d24c3819203d5769ca578ab209b5faa40b30dd8517497d27bd2cd935b06c"
+      "sourceBytes": 7758,
+      "sourceSha256": "eb5b98cdccc022f6e9df4d23c8cfcd11c3d7a7144da1ab8a8f8ee3311f4b4c51",
+      "bytes": 7758,
+      "sha256": "eb5b98cdccc022f6e9df4d23c8cfcd11c3d7a7144da1ab8a8f8ee3311f4b4c51"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-runtime-archive.mjs",
@@ -867,10 +897,10 @@
       "target": "docs/active-harness-inventory.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 15179,
-      "sourceSha256": "dc78f75bcd71fa97586dd66426ed2bf7499f94f44191d37bd2cba1f42824f14a",
-      "bytes": 15179,
-      "sha256": "dc78f75bcd71fa97586dd66426ed2bf7499f94f44191d37bd2cba1f42824f14a"
+      "sourceBytes": 15319,
+      "sourceSha256": "7af46a886af7ef472876403e60823018a71e996c48541ffe249cbea62ed7c02a",
+      "bytes": 15319,
+      "sha256": "7af46a886af7ef472876403e60823018a71e996c48541ffe249cbea62ed7c02a"
     },
     {
       "source": "generated/docs/completeness-check.md",
@@ -897,10 +927,10 @@
       "target": "docs/guard-abdeckung.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 3616,
-      "sourceSha256": "c5d08cff4f20a591c98e006b5c157105a98cf4c54dfef447c9e7a746ac98393a",
-      "bytes": 3616,
-      "sha256": "c5d08cff4f20a591c98e006b5c157105a98cf4c54dfef447c9e7a746ac98393a"
+      "sourceBytes": 4016,
+      "sourceSha256": "0b1bc1eb7f600fa736aa6e7321464c7d214992b8a9464aa1f787d1759d15a1b9",
+      "bytes": 4016,
+      "sha256": "0b1bc1eb7f600fa736aa6e7321464c7d214992b8a9464aa1f787d1759d15a1b9"
     },
     {
       "source": "test-harness/standalone/templates/harness-instance.md",
@@ -983,6 +1013,16 @@
       "sha256": "e56fb4c3ca178dc51d24f9a09c8709537d993a045bbd66e52cbd389320edf5f2"
     },
     {
+      "source": "test-harness/harness-core/binding/package-ownership.cjs",
+      "target": "harness-core/binding/package-ownership.cjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6310,
+      "sourceSha256": "1cf656b8fe728d9621136b83aecc1747f902f1bdb9d99da3fc7f6b6cab1d7c59",
+      "bytes": 6310,
+      "sha256": "1cf656b8fe728d9621136b83aecc1747f902f1bdb9d99da3fc7f6b6cab1d7c59"
+    },
+    {
       "source": "test-harness/harness-core/binding/repository.cjs",
       "target": "harness-core/binding/repository.cjs",
       "mode": "copy",
@@ -1017,10 +1057,10 @@
       "target": "harness-core/execution/owner-approval.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 15030,
-      "sourceSha256": "d8bcb3847bef75ded31ebd86fb306c409a762f1488141203f757ffa88662d1bd",
-      "bytes": 15030,
-      "sha256": "d8bcb3847bef75ded31ebd86fb306c409a762f1488141203f757ffa88662d1bd"
+      "sourceBytes": 15756,
+      "sourceSha256": "7aa2ff4921ba13c9bbaf85efe328d713b7faa13c1592762fa7c17a03f6e14fcd",
+      "bytes": 15756,
+      "sha256": "7aa2ff4921ba13c9bbaf85efe328d713b7faa13c1592762fa7c17a03f6e14fcd"
     },
     {
       "source": "test-harness/harness-core/execution/package-bootstrap.mjs",
@@ -1037,10 +1077,10 @@
       "target": "harness-core/execution/package-executor.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 89806,
-      "sourceSha256": "071f0fe331ee42a7c0eb2c238d8a68010a8084084b02a2f4beb4f6ed7f57bb42",
-      "bytes": 89806,
-      "sha256": "071f0fe331ee42a7c0eb2c238d8a68010a8084084b02a2f4beb4f6ed7f57bb42"
+      "sourceBytes": 90521,
+      "sourceSha256": "1a183ebe321fb8ea2e66cfbed2ff55b926cdc917dcfd4c0a6ea6b7b4dc6dd582",
+      "bytes": 90521,
+      "sha256": "1a183ebe321fb8ea2e66cfbed2ff55b926cdc917dcfd4c0a6ea6b7b4dc6dd582"
     },
     {
       "source": "test-harness/harness-core/execution/provider-runtime.mjs",
@@ -1057,10 +1097,10 @@
       "target": "harness-core/git/git-intent.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 84698,
-      "sourceSha256": "2ae930a8a605033f8f0128203e2e435590e8a8a8dcbd14f67f37d91d60ce2478",
-      "bytes": 84698,
-      "sha256": "2ae930a8a605033f8f0128203e2e435590e8a8a8dcbd14f67f37d91d60ce2478"
+      "sourceBytes": 87145,
+      "sourceSha256": "dbfed2a86a4c91df104b594a7b5e355cf5f5eb4e114720d372212325ca982765",
+      "bytes": 87145,
+      "sha256": "dbfed2a86a4c91df104b594a7b5e355cf5f5eb4e114720d372212325ca982765"
     },
     {
       "source": "test-harness/licenses/LICENSE-i-have-adhd.txt",
@@ -1080,7 +1120,7 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 571,
-      "sha256": "4e1ebf9d2db7b3c0f1a503fd2c796e9eafbc60de56ae2a764fd28117331097ca"
+      "sha256": "d263190a0da7b235b01ba0f5014e7ff3b111893cb8ce5b80e4c66fa70c7438b8"
     },
     {
       "source": "test-harness/templates/GATES-LEAF.md",

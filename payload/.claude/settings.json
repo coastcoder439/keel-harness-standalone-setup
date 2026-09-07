@@ -134,6 +134,17 @@
             "statusMessage": "Repo- und Bundle-Zuordnung"
           }
         ]
+      },
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/mcp-write-guard.js\"",
+            "timeout": 10,
+            "statusMessage": "mcp-write-guard (MCP-Schreibgrenze bei aktivem Paket)"
+          }
+        ]
       }
     ]
   },
