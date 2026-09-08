@@ -10,9 +10,8 @@ import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { pathToFileURL, fileURLToPath } from "node:url";
+import { fileURLToPath } from "node:url";
 import { replaceFileSync } from "./atomic-file.mjs";
-import { writeImmutableRecordFile } from "./owner-approval.mjs";
 import { resolveClaudeExecutable } from "./codex-plugin-bootstrap.mjs";
 import {
   launchProviderRun,
@@ -21,12 +20,19 @@ import {
   requestProviderStop,
 } from "./provider-runtime.mjs";
 import {
-  consumeOwnerApproval,
-  createApprovalChallenge,
   readExecutionReceipt,
   writeConsequentialReceipt,
+  writeImmutableRecordFile,
   writeWritebackWitness,
-} from "./owner-approval.mjs";
+} from "./execution-receipts.mjs";
+import {
+  findOwnerOk,
+  formatOwnerOkLine,
+  insertOwnerOkLine,
+  OWNER_OK_LINE,
+  todayLocal,
+  validateOwnerOk,
+} from "./owner-ok.mjs";
 import {
   isBundleLedger,
   loadGateParser,
@@ -49,8 +55,8 @@ const PROVIDERS = new Set(["claude", "codex"]);
 const COMMANDS = new Set([
   "start", "next", "dispatch", "return", "verify", "resume", "integrate", "status", "close",
   "abort", "abandon", "heartbeat", "liveness", "timeout", "retry", "reassign", "recover",
-  "duty-assess", "duty-add", "duty-resolve", "plan-duty-waiver", "duty-waive",
-  "plan-close", "recover-close", "plan-publish", "publish",
+  "duty-assess", "duty-add", "duty-resolve", "duty-waive",
+  "recover-close", "publish",
 ]);
 const MAX_WAVE_MEMBERS = 8;
 
@@ -75,6 +81,17 @@ function session(value) {
 
 function digest(value) {
   return "sha256:" + crypto.createHash("sha256").update(value).digest("hex");
+}
+
+// Der Wortlaut des Owners, so wie er in die Owner-OK-Zeile passt: eine Zeile,
+// 1..500 Zeichen, ohne Anfuehrungszeichen -- sonst waere die Zeile nicht mehr
+// eindeutig lesbar.
+function ownerWording(value) {
+  const text = String(value ?? "");
+  if (text.length < 1 || text.length > 500 || /["\r\n]/u.test(text)) {
+    fail("USAGE", "--owner-ok must be 1..500 characters on one line without quotation marks");
+  }
+  return text;
 }
 
 function parseArgs(argv) {
@@ -123,8 +140,8 @@ function parseArgs(argv) {
     else if (key === "--trigger") options.trigger = take(key);
     else if (key === "--due-state") options.dueState = take(key);
     else if (key === "--gate") options.gate = take(key);
-    else if (key === "--approval-file") options.approvalFile = take(key);
-    else if (key === "--challenge") options.challenge = take(key);
+    else if (key === "--owner-ok") options.ownerOk = ownerWording(take(key));
+    else if (key === "--reverify") options.reverify = true;
     else if (key === "--receipt") options.receipt = take(key);
     else if (key === "--closure-receipt") options.closureReceipt = take(key);
     else fail("USAGE", "unknown option " + key);
@@ -893,6 +910,14 @@ function currentHead(repoRoot) {
   return String(result.stdout).trim();
 }
 
+// Die Owner-OK-Zeile fuer eine Aktion, die NICHT in PACKAGE.md steht (publish,
+// waive-duty): gebildet, validiert und sofort wieder gelesen, damit der Datensatz
+// exakt dieselbe Form und denselben Zeilen-Digest traegt wie eine gelesene Zeile.
+function ownerOkRecord(action, target, head, wording) {
+  const line = formatOwnerOkLine({ action, target, date: todayLocal(), commit: head, wording });
+  return validateOwnerOk(findOwnerOk(line, action, target), { action, target, head, today: todayLocal() });
+}
+
 function dutiesFile(context) {
   return path.join(context.repoRoot, ".unlazy", context.scope, "duties.json");
 }
@@ -931,44 +956,25 @@ function dutyTransition(context, options) {
   if (options.trigger) args.push("--trigger", options.trigger);
   if (options.dueState) args.push("--due-state", options.dueState);
   if (options.gate) args.push("--gate", options.gate);
-  if (options.receipt) args.push("--waiver-receipt", options.receipt);
   return packageCliJson(context, args, command);
 }
 
-function planDutyWaiver(context, options) {
+// Eine Pflicht wird nur mit dem Wort des Owners erlassen. Der Beleg ist dieselbe
+// Owner-OK-Zeile wie beim Abschluss, nur mit der Aktion `waive-duty:<id>`; sie
+// steht nicht in PACKAGE.md, sondern im Beleg und im Pflichtstand.
+function waiveDuty(context, options) {
   ensureActive(context);
-  const duties = readDuties(context);
-  const dutyId = id(options.dutyId, "duty");
-  const duty = duties.duties[dutyId];
-  if (!duty || !["open", "due"].includes(duty.dueState)) fail("DUTY_STATE", "waiver plan requires an open or due duty");
-  return createApprovalChallenge({
-    repoRoot: context.repoRoot,
-    action: "waive-duty",
-    packageId: context.packageId,
-    scope: context.scope,
-    dutyId,
-    subject: { duty, dutiesDigest: dutyStateDigest(duties), ownerDigest: context.packageInfo.owner.digest,
-      head: currentHead(context.repoRoot) },
-  });
-}
-
-async function waiveDuty(context, options) {
-  ensureActive(context);
-  if (!options.challenge || !options.approvalFile) fail("USAGE", "duty-waive requires --challenge and --approval-file");
-  const consumed = await consumeOwnerApproval({ repoRoot: context.repoRoot, unlazyRoot: context.unlazyRoot,
-    challenge: options.challenge, approvalFile: options.approvalFile });
+  if (!options.ownerOk) fail("USAGE", "duty-waive requires --owner-ok TEXT");
   const before = readDuties(context);
   const duty = before.duties[id(options.dutyId, "duty")];
-  if (!duty || consumed.subject.dutiesDigest !== dutyStateDigest(before) ||
-      consumed.subject.head !== currentHead(context.repoRoot) || consumed.subject.ownerDigest !== context.packageInfo.owner.digest) {
-    fail("OWNER_APPROVAL_STALE", "duty waiver approval is stale", 1);
-  }
+  if (!duty || !["open", "due"].includes(duty.dueState)) fail("DUTY_STATE", "a waiver requires an open or due duty");
+  const record = ownerOkRecord("waive-duty", duty.id, currentHead(context.repoRoot), options.ownerOk);
   const result = packageCliJson(context, ["duty-waive", "--duty", duty.id,
-    "--waiver-receipt", consumed.approvalReceipt], "duty waiver");
+    "--owner-ok", record.wording], "duty waiver");
   const receipt = writeConsequentialReceipt({ repoRoot: context.repoRoot, action: "waive-duty",
-    packageId: context.packageId, scope: context.scope, approvalReceipt: consumed.approvalReceipt,
+    packageId: context.packageId, scope: context.scope, ownerOk: record,
     result: { dutyId: duty.id, dueState: "waived", dutiesDigest: dutyStateDigest(result) } });
-  return { duty: result.duties[duty.id], approvalReceipt: consumed.approvalReceipt, waiverReceipt: receipt.receipt };
+  return { duty: result.duties[duty.id], ownerOk: record, waiverReceipt: receipt.receipt };
 }
 
 function completePlanFromEvidence(context) {
@@ -1273,84 +1279,6 @@ function assertDutiesReady(duties) {
     open.map((duty) => duty.id + "=" + duty.dueState).join(", "), 1);
 }
 
-function planClose(context, options) {
-  ensureActive(context);
-  const state = readState(context);
-  assertCloseReady(context, state);
-  const timeout = String(options.timeout || "120");
-  const verified = runNode(context.tools.gateCheck, ["--reverify", "--timeout", timeout, "--root", context.repoRoot,
-    "--package", context.packageId, "--scope", context.scope], { cwd: context.repoRoot,
-    timeoutMs: reverifyWallMs(context.packageInfo, timeout) });
-  childOk(verified, "bottom-up package re-verification");
-  const duties = readDuties(context);
-  assertDutiesReady(duties);
-  const planned = parseIntentOutput(childOk(runNode(context.tools.gitIntent,
-    ["plan-close", "--root", context.repoRoot, "--package", context.packageId, "--scope", context.scope],
-    { cwd: context.repoRoot, timeoutMs: 30_000 }), "close checkpoint plan"));
-  const challenge = createApprovalChallenge({
-    repoRoot: context.repoRoot,
-    action: "close",
-    packageId: context.packageId,
-    scope: context.scope,
-    subject: {
-      planReceipt: planned.receipt,
-      // The plan receipt's own BYTES, not just its path. That receipt lists the
-      // package file set, each file's digest and the normalized PACKAGE.md
-      // digest the closure checkpoint compares the closed bundle against, and it
-      // lives in agent-writable .unlazy/.global-receipts/ with no digest-derived
-      // identity of its own -- so without this the Owner approved a path whose
-      // content anyone could rewrite afterwards. git-intent's closureCheckpoint
-      // re-derives this digest and refuses a mismatch. Proven by the
-      // edited-plan-receipt probe of "two verified leaves receive one integration
-      // checkpoint, bottom-up reverify, plan completion and close" in
-      // test/package-execution.test.js.
-      planDigest: digest(fs.readFileSync(path.resolve(context.repoRoot, planned.receipt))),
-      head: currentHead(context.repoRoot),
-      packageDigest: digest(fs.readFileSync(context.packageInfo.packageFile, "utf8")),
-      ownerDigest: context.packageInfo.owner.digest,
-      dutiesDigest: dutyStateDigest(duties),
-    },
-  });
-  return { ...planned, ...challenge, duties, locallyReverified: true, providerOutputEvidence: false,
-    ownerApproval: ownerApprovalGuide(context, challenge, "close", "close"),
-    next: "Owner creates one external approval artifact bound to challengeDigest (see ownerApproval.template and ownerApproval.nextCommand); package-executor may not create it." };
-}
-
-// Der Owner erstellt das Freigabe-Artefakt ausserhalb des Repos; diese Route darf es nicht
-// erzeugen. Damit ein fremder Owner das ohne Quellcode-Studium kann, liefert jeder Plan das
-// Schema ausgefuellt mit -- samt Nonce-Befehl, Zeitfenster, Windows-ACL-Haertung und dem
-// exakten Folgebefehl (Audit B3). Die Werte stammen aus der soeben erzeugten Challenge.
-function ownerApprovalGuide(context, challenge, action, followUp) {
-  const issuedAt = new Date();
-  const expiresAt = new Date(issuedAt.getTime() + 60 * 60_000);
-  const executorFile = path.resolve(process.argv[1] || "package-executor.mjs");
-  const location = process.platform === "win32"
-    ? `%LOCALAPPDATA%\\KeelHarness\\approvals\\${context.packageId}-${action}.json`
-    : `$HOME/.keel-harness/approvals/${context.packageId}-${action}.json`;
-  return {
-    rule: "Only the human Owner writes this file, outside the repository and readable only by the Owner; the agent route never creates it and no boolean flag is accepted.",
-    template: {
-      schemaVersion: 1,
-      kind: "keel-owner-approval",
-      owner: "Owner",
-      action,
-      packageId: context.packageId,
-      scope: context.scope,
-      challengeDigest: challenge.challengeDigest,
-      nonce: "<43-128 URL-safe characters, single use: run nonceCommand>",
-      issuedAt: issuedAt.toISOString(),
-      expiresAt: expiresAt.toISOString(),
-    },
-    nonceCommand: "node -e \"process.stdout.write(require('node:crypto').randomBytes(32).toString('base64url'))\"",
-    expiryRule: "issuedAt at most 5 minutes in the future; expiresAt after now and at most 24 hours after issuedAt; the nonce is consumed once",
-    suggestedLocation: location,
-    windowsHardenCommand: process.platform === "win32"
-      ? `node -e "import('${pathToFileURL(path.join(context.unlazyRoot, "scripts", "lib", "windows-acl.mjs")).href}').then((m) => m.hardenWindowsPrivateDirectory(process.argv[1]))" "<directory of the approval file>"`
-      : null,
-    nextCommand: `node "${executorFile}" ${followUp} --harness-root "${context.harnessRoot}" --root "${context.repoRoot}" --package ${context.packageId} --scope ${context.scope} --challenge "${challenge.challenge}" --approval-file "<EXTERNAL_PATH>" --json`,
-  };
-}
-
 // Every bundle ledger of this package as its repo-relative path. A bundle-wide
 // gate-runner invocation covers exactly this set.
 function bundleLedgerRelatives(context) {
@@ -1379,69 +1307,173 @@ function closureWitnessArgs(context, planReceipt, head, before, after) {
   return ["--writeback-receipt", witness.receipt];
 }
 
-async function close(context, options) {
+// Die Owner-OK-Zeile in PACKAGE.md wird atomar geschrieben, genau wie die
+// Planhaken der Integration: erst eine Temporaerdatei, dann ein Rename.
+function writeOwnerOkLine(context, line) {
+  const file = context.packageInfo.packageFile;
+  const next = insertOwnerOkLine(fs.readFileSync(file, "utf8"), line);
+  const temporary = file + "." + process.pid + "." + crypto.randomBytes(8).toString("hex") + ".tmp";
+  fs.writeFileSync(temporary, next, { encoding: "utf8", flag: "wx" });
+  try { replaceFileSync(temporary, file); }
+  finally { try { fs.unlinkSync(temporary); } catch { /* renamed or absent */ } }
+}
+
+// Der Abschluss ist der einzige Schritt, der die Owner-OK-Zeile in PACKAGE.md
+// schreibt: sie wird mit dem Schluss-Commit versioniert und ist danach der
+// dauerhafte Beleg der Owner-Entscheidung. `--owner-ok TEXT` traegt den Wortlaut
+// des Owners aus dem Chat; ohne den Schalter muss die Zeile schon dastehen.
+// Nach dem Schreiben wird der Paket-Kontext neu eingelesen, weil jeder spaetere
+// Vergleich (Plan-Digest, completePlanFromEvidence) gegen die Bytes der Datei laeuft.
+function ownerOkForClose(context, options, head) {
+  const today = todayLocal();
+  if (options.ownerOk) {
+    const existing = findOwnerOk(context.packageInfo.packageText, "close");
+    // Ein zweites OK des Owners ist nie ein Fehler: gilt die vorhandene Zeile noch fuer
+    // diesen HEAD, bleibt sie stehen (ein abgebrochener Abschluss darf einfach wiederholt
+    // werden); ist sie veraltet, ersetzt das neue Wort des Owners die alte Zeile. Ohne
+    // diese Regel endete jeder gescheiterte Abschluss in einer Sackgasse, aus der nur
+    // Handarbeit an der PACKAGE.md fuehrte (Review 08.09.2026).
+    if (!existing || existing.commit !== head) {
+      const line = formatOwnerOkLine({ action: "close", target: null, date: today, commit: head, wording: options.ownerOk });
+      if (existing) replaceOwnerOkLine(context, existing.line, line);
+      else writeOwnerOkLine(context, line);
+      context.packageInfo = packageRecord(context.repoRoot, context.packageId);
+    }
+  }
+  try {
+    return validateOwnerOk(findOwnerOk(context.packageInfo.packageText, "close"),
+      { action: "close", target: null, head, today });
+  } catch (error) {
+    if (error.code === "OWNER_OK_STALE") {
+      error.message += "; repeat close with --owner-ok \"<the Owner's renewed OK>\" to replace the stale line";
+    }
+    throw error;
+  }
+}
+
+// Eine veraltete close-Zeile wird durch die neue ersetzt, an derselben Stelle.
+function replaceOwnerOkLine(context, oldLine, newLine) {
+  const file = context.packageInfo.packageFile;
+  const text = fs.readFileSync(file, "utf8");
+  const next = text.split(/\r?\n/u).map((item) => (item === oldLine ? newLine : item))
+    .join(/\r\n/u.test(text) ? "\r\n" : "\n");
+  const temporary = file + "." + process.pid + "." + crypto.randomBytes(8).toString("hex") + ".tmp";
+  fs.writeFileSync(temporary, next, { encoding: "utf8", flag: "wx" });
+  try { replaceFileSync(temporary, file); }
+  finally { try { fs.unlinkSync(temporary); } catch { /* renamed or absent */ } }
+}
+
+// Die Wiederverwendung der Integrations-Nachpruefung setzt voraus, dass der
+// Arbeitsbaum GENAU der Baum ist, den die Integration gemessen hat: kein
+// veraenderter, geloeschter oder neuer Pfad ausser der PACKAGE.md des Pakets, und
+// deren einzige Aenderung sind hinzugefuegte Owner-OK-Zeilen. Nur die Ledger zu
+// vergleichen reichte nicht -- ein Gate misst beliebige Dateien, und eine
+// ungespeicherte Aenderung an einer davon haette ein heute rotes Paket ohne
+// Gate-Lauf geschlossen (Review 08.09.2026).
+function treeUnchangedSinceHead(context) {
+  const packageRelative = path.relative(context.repoRoot, context.packageInfo.packageFile).replaceAll("\\", "/");
+  const status = spawnSync("git", ["-C", context.repoRoot, "status", "--porcelain", "--untracked-files=all"], {
+    cwd: context.repoRoot, encoding: "utf8", windowsHide: true, timeout: 30_000,
+  });
+  if (status.error || status.status !== 0) return false;
+  const entries = String(status.stdout || "").split(/\r?\n/u).filter(Boolean);
+  for (const entry of entries) {
+    const relative = entry.slice(3).replace(/^"|"$/gu, "").replaceAll("\\", "/");
+    if (relative !== packageRelative) return false;
+  }
+  if (!entries.length) return true;
+  const diff = spawnSync("git", ["-C", context.repoRoot, "diff", "HEAD", "--", packageRelative], {
+    cwd: context.repoRoot, encoding: "utf8", windowsHide: true, timeout: 30_000,
+  });
+  if (diff.error || diff.status !== 0) return false;
+  for (const line of String(diff.stdout || "").split(/\r?\n/u)) {
+    if (line.startsWith("+++") || line.startsWith("---")) continue;
+    if (line.startsWith("-")) return false;
+    if (line.startsWith("+") && !OWNER_OK_LINE.test(line.slice(1))) return false;
+  }
+  return true;
+}
+
+// Die read-only Statuspruefung, die bei einer Wiederverwendung an die Stelle des
+// vollen Gate-Laufs tritt. Sie fuehrt nichts aus; sagt sie nicht ALL MET, faellt
+// close ohne Fehler auf die volle Nachpruefung zurueck.
+function allGatesMet(context) {
+  const result = runNode(context.tools.gateCheck, ["--status", "--root", context.repoRoot,
+    "--package", context.packageId, "--scope", context.scope], { cwd: context.repoRoot, timeoutMs: 60_000 });
+  return result.status === 0 && /^ALL MET \(/mu.test(String(result.stdout || ""));
+}
+
+function close(context, options) {
   ensureActive(context);
-  if (!options.challenge || !options.approvalFile) fail("USAGE", "close requires --challenge and --approval-file");
   const state = readState(context);
   assertCloseReady(context, state);
   const duties = readDuties(context);
   assertDutiesReady(duties);
-  const consumed = await consumeOwnerApproval({ repoRoot: context.repoRoot, unlazyRoot: context.unlazyRoot,
-    challenge: options.challenge, approvalFile: options.approvalFile });
-  if (consumed.action !== "close") fail("OWNER_APPROVAL_MISMATCH", "approval does not authorize close", 1);
+  const head = currentHead(context.repoRoot);
+  const ownerOk = ownerOkForClose(context, options, head);
   const closeMessage = String(options.message || ("chore: close package " + context.packageId)).trim();
   const timeout = String(options.timeout || "120");
+  const planned = parseIntentOutput(childOk(runNode(context.tools.gitIntent,
+    ["plan-close", "--root", context.repoRoot, "--package", context.packageId, "--scope", context.scope],
+    { cwd: context.repoRoot, timeoutMs: 30_000 }), "close checkpoint plan"));
+  // Eine Nachpruefung, die exakt denselben Baum noch einmal misst, beweist nichts
+  // Neues: steht der Integrations-Checkpoint auf HEAD und ist der Arbeitsbaum bis
+  // auf die Owner-OK-Zeile unveraendert, genuegt die read-only Statuspruefung.
+  // `--reverify` erzwingt den vollen Lauf; meldet der Status nicht alle Gates met,
+  // laeuft er ohnehin (kein Fehler, nur kein Verzicht).
+  const reuse = !options.reverify && state.integration?.state === "committed" &&
+    state.integration.commit === head && treeUnchangedSinceHead(context) && allGatesMet(context);
   // The vendored close re-verifies the whole bundle, so the digests taken around
   // it are the witness of what that mandated run actually rewrote. Without it a
-  // file hand-edited between the approved close plan and this call would ride
-  // through the declared writeback window unchanged.
+  // file hand-edited between the close plan and this call would ride through the
+  // declared writeback window unchanged.
   const witnessBefore = bundleFileDigests(context);
-  const closed = runNode(context.tools.packageCli, ["close", "--timeout", timeout, "--root", context.repoRoot,
-    "--package", context.packageId, "--scope", context.scope, "--authorization-receipt", consumed.approvalReceipt,
-    "--json"], { cwd: context.repoRoot,
+  const closeArgs = ["close", "--timeout", timeout, "--root", context.repoRoot,
+    "--package", context.packageId, "--scope", context.scope];
+  if (reuse) closeArgs.push("--reuse-integration", head);
+  const closed = runNode(context.tools.packageCli, [...closeArgs, "--json"], { cwd: context.repoRoot,
     timeoutMs: reverifyWallMs(context.packageInfo, timeout, { marginSeconds: 60 }) });
   const witnessAfter = bundleFileDigests(context);
   let packageClose;
   try { packageClose = JSON.parse(childOk(closed, "package close")); }
   catch (error) { if (error.code) throw error; fail("CHILD_FAILED", "package close returned invalid JSON"); }
+  const reverified = packageClose.reverified !== false;
   const durableClose = writeConsequentialReceipt({ repoRoot: context.repoRoot, action: "close",
-    packageId: context.packageId, scope: context.scope, approvalReceipt: consumed.approvalReceipt, duties,
-    result: { packageClosed: true, planReceipt: consumed.subject.planReceipt, packageClose } });
-  const closeEvidence = mirrorCloseEvidence(context, consumed, durableClose.receipt, duties);
+    packageId: context.packageId, scope: context.scope, ownerOk, duties,
+    result: { packageClosed: true, planReceipt: planned.receipt, packageClose, reverified } });
+  const closeEvidence = mirrorCloseEvidence(context, durableClose.receipt, duties);
   let closure;
   try {
     closure = parseIntentOutput(childOk(runNode(context.tools.gitIntent,
       ["closure-checkpoint", "--root", context.repoRoot, "--package", context.packageId,
-        "--message", closeMessage, "--receipt", consumed.subject.planReceipt,
-        "--approval-receipt", consumed.approvalReceipt,
+        "--message", closeMessage, "--receipt", planned.receipt,
         "--unlazy-root", context.unlazyRoot,
-        ...closureWitnessArgs(context, consumed.subject.planReceipt, consumed.subject.head,
-          witnessBefore, witnessAfter)],
+        ...closureWitnessArgs(context, planned.receipt, planned.head, witnessBefore, witnessAfter)],
       { cwd: context.repoRoot, timeoutMs: 180_000 }), "closure checkpoint"));
   } catch (error) {
     error.message += "; package is closed and recoverable with close receipt " + durableClose.receipt;
     throw error;
   }
   const completed = writeConsequentialReceipt({ repoRoot: context.repoRoot, action: "close",
-    packageId: context.packageId, scope: context.scope, approvalReceipt: consumed.approvalReceipt, duties,
-    result: { packageClosed: true, planReceipt: consumed.subject.planReceipt, packageClose, closure } });
+    packageId: context.packageId, scope: context.scope, ownerOk, duties,
+    result: { packageClosed: true, planReceipt: planned.receipt, packageClose, closure, reverified } });
   return { packageId: context.packageId, scope: context.scope, originalOwnerDigest: state.originalOwnerDigest,
-    originalGoalDigest: state.originalGoalDigest, locallyReverified: true, closed: true,
-    approvalReceipt: consumed.approvalReceipt, closeReceipt: completed.receipt, recoveryReceipt: durableClose.receipt,
-    closeEvidence, closure, providerOutputEvidence: false };
+    originalGoalDigest: state.originalGoalDigest, closed: true, ownerOk, reverified,
+    reusedIntegration: reuse ? head : null,
+    closeReceipt: completed.receipt, recoveryReceipt: durableClose.receipt,
+    closeEvidence, closure, locallyReverified: reverified, providerOutputEvidence: false };
 }
 
 // Audit 06.09.2026, B23: the durable truth of a close no longer lives only in gitignored
-// .unlazy/. The challenge, the consumed Owner approval, the close receipt and the duty state are
-// mirrored as immutable records into the bundle before the closure checkpoint, which admits
-// exactly them (git-intent closeMirrorRecord) and commits them with the closure.
-function mirrorCloseEvidence(context, consumed, closeReceipt, duties) {
+// .unlazy/. The close receipt and the duty state are mirrored as immutable records into the
+// bundle before the closure checkpoint, which admits exactly them (git-intent
+// closeMirrorRecord) and commits them with the closure. Der Freigabebeleg selbst braucht
+// keine Spiegelung mehr: die Owner-OK-Zeile steht in der PACKAGE.md desselben Commits.
+function mirrorCloseEvidence(context, closeReceipt, duties) {
   const directory = path.join(context.packageInfo.packageDir, "evidence", "close");
   fs.mkdirSync(directory, { recursive: true });
   const files = [];
   for (const [name, source] of [
-    ["owner-approval-challenge.json", consumed.challenge],
-    ["owner-approval-consumption.json", consumed.approvalReceipt],
     ["close-receipt.json", closeReceipt],
   ]) {
     const target = path.join(directory, name);
@@ -1475,16 +1507,16 @@ function recoverClose(context, options) {
     "--package", context.packageId], { cwd: context.repoRoot,
     timeoutMs: reverifyWallMs(context.packageInfo, timeout) });
   // A red recovery re-verification must not read as "the harness broke". The
-  // close approval is spent (its nonce is one-time), so recovery is the only
-  // route left to the missing closure commit, and refusing it silently would
-  // strand the package half closed. Name the state and the Owner route instead
-  // of failing with the generic child error.
+  // package is already closed, so recovery is the only route left to the missing
+  // closure commit, and refusing it silently would strand the package half
+  // closed. Name the state and the Owner route instead of failing with the
+  // generic child error.
   if (reverified.status !== 0) {
     const detail = String(reverified.stderr || reverified.stdout || "").trim().slice(0, 1_000);
     fail("CLOSE_RECOVERY_REVERIFY", "bottom-up close recovery re-verification is red, so the interrupted closure " +
       "checkpoint stays unwritten and the package stays half closed: " + (detail || "exit " + reverified.status) +
       ". Repair the red gate and repeat recover-close with the same close receipt; if it cannot go green again, the " +
-      "Owner route is a NEW close approval (plan-close, then close) -- recovery never commits an unverified bundle.",
+      "Owner route is a NEW Owner-OK line and a new close -- recovery never commits an unverified bundle.",
     1);
   }
   const witnessAfter = bundleFileDigests(context);
@@ -1492,45 +1524,33 @@ function recoverClose(context, options) {
   const closure = parseIntentOutput(childOk(runNode(context.tools.gitIntent,
     ["closure-checkpoint", "--root", context.repoRoot, "--package", context.packageId,
       "--message", closeMessage, "--receipt", source.value.result.planReceipt,
-      "--approval-receipt", source.value.approvalReceipt,
       "--unlazy-root", context.unlazyRoot,
       ...closureWitnessArgs(context, source.value.result.planReceipt, currentHead(context.repoRoot),
         witnessBefore, witnessAfter)],
     { cwd: context.repoRoot, timeoutMs: 180_000 }), "closure checkpoint recovery"));
   const completed = writeConsequentialReceipt({ repoRoot: context.repoRoot, action: "close",
-    packageId: context.packageId, scope: context.scope, approvalReceipt: source.value.approvalReceipt,
+    packageId: context.packageId, scope: context.scope, ownerOk: source.value.ownerOk,
     duties: source.value.duties, result: { ...source.value.result, closure, recovered: true } });
   return { recovered: true, idempotent: false, closeReceipt: completed.receipt, closure, locallyReverified: true };
 }
 
-function planPublish(context, options) {
-  if (!options.closureReceipt) fail("USAGE", "plan-publish requires --closure-receipt");
+// Publish ist die zweite folgenreiche Transition. Der Owner sagt im Chat OK, der
+// Agent bildet daraus dieselbe Owner-OK-Zeile -- hier gebunden an den HEAD des
+// Publish-Plans -- und reicht ihren Wortlaut an git-intent weiter.
+function publish(context, options) {
+  if (!options.closureReceipt) fail("USAGE", "publish requires --closure-receipt");
+  if (!options.ownerOk) fail("USAGE", "publish requires --owner-ok TEXT");
   const planned = parseIntentOutput(childOk(runNode(context.tools.gitIntent,
     ["plan-publish", "--root", context.repoRoot, "--receipt", options.closureReceipt],
   { cwd: context.repoRoot, timeoutMs: 30_000 }), "publish plan"));
-  const challenge = createApprovalChallenge({ repoRoot: context.repoRoot, action: "publish",
-    packageId: context.packageId, scope: context.scope,
-    subject: { planReceipt: planned.receipt, closureReceipt: options.closureReceipt, head: planned.head,
-      branch: planned.branch, remote: planned.remote },
-  });
-  return { ...planned, ...challenge,
-    ownerApproval: ownerApprovalGuide(context, challenge, "publish", "publish"),
-    next: "Owner creates one external approval artifact bound to challengeDigest (see ownerApproval.template and ownerApproval.nextCommand); no boolean approval is accepted." };
-}
-
-async function publish(context, options) {
-  if (!options.challenge || !options.approvalFile) fail("USAGE", "publish requires --challenge and --approval-file");
-  const consumed = await consumeOwnerApproval({ repoRoot: context.repoRoot, unlazyRoot: context.unlazyRoot,
-    challenge: options.challenge, approvalFile: options.approvalFile });
-  if (consumed.action !== "publish") fail("OWNER_APPROVAL_MISMATCH", "approval does not authorize publish", 1);
+  const ownerOk = ownerOkRecord("publish", null, planned.head, options.ownerOk);
   const published = parseIntentOutput(childOk(runNode(context.tools.gitIntent,
-    ["publish", "--root", context.repoRoot, "--receipt", consumed.subject.planReceipt,
-      "--approval-receipt", consumed.approvalReceipt],
-  { cwd: context.repoRoot, timeoutMs: 180_000 }), "approval-receipt publish"));
+    ["publish", "--root", context.repoRoot, "--receipt", planned.receipt,
+      "--owner-ok", ownerOk.wording],
+  { cwd: context.repoRoot, timeoutMs: 180_000 }), "Owner-OK publish"));
   const receipt = writeConsequentialReceipt({ repoRoot: context.repoRoot, action: "publish",
-    packageId: context.packageId, scope: context.scope, approvalReceipt: consumed.approvalReceipt,
-    result: published });
-  return { ...published, approvalReceipt: consumed.approvalReceipt, publishReceipt: receipt.receipt };
+    packageId: context.packageId, scope: context.scope, ownerOk, result: published });
+  return { ...published, ownerOk, publishReceipt: receipt.receipt };
 }
 
 function publicEntry(entry) {
@@ -1559,13 +1579,27 @@ commands:
   duty-assess --gate LEDGER:GATE
   duty-add --duty ID --owner TEXT --trigger TEXT --due-state open|due --gate LEDGER:GATE
   duty-resolve --duty ID [--gate LEDGER:GATE]
-  plan-duty-waiver --duty ID
-  duty-waive --duty ID --challenge PATH --approval-file EXTERNAL_PATH
-  plan-close [--timeout S]
-  close --challenge PATH --approval-file EXTERNAL_PATH [--message TEXT] [--timeout S]
+  duty-waive --duty ID --owner-ok TEXT
+  close [--owner-ok TEXT] [--message TEXT] [--timeout S] [--reverify]
   recover-close --receipt CLOSE_RECEIPT [--message TEXT] [--timeout S]
-  plan-publish --closure-receipt PATH
-  publish --challenge PATH --approval-file EXTERNAL_PATH
+  publish --closure-receipt PATH --owner-ok TEXT
+
+The one Owner record is the Owner-OK line, formed as
+  Owner-OK: <close|publish|waive-duty:ID> <YYYY-MM-DD> <commit-sha> "<wording>"
+--owner-ok TEXT carries the words of the Owner from the chat. close writes that
+line into the "## Abschluss" section of PACKAGE.md and commits it with the
+closure; without the switch the line has to be there already (OWNER_OK_MISSING).
+With the switch a line that still names HEAD is kept (a failed close is simply
+repeated) and a stale one is replaced by the Owner's renewed words. The line
+binds the commit it names: once HEAD moves on it is OWNER_OK_STALE and the Owner
+is asked again. publish and waive-duty form the same line and keep it in their
+receipt instead of PACKAGE.md, because a closed package is not edited any more.
+
+close reuses the current integration checkpoint instead of re-running the whole
+bundle when that checkpoint IS HEAD, the working tree is unchanged except for
+the Owner-OK line, and the read-only gate status reports every gate met; it then
+reports reverified:false and reusedIntegration:<sha>, and the closed PACKAGE.md
+says so. --reverify always forces the full re-verification.
 
 --timeout S is the per-CHECK budget the gate runner receives, not the budget for
 a whole re-verification: the runner executes CHECKs serially, so the wall clock
@@ -1579,8 +1613,8 @@ recover-close continues an interrupted closure checkpoint and re-verifies
 bottom-up like close before writing it; once that commit exists it returns
 unchanged and without re-verifying (locallyReverified: false). A red recovery
 re-verification writes no closure commit and reports CLOSE_RECOVERY_REVERIFY:
-repair the gate and repeat, or ask the Owner for a new close approval through
-plan-close and close.`;
+repair the gate and repeat, or ask the Owner for a new Owner-OK line and close
+again.`;
 
 async function main() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
@@ -1627,15 +1661,13 @@ async function main() {
   else if (options.command === "recover") result = recoverExecution(context, options);
   else if (["duty-assess", "duty-add", "duty-resolve"].includes(options.command)) {
     result = dutyTransition(context, options);
-  } else if (options.command === "plan-duty-waiver") result = planDutyWaiver(context, options);
-  else if (options.command === "duty-waive") result = await waiveDuty(context, options);
+  } else if (options.command === "duty-waive") result = waiveDuty(context, options);
   else if (options.command === "integrate") result = await integrate(context, options);
   else if (options.command === "status") result = await status(context);
-  else if (options.command === "plan-close") result = planClose(context, options);
-  else if (options.command === "close") result = await close(context, options);
+  else if (options.command === "close") result = close(context, options);
   else if (options.command === "recover-close") result = recoverClose(context, options);
-  else if (options.command === "plan-publish") result = planPublish(context, options);
-  else result = await publish(context, options);
+  else if (options.command === "publish") result = publish(context, options);
+  else fail("USAGE", "unhandled command " + options.command);
   if (options.json) process.stdout.write(JSON.stringify(result, null, 2) + "\n");
   else process.stdout.write(JSON.stringify(result, null, 2) + "\n");
 }

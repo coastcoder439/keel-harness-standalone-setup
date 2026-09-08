@@ -10,7 +10,8 @@ import { createRequire } from "node:module";
 import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { readExecutionReceipt, validateImmutableRecord } from "../execution/owner-approval.mjs";
+import { readExecutionReceipt, validateImmutableRecord } from "../execution/execution-receipts.mjs";
+import { findOwnerOk, formatOwnerOkLine, todayLocal, validateOwnerOk } from "../execution/owner-ok.mjs";
 
 const require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -177,7 +178,7 @@ function parseArgs(argv) {
     else if (option === "--path") values.paths.push(args.shift());
     else if (option === "--operation") values.operation = args.shift();
     else if (option === "--receipt") values.receipt = args.shift();
-    else if (option === "--approval-receipt") values.approvalReceipt = args.shift();
+    else if (option === "--owner-ok") values.ownerOk = args.shift();
     else if (option === "--unlazy-root") values.unlazyRoot = args.shift();
     else if (option === "--writeback-receipt") values.writebackReceipts.push(args.shift());
     else if (option === "--json") values.json = true;
@@ -1156,7 +1157,7 @@ function planClose(options) {
 // A receipt cannot be reduced to a word: readExecutionReceipt binds it to its
 // immutable digest-derived path and operation, and every receipt has to name
 // THIS close plan, THIS HEAD and the exact ledgers its run covered -- exactly
-// how publish below verifies its Owner-approval consumption receipt.
+// how the close plan itself is bound to this exact package and HEAD.
 // A receipt is still written by the same OS user as the repository, so it is the
 // sanctioned chain, not cryptography (welle-2c-design.md, threat model). What it
 // buys over argv is that the executor must have RUN the re-verification whose
@@ -1187,14 +1188,13 @@ function writebackWitnesses(repoRoot, packageId, source, planReceipt, receiptPat
 }
 
 // The close mirror (audit 06.09.2026, B23): package execution copies its own immutable receipts
-// -- the close challenge, the consumed Owner approval, the close receipt and the duty state --
-// into docs/packages/<id>/evidence/close/ so that follow-up duties and the approval survive the
-// runtime cleanup of .unlazy/. The closure checkpoint admits exactly these files, each proven by
-// its own record digest and bound to this package and scope; anything else under the bundle that
-// the close plan did not snapshot still fails CLOSE_WRITEBACK.
+// -- the close receipt and the duty state -- into docs/packages/<id>/evidence/close/ so that
+// follow-up duties survive the runtime cleanup of .unlazy/. The closure checkpoint admits exactly
+// these files, each proven by its own record digest and bound to this package and scope; anything
+// else under the bundle that the close plan did not snapshot still fails CLOSE_WRITEBACK.
+// Der Freigabebeleg selbst wird nicht mehr gespiegelt: die Owner-OK-Zeile steht in der
+// PACKAGE.md, die dieser Checkpoint selbst committet (Rueckbau 08.09.2026).
 export const CLOSE_MIRROR_FILES = Object.freeze({
-  "owner-approval-challenge.json": "owner-approval-challenge",
-  "owner-approval-consumption.json": "owner-approval-consumption",
   "close-receipt.json": "close-receipt",
   "duties-state.json": "duties-state",
 });
@@ -1224,45 +1224,25 @@ async function closureCheckpoint(options) {
   if (source.packageId !== packageId || source.head !== snapshot.headOid) {
     fail("CLOSE_PLAN_STALE", "package or HEAD changed after the close plan", 1);
   }
+  const packageDir = path.join(snapshot.repoRoot, "docs", "packages", packageId);
+  const packageFile = path.join(packageDir, "PACKAGE.md");
+  const packageText = fs.readFileSync(packageFile, "utf8");
   // The same Owner bar publish carries. A closure checkpoint writes a commit for
-  // a package the Owner approved closing, so it verifies the consumed one-time
-  // approval receipt itself instead of trusting that its caller did: the
-  // executor's own state file is plain agent-writable JSON, and without this
-  // check a direct git-intent call closed a package with no approval at all.
-  if (!options.approvalReceipt) {
-    fail("OWNER_APPROVAL_REQUIRED", "closure-checkpoint requires a consumed, one-time --approval-receipt from package execution", 1);
-  }
-  let approval;
-  try { approval = readExecutionReceipt(snapshot.repoRoot, options.approvalReceipt, "owner-approval-consumption"); }
-  catch (error) { fail(error.code || "OWNER_APPROVAL_RECEIPT", error.message, error.exitCode || 2); }
-  const approvedPlan = path.resolve(snapshot.repoRoot, String(approval.value.subject?.planReceipt || ""));
-  if (approval.value.action !== "close" || approval.value.packageId !== packageId ||
-      approval.value.scope !== source.scope || approval.value.subject?.head !== source.head ||
-      !repository.samePath(approvedPlan, path.resolve(snapshot.repoRoot, options.receipt))) {
-    fail("OWNER_APPROVAL_MISMATCH", "approval receipt does not bind this exact close plan", 1);
-  }
-  // The approval binds the plan receipt's BYTES, not just its path. The plan
-  // receipt lives under .unlazy/.global-receipts/ and is plain agent-writable
-  // JSON with no digest-derived identity, so without this the file set, the
-  // per-file digests and the normalized PACKAGE.md digest this close compares
-  // against were all supplied by whoever could edit that file (measured
-  // 02.09.2026: rewriting one files[] digest made a close carrying hand-edited
-  // design/notes.md exit 0). package-executor.mjs planClose puts planDigest into
-  // the challenge subject, so the Owner's approval covers those bytes. Proven by
-  // the edited-plan-receipt probe of "two verified leaves receive one integration
-  // checkpoint, bottom-up reverify, plan completion and close" in
-  // test/package-execution.test.js.
-  const planBytes = fs.readFileSync(path.resolve(snapshot.repoRoot, options.receipt));
-  if (sha256(planBytes) !== String(approval.value.subject?.planDigest || "")) {
-    fail("OWNER_APPROVAL_MISMATCH", "close plan receipt bytes changed after the Owner approved them", 1);
-  }
+  // a package the Owner said OK to closing, so it reads that Owner-OK line out of
+  // the PACKAGE.md it is about to commit instead of trusting that its caller did:
+  // the executor's own state file is plain agent-writable JSON, and without this
+  // check a direct git-intent call closed a package with no Owner word at all.
+  // The line binds the exact commit the close plan is bound to, so an Owner-OK
+  // written for an older state is stale here (Rueckbau 08.09.2026).
+  let ownerOk;
+  try { ownerOk = findOwnerOk(packageText, "close"); }
+  catch (error) { fail(error.code || "OWNER_OK_INVALID", error.message, error.exitCode || 2); }
+  try { validateOwnerOk(ownerOk, { action: "close", target: null, head: source.head, today: todayLocal() }); }
+  catch (error) { fail(error.code || "OWNER_OK_INVALID", error.message, error.exitCode || 2); }
   const message = String(options.message || "").trim();
   if (!message || message.length > 200 || /[\r\n\0]/u.test(message)) {
     fail("USAGE", "--message must be one line of 1..200 characters");
   }
-  const packageDir = path.join(snapshot.repoRoot, "docs", "packages", packageId);
-  const packageFile = path.join(packageDir, "PACKAGE.md");
-  const packageText = fs.readFileSync(packageFile, "utf8");
   if (!/^Fulfillment:\s*(?:erfuellt|fulfilled)\b/imu.test(packageText) ||
       !/^Offen:\s*(?:nichts|nothing|none)\s*$/imu.test(packageText)) {
     fail("CLOSE_NOT_FINAL", "PACKAGE.md does not carry a closed Fulfillment/Offen claim", 1);
@@ -1280,20 +1260,21 @@ async function closureCheckpoint(options) {
   if (JSON.stringify(currentPlanned) !== JSON.stringify(source.files.map((item) => item.relative))) {
     fail("CLOSE_WRITEBACK", "package file set changed during close", 1);
   }
-  // The package close MUST re-verify gates after the Owner approval (the
-  // vendored close always runs its gate runner), and that mandated re-execution
+  // The package close MUST re-verify gates after the Owner said OK (the
+  // vendored close runs its gate runner, or reuses the current integration
+  // checkpoint when nothing changed since it), and that mandated re-execution
   // legitimately refreshes runtime evidence: ledger checkboxes/EVIDENCE values
   // and exactly those evidence/ artifacts a gate of this bundle declares it
   // regenerates. Only that turnover is tolerated here; the file set stays locked
   // above, and every contract byte (OWNER.md, ledger contract lines, undeclared
-  // evidence proof, everything else in the bundle) stays bound to the approved
+  // evidence proof, everything else in the bundle) stays bound to the recorded
   // close plan.
   // Two independent conditions have to agree, because a declaration alone is a
   // permission, not a fact: the witness receipts record which paths the mandated
   // re-verification actually rewrote (digest before the run != digest after it),
   // and this close re-checks that each recorded digest is still the file's
   // CURRENT digest. Without that witness the tolerance is empty, which is why a
-  // file hand-edited between the approved close plan and the run -- an Owner
+  // file hand-edited between the recorded close plan and the run -- an Owner
   // proof no oracle ever writes -- is refused even inside a bundle whose
   // declaration would cover it.
   // The ledgers are read from the working tree here on purpose: a widened WRITES
@@ -1302,13 +1283,12 @@ async function closureCheckpoint(options) {
   // under evidence/ and are therefore never tolerable). Proven by "two verified
   // leaves receive one integration checkpoint, bottom-up reverify, plan
   // completion and close" in test/package-execution.test.js, which rewrites a
-  // gate title after the approved close plan.
+  // gate title after the recorded close plan.
   // The BEFORE state of every path the anchor commit carries comes from that
   // commit (source.head is asserted to be HEAD above), not from the plan
   // receipt: the receipt is agent-writable, the commit is not. The receipt stays
   // the before state only for a path the anchor does not carry -- an artifact the
-  // mandated re-verification created after the checkpoint -- and its bytes are
-  // bound to the Owner approval by the planDigest check above.
+  // mandated re-verification created after the checkpoint.
   const anchor = anchorBundleState(snapshot.repoRoot, packageId, source.head);
   const beforeByFile = new Map(source.files.map((item) => [item.relative, item]));
   const witnesses = writebackWitnesses(snapshot.repoRoot, packageId, source, options.receipt,
@@ -1384,7 +1364,8 @@ async function closureCheckpoint(options) {
   const receipt = writeGlobalReceipt(snapshot.repoRoot, { operation: "closure-checkpoint", packageId,
     scope: source.scope,
     headBefore: source.head, head: commit, commit, paths, planReceipt: options.receipt,
-    approvalReceipt: approval.file, approvalDigest: approval.value.approvalDigest });
+    ownerOk: { action: ownerOk.action, target: ownerOk.target, date: ownerOk.date, commit: ownerOk.commit,
+      wording: ownerOk.wording, line: ownerOk.line, lineDigest: ownerOk.lineDigest } });
   return { operation: "closure-checkpoint", packageId, commit, paths, receipt };
 }
 
@@ -1432,18 +1413,18 @@ function planPublish(options) {
   const receiptPath = binding ? writeReceipt(binding, value) : writeGlobalReceipt(repoRoot, value);
   return {
     operation: "plan-publish",
-    code: "OWNER_APPROVAL_REQUIRED",
+    code: "OWNER_OK_REQUIRED",
     branch,
     remote: remoteValue.replace(/:\/\/[^/@\s]+@/u, "://[credential]@"),
     head,
     receipt: receiptPath,
-    next: "Show this exact plan to the Owner. Publish only through the package executor after it consumes an external Owner approval artifact; raw git push remains blocked.",
+    next: "Show this exact plan to the Owner. Publish only through the package executor once the Owner says OK in the chat, whose words become the Owner-OK line; raw git push remains blocked.",
   };
 }
 
 function publish(options) {
-  if (!options.approvalReceipt) {
-    fail("OWNER_APPROVAL_REQUIRED", "publish requires a consumed, one-time --approval-receipt from package execution", 1);
+  if (!options.ownerOk) {
+    fail("OWNER_OK_REQUIRED", "publish requires the Owner-OK wording of this exact publish plan (--owner-ok TEXT)", 1);
   }
   const snapshot = repository.repositorySnapshot(options.root || process.cwd());
   const resolvedReceipt = path.resolve(snapshot.repoRoot, options.receipt || "");
@@ -1456,21 +1437,17 @@ function publish(options) {
     source = receiptRecord(binding, options.receipt, "plan-publish").value;
   }
   const repoRoot = binding ? binding.repoRoot : snapshot.repoRoot;
-  let approval;
-  try {
-    approval = readExecutionReceipt(repoRoot, options.approvalReceipt, "owner-approval-consumption");
-  } catch (error) {
-    fail(error.code || "OWNER_APPROVAL_RECEIPT", error.message, error.exitCode || 2);
-  }
   const expectedScope = binding ? binding.scope : source.scope;
-  const approvedPlan = path.resolve(repoRoot, String(approval.value.subject?.planReceipt || ""));
-  const actualPlan = path.resolve(repoRoot, options.receipt || "");
-  if (approval.value.action !== "publish" || approval.value.packageId !== source.packageId ||
-      approval.value.scope !== expectedScope || !repository.samePath(approvedPlan, actualPlan) ||
-      approval.value.subject?.head !== source.head || approval.value.subject?.branch !== source.branch ||
-      (source.closureReceipt || null) !== (approval.value.subject?.closureReceipt || null)) {
-    fail("OWNER_APPROVAL_MISMATCH", "approval receipt does not bind this exact publish plan", 1);
-  }
+  // Die Owner-OK-Zeile fuer publish steht nicht in einer Datei des Repos: ein
+  // geschlossenes Paket wird nicht mehr editiert. Sie wird hier aus dem Wortlaut
+  // des Owners und dem HEAD DIESES Publish-Plans gebildet und im Beleg gehalten.
+  let ownerOk;
+  try {
+    const line = formatOwnerOkLine({ action: "publish", target: null, date: todayLocal(),
+      commit: source.head, wording: String(options.ownerOk) });
+    ownerOk = validateOwnerOk(findOwnerOk(line, "publish"),
+      { action: "publish", target: null, head: source.head, today: todayLocal() });
+  } catch (error) { fail(error.code || "OWNER_OK_INVALID", error.message, error.exitCode || 2); }
   const head = commandResult(git(repoRoot, ["rev-parse", "--verify", "HEAD"]), "head").trim();
   const branch = commandResult(git(repoRoot, ["branch", "--show-current"]), "branch").trim();
   const remote = commandResult(git(repoRoot, ["remote", "get-url", "origin"]), "remote").trim();
@@ -1482,8 +1459,10 @@ function publish(options) {
     { timeoutMs: 120_000 });
   commandResult(result, "publish");
   const receiptValue = { operation: "publish", head, branch, packageId: source.packageId,
-    scope: expectedScope, planReceipt: options.receipt, approvalReceipt: approval.file,
-    approvalDigest: approval.value.approvalDigest, remoteDigest: source.remoteDigest, paths: [] };
+    scope: expectedScope, planReceipt: options.receipt,
+    ownerOk: { action: ownerOk.action, target: ownerOk.target, date: ownerOk.date, commit: ownerOk.commit,
+      wording: ownerOk.wording, line: ownerOk.line, lineDigest: ownerOk.lineDigest },
+    remoteDigest: source.remoteDigest, paths: [] };
   const receiptPath = global ? writeGlobalReceipt(repoRoot, receiptValue) : writeReceipt(binding, receiptValue);
   return { operation: "publish", branch, head, receipt: receiptPath, published: true };
 }
@@ -1506,11 +1485,11 @@ export const CANONICAL_INTENTS = Object.freeze([
   { name: "plan-close", mutates: true,
     syntax: "plan-close --root <repo> --package <packageId> --scope <scope>" },
   { name: "closure-checkpoint", mutates: true,
-    syntax: "closure-checkpoint --root <repo> --package <packageId> --receipt <closePlanReceipt> --approval-receipt <consumedApprovalReceipt> --message <message> [--unlazy-root <dir>] [--writeback-receipt <witnessReceipt> ...]" },
+    syntax: "closure-checkpoint --root <repo> --package <packageId> --receipt <closePlanReceipt> --message <message> [--unlazy-root <dir>] [--writeback-receipt <witnessReceipt> ...]" },
   { name: "plan-publish", mutates: true,
     syntax: "plan-publish --root <repo> (--session <sessionId> | --receipt <closureReceipt>)" },
   { name: "publish", mutates: true,
-    syntax: "publish --root <repo> --receipt <publishPlanReceipt> --approval-receipt <consumedApprovalReceipt> [--session <sessionId>]" },
+    syntax: "publish --root <repo> --receipt <publishPlanReceipt> --owner-ok <ownerWording> [--session <sessionId>]" },
   { name: "explain", mutates: false,
     syntax: "explain --operation <unsupportedGitOperation>" },
 ]);
