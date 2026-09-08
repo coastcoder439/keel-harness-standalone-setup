@@ -51,6 +51,8 @@ for (const required of [
   ["harness-core", "binding", "package-binding.cjs"],
   ["harness-core", "execution", "package-bootstrap.mjs"],
   ["harness-core", "execution", "package-executor.mjs"],
+  ["harness-core", "execution", "owner-ok.mjs"],
+  ["harness-core", "execution", "execution-receipts.mjs"],
   ["harness-core", "git", "git-intent.mjs"],
   ["templates", "OWNER.md"], ["templates", "GATES-ROOT.md"], ["templates", "GATES-LEAF.md"],
   ["checks", "onboarding-ready.mjs"], ["docs", "harness-instance.md"],

@@ -14,12 +14,12 @@ description: Sichert genau den verifizierten Stand des gebundenen Arbeitspakets 
 4. Nur wenn fuer einen gebundenen, nicht parallelen Sonderfall ein einzelner Checkpoint
    ausdruecklich vorgesehen ist, verwende `git-intent.mjs checkpoint` mit den exakten
    `--path`-Werten. Versuche nie einen alternativen rohen Git-Befehl.
-5. Eine Veroeffentlichung beginnt erst nach dem Package-Close. Fuehre
-   `package-executor.mjs plan-publish --harness-root <HARNESS_ROOT> --root <REPO> --package <ID> --scope <SCOPE> --closure-receipt <CLOSURE_RECEIPT> --json`
-   aus und zeige Repo, Branch, HEAD, Remote und Challenge dem Owner. Nur der Owner
-   erstellt ausserhalb des Repos ein privates kurzlebiges Approval-Artefakt. Danach
-   darf ausschließlich `package-executor.mjs publish` mit `--challenge` und
-   `--approval-file` laufen; direkter `git-intent publish` ist kein Bedienweg.
+5. Eine Veroeffentlichung beginnt erst nach dem Package-Close. Der Owner sagt sein OK im
+   Chat; danach laeuft genau ein Befehl:
+   `package-executor.mjs publish --harness-root <HARNESS_ROOT> --root <REPO> --package <ID> --scope <SCOPE> --closure-receipt <CLOSURE_RECEIPT> --owner-ok "<WORTLAUT>" --json`.
+   Er plant den Push, zeigt Repo, Branch, HEAD und Remote und legt die Owner-OK-Zeile im
+   Publish-Beleg ab. Ohne `--owner-ok` bricht er ab; direkter `git-intent publish` ist
+   kein Bedienweg.
 6. Berichte Receipt, Commit und lokalen Reverify-Stand. Ein Commit oder Provider-Erfolg
    ersetzt weder Evidence noch Fulfillment des unveraenderlichen Owner-Auftrags.
 

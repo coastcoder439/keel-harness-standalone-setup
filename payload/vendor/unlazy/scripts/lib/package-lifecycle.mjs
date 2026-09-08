@@ -11,10 +11,9 @@ import {
   realpathSync,
   renameSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join, relative, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import packageContext from "./package-context.cjs";
 import {
@@ -56,12 +55,6 @@ const RUNTIME_FILES = Object.freeze([
 
 const slash = (value) => value.replaceAll("\\", "/");
 const digestBytes = (value) => "sha256:" + createHash("sha256").update(value).digest("hex");
-
-function sameFileSystemObject(left, right) {
-  const a = statSync(left, { bigint: true });
-  const b = statSync(right, { bigint: true });
-  return a.dev === b.dev && a.ino === b.ino;
-}
 
 function lifecycleError(message, exitCode = 2, code = "UNLAZY_PACKAGE_LIFECYCLE") {
   const error = new Error(message);
@@ -252,11 +245,9 @@ function validateDuties(value, packageId, scope) {
         Number.isNaN(Date.parse(duty.createdAt)) || Number.isNaN(Date.parse(duty.updatedAt))) {
       throw lifecycleError("follow-up duty " + dutyId + " must define owner, trigger, dueState, and qualified gate");
     }
-    if (duty.dueState === "waived" && typeof duty.waiverReceipt !== "string") {
-      throw lifecycleError("waived follow-up duty " + dutyId + " requires an Owner waiver receipt");
-    }
-    if (duty.dueState !== "waived" && duty.waiverReceipt) {
-      throw lifecycleError("non-waived follow-up duty " + dutyId + " cannot carry a waiver receipt");
+    if (duty.dueState === "waived") validateWaiverRecord(dutyId, duty.waiver);
+    if (duty.dueState !== "waived" && duty.waiver) {
+      throw lifecycleError("non-waived follow-up duty " + dutyId + " cannot carry an Owner-OK waiver record");
     }
     if (duty.dueState === "fulfilled" && Number.isNaN(Date.parse(duty.fulfilledAt))) {
       throw lifecycleError("fulfilled follow-up duty " + dutyId + " requires a timestamp");
@@ -297,66 +288,128 @@ function assertDutiesClosable(duties) {
   return duties;
 }
 
-function executionReceipt(repoRoot, receiptPath, operation) {
-  const directory = resolve(repoRoot, ".unlazy", ".execution-receipts");
-  const file = resolve(receiptPath || "");
-  const info = lstatSync(file);
-  if (!info.isFile() || info.isSymbolicLink() || (typeof info.nlink === "number" && info.nlink !== 1)) {
-    throw lifecycleError("authorization receipt must be one regular file");
+// Owner-OK-Zeile: derselbe Wortlaut wie im Harness-Kern, hier lokal, weil vendor/ nicht importiert.
+const OWNER_OK_LINE =
+  /^Owner-OK:\s+(close|publish|waive-duty:[A-Za-z0-9][A-Za-z0-9._-]{0,63})\s+(\d{4}-\d{2}-\d{2})\s+([0-9a-f]{40})\s+"([^"\r\n]{1,500})"\s*$/u;
+
+function parseOwnerOkLines(text) {
+  const records = [];
+  for (const line of String(text ?? "").split(/\r?\n/)) {
+    const match = OWNER_OK_LINE.exec(line);
+    if (!match) continue;
+    const separator = match[1].indexOf(":");
+    records.push({
+      action: separator === -1 ? match[1] : match[1].slice(0, separator),
+      target: separator === -1 ? null : match[1].slice(separator + 1),
+      date: match[2],
+      commit: match[3],
+      wording: match[4],
+      line,
+      lineDigest: digestBytes(line),
+    });
   }
-  const resolvedDirectory = realpathSync(directory);
-  const resolvedFile = realpathSync(file);
-  if (!sameFileSystemObject(resolvedDirectory, dirname(resolvedFile))) {
-    throw lifecycleError("authorization receipt escapes the execution receipt directory");
-  }
-  let value;
-  try { value = JSON.parse(readFileSync(file, "utf8")); }
-  catch (error) { throw lifecycleError("invalid authorization receipt: " + error.message); }
-  const recordDigest = value?.recordDigest;
-  if (!value || value.schemaVersion !== 1 || value.operation !== operation || !/^sha256:[a-f0-9]{64}$/u.test(recordDigest || "")) {
-    throw lifecycleError("authorization receipt has the wrong schema or operation");
-  }
-  const body = { ...value };
-  delete body.recordDigest;
-  if (digestBytes(JSON.stringify(canonical(body))) !== recordDigest) {
-    throw lifecycleError("authorization receipt digest is invalid");
-  }
-  const expected = join(directory, value.operation + "-" + recordDigest.slice(7) + ".json");
-  if (!existsSync(expected) || !sameFileSystemObject(expected, resolvedFile)) {
-    throw lifecycleError("authorization receipt path does not match its immutable identity");
-  }
-  return { file: resolvedFile, value };
+  return records;
 }
 
-function approvalConsumption(repoRoot, receiptPath, action, packageId, scope, dutyId = null) {
-  const receipt = executionReceipt(repoRoot, receiptPath, "owner-approval-consumption");
-  const value = receipt.value;
-  const challenge = executionReceipt(repoRoot, value.challengeReceipt, "owner-approval-challenge");
-  if (value.action !== action || value.packageId !== packageId || value.scope !== scope ||
-      (value.dutyId || null) !== dutyId || value.challengeDigest !== challenge.value.recordDigest ||
-      value.subjectDigest !== challenge.value.subjectDigest || value.subjectDigest !==
-        digestBytes(JSON.stringify(canonical(value.subject || {}))) ||
-      challenge.value.action !== action || challenge.value.packageId !== packageId ||
-      challenge.value.scope !== scope || (challenge.value.dutyId || null) !== dutyId) {
-    throw lifecycleError("Owner approval consumption does not bind its immutable challenge", 1);
+function findOwnerOk(text, action, target = null) {
+  const matches = parseOwnerOkLines(text)
+    .filter((record) => record.action === action && record.target === target);
+  if (matches.length > 1) {
+    throw lifecycleError("PACKAGE.md carries more than one Owner-OK line for " + action, 1);
   }
-  return receipt;
+  return matches[0] || null;
 }
 
-function closeAuthorization(repoRoot, packageId, scope, status, duties, receiptPath) {
-  const receipt = approvalConsumption(repoRoot, receiptPath, "close", packageId, scope);
-  const value = receipt.value;
-  const subject = value.subject || {};
+function formatOwnerOkLine(record) {
+  const label = record.target ? record.action + ":" + record.target : record.action;
+  const line = "Owner-OK: " + label + " " + record.date + " " + record.commit + ' "' + record.wording + '"';
+  if (!OWNER_OK_LINE.test(line)) throw lifecycleError("Owner-OK line is invalid: " + JSON.stringify(line));
+  return line;
+}
+
+function todayLocal(now = new Date()) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate());
+}
+
+function currentHead(repoRoot) {
   const head = spawnSync("git", ["-C", repoRoot, "rev-parse", "--verify", "HEAD"], {
     encoding: "utf8", windowsHide: true, timeout: 30_000,
   });
-  if (head.status !== 0) throw lifecycleError("cannot bind close authorization to current Git HEAD");
-  if (subject.packageDigest !== status.digest || subject.dutiesDigest !== dutyDigest(duties) ||
-      subject.ownerDigest !== status.owner.digest || subject.head !== String(head.stdout).trim() ||
-      typeof subject.planReceipt !== "string" || !subject.planReceipt) {
-    throw lifecycleError("Owner close approval is stale for package, duties, Owner contract, HEAD, or close plan", 1);
+  if (head.status !== 0) throw lifecycleError("cannot read the current Git HEAD");
+  return String(head.stdout).trim();
+}
+
+// Nur der Abschnitt `## Abschluss` traegt Freigaben; ein Zitat der Zeile im Status
+// oder in einem Codeblock ist keine (dieselbe Regel wie owner-ok.mjs im Harness-Kern).
+function abschlussSection(packageText) {
+  const lines = String(packageText ?? "").split(/\r?\n/);
+  const start = lines.findIndex((item) => /^##\s+Abschluss\s*$/.test(item));
+  if (start === -1) return "";
+  let end = lines.length;
+  for (let index = start + 1; index < lines.length; index += 1) {
+    if (/^##\s/.test(lines[index])) { end = index; break; }
   }
-  return receipt;
+  return lines.slice(start + 1, end).join("\n");
+}
+
+function packageOwnerOk(target, action) {
+  return findOwnerOk(abschlussSection(readFileSync(target.packageFile, "utf8")), action);
+}
+
+// --reuse-integration darf nur den Baum wiederverwenden, den die Integration gemessen
+// hat: kein veraenderter, geloeschter oder neuer Pfad ausser der PACKAGE.md des Pakets,
+// und deren einzige Aenderung sind hinzugefuegte Owner-OK-Zeilen. Diese Pruefung lebt
+// hier ein zweites Mal, weil der Executor-Zustand agent-schreibbar ist und der
+// Lifecycle die Bedingung selbst kennen muss.
+function assertTreeReusable(repoRoot, packageFile) {
+  const packageRelative = relative(repoRoot, packageFile).replaceAll("\\", "/");
+  const status = spawnSync("git", ["-C", repoRoot, "status", "--porcelain", "--untracked-files=all"], {
+    encoding: "utf8", windowsHide: true, timeout: 30_000,
+  });
+  if (status.error || status.status !== 0) conflict("--reuse-integration could not read the Git working tree state");
+  const entries = String(status.stdout ?? "").split(/\r?\n/).filter(Boolean);
+  for (const entry of entries) {
+    const path = entry.slice(3).replace(/^"|"$/g, "").replaceAll("\\", "/");
+    if (path !== packageRelative) {
+      conflict("--reuse-integration requires an unchanged working tree; changed: " + path + "; rerun close without it");
+    }
+  }
+  if (!entries.length) return;
+  const diff = spawnSync("git", ["-C", repoRoot, "diff", "HEAD", "--", packageRelative], {
+    encoding: "utf8", windowsHide: true, timeout: 30_000,
+  });
+  if (diff.error || diff.status !== 0) conflict("--reuse-integration could not diff PACKAGE.md against HEAD");
+  for (const line of String(diff.stdout ?? "").split(/\r?\n/)) {
+    if (line.startsWith("+++") || line.startsWith("---")) continue;
+    if (line.startsWith("-") || (line.startsWith("+") && !OWNER_OK_LINE.test(line.slice(1)))) {
+      conflict("--reuse-integration allows only added Owner-OK lines in PACKAGE.md; rerun close without it");
+    }
+  }
+}
+
+function ownerOkWaiver(repoRoot, dutyId, wording) {
+  const text = String(wording ?? "");
+  if (!text) throw lifecycleError("duty-waive requires --owner-ok TEXT");
+  const date = todayLocal();
+  const head = currentHead(repoRoot);
+  const line = formatOwnerOkLine({ action: "waive-duty", target: dutyId, date, commit: head, wording: text });
+  return { wording: text, date, head, line, lineDigest: digestBytes(line) };
+}
+
+function validateWaiverRecord(dutyId, waiver) {
+  if (!waiver || typeof waiver !== "object" || Array.isArray(waiver) ||
+      typeof waiver.wording !== "string" || typeof waiver.date !== "string" ||
+      typeof waiver.head !== "string" || typeof waiver.line !== "string" ||
+      typeof waiver.lineDigest !== "string" || digestBytes(waiver.line) !== waiver.lineDigest) {
+    throw lifecycleError("waived follow-up duty " + dutyId + " requires an Owner-OK waiver record");
+  }
+  const record = parseOwnerOkLines(waiver.line)[0];
+  if (!record || record.action !== "waive-duty" || record.target !== dutyId ||
+      record.date !== waiver.date || record.commit !== waiver.head || record.wording !== waiver.wording) {
+    throw lifecycleError("waived follow-up duty " + dutyId + " carries an Owner-OK line for another subject");
+  }
+  return waiver;
 }
 
 export function readFollowUpDuties(options) {
@@ -392,28 +445,19 @@ export async function transitionFollowUpDuty(options) {
       if (!["open", "due"].includes(dueState)) throw lifecycleError("new duty due state must be open or due");
       const gate = String(options.gate || "");
       assertGate(status, gate, false);
-      duties.duties[dutyId] = { id: dutyId, owner, trigger, dueState, gate, waiverReceipt: null,
+      duties.duties[dutyId] = { id: dutyId, owner, trigger, dueState, gate, waiver: null,
         createdAt: now, updatedAt: now };
     } else if (options.action === "resolve") {
       const duty = duties.duties[String(options.dutyId || "")];
       if (!duty || !["open", "due"].includes(duty.dueState)) throw lifecycleError("duty-resolve requires an open duty");
       const gate = String(options.gate || duty.gate);
       assertGate(status, gate, true);
-      Object.assign(duty, { dueState: "fulfilled", gate, waiverReceipt: null, updatedAt: now, fulfilledAt: now });
+      Object.assign(duty, { dueState: "fulfilled", gate, waiver: null, updatedAt: now, fulfilledAt: now });
     } else if (options.action === "waive") {
       const duty = duties.duties[String(options.dutyId || "")];
       if (!duty || !["open", "due"].includes(duty.dueState)) throw lifecycleError("duty-waive requires an open duty");
-      const waiver = approvalConsumption(repoRoot, options.waiverReceipt, "waive-duty", packageId, scope, duty.id);
-      const subject = waiver.value.subject || {};
-      const head = spawnSync("git", ["-C", repoRoot, "rev-parse", "--verify", "HEAD"], {
-        encoding: "utf8", windowsHide: true, timeout: 30_000,
-      });
-      if (head.status !== 0 || subject.dutiesDigest !== dutyDigest(duties) ||
-          subject.ownerDigest !== status.owner.digest || subject.head !== String(head.stdout).trim() ||
-          subject.duty?.id !== duty.id) {
-        throw lifecycleError("Owner waiver receipt is stale for duty state, Owner contract, or HEAD", 1);
-      }
-      Object.assign(duty, { dueState: "waived", waiverReceipt: waiver.file, updatedAt: now, waivedAt: now });
+      const waiver = ownerOkWaiver(repoRoot, duty.id, options.ownerOk);
+      Object.assign(duty, { dueState: "waived", waiver, updatedAt: now, waivedAt: now });
     } else throw lifecycleError("unknown follow-up duty transition " + options.action);
     validateDuties(duties, packageId, scope);
     writeAtomic(file, JSON.stringify(duties, null, 2) + "\n", { root: repoRoot });
@@ -621,14 +665,31 @@ function assertPreclose(status, target, options = {}, duties = null) {
   }
 }
 
-function finalizePackageText(status, duties) {
+// Nachpruefung wiederverwenden: kein Gate-Runner, nur die lesende Statuspruefung des Bundles.
+function assertReusableIntegration(status) {
+  if (status.gates.total === 0 || status.gates.met !== status.gates.total || status.gates.handoff !== 0 ||
+      status.status !== "closable") {
+    conflict("--reuse-integration requires every gate to be locally met; rerun close without it");
+  }
+  return status;
+}
+
+// Der Abschlusstext sagt, was wirklich lief: der volle Gate-Lauf dieses close oder die
+// wiederverwendete Integrations-Nachpruefung. Ein "reverified every gate" auf dem
+// Reuse-Pfad waere eine versionierte Falschaussage (Review 08.09.2026).
+function finalizePackageText(status, duties, reusedIntegration = null) {
   assertDutiesClosable(duties);
   let text = status._internal.parsed.text;
   const replacements = {
     Coverage: status.contract.covered + "/" + status.contract.required + " contract outcomes mapped; " +
       status.gates.met + "/" + status.gates.total + " met.",
-    Fulfillment: "erfuellt - package-cli close reverified every executable gate and validated all closure dimensions.",
-    "Geprueft gegen": "package-cli close --reverify; package schema version " + status.schemaVersion + ".",
+    Fulfillment: reusedIntegration
+      ? "erfuellt - package-cli close reused the integration re-verification committed as " + reusedIntegration +
+        " (working tree unchanged, every gate read as met; no gate was re-executed by this close) and validated all closure dimensions."
+      : "erfuellt - package-cli close reverified every executable gate and validated all closure dimensions.",
+    "Geprueft gegen": (reusedIntegration
+      ? "package-cli close --reuse-integration " + reusedIntegration + " (read-only gate status)"
+      : "package-cli close --reverify") + "; package schema version " + status.schemaVersion + ".",
     Offen: "nichts",
   };
   for (const [name, value] of Object.entries(replacements)) {
@@ -690,6 +751,10 @@ export async function closePackage(options) {
   if (invalidPackage) throw lifecycleError(invalidPackage);
   if (invalidScope) throw lifecycleError(invalidScope);
   assertPackageModeBoundary(repoRoot, packageId);
+  const reuseIntegration = options.reuseIntegration ? String(options.reuseIntegration) : null;
+  if (reuseIntegration !== null && !/^[0-9a-f]{40}$/u.test(reuseIntegration)) {
+    throw lifecycleError("--reuse-integration must name a full 40-character commit SHA");
+  }
 
   return withFileLock(repoRoot, lifecycleRegistry(repoRoot), async () => {
     const records = listActiveScopes(repoRoot, { assertRoot: false, includeInvalid: true });
@@ -716,10 +781,10 @@ export async function closePackage(options) {
     if (status.status === "closed") {
       if (status.diagnostics.length) throw lifecycleError("closed package is invalid");
       const journal = readJournal(repoRoot, record.scope);
-      const authorization = approvalConsumption(repoRoot, options.authorizationReceipt, "close", packageId, record.scope);
-      if (!journal || journal.value.authorizationDigest !== authorization.value.recordDigest ||
-          !sameFileSystemObject(journal.value.authorizationReceipt, authorization.file)) {
-        throw lifecycleError("closed-package recovery requires the original Owner approval receipt", 1);
+      const ownerOk = packageOwnerOk(target, "close");
+      if (!journal || !journal.value.ownerOk || !ownerOk ||
+          journal.value.ownerOk.lineDigest !== ownerOk.lineDigest) {
+        throw lifecycleError("closed-package recovery requires the original Owner-OK line", 1);
       }
       const releasedLeases = await cleanupClosedRuntime(repoRoot, record.scope, packageId, options);
       return {
@@ -727,6 +792,8 @@ export async function closePackage(options) {
         closed: true,
         recovered: true,
         reverified: false,
+        reusedIntegration: null,
+        ownerOk,
         releasedLeases,
         repoRoot,
         repoKey: options.repoKey || ".",
@@ -738,45 +805,60 @@ export async function closePackage(options) {
     }
 
     assertPreclose(status, target, {}, duties);
-    const authorization = closeAuthorization(repoRoot, packageId, record.scope, status, duties, options.authorizationReceipt);
+    const head = currentHead(repoRoot);
+    const ownerOk = packageOwnerOk(target, "close");
+    if (!ownerOk || ownerOk.commit !== head) {
+      throw lifecycleError("Owner-OK for close is missing or stale", 1);
+    }
+    if (reuseIntegration !== null && reuseIntegration !== head) {
+      throw lifecycleError("--reuse-integration must name the current Git HEAD", 1);
+    }
+    if (reuseIntegration !== null) assertTreeReusable(repoRoot, target.packageFile);
+    const startDutiesDigest = dutyDigest(duties);
+    const ownerOkRecord = { line: ownerOk.line, lineDigest: ownerOk.lineDigest };
     const before = snapshots(target);
     writeJournal(repoRoot, record.scope, {
       state: "verifying",
       scope: record.scope,
       packageId,
       packageDigest: status.digest,
-      authorizationReceipt: authorization.file,
-      authorizationDigest: authorization.value.recordDigest,
+      ownerOk: ownerOkRecord,
+      dutiesDigest: startDutiesDigest,
       startedAt: options.now || new Date().toISOString(),
     });
     reach(options, "close-after-journal");
 
-    const runner = options.gateRunner || defaultGateRunner;
-    const gateResult = await runner({
-      root: repoRoot,
-      packageId,
-      scope: record.scope,
-      timeoutSeconds: options.timeoutSeconds,
-      jobs: options.jobs,
-      shell: options.shell,
-      runnerTimeoutMs: options.runnerTimeoutMs,
-      env: options.env,
-    });
-    if (!gateResult || !Number.isInteger(gateResult.status)) {
-      throw lifecycleError("gate runner returned no integer status");
-    }
-    if (gateResult.status !== 0) {
-      writeJournal(repoRoot, record.scope, {
-        state: "blocked",
-        scope: record.scope,
+    let gateResult = null;
+    if (reuseIntegration === null) {
+      const runner = options.gateRunner || defaultGateRunner;
+      gateResult = await runner({
+        root: repoRoot,
         packageId,
-        packageDigest: status.digest,
-        authorizationReceipt: authorization.file,
-        authorizationDigest: authorization.value.recordDigest,
-        gateExitCode: gateResult.status,
-        attemptedAt: new Date().toISOString(),
+        scope: record.scope,
+        timeoutSeconds: options.timeoutSeconds,
+        jobs: options.jobs,
+        shell: options.shell,
+        runnerTimeoutMs: options.runnerTimeoutMs,
+        env: options.env,
       });
-      throw gateFailure(gateResult);
+      if (!gateResult || !Number.isInteger(gateResult.status)) {
+        throw lifecycleError("gate runner returned no integer status");
+      }
+      if (gateResult.status !== 0) {
+        writeJournal(repoRoot, record.scope, {
+          state: "blocked",
+          scope: record.scope,
+          packageId,
+          packageDigest: status.digest,
+          ownerOk: ownerOkRecord,
+          dutiesDigest: startDutiesDigest,
+          gateExitCode: gateResult.status,
+          attemptedAt: new Date().toISOString(),
+        });
+        throw gateFailure(gateResult);
+      }
+    } else {
+      assertReusableIntegration(status);
     }
     reach(options, "close-after-reverify");
 
@@ -795,8 +877,8 @@ export async function closePackage(options) {
       scope: record.scope,
       packageId,
       packageDigest: status.digest,
-      authorizationReceipt: authorization.file,
-      authorizationDigest: authorization.value.recordDigest,
+      ownerOk: ownerOkRecord,
+      dutiesDigest: startDutiesDigest,
       verifiedAt: new Date().toISOString(),
       gateDigests: verified.slice(1).map((item) => ({
         file: slash(relative(repoRoot, item.path)), digest: item.digest,
@@ -823,11 +905,12 @@ export async function closePackage(options) {
       const finalStatus = inspectPackageBundle(finalTarget);
       assertOwnerBinding(runtimeDirectory, packageId, finalStatus.owner);
       const finalDuties = readDuties(runtimeDirectory, packageId, record.scope);
-      if (dutyDigest(finalDuties) !== dutyDigest(duties)) {
-        conflict("follow-up duties changed after Owner approval; close refused stale writeback");
+      const journal = readJournal(repoRoot, record.scope);
+      if (!journal || dutyDigest(finalDuties) !== journal.value.dutiesDigest) {
+        conflict("follow-up duties changed after the Owner-OK line; close refused stale writeback");
       }
       assertPreclose(finalStatus, finalTarget, { afterReverify: true }, finalDuties);
-      writeAtomic(finalTarget.packageFile, finalizePackageText(finalStatus, finalDuties));
+      writeAtomic(finalTarget.packageFile, finalizePackageText(finalStatus, finalDuties, reuseIntegration));
       closedStatus = inspectPackageBundle(finalTarget);
       if (closedStatus.status !== "closed" || closedStatus.diagnostics.length) {
         throw lifecycleError("internal close validation did not produce a valid closed package");
@@ -837,8 +920,7 @@ export async function closePackage(options) {
         scope: record.scope,
         packageId,
         packageDigest: closedStatus.digest,
-        authorizationReceipt: authorization.file,
-        authorizationDigest: authorization.value.recordDigest,
+        ownerOk: ownerOkRecord,
         dutiesDigest: dutyDigest(finalDuties),
         closedAt: new Date().toISOString(),
       });
@@ -850,15 +932,16 @@ export async function closePackage(options) {
       action: "close",
       closed: true,
       recovered: false,
-      reverified: true,
+      reverified: reuseIntegration === null,
+      reusedIntegration: reuseIntegration,
+      ownerOk,
       releasedLeases,
       repoRoot,
       repoKey: options.repoKey || ".",
       packageId,
       scope: record.scope,
       status: publicPackageStatus(inspectPackageBundle({ ...target, scope: null })),
-      gateOutput: String(gateResult.stdout || "").trim(),
-      authorizationReceipt: authorization.file,
+      gateOutput: gateResult ? String(gateResult.stdout || "").trim() : "",
       duties,
     };
   });
