@@ -3,10 +3,10 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.1.5"
+    "version": "1.1.6"
   },
   "payload": {
-    "treeSha256": "d69e69724258fc0d8a0c6c91f259cb603b2d2540499dd077ed29d7a48fa8332e"
+    "treeSha256": "583984612741dafe7208db69abd3c9836f72ddc421c350a68d8dc9c5e158ba62"
   },
   "provenance": {
     "unlazy": {
@@ -87,10 +87,10 @@
       "target": ".agents/skills/package-execution/SKILL.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 5606,
-      "sourceSha256": "1928f0f06848efbfebdc98b9708c05a7819b2ee910ff1e7e5996a7efb4063190",
-      "bytes": 5606,
-      "sha256": "1928f0f06848efbfebdc98b9708c05a7819b2ee910ff1e7e5996a7efb4063190"
+      "sourceBytes": 5839,
+      "sourceSha256": "590d30239952f0a900502d661d9e5346a8d277a130988bcb753bcddd57ca1d64",
+      "bytes": 5839,
+      "sha256": "590d30239952f0a900502d661d9e5346a8d277a130988bcb753bcddd57ca1d64"
     },
     {
       "source": "test-harness/.agents/skills/software-factory/SKILL.md",
@@ -187,10 +187,10 @@
       "target": ".claude/commands/package-close.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 2197,
-      "sourceSha256": "da1d1a904cb22fd2bbc8ea9a1448f29184a35494d324d948ff2e156e7bc0cbee",
-      "bytes": 2197,
-      "sha256": "da1d1a904cb22fd2bbc8ea9a1448f29184a35494d324d948ff2e156e7bc0cbee"
+      "sourceBytes": 2465,
+      "sourceSha256": "29baa8592d4f02d06e499fb1405c2cf83adad66c6846e821818d1bee88666e71",
+      "bytes": 2465,
+      "sha256": "29baa8592d4f02d06e499fb1405c2cf83adad66c6846e821818d1bee88666e71"
     },
     {
       "source": "test-harness/.claude/commands/package-create.md",
@@ -597,10 +597,10 @@
       "target": ".claude/skills/package-execution/SKILL.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 5606,
-      "sourceSha256": "1928f0f06848efbfebdc98b9708c05a7819b2ee910ff1e7e5996a7efb4063190",
-      "bytes": 5606,
-      "sha256": "1928f0f06848efbfebdc98b9708c05a7819b2ee910ff1e7e5996a7efb4063190"
+      "sourceBytes": 5839,
+      "sourceSha256": "590d30239952f0a900502d661d9e5346a8d277a130988bcb753bcddd57ca1d64",
+      "bytes": 5839,
+      "sha256": "590d30239952f0a900502d661d9e5346a8d277a130988bcb753bcddd57ca1d64"
     },
     {
       "source": "test-harness/.claude/skills/software-factory/SKILL.md",
@@ -1097,10 +1097,10 @@
       "target": "harness-core/git/git-intent.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 85678,
-      "sourceSha256": "9b02b178be94c0d9f4fb9ca4c3d94d4ea7b98e0d61f0076890fc3fe8ca7ed62a",
-      "bytes": 85678,
-      "sha256": "9b02b178be94c0d9f4fb9ca4c3d94d4ea7b98e0d61f0076890fc3fe8ca7ed62a"
+      "sourceBytes": 87695,
+      "sourceSha256": "164ef953c6cba27ce6160ab5e43ce4d93d88aaad136a69bf11bde677cfd971a8",
+      "bytes": 87695,
+      "sha256": "164ef953c6cba27ce6160ab5e43ce4d93d88aaad136a69bf11bde677cfd971a8"
     },
     {
       "source": "test-harness/licenses/LICENSE-i-have-adhd.txt",
@@ -1120,7 +1120,7 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 571,
-      "sha256": "0e51710ccfc3bd1108ee5035150ec5c7624c07b883b4a50a1fb7cc454f97f912"
+      "sha256": "a2202d63bbe54448b9602570813be32233e5e82e339264011735c66a7a4397d7"
     },
     {
       "source": "test-harness/templates/GATES-LEAF.md",
