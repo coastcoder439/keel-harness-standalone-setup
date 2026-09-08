@@ -1127,12 +1127,41 @@ function normalizedClosure(text) {
   return value;
 }
 
+// Commits, die NACH dem Integrations-Checkpoint auf HEAD liegen, sperren den Abschluss
+// nicht mehr grundsaetzlich (Owner-Rueckbau 08.09.2026: Integration am 07.09., danach
+// veroeffentlichte Rueckbau-Commits, weder integrate noch close waren moeglich). Erlaubt
+// sind sie genau dann, wenn der Checkpoint ein Vorfahr von HEAD ist und jeder Commit
+// seither von origin/main erreichbar ist -- derselbe Owner-Veroeffentlichungs-Proxy wie
+// in checks/reference-boundary.mjs. Der Abschluss prueft dann auf HEAD voll nach (die
+// Wiederverwendung der Integrations-Nachpruefung gilt nur bei HEAD == Checkpoint), und
+// die Owner-OK-Zeile bindet HEAD. Der Beleg nennt die Commits seit dem Checkpoint.
+function publishedCommitsSinceIntegration(context, integrationCommit, head) {
+  const repoRoot = context.snapshot.repoRoot;
+  const ancestor = git(repoRoot, ["merge-base", "--is-ancestor", integrationCommit, head]);
+  if (ancestor.status !== 0) {
+    fail("INTEGRATION_REQUIRED", "package close requires the integration checkpoint to be an ancestor of HEAD", 1);
+  }
+  const originMain = git(repoRoot, ["rev-parse", "--verify", "--quiet", "refs/remotes/origin/main"]);
+  if (originMain.status !== 0) {
+    fail("INTEGRATION_REQUIRED", "commits after the integration checkpoint need origin/main to prove Owner publication; none is present", 1);
+  }
+  const unpublished = commandResult(git(repoRoot, ["rev-list", "refs/remotes/origin/main.." + head]), "close-plan-origin").trim();
+  if (unpublished) {
+    fail("INTEGRATION_REQUIRED", "commits after the integration checkpoint are not reachable from origin/main: " +
+      unpublished.split(/\r?\n/u).length + " unpublished; publish them first", 1);
+  }
+  return commandResult(git(repoRoot, ["rev-list", integrationCommit + ".." + head]), "close-plan-since")
+    .trim().split(/\r?\n/u).filter(Boolean);
+}
+
 function planClose(options) {
   const context = integrationContext(options);
-  if (context.state.integration?.state !== "committed" ||
-      currentHead(context.binding) !== context.state.integration.commit) {
-    fail("INTEGRATION_REQUIRED", "package close requires the current exact integration checkpoint", 1);
+  if (context.state.integration?.state !== "committed") {
+    fail("INTEGRATION_REQUIRED", "package close requires a committed integration checkpoint", 1);
   }
+  const integrationCommit = context.state.integration.commit;
+  const head = currentHead(context.binding);
+  const publishedSince = head === integrationCommit ? [] : publishedCommitsSinceIntegration(context, integrationCommit, head);
   const packageFile = path.join(context.snapshot.repoRoot, "docs", "packages", context.packageId, "PACKAGE.md");
   const packageText = fs.readFileSync(packageFile, "utf8");
   const files = packageFiles(context.snapshot.repoRoot, context.packageId);
@@ -1140,14 +1169,16 @@ function planClose(options) {
     operation: "plan-close",
     packageId: context.packageId,
     scope: context.scope,
-    head: context.state.integration.commit,
+    head,
+    integrationCommit,
+    publishedSince,
     ownerDigest: context.state.originalOwnerDigest,
     ownerRequestDigest: context.state.originalOwnerRequestDigest,
     normalizedPackageDigest: sha256(normalizedClosure(packageText)),
     files,
   });
   return { operation: "plan-close", packageId: context.packageId, scope: context.scope,
-    head: context.state.integration.commit, receipt };
+    head, integrationCommit, publishedSince, receipt };
 }
 
 // The witnesses of the mandated re-verification, read as EXECUTION RECEIPTS
