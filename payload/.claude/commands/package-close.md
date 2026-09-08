@@ -21,7 +21,10 @@ description: Schließt ein vollständig integriertes Paket mit der Owner-OK-Zeil
    Arbeitsbaum bis auf die Owner-OK-Zeile unveraendert, uebernimmt `close` die Integrations-Reverify und
    prueft die Gates nur noch lesend (`reverified: false`, `reusedIntegration: <SHA>`).
    Sonst laeuft die volle Reverify (`reverified: true`). `--reverify` erzwingt sie
-   immer; `--timeout S` ist das Budget je CHECK.
+   immer; `--timeout S` ist das Budget je CHECK. Liegen nach dem Integrations-Checkpoint
+   weitere Commits auf `HEAD`, ist der Abschluss trotzdem moeglich, wenn der Checkpoint ein
+   Vorfahr von `HEAD` ist und jeder Commit seither von `origin/main` erreichbar ist (also
+   gepusht); sonst `INTEGRATION_REQUIRED`.
 5. Gib Close-, Recovery- und Closure-Receipt aus. Sie erlauben noch keinen Push;
    ein unterbrochener Closure-Checkpoint darf nur mit `recover-close --receipt
    <CLOSE_RECEIPT>` fortgesetzt werden.

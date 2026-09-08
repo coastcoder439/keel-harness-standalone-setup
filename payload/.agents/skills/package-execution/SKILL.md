@@ -57,7 +57,9 @@ Jeder Aufruf nennt `--harness-root <HARNESS_ROOT>` und `--root <ECHTES_GIT_REPO>
   auf die Owner-OK-Zeile unveraendert, uebernimmt `close` diese Reverify und prueft die
   Gates nur lesend (`reverified: false`, `reusedIntegration: <SHA>`; die geschlossene
   PACKAGE.md sagt das im Abschluss); sonst laeuft die volle Reverify. `--reverify`
-  erzwingt sie immer.
+  erzwingt sie immer. Commits nach dem Integrations-Checkpoint sperren den Abschluss nur,
+  wenn sie nicht von `origin/main` erreichbar sind (`INTEGRATION_REQUIRED`); gepushte
+  Commits sind erlaubt, der Abschluss prueft dann voll nach und bindet `HEAD`.
 - Nach Close, ohne Bearbeitung des geschlossenen Pakets:
   `publish --closure-receipt <RECEIPT> --owner-ok "<WORTLAUT>" --json`; die Zeile lebt im
   Publish-Beleg, nicht in der PACKAGE.md.
