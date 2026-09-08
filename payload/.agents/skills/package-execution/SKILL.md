@@ -37,20 +37,33 @@ Jeder Aufruf nennt `--harness-root <HARNESS_ROOT>` und `--root <ECHTES_GIT_REPO>
   bekannte Arbeit mit `duty-add --duty <ID> --owner "<OWNER>" --trigger
   "<TRIGGER>" --due-state open|due --gate <LEDGER:GATE>` und später
   `duty-resolve --duty <ID> [--gate <LEDGER:GATE>]`. Unbekannte oder offene Duties
-  blockieren Close. Waiver läuft zweistufig über `plan-duty-waiver --duty <ID>` und
-  `duty-waive --duty <ID> --challenge <RECEIPT> --approval-file <EXTERN>`.
-- Close läuft ausschließlich `plan-close --json`, danach erstellt der Owner außerhalb
-  des Repos ein kurzlebiges, challenge-gebundenes Freigabe-Artefakt, danach
-  `close --challenge <RECEIPT> --approval-file <EXTERN> --message "<TEXT>" --json`.
-  Die Agentenroute darf dieses Artefakt nicht erstellen und akzeptiert keinen Boolean.
-  Die Schranke ist eine Prozess-Kontrolle desselben OS-Benutzers, gehaertet durch
-  Datei-ACLs -- keine Kryptografie und kein Identitaetsnachweis (owner-approval.mjs).
-- Nach Close: `plan-publish --closure-receipt <RECEIPT> --json`, neue separate
-  Owner-Freigabe und `publish --challenge <RECEIPT> --approval-file <EXTERN> --json`.
+  blockieren Close. Ein Waiver ist ein Schritt: der Owner sagt im Chat OK, dann
+  `duty-waive --duty <ID> --owner-ok "<WORTLAUT>"`.
+- Folgenreiche Transitionen belegt genau eine Zeile, ueberall gleich geformt
+  (`owner-ok.mjs`): `Owner-OK: <close|publish|waive-duty:<ID>> <YYYY-MM-DD> <40-stelliger
+  Commit-SHA> "<Wortlaut>"`. Der Commit muss beim Verbrauch dem aktuellen `HEAD`
+  entsprechen (`OWNER_OK_STALE`), es gibt keine Ablaufzeit, keine Freigabedatei und
+  keine Challenge.
+- Close läuft in einem Schritt: der Owner sagt im Chat OK, dann
+  `close --owner-ok "<WORTLAUT>" --message "<TEXT>" --json`. Der Schalter schreibt die
+  `close`-Zeile in den Abschnitt `## Abschluss` der PACKAGE.md, wo sie mit dem
+  Schluss-Commit versioniert wird; steht dort schon eine Zeile fuer diesen `HEAD`, bleibt
+  sie (ein abgebrochener Abschluss wird einfach wiederholt), eine veraltete ersetzt der
+  Schalter durch das neue OK; fehlt die Zeile ohne Schalter, ist es `OWNER_OK_MISSING`,
+  nennt sie einen anderen Commit `OWNER_OK_STALE`, gibt es zwei `OWNER_OK_AMBIGUOUS`.
+  Nur der Abschnitt `## Abschluss` zaehlt; ein Zitat der Zeile im Status ist keine
+  Freigabe. Die Agentenroute akzeptiert keinen Boolean.
+- Steht `HEAD` unveraendert auf dem Integrations-Checkpoint und ist der Arbeitsbaum bis
+  auf die Owner-OK-Zeile unveraendert, uebernimmt `close` diese Reverify und prueft die
+  Gates nur lesend (`reverified: false`, `reusedIntegration: <SHA>`; die geschlossene
+  PACKAGE.md sagt das im Abschluss); sonst laeuft die volle Reverify. `--reverify`
+  erzwingt sie immer.
+- Nach Close, ohne Bearbeitung des geschlossenen Pakets:
+  `publish --closure-receipt <RECEIPT> --owner-ok "<WORTLAUT>" --json`; die Zeile lebt im
+  Publish-Beleg, nicht in der PACKAGE.md.
   `recover-close --receipt <CLOSE_RECEIPT>` setzt einen unterbrochenen
   Closure-Checkpoint fort und reverifiziert davor bottom-up wie `close` selbst:
   der Lauf führt alle CHECKs des Bundles aus und schreibt dabei Evidence, ist
-  also kein billiger Wiederanlauf. `--timeout S` ist bei `integrate`,
-  `plan-close`, `close` und `recover-close` das Budget je CHECK; die Wanduhr
-  deckt alle CHECKs der adressierten Ledger ab. Close- und Publish-Receipts sind
-  unveränderlich und verbrauchen ihre Nonce genau einmal.
+  also kein billiger Wiederanlauf. `--timeout S` ist bei `integrate`, `close` und
+  `recover-close` das Budget je CHECK; die Wanduhr deckt alle CHECKs der adressierten
+  Ledger ab. Close- und Publish-Receipts sind unveränderlich.

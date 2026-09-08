@@ -57,12 +57,17 @@ Nach allen Returns führt integrate mit expliziter Check-Ausführungsfreigabe
 Node- und Root-Gates bottom-up aus, leitet erst aus grüner Evidence die
 Planhaken ab und erzeugt danach genau einen Integrations-Checkpoint; ein
 erneuter Aufruf führt dieselbe Reverify erneut aus und liefert denselben
-Checkpoint statt eines zweiten. close reverifiziert erneut, und recover-close
-reverifiziert vor seinem Closure-Checkpoint genauso bottom-up; ist dieser
-Commit bereits geschrieben, kehrt der Aufruf unverändert und ohne erneute
-Reverify zurück. Bleibt die Reverify der Recovery rot, entsteht kein
-Closure-Commit; der Ausweg ist eine neue Owner-Freigabe über plan-close und
-close. --timeout ist dabei das Budget je CHECK, nicht für den ganzen Lauf.
+Checkpoint statt eines zweiten. close läuft in einem Schritt: der Owner sagt im
+Chat OK, `close --owner-ok "<Wortlaut>"` schreibt die Owner-OK-Zeile in den
+Abschnitt Abschluss der PACKAGE.md, prüft die Gates (oder übernimmt die
+Integrations-Reverify, wenn HEAD der Integrations-Checkpoint ist und der
+Arbeitsbaum bis auf diese Zeile unverändert blieb; --reverify erzwingt den
+vollen Lauf) und schreibt den Closure-Commit. recover-close reverifiziert vor
+seinem Closure-Checkpoint bottom-up; ist dieser Commit bereits geschrieben,
+kehrt der Aufruf unverändert und ohne erneute Reverify zurück. Bleibt die
+Reverify der Recovery rot, entsteht kein Closure-Commit; der Ausweg ist ein
+erneutes close mit dem neuen OK des Owners. --timeout ist dabei das Budget je
+CHECK, nicht für den ganzen Lauf.
 Geschlossen wird nur bei vollständiger Coverage und Fulfillment.
 
 ## Sieben Schritte, je eine verantwortliche Schnittstelle
@@ -73,7 +78,7 @@ Geschlossen wird nur bei vollständiger Coverage und Fulfillment.
 4. **Arbeiten** — Claims, Bindings, Dispatch und Returns; Package-Executor.
 5. **Coverage** — vollständige Owner-/Contract-/Gate-Zuordnung; Statusprüfung.
 6. **Fulfillment** — lokale Leaf→Node→Root-Evidence; integrate.
-7. **Abschluss** — erneutes Reverify und Close-Receipt; close.
+7. **Abschluss** — Owner-OK-Zeile, Reverify oder übernommene Integrations-Reverify, Close-Receipt; close.
 
 Prompt-Erinnerungen und Schlussformulierungen sind Kommunikation, kein
 deterministischer Ersatz für diese Übergänge.
@@ -87,9 +92,10 @@ genau ein Aufruf über harness-core/git/git-intent.mjs:
 - discard-working mit Recovery-Receipt und recover-discard
 - revert-checkpoint nur für den letzten exakten eigenen Checkpoint
 - integration-checkpoint einmal nach verifizierten parallelen Leaves
-- plan-publish und publish nur über den Package-Executor; Git akzeptiert dabei
-  ausschließlich den verbrauchten externen Approval-Receipt für denselben
-  unveränderten Plan
+- publish nur über den Package-Executor mit dem Owner-OK-Wortlaut
+  (`publish --closure-receipt <RECEIPT> --owner-ok "<Wortlaut>"`); Git bindet
+  dabei den Publish-Plan an den unveränderten HEAD und schreibt den Wortlaut in
+  den Publish-Beleg
 
 Breite Historienumschreibungen und nicht recoverable Löschungen bleiben
 Owner-Entscheidungen. Leaf-Agenten committen nicht mitten in einer parallelen

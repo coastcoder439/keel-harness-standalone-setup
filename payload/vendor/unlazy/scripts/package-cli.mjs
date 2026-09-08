@@ -38,8 +38,8 @@ commands:
   duty-assess --package ID --scope ID --gate LEDGER:GATE
   duty-add --package ID --scope ID --duty ID --owner TEXT --trigger TEXT --due-state open|due --gate LEDGER:GATE
   duty-resolve --package ID --scope ID --duty ID [--gate LEDGER:GATE]
-  duty-waive --package ID --scope ID --duty ID --waiver-receipt PATH
-  close --package ID --scope ID --authorization-receipt PATH
+  duty-waive --package ID --scope ID --duty ID --owner-ok TEXT
+  close --package ID --scope ID [--reuse-integration SHA]
                             reverify and atomically close package
 
 targeting:
@@ -51,6 +51,8 @@ targeting:
   --timeout S               close gate timeout in seconds
   --jobs N                  close gate concurrency
   --shell PATH              close gate shell
+  --owner-ok TEXT           Owner-OK wording (duty-waive)
+  --reuse-integration SHA   close reuses the integration verified at SHA
   --all                     every bundle (doctor only)
   --json                    emit JSON only
 
@@ -60,7 +62,7 @@ exit codes: 0 valid/met or successful mutation; 1 valid but incomplete;
 const VALUE_OPTIONS = new Set([
   "--root", "--package", "--scope", "--repo-key", "--session",
   "--timeout", "--jobs", "--shell",
-  "--duty", "--owner", "--trigger", "--due-state", "--gate", "--waiver-receipt", "--authorization-receipt",
+  "--duty", "--owner", "--trigger", "--due-state", "--gate", "--owner-ok", "--reuse-integration",
 ]);
 const FLAG_OPTIONS = new Set(["--all", "--json", "--help", "-h"]);
 
@@ -299,6 +301,7 @@ if (!parsed) {
       } else if (["duty-assess", "duty-add", "duty-resolve", "duty-waive"].includes(command)) {
         if (!options.package || !options.scope) throw new Error(command + " requires --package ID and --scope ID");
         if (options.all || options.session) throw new Error(command + " does not accept --all or --session");
+        if (command === "duty-waive" && !options["owner-ok"]) throw new Error("duty-waive requires --owner-ok TEXT");
         const action = command.slice("duty-".length).replace("assess", "assess").replace("add", "add")
           .replace("resolve", "resolve").replace("waive", "waive");
         const result = await transitionFollowUpDuty({
@@ -312,13 +315,12 @@ if (!parsed) {
           trigger: options.trigger,
           dueState: options["due-state"],
           gate: options.gate,
-          waiverReceipt: options["waiver-receipt"],
+          ownerOk: options["owner-ok"],
         });
         print(options.json ? result : result, options.json);
       } else if (command === "close") {
         if (!options.package || !options.scope) throw new Error("close requires --package ID and --scope ID");
         if (options.all || options.session) throw new Error("close does not accept --all or --session");
-        if (!options["authorization-receipt"]) throw new Error("close requires --authorization-receipt PATH");
         const result = await closePackage({
           root,
           packageId: options.package,
@@ -327,7 +329,7 @@ if (!parsed) {
           timeoutSeconds: options.timeout,
           jobs: options.jobs,
           shell: options.shell,
-          authorizationReceipt: options["authorization-receipt"],
+          reuseIntegration: options["reuse-integration"],
         });
         if (options.json) print(result, true);
         else {

@@ -1,18 +1,16 @@
 ---
-description: Plant einen sicheren Publish nach Close und verbraucht dafür eine eigene externe Owner-Freigabe.
+description: Veröffentlicht nach Close mit dem Closure-Receipt und einer eigenen Owner-OK-Zeile.
 ---
 
-1. Nach erfolgreichem `package-close` führe exakt
-   `node <HARNESS_ROOT>/harness-core/execution/package-executor.mjs plan-publish --harness-root <HARNESS_ROOT> --root <REPO> --package <ID> --scope <SCOPE> --closure-receipt <CLOSURE_RECEIPT> --json`
-   aus.
-2. Zeige dem Owner Ziel-Remote, Branch, Commit und Challenge-Receipt. Stoppe. Close
-   ist keine Publish-Freigabe.
-3. Nur der Owner erstellt außerhalb des Repos ein neues privates, kurzlebiges
-   `keel-owner-approval`-Artefakt für `action: "publish"`, gebunden an diese
-   Challenge und eine neue Nonce.
-4. Nach Erhalt des externen Pfads führe exakt
-   `node <HARNESS_ROOT>/harness-core/execution/package-executor.mjs publish --harness-root <HARNESS_ROOT> --root <REPO> --package <ID> --scope <SCOPE> --challenge <CHALLENGE_RECEIPT> --approval-file <EXTERNES_ARTEFAKT> --json`
-   aus. Bei jeder Änderung an HEAD, Branch oder Remote neu planen. Kein
-   `--owner-approved` und kein roher Git-Push.
-
-Hinweis: Die JSON-Ausgabe des Plans enthaelt unter `ownerApproval` das ausgefuellte Artefakt-Template (Schema, challengeDigest, Paket, Scope, Zeitfenster), den Befehl zur Nonce-Erzeugung, den Ablageort-Vorschlag ausserhalb des Repos, unter Windows den ACL-Haertungsbefehl und den exakten Folgebefehl. Der Owner fuellt nur die Nonce ein und speichert die Datei ausserhalb des Repos.
+1. Nach erfolgreichem `package-close` gibt der Owner sein OK zum Push im Chat. Close
+   ist keine Publish-Freigabe; der Wortlaut wird eigens für `publish` erhoben.
+2. Führe exakt
+   `node <HARNESS_ROOT>/harness-core/execution/package-executor.mjs publish --harness-root <HARNESS_ROOT> --root <REPO> --package <ID> --scope <SCOPE> --closure-receipt <CLOSURE_RECEIPT> --owner-ok "<WORTLAUT>" --json`
+   aus. Der Befehl prueft den Closure-Receipt, plant den Push, bildet daraus die Zeile
+   `Owner-OK: publish <YYYY-MM-DD> <HEAD des Publish-Plans> "<WORTLAUT>"` und legt sie im
+   Publish-Beleg ab. Sie wandert NICHT in die PACKAGE.md: ein geschlossenes Paket wird
+   nicht mehr editiert.
+3. Ohne `--owner-ok` bricht der Befehl mit einer USAGE-Meldung ab. Bei jeder Änderung an
+   HEAD, Branch oder Remote neu ausführen; es gibt kein `--owner-approved`, keine
+   Freigabedatei und keinen rohen Git-Push.
+4. Gib den Publish-Beleg mit Remote, Branch, Commit und der Owner-OK-Zeile aus.

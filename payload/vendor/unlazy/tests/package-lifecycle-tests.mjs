@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -186,16 +185,6 @@ function status(root, packageId) {
   return inspectPackageBundle(resolvePackageTarget({ root, packageId, env: {} }));
 }
 
-function canonical(value) {
-  if (Array.isArray(value)) return value.map(canonical);
-  if (!value || typeof value !== "object") return value;
-  return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonical(value[key])]));
-}
-
-function digest(value) {
-  return "sha256:" + createHash("sha256").update(JSON.stringify(canonical(value))).digest("hex");
-}
-
 function assessDuties(root, packageId, scope = "main") {
   return run(packageCli, root, "duty-assess", "--root", root, "--package", packageId,
     "--scope", scope, "--gate", "GATES.md:G1");
@@ -213,44 +202,24 @@ function forceAssessedDuties(root, packageId, scope = "main") {
   return duties;
 }
 
-function closeAuthorization(root, packageId, scope = "main") {
-  const packageStatus = status(root, packageId);
-  const duties = JSON.parse(readFileSync(join(root, ".unlazy", scope, "duties.json"), "utf8"));
-  const subject = {
-    packageDigest: packageStatus.digest,
-    dutiesDigest: digest(duties),
-    ownerDigest: packageStatus.owner.digest,
-    head: git(root, "rev-parse", "--verify", "HEAD"),
-    planReceipt: "synthetic lifecycle plan receipt",
-  };
-  const directory = join(root, ".unlazy", ".execution-receipts");
-  mkdirSync(directory, { recursive: true });
-  const writeReceipt = (body) => {
-    const receipt = { ...body, recordDigest: digest(body) };
-    const file = join(directory, `${body.operation}-${receipt.recordDigest.slice(7)}.json`);
-    writeFileSync(file, JSON.stringify(receipt, null, 2) + "\n", "utf8");
-    return { file, receipt };
-  };
-  const challenge = writeReceipt({
-    schemaVersion: 1,
-    operation: "owner-approval-challenge",
-    action: "close",
-    packageId,
-    scope,
-    subjectDigest: digest(subject),
-  });
-  const consumption = writeReceipt({
-    schemaVersion: 1,
-    operation: "owner-approval-consumption",
-    action: "close",
-    packageId,
-    scope,
-    subject,
-    subjectDigest: digest(subject),
-    challengeReceipt: challenge.file,
-    challengeDigest: challenge.receipt.recordDigest,
-  });
-  return consumption.file;
+function todayLocal(now = new Date()) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate());
+}
+
+// Der Freigabebeleg ist die Owner-OK-Zeile im Abschnitt "## Abschluss" der PACKAGE.md.
+function writeCloseOwnerOk(root, packageId, wording = "Owner-OK lifecycle fixture") {
+  const file = join(root, "docs", "packages", packageId, "PACKAGE.md");
+  const line = `Owner-OK: close ${todayLocal()} ${git(root, "rev-parse", "--verify", "HEAD")} "${wording}"`;
+  const lines = readFileSync(file, "utf8").split("\n");
+  const start = lines.findIndex((entry) => entry.trim() === "## Abschluss");
+  assert.notEqual(start, -1, "fixture package needs an Abschluss section");
+  let end = lines.findIndex((entry, index) => index > start && entry.startsWith("## "));
+  if (end === -1) end = lines.length;
+  while (end > start + 1 && !lines[end - 1].trim()) end -= 1;
+  lines.splice(end, 0, line);
+  writeFileSync(file, lines.join("\n"), "utf8");
+  return line;
 }
 
 const tests = [];
@@ -330,8 +299,7 @@ test("activation freezes the complete Owner contract and direct activate/close r
   const repeated = activate(root, "alpha");
   assert.equal(repeated.status, 3, repeated.stderr + repeated.stdout);
   assert.match(repeated.stderr, /immutable Owner contract changed/);
-  const closed = run(packageCli, root, "close", "--root", root, "--package", "alpha", "--scope", "main",
-    "--authorization-receipt", join(root, ".unlazy", ".execution-receipts", "owner-change.json"));
+  const closed = run(packageCli, root, "close", "--root", root, "--package", "alpha", "--scope", "main");
   assert.equal(closed.status, 3, closed.stderr + closed.stdout);
   assert.match(closed.stderr, /immutable Owner contract changed/);
   assert.equal(existsSync(join(root, ".unlazy", "main")), true);
@@ -361,9 +329,8 @@ test("close actually reverifies, writes a valid receipt, releases only its lease
   })).ok, true);
   assert.equal((await claimLeases(root, { scope: "foreign", leaf: "owned", globs: ["src/foreign/**"] })).ok, true);
 
-  const authorization = closeAuthorization(root, "alpha");
-  const closed = run(packageCli, root, "close", "--root", root, "--package", "alpha", "--scope", "main",
-    "--authorization-receipt", authorization);
+  writeCloseOwnerOk(root, "alpha");
+  const closed = run(packageCli, root, "close", "--root", root, "--package", "alpha", "--scope", "main");
   assert.equal(closed.status, 0, closed.stderr + closed.stdout);
   assert.match(closed.stdout, /ALL MET \(1 met,/);
   assert.match(closed.stdout, /closed \.::alpha; released 1 lease\(s\)/);
@@ -383,10 +350,9 @@ test("stale evidence is demoted by close and cannot produce a receipt", () => {
   assert.equal(activate(root, "alpha").status, 0);
   assert.equal(approve(root, "alpha").status, 0);
   assert.equal(assessDuties(root, "alpha").status, 0);
-  const authorization = closeAuthorization(root, "alpha");
+  writeCloseOwnerOk(root, "alpha");
   writeFileSync(join(root, "scripts", "check-lifecycle.mjs"), "console.log('STALE FAILURE');\n", "utf8");
-  const closed = run(packageCli, root, "close", "--root", root, "--package", "alpha", "--scope", "main",
-    "--authorization-receipt", authorization);
+  const closed = run(packageCli, root, "close", "--root", root, "--package", "alpha", "--scope", "main");
   assert.equal(closed.status, 1, closed.stderr + closed.stdout);
   assert.match(closed.stderr, /gate re-verification exited 1/);
   assert.equal(existsSync(join(root, ".unlazy", "main")), true);
@@ -402,7 +368,7 @@ test("close rejects handoff, deferred owner decisions, and unfinished dispatch b
   assert.equal(activate(handoffRoot, "alpha").status, 0);
   forceAssessedDuties(handoffRoot, "alpha");
   const handoff = run(packageCli, handoffRoot, "close", "--root", handoffRoot,
-    "--package", "alpha", "--scope", "main", "--authorization-receipt", join(handoffRoot, "missing.json"));
+    "--package", "alpha", "--scope", "main");
   assert.equal(handoff.status, 1, handoff.stderr + handoff.stdout);
   assert.match(handoff.stderr, /unresolved decisions.*ABANDON/);
 
@@ -411,7 +377,7 @@ test("close rejects handoff, deferred owner decisions, and unfinished dispatch b
   assert.equal(activate(deferredRoot, "alpha").status, 0);
   assert.equal(assessDuties(deferredRoot, "alpha").status, 0);
   const deferred = run(packageCli, deferredRoot, "close", "--root", deferredRoot,
-    "--package", "alpha", "--scope", "main", "--authorization-receipt", join(deferredRoot, "missing.json"));
+    "--package", "alpha", "--scope", "main");
   assert.equal(deferred.status, 1, deferred.stderr + deferred.stdout);
   assert.match(deferred.stderr, /unresolved decisions/);
 
@@ -432,7 +398,7 @@ test("close rejects handoff, deferred owner decisions, and unfinished dispatch b
     },
   }, null, 2) + "\n", "utf8");
   const dispatch = run(packageCli, dispatchRoot, "close", "--root", dispatchRoot,
-    "--package", "alpha", "--scope", "main", "--authorization-receipt", join(dispatchRoot, "missing.json"));
+    "--package", "alpha", "--scope", "main");
   assert.equal(dispatch.status, 1, dispatch.stderr + dispatch.stdout);
   assert.match(dispatch.stderr, /dispatch is unfinished/);
 });
@@ -443,12 +409,11 @@ test("close crash after the package receipt resumes cleanup without a second rec
   assert.equal(activate(root, "alpha").status, 0);
   assert.equal(approve(root, "alpha").status, 0);
   assert.equal(assessDuties(root, "alpha").status, 0);
-  const authorization = closeAuthorization(root, "alpha");
+  writeCloseOwnerOk(root, "alpha");
   await assert.rejects(() => closePackage({
     root,
     packageId: "alpha",
     scope: "main",
-    authorizationReceipt: authorization,
     env: { ...process.env, UNLAZY_APPROVAL_DIR: approvals },
     failpoint(point) {
       if (point === "close-after-package-write") throw new SimulatedLifecycleCrash(point);
@@ -456,8 +421,7 @@ test("close crash after the package receipt resumes cleanup without a second rec
   }), /simulated lifecycle crash/);
   assert.equal(status(root, "alpha").status, "closed");
   assert.equal(existsSync(join(root, ".unlazy", "main", "lifecycle.json")), true);
-  const recovered = run(packageCli, root, "close", "--root", root, "--package", "alpha", "--scope", "main",
-    "--authorization-receipt", authorization);
+  const recovered = run(packageCli, root, "close", "--root", root, "--package", "alpha", "--scope", "main");
   assert.equal(recovered.status, 0, recovered.stderr + recovered.stdout);
   assert.match(recovered.stdout, /recovered closed/);
   assert.equal(existsSync(join(root, ".unlazy", "main")), false);

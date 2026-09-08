@@ -27,7 +27,6 @@ const WRITE_COMMANDS = new Set([
 ]);
 
 const VERIFIER_PATHS = new Set([
-  "checks/owner-acceptance.mjs",
   "checks/codex-runtime-smoke.mjs",
   "checks/completeness-repair.mjs",
   "checks/dashboard-e2e.mjs",
@@ -59,7 +58,6 @@ const VERIFIER_PATHS = new Set([
 
 const TEST_PATHS = new Set([
   "test/mcp-write-guard.test.js",
-  "test/owner-acceptance.test.js",
   "test/package-ownership.test.js",
   "test/bounded-runner-hardening.test.js",
   "test/bounded-runner.test.js",
@@ -83,6 +81,7 @@ const TEST_PATHS = new Set([
   "test/inventory-refresh.test.js",
   "test/lifecycle-gate-evidence.test.js",
   "test/no-google-identity.test.js",
+  "test/owner-ok.test.js",
   "test/package-bootstrap.test.js",
   "test/package-execution-lifecycle.test.js",
   "test/package-execution.test.js",
