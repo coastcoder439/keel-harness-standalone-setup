@@ -1,6 +1,8 @@
 # Guard coverage
 
-Stand: 2026-08-30. Maßgeblich sind die aktiven Host-Konfigurationen,
+Stand: 2026-08-30; die Zusagen der Shell-Mutationsgrenze (fail-closed bei
+Ladefehler/ungültiger Eingabe, Werkzeugnamen-Unabhängigkeit, Geltung ohne aktives
+Paket) am 2026-09-09 ergänzt. Maßgeblich sind die aktiven Host-Konfigurationen,
 Package-Lifecycle-Funktionen und ausführbaren Tests. Injizierte Prosa wird nie
 als technischer Zwang gezählt.
 
@@ -25,6 +27,12 @@ Executor und dieselbe vendorte Unlazy-Runtime auf.
 
 ## Belegte Gegenproben
 
+- `test/shell-mutation-boundary.test.js` prüft die endliche Shell-Mutationsgrenze:
+  Redirection/Direktschreiben/Interpreter/undeklarierte Skripte blockieren ohne
+  Filesystem- oder Git-Änderung, deklarierte Prüfer/Tests/Dienste bleiben erreichbar,
+  die Grenze greift auch ohne aktives Paket (H6), fällt fail-closed bei fehlender
+  Abhängigkeit und ungültiger Eingabe (Exit 2) und blockiert unabhängig vom
+  Werkzeugnamen (`Bash`/`shell`/fehlend).
 - `test/guard-lifecycle.test.js` führt die gemeinsamen Hook-Selbsttests und
   Lifecycle-Smokes begrenzt aus.
 - `test/codex-hooks.test.js` prüft native Codex-Felder, Root-Auflösung sowie

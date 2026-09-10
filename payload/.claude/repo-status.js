@@ -11,7 +11,43 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-const WORKSPACE = path.resolve(__dirname, '..');            // = Wurzel der Werkbank
+const WORKSPACE = path.resolve(__dirname, '..');            // = installierte Harness-Wurzel
+
+// --- Projekt-Container-Ordner aus dem Instanzprofil (Fund 413) ---
+// Welche Ordner Projekt-Repos enthalten, ist installationsspezifisch und steht in
+// docs/harness-instance.md (Feld "Additional allowed write roots") -- NICHT fest
+// "user-projects" (CLAUDE.md: "keinen fest eingebauten ... Workspace-Namen"; eine
+// Fremdinstallation meldete sonst dauerhaft "(keine)" unter einem falschen Namen).
+// schreibwurzelnAusText ist rein und wortgleich zu write-guard.js gespiegelt (wie
+// erlaubteWurzeln zwischen danger-/write-guard); aendert sich das Muster, zieht die
+// andere Kopie mit. "none"/"keine"/leer/[AUSFUELLEN] => keine Wurzel definiert.
+function schreibwurzelnAusText(md) {
+  const zeile = String(md).match(/^[ \t]*[-*][ \t]*Additional allowed write roots:[ \t]*(.*)$/im);
+  if (!zeile) return [];
+  const wert = zeile[1].trim();
+  if (!wert || /^\[AUSFUELLEN\]/i.test(wert) || /^(none|keine)\b/i.test(wert)) return [];
+  const gefunden = [];
+  const merke = (roh) => {
+    const t = String(roh).trim().replace(/^[`'"]+|[`'"]+$/g, '').replace(/\/+$/, '');
+    if (t && /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/.test(t) && !gefunden.includes(t)) gefunden.push(t);
+  };
+  const explizit = /`([^`]+)`|(?:^|[\s,;(])([A-Za-z0-9._-]+\/(?:[A-Za-z0-9._-]+\/?)*)/g;
+  let treffer;
+  while ((treffer = explizit.exec(wert))) merke(treffer[1] || treffer[2]);
+  if (gefunden.length) return gefunden;
+  const teile = wert.split(/\s*[,;]\s*|\s+(?:and|und|or|oder|&|\+)\s+/i).map((s) => s.trim()).filter(Boolean);
+  if (teile.length && teile.every((p) => /^[A-Za-z0-9._-]+$/.test(p))) teile.forEach(merke);
+  return gefunden;
+}
+
+function leseSchreibwurzeln(projektWurzel) {
+  if (!projektWurzel) return [];
+  try {
+    return schreibwurzelnAusText(fs.readFileSync(path.join(projektWurzel, 'docs', 'harness-instance.md'), 'utf8'));
+  } catch {
+    return [];
+  }
+}
 
 // --lokal: keine Netzabfrage. Gemessen am 23.08.2026: `git ls-remote` kostet
 // 1,85 s je Repo, bei 20 Repos also rund 37 s -- das ist die GESAMTE Laufzeit
@@ -202,14 +238,28 @@ function ungesichertZaehlen(dir) {
   return { dateien, ordner, zeilen: zeilen.length };
 }
 
-console.log('\n############  REPO-STATUS  ############\n');
+if (require.main === module) {
+  console.log('\n############  REPO-STATUS  ############\n');
 
-console.log('=== WERKBANK / HARNESS ===');
-console.log(repoInfo(WORKSPACE, path.basename(WORKSPACE) + '  <- das zeigt die Statusleiste (Repo-Name)'));
+  console.log('=== HARNESS-REPO ===');
+  console.log(repoInfo(WORKSPACE, path.basename(WORKSPACE) + '  <- das zeigt die Statusleiste (Repo-Name)'));
 
-console.log('\n=== PROJEKT-REPOS in user-projects/ (je eigenes GitHub-Repo) ===');
-const nested = findNestedRepos(path.join(WORKSPACE, 'user-projects'));
-if (!nested.length) console.log('  (keine)');
-for (const d of nested.sort()) console.log(repoInfo(d, path.relative(WORKSPACE, d)));
+  // Container-Ordner installationsspezifisch aus docs/harness-instance.md -- nicht fest
+  // "user-projects". Fehlt die Angabe (Lab-Instanz: "none"), keine erfundene Zeile.
+  const container = leseSchreibwurzeln(WORKSPACE);
+  if (!container.length) {
+    console.log('\n=== PROJEKT-REPOS ===');
+    console.log('  (keine zusaetzlichen Projekt-Container in docs/harness-instance.md definiert)');
+  } else {
+    for (const c of container) {
+      console.log(`\n=== PROJEKT-REPOS in ${c}/ (je eigenes GitHub-Repo) ===`);
+      const nested = findNestedRepos(path.join(WORKSPACE, c.replaceAll('/', path.sep)));
+      if (!nested.length) console.log('  (keine)');
+      for (const d of nested.sort()) console.log(repoInfo(d, path.relative(WORKSPACE, d)));
+    }
+  }
 
-console.log('\n######################################\n');
+  console.log('\n######################################\n');
+}
+
+module.exports = { schreibwurzelnAusText, leseSchreibwurzeln, findNestedRepos };

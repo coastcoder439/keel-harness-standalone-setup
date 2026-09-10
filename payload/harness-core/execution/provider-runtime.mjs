@@ -11,6 +11,7 @@ import process from "node:process";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { replaceFileSync } from "./atomic-file.mjs";
+import { CODEX_MODEL, CODEX_EFFORT } from "./codex-pin.mjs";
 
 const hereFile = fileURLToPath(import.meta.url);
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
@@ -174,8 +175,8 @@ export async function launchProviderRun(options) {
     prefixArgs,
     maxTurns,
     deadlineAt,
-    model: provider === "codex" ? "gpt-5.6-sol" : null,
-    effort: provider === "codex" ? "max" : null,
+    model: provider === "codex" ? CODEX_MODEL : null,
+    effort: provider === "codex" ? CODEX_EFFORT : null,
     permissionMode: "bypassPermissions",
   };
   atomicJson(manifestPath(repoRoot, scope, runId), manifest);

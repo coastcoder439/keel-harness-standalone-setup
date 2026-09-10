@@ -29,6 +29,21 @@
 
 const path = require("path");
 const os = require("os");
+const fs = require("node:fs");
+
+// A self-contained transport avoids a shared dependency becoming a fail-open
+// startup error. The existing Codex runner identifies its target in the env.
+function block(message) {
+  const reason = String(message).trim() || "danger-guard: tool denied";
+  if (process.env.KEEL_HARNESS_ROOT && process.env.KEEL_HOOK_TARGET === ".claude/danger-guard.js") {
+    fs.writeSync(1, JSON.stringify({ hookSpecificOutput: {
+      hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason,
+    } }) + "\n");
+    process.exit(0); // PowerShell otherwise changes a native exit 2 to exit 1.
+  }
+  fs.writeSync(2, reason + "\n");
+  process.exit(2);
+}
 
 const HOME = os.homedir();
 const IST_WIN = process.platform === "win32";
@@ -243,7 +258,7 @@ const REGELN = [
       if (!ziel || !path.isAbsolute(ziel)) return false;
       return unterHeimat(ziel) && !erlaubteWurzeln().some((w) => unter(ziel, w));
     },
-    rat: `Geschrieben wird nur in Werkbank, user-projects, /tmp, ~/.claude und ~/.codex -- nicht sonstwo unter ${HOME}.`,
+    rat: `Geschrieben wird nur in die Projektwurzel, /tmp, ~/.claude und ~/.codex -- nicht sonstwo unter ${HOME}.`,
   },
   {
     name: "rm -r auf einen Systempfad",
@@ -365,7 +380,9 @@ process.stdin.on("end", () => {
   let daten = {};
   try {
     daten = JSON.parse(eingabe || "{}");
-  } catch {}
+  } catch {
+    return block("danger-guard: invalid hook input; command blocked");
+  }
   const roh = daten?.tool_input?.command || "";
   if (!roh) return process.exit(0);
 
@@ -384,11 +401,10 @@ process.stdin.on("end", () => {
   }
   if (!verletzt.size) return process.exit(0);
 
-  process.stderr.write(
+  block(
     "danger-guard hat den Befehl NICHT ausgefuehrt.\n\n" +
       [...verletzt.values()].map(({ r, seg }) => `  - ${r.name}\n    ${r.rat}\n    -> ${seg.slice(0, 160)}`).join("\n") +
       "\n\n  Der Waechter ist deterministisch und nicht ueberredbar. Wenn das wirklich gewollt\n" +
       "  ist, fuehrt der Mensch den Befehl selbst im Terminal aus.\n"
   );
-  process.exit(2); // 2 = blockieren, stderr geht ans Modell zurueck
 });
