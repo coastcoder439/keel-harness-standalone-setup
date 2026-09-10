@@ -10,7 +10,26 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
-const packageBinding = require("../harness-core/binding/package-binding.cjs");
+// This must work before loading policy dependencies. PowerShell converts native
+// exit 2 to 1; Codex needs a valid PreToolUse JSON denial with exit 0 instead.
+function block(message) {
+  const reason = String(message).trim() || "git-intent-guard: tool denied";
+  if (process.env.KEEL_HARNESS_ROOT && process.env.KEEL_HOOK_TARGET === ".claude/git-intent-guard.js") {
+    fs.writeSync(1, JSON.stringify({ hookSpecificOutput: {
+      hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason,
+    } }) + "\n");
+    process.exit(0);
+  }
+  fs.writeSync(2, reason + "\n");
+  process.exit(2);
+}
+
+let packageBinding;
+try { packageBinding = require("../harness-core/binding/package-binding.cjs"); }
+catch (error) {
+  if (require.main === module) block("git-intent-guard: dependency load failed; command blocked: " + error.message);
+  throw error;
+}
 
 const READ_ONLY = new Set([
   "status", "diff", "log", "show", "rev-parse", "rev-list", "ls-files",
@@ -341,21 +360,18 @@ if (require.main === module) {
     let payload;
     try { payload = JSON.parse(input || "{}"); }
     catch {
-      process.stderr.write("git-intent-guard: invalid hook input; command blocked\n");
-      return process.exit(2);
+      return block("git-intent-guard: invalid hook input; command blocked");
     }
     const projectRoot = process.env.CLAUDE_PROJECT_DIR || process.cwd();
     let found;
     try { found = inspect(payload?.tool_input?.command || "", projectRoot, payload.session_id, { cwd: payload.cwd }); }
     catch (error) {
-      process.stderr.write("git-intent-guard: policy evaluation failed; command blocked: " + error.message + "\n");
-      return process.exit(2);
+      return block("git-intent-guard: policy evaluation failed; command blocked: " + error.message);
     }
     if (!found.length) return process.exit(0);
     const first = found[0];
-    process.stderr.write("git-intent-guard: raw direct or wrapped Git blocked before execution: " +
+    block("git-intent-guard: raw direct or wrapped Git blocked before execution: " +
       first.wrapper + " -> git " + first.subcommand + "\nNEXT: " + first.next + "\n");
-    process.exit(2);
   });
 }
 

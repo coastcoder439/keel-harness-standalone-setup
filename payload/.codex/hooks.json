@@ -45,7 +45,7 @@
     ],
     "PreToolUse": [
       {
-        "matcher": "^Bash$",
+        "matcher": "^(Bash|exec_command|shell|local_shell)$",
         "hooks": [
           {
             "type": "command",
@@ -103,7 +103,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "^(Bash|apply_patch)$",
+        "matcher": "^(Bash|exec_command|shell|local_shell|apply_patch)$",
         "hooks": [
           {
             "type": "command",

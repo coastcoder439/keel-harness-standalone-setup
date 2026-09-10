@@ -11,6 +11,7 @@ import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { CODEX_MODEL, CODEX_EFFORT } from "./codex-pin.mjs";
 
 const require = createRequire(import.meta.url);
 const repository = require("../binding/repository.cjs");
@@ -19,6 +20,8 @@ const scriptHarnessRoot = path.resolve(path.dirname(fileURLToPath(import.meta.ur
 const MARKETPLACE = "openai/codex-plugin-cc";
 const MARKETPLACE_NAME = "openai-codex";
 const PLUGIN = "codex@openai-codex";
+
+const escapeRegExp = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 function fail(message, exitCode = 2, code = "CODEX_PLUGIN") {
   const error = new Error(message);
@@ -66,8 +69,9 @@ export function contract(repoRoot, harnessRoot) {
   }
   if (settings.enabledPlugins?.[PLUGIN] !== true) fail("official Codex plugin is not enabled at project scope");
   const config = fs.readFileSync(configFile, "utf8");
-  if (!/^model = "gpt-5\.6-sol"$/mu.test(config) || !/^model_reasoning_effort = "max"$/mu.test(config)) {
-    fail("project Codex config must select gpt-5.6-sol with max effort");
+  if (!new RegExp(`^model = "${escapeRegExp(CODEX_MODEL)}"$`, "mu").test(config) ||
+      !new RegExp(`^model_reasoning_effort = "${escapeRegExp(CODEX_EFFORT)}"$`, "mu").test(config)) {
+    fail(`project Codex config must select ${CODEX_MODEL} with ${CODEX_EFFORT} effort`);
   }
   if (/(?:token|secret|password|client_secret)\s*=/iu.test(config)) fail("project Codex config contains a credential-shaped field");
   return {
@@ -75,8 +79,8 @@ export function contract(repoRoot, harnessRoot) {
     marketplaceName: MARKETPLACE_NAME,
     plugin: PLUGIN,
     scope: "project",
-    model: "gpt-5.6-sol",
-    effort: "max",
+    model: CODEX_MODEL,
+    effort: CODEX_EFFORT,
     harnessRoot,
     commands: commands(),
     postInstall: ["/reload-plugins", "/codex:setup"],
@@ -159,6 +163,20 @@ export function resolveCodexCommand(requested, env = process.env, platform = pro
   return plain(candidates.length === 1 ? candidates[0] : "codex");
 }
 
+// `claude plugin list --json` returns an array of installed-plugin records shaped
+// { id: "codex@openai-codex", version, scope: "project"|"user"|…, enabled: bool, … }.
+// The former substring scan over JSON.stringify(list) (audit follow-up 374,
+// 09.09.2026) also matched a disabled entry, a user-scoped entry, or a mere
+// marketplace mention. The official route requires the exact plugin id enabled at
+// project scope, so the list is parsed structurally.
+export function officialCodexPluginInstalled(plugins) {
+  const list = Array.isArray(plugins) ? plugins
+    : Array.isArray(plugins?.plugins) ? plugins.plugins
+      : [];
+  return list.some((entry) => entry && typeof entry === "object" &&
+    entry.id === PLUGIN && entry.scope === "project" && entry.enabled === true);
+}
+
 export function runtime(root, options) {
   const codexCommand = resolveCodexCommand(options.codex);
   const codex = run(codexCommand.command, [...codexCommand.prefixArgs, "--version"], root, 120_000, "CODEX_CLI_MISSING");
@@ -170,8 +188,7 @@ export function runtime(root, options) {
   let plugins;
   try { plugins = JSON.parse(claude.stdout); }
   catch { fail("Claude plugin list did not return JSON", 1, "CLAUDE_PLUGIN_LIST_INVALID"); }
-  const serialized = JSON.stringify(plugins);
-  if (!serialized.includes("codex") || !serialized.includes("openai-codex")) {
+  if (!officialCodexPluginInstalled(plugins)) {
     fail("official project-scoped codex@openai-codex plugin is not installed", 1, "OFFICIAL_CODEX_PLUGIN_MISSING");
   }
   return { codexVersion: String(codex.stdout).trim(), pluginInstalled: true, plugin: PLUGIN };
@@ -197,7 +214,7 @@ export function probeRoute(root, options = {}) {
   const available = runtime(root, options);
   const before = gitStatus(root);
   const token = "CODEX_PLUGIN_ROUTE_" + crypto.randomBytes(12).toString("hex");
-  const prompt = `/codex:rescue --wait --fresh --model gpt-5.6-sol --effort max ` +
+  const prompt = `/codex:rescue --wait --fresh --model ${CODEX_MODEL} --effort ${CODEX_EFFORT} ` +
     `Read-only capability probe. Do not modify files. Reply exactly with ${token}`;
   const result = run(resolveClaudeExecutable(options.claude), ["-p", "--output-format", "json", "--max-turns", "8",
     "--permission-mode", "plan", prompt], root, 10 * 60_000);
@@ -220,8 +237,8 @@ export function probeRoute(root, options = {}) {
   return {
     ...available,
     route: "claude:/codex:rescue",
-    model: "gpt-5.6-sol",
-    effort: "max",
+    model: CODEX_MODEL,
+    effort: CODEX_EFFORT,
     claudeSessionId: payload.session_id,
     providerOutputEvidence: false,
     locallyReverified: true,

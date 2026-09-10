@@ -80,6 +80,10 @@ function render(result) {
       : `accountability-data-left=${result.accountabilityData.exists
         ? `${result.accountabilityData.files.length}-files(credentials:${result.accountabilityData.credentialFiles.length})`
         : "absent"}`) : null,
+    result.runtimeActivation && result.runtimeActivation.packageRefs.length ? (result.runtimeActivation.cleared.length
+      ? `runtime-activation-cleared=${result.runtimeActivation.cleared.length}-package-ref` +
+        (result.runtimeActivation.recoveryPreserved.length ? ` recovery-preserved=${result.runtimeActivation.recoveryPreserved.length}` : "")
+      : `runtime-activation-left=${result.runtimeActivation.packageRefs.length}-package-ref`) : null,
   ].filter(Boolean);
   return "keel harness distribution: " + values.join(" ");
 }
@@ -105,6 +109,17 @@ if (process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(proce
     if (data && !data.purged && data.credentialFiles?.length) {
       console.error("keel harness installer: Google credentials of this installation remain outside the repository: " +
         data.directory + " (" + data.credentialFiles.join(", ") + "). Disconnect in the Dashboard first, or rerun uninstall with --purge-accountability-data.");
+    }
+    const activation = result.runtimeActivation;
+    if (activation && activation.cleared.length) {
+      console.error("keel harness installer: cleared " + activation.cleared.length +
+        " stale package activation pointer(s) in .unlazy/ (" + activation.cleared.join(", ") +
+        ") so a follow-up installation does not inherit an active package" +
+        (activation.recoveryPreserved.length ? "; recoverable git state under .unlazy/<scope>/git/recovery was preserved" : "") + ".");
+    } else if (activation && activation.packageRefs.length) {
+      console.error("keel harness installer: a follow-up installation would inherit " + activation.packageRefs.length +
+        " active package activation pointer(s) in .unlazy/ (" + activation.packageRefs.join(", ") +
+        "); the real uninstall clears them.");
     }
     process.stdout.write((options.json ? JSON.stringify(result, null, 2) : render(result)) + "\n");
   } catch (error) {
