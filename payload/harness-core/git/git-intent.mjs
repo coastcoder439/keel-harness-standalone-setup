@@ -177,6 +177,7 @@ function parseArgs(argv) {
     else if (option === "--expected-result-digest") values.expectedResultDigest = args.shift();
     else if (option === "--path") values.paths.push(args.shift());
     else if (option === "--operation") values.operation = args.shift();
+    else if (option === "--rev") values.rev = args.shift();
     else if (option === "--receipt") values.receipt = args.shift();
     else if (option === "--owner-ok") values.ownerOk = args.shift();
     else if (option === "--unlazy-root") values.unlazyRoot = args.shift();
@@ -312,12 +313,54 @@ function atomicJson(file, value) {
   finally { try { fs.unlinkSync(temporary); } catch { /* renamed or absent */ } }
 }
 
+// The read half of the finite Git surface. During an active package the guard
+// redirects EVERY raw Git command -- read-only status/log/diff/show included --
+// to this one intent (git-intent-guard.js), so the contract sentence "raw
+// MUTATING Git is locked" (CLAUDE.md) only holds if the read intent actually
+// serves those reads; without them a bound agent had no route to `git log/diff/
+// show` at all (audit 06.09.2026 line 380). Every operation stays strictly
+// read-only and is constrained to the bound leaf OWNS paths, so a read can never
+// widen past the session's own surface. An optional --rev is resolved to a
+// committed OID BEFORE use, so it can neither inject a Git option nor reach a path
+// outside the "-- <ownedPaths>" limiter (the `<rev>:<path>` form is never built).
+// Proven by "inspect serves read-only log, diff and show for owned paths" in
+// test/git-intent.test.js.
+const READ_OPERATIONS = new Set(["status", "log", "diff", "show"]);
+
+function resolveReadRev(repoRoot, rev) {
+  const text = String(rev);
+  if (!/^[0-9A-Za-z][0-9A-Za-z._/~^-]{0,127}$/u.test(text)) fail("USAGE", "--rev must be a plain commit-ish");
+  const resolved = git(repoRoot, ["rev-parse", "--verify", "--quiet", text + "^{commit}"]);
+  if (resolved.status !== 0) fail("INSPECT_REV", "--rev does not resolve to a commit: " + text, 1);
+  return String(resolved.stdout).trim();
+}
+
 function inspect(options) {
   const binding = exactBinding(options);
   const paths = options.paths.length ? authorizedPaths(binding, options.paths) : binding.owns;
-  const status = commandResult(git(binding.repoRoot, ["status", "--porcelain=v2", "--branch", "--", ...paths]), "inspect");
-  return { operation: "inspect", packageId: binding.packageId, scope: binding.scope,
-    leaf: binding.leaf, head: binding.headOid, paths, status: status.split(/\r?\n/u).filter(Boolean) };
+  const operation = String(options.operation || "status");
+  if (!READ_OPERATIONS.has(operation)) {
+    fail("USAGE", "inspect --operation must be one of status, log, diff, show");
+  }
+  if (operation === "status") {
+    const status = commandResult(git(binding.repoRoot, ["status", "--porcelain=v2", "--branch", "--", ...paths]), "inspect");
+    return { operation: "inspect", read: "status", packageId: binding.packageId, scope: binding.scope,
+      leaf: binding.leaf, head: binding.headOid, paths, status: status.split(/\r?\n/u).filter(Boolean) };
+  }
+  const base = options.rev ? resolveReadRev(binding.repoRoot, options.rev) : binding.headOid;
+  let args;
+  if (operation === "log") {
+    args = ["log", "--max-count", "50", "--pretty=format:%H %ad %s", "--date=iso-strict",
+      ...(base ? [base] : []), "--", ...paths];
+  } else if (operation === "diff") {
+    args = ["diff", ...(base ? [base] : []), "--", ...paths];
+  } else {
+    if (!base) fail("INSPECT_REV", "show needs at least one commit; the repository is unborn", 1);
+    args = ["show", base, "--", ...paths];
+  }
+  const output = commandResult(git(binding.repoRoot, args), "inspect");
+  return { operation: "inspect", read: operation, packageId: binding.packageId, scope: binding.scope,
+    leaf: binding.leaf, head: binding.headOid, rev: base || null, paths, output: output.split(/\r?\n/u) };
 }
 
 function unstage(options) {
@@ -330,6 +373,102 @@ function unstage(options) {
   commandResult(result, "unstage");
   const receiptPath = writeReceipt(binding, { operation: "unstage", head: binding.headOid || "unborn", paths });
   return { operation: "unstage", paths, receipt: receiptPath };
+}
+
+// Fund 377 (triage 09.09.2026): when the session that staged paths disappears its
+// binding file is gone, so the session-bound unstage intent above can never clear
+// them and every checkpoint stays refused with SHARED_INDEX_DIRTY -- a dead end,
+// because raw Git is blocked and no other session may unstage a path it does not
+// own. This is the package/scope-authorized recovery for exactly that shared-index
+// orphan. It authorizes a staged path against the WHOLE package surface (every
+// leaf OWNS of the bundle plus docs/packages/<id>/**), never a single session, so
+// a vanished leaf's paths stay recoverable. It stays session-locked: a staged path
+// a LIVE session binding still owns is refused (that session runs unstage itself),
+// and any staged path outside this package's surface is refused (another owner's
+// decision). It only unstages -- the working tree is preserved. Unreadable binding
+// state fails closed, so recovery never unstages while blind to a possibly-live
+// claim. Proven by "recover-index clears staged paths of a disappeared session"
+// and its guard test in test/git-intent.test.js.
+function packageAuthorizedPatterns(repoRoot, packageId) {
+  const patterns = new Set(["docs/packages/" + packageId + "/**"]);
+  const gatesDir = path.join(repoRoot, "docs", "packages", packageId, "gates");
+  let entries = [];
+  try { entries = fs.readdirSync(gatesDir, { withFileTypes: true }); } catch { /* a package may ship no leaf ledgers */ }
+  for (const entry of entries) {
+    if (!entry.isFile() || !/^leaf-[A-Za-z0-9][A-Za-z0-9._-]{0,58}\.md$/u.test(entry.name)) continue;
+    let owns;
+    try { owns = packageBinding.leafOwnsFromText(fs.readFileSync(path.join(gatesDir, entry.name), "utf8")); }
+    catch { continue; }
+    for (const pattern of owns) patterns.add(pattern);
+  }
+  return [...patterns];
+}
+
+function liveSessionOwners(repoRoot) {
+  const runtime = path.join(repoRoot, ".unlazy");
+  const owners = [];
+  let scopes = [];
+  try { scopes = fs.readdirSync(runtime, { withFileTypes: true }); } catch { return owners; }
+  for (const scope of scopes) {
+    if (!scope.isDirectory() || scope.name === "locks" || scope.name.startsWith(".")) continue;
+    const directory = path.join(runtime, scope.name, "bindings");
+    let files = [];
+    try { files = fs.readdirSync(directory, { withFileTypes: true }); } catch { continue; }
+    for (const file of files) {
+      if (!file.isFile() || !/^[a-f0-9]{64}\.json$/u.test(file.name)) continue;
+      const relative = path.relative(repoRoot, path.join(directory, file.name)).replaceAll("\\", "/");
+      let value;
+      try { value = JSON.parse(fs.readFileSync(path.join(directory, file.name), "utf8")); }
+      catch { fail("RECOVERY_STATE_UNREADABLE", "a session binding is unreadable; recovery cannot prove staged paths are orphaned: " + relative); }
+      if (!value || value.schemaVersion !== 1 || !Array.isArray(value.owns)) {
+        fail("RECOVERY_STATE_UNREADABLE", "a session binding is invalid; recovery cannot prove staged paths are orphaned: " + relative);
+      }
+      owners.push({ sessionId: value.sessionId, owns: value.owns.map((pattern) => packageBinding.globRegex(pattern)) });
+    }
+  }
+  return owners;
+}
+
+function recoverIndex(options) {
+  const snapshot = repository.repositorySnapshot(options.root || process.cwd());
+  const packageId = identifier(options.packageId, "package");
+  const scope = identifier(options.scope || packageId, "scope");
+  const refFile = path.join(snapshot.repoRoot, ".unlazy", scope, "package.ref");
+  if (!fs.existsSync(refFile) || fs.readFileSync(refFile, "utf8") !== "docs/packages/" + packageId + "\n") {
+    fail("RECOVERY_BINDING", "scope does not bind the requested package");
+  }
+  const staged = parseZeroList(commandResult(git(snapshot.repoRoot,
+    ["diff", "--cached", "--name-only", "-z"]), "recover-preflight"));
+  if (!staged.length) fail("NOTHING_TO_RECOVER", "the shared index contains no staged paths", 1);
+  const authorized = packageAuthorizedPatterns(snapshot.repoRoot, packageId).map((pattern) => packageBinding.globRegex(pattern));
+  const owners = liveSessionOwners(snapshot.repoRoot);
+  const foreign = [];
+  const held = [];
+  const recoverable = [];
+  for (const relative of staged) {
+    if (!authorized.some((pattern) => pattern.test(relative))) { foreign.push(relative); continue; }
+    const owner = owners.find((entry) => entry.owns.some((pattern) => pattern.test(relative)));
+    if (owner) { held.push(relative + " (" + owner.sessionId + ")"); continue; }
+    recoverable.push(relative);
+  }
+  if (foreign.length) {
+    fail("RECOVERY_OUT_OF_SCOPE", "staged paths are outside the authorized surface of package " + packageId +
+      "; recovery cannot authorize them: " + foreign.join(", "), 1);
+  }
+  if (held.length) {
+    fail("RECOVERY_SESSION_LIVE", "staged paths are still owned by a live session that must unstage them itself: " +
+      held.join(", "), 1);
+  }
+  recoverable.sort((left, right) => left.localeCompare(right, "en"));
+  let result = git(snapshot.repoRoot, ["restore", "--staged", "--", ...recoverable]);
+  if (result.status !== 0 && snapshot.headOid === null) {
+    result = git(snapshot.repoRoot, ["rm", "--cached", "-r", "--ignore-unmatch", "--", ...recoverable]);
+  }
+  commandResult(result, "recover-index");
+  const binding = { repoRoot: snapshot.repoRoot, packageId, scope, sessionId: "recovery", leaf: "recovery",
+    headOid: snapshot.headOid };
+  const receiptPath = writeReceipt(binding, { operation: "recover-index", head: snapshot.headOid || "unborn", paths: recoverable });
+  return { operation: "recover-index", paths: recoverable, receipt: receiptPath };
 }
 
 // Contract sentence (CLAUDE.md/AGENTS.md, skill package-execution): "Leaf-Agenten committen
@@ -374,7 +513,9 @@ function checkpoint(options) {
   if (!message || message.length > 200 || /[\r\n\0]/u.test(message)) fail("USAGE", "--message must be one line of 1..200 characters");
 
   const staged = commandResult(git(binding.repoRoot, ["diff", "--cached", "--name-only", "-z"]), "preflight");
-  if (staged.length) fail("SHARED_INDEX_DIRTY", "checkpoint refused: Git index already contains staged paths; run the unstage intent for their owning session");
+  if (staged.length) {
+    fail("SHARED_INDEX_DIRTY", "checkpoint refused: Git index already contains staged paths; the owning session must run the unstage intent, or run the recover-index intent (package/scope authorized) when that session is gone");
+  }
   const changed = commandResult(git(binding.repoRoot, ["status", "--porcelain=v1", "-z", "--", ...paths]), "preflight");
   if (!changed.length) fail("NOTHING_TO_CHECKPOINT", "none of the bound paths changed", 1);
 
@@ -1505,6 +1646,8 @@ export const CANONICAL_INTENTS = Object.freeze([
     syntax: "checkpoint --session <sessionId> --message <message> --path <ownedPath>" },
   { name: "unstage", mutates: true,
     syntax: "unstage --session <sessionId> --path <ownedPath>" },
+  { name: "recover-index", mutates: true,
+    syntax: "recover-index --root <repo> --package <packageId> --scope <scope>" },
   { name: "discard-working", mutates: true,
     syntax: "discard-working --session <sessionId> --path <exactOwnedFile>" },
   { name: "recover-discard", mutates: true,
@@ -1538,6 +1681,7 @@ export async function runIntent(options) {
   if (options.intent === "inspect") return inspect(options);
   if (options.intent === "checkpoint") return checkpoint(options);
   if (options.intent === "unstage") return unstage(options);
+  if (options.intent === "recover-index") return recoverIndex(options);
   if (options.intent === "discard-working") return discardWorking(options);
   if (options.intent === "recover-discard") return recoverDiscard(options);
   if (options.intent === "revert-checkpoint") return revertCheckpoint(options);
@@ -1547,7 +1691,7 @@ export async function runIntent(options) {
   if (options.intent === "plan-publish") return planPublish(options);
   if (options.intent === "publish") return publish(options);
   if (options.intent === "explain") return explain(options);
-  fail("USAGE", "intent must be inspect, checkpoint, unstage, discard-working, recover-discard, revert-checkpoint, integration-checkpoint, plan-close, closure-checkpoint, plan-publish, publish, or explain");
+  fail("USAGE", "intent must be inspect, checkpoint, unstage, recover-index, discard-working, recover-discard, revert-checkpoint, integration-checkpoint, plan-close, closure-checkpoint, plan-publish, publish, or explain");
 }
 
 async function main() {

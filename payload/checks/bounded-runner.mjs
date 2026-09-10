@@ -205,7 +205,11 @@ export function runBounded(spec, dependencies = {}) {
       child.stdout.destroy();
       child.stderr.destroy();
       child.unref();
-      setTimeout(finish, 100).unref();
+      // Deliberately referenced: child.unref() plus the unref'd deadline and
+      // heartbeat leave this timer as the only live handle. Unref'd, Node exited
+      // with code 0 before finish() ran: no [END] line, no failing exit code,
+      // and a timed-out matrix phase silently ended the whole run (measured 10.09.2026).
+      setTimeout(finish, 100);
     }, timeoutMs);
     deadline.unref();
 

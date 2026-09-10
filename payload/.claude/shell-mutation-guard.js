@@ -1,15 +1,41 @@
 #!/usr/bin/env node
 "use strict";
 
-// Application-level PreToolUse mutation boundary for an active package.
-// The shell is not statically decidable, so executable code is fail-closed:
-// only named repository verifiers and canonical mutation tools may run.
+// Application-level PreToolUse mutation boundary for every governed agent shell call.
+// It holds whether or not a package is bound (audit H6, 09.09.2026): the shell is not
+// statically decidable, so executable code is fail-closed -- only named repository
+// verifiers, canonical mutation tools and the declared Dashboard service may run.
 // Ordinary read-only inspection remains available. This does not claim OS sandboxing;
 // a human terminal and trusted allowlisted programs are outside it.
 
 const fs = require("node:fs");
 const path = require("node:path");
-const gitGuard = require("./git-intent-guard.js");
+// Keep the transport local: a missing output-adapter dependency must not turn
+// a denial into an exit-1 hook error that Codex would ignore on Windows.
+function block(message) {
+  const reason = String(message).trim() || "shell-mutation-guard: tool denied";
+  if (process.env.KEEL_HARNESS_ROOT && process.env.KEEL_HOOK_TARGET === ".claude/shell-mutation-guard.js") {
+    fs.writeSync(1, JSON.stringify({ hookSpecificOutput: {
+      hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason,
+    } }) + "\n");
+    process.exit(0); // PowerShell maps native exit 2 to 1; valid JSON survives.
+  }
+  fs.writeSync(2, reason + "\n");
+  process.exit(2); // Preserve the direct Claude hook contract.
+}
+// A partial or corrupted guard install (e.g. a deleted sibling guard) must block, not
+// pass: dependency failures emit a protocol-specific denial (Codex exit-0 JSON,
+// direct Claude exit 2), not a bare crash (audit follow-up 425, 09.09.2026). As an imported module
+// the real error is surfaced so tests and callers never see a silently stubbed guard.
+let gitGuard;
+try {
+  gitGuard = require("./git-intent-guard.js");
+} catch (error) {
+  if (require.main === module) {
+    block("shell-mutation-guard: dependency load failed; command blocked: " + error.message);
+  }
+  throw error;
+}
 
 const READ_ONLY_COMMANDS = new Set([
   "[", "cat", "cd", "cmp", "command", "cut", "diff", "dir", "echo", "exit", "false", "fd", "file",
@@ -63,6 +89,7 @@ const TEST_PATHS = new Set([
   "test/bounded-runner.test.js",
   "test/claude-fanout-e2e.test.js",
   "test/codex-hooks.test.js",
+  "test/codex-hook-enforcement.test.js",
   "test/codex-plugin-e2e.test.js",
   "test/codex-plugin-integration.test.js",
   "test/dashboard-runtime-archive.test.js",
@@ -88,6 +115,7 @@ const TEST_PATHS = new Set([
   "test/package-runtime-audit.test.js",
   "test/reference-boundary.test.js",
   "test/repository-binding.test.js",
+  "test/session-roles-handoff.test.js",
   "test/shell-mutation-boundary.test.js",
   "test/standalone-build-transaction.test.js",
   "test/windows-launchers.test.js",
@@ -426,9 +454,10 @@ function inspect(command, context = {}) {
   const projectRoot = path.resolve(context.projectRoot || process.cwd());
   const cwd = path.resolve(context.cwd || projectRoot);
   const sessionId = context.sessionId || "";
-  const active = context.active ?? gitGuard.activePackage(projectRoot, sessionId, cwd);
-  if (!active) return { allowed: true, code: "NO_ACTIVE_PACKAGE" };
-
+  // The finite executable policy holds whether or not a package is bound (audit H6):
+  // rm/Set-Content/undeclared Node scripts/redirection stay blocked with no active
+  // package. Git stays owned by git-intent-guard, and read-only inspection plus the
+  // declared Dashboard service (SERVICE_PATHS/DECLARED_SERVICE) remain reachable.
   const gitFindings = gitGuard.inspect(command, projectRoot, sessionId, { active: true, cwd });
   if (gitFindings.length) return { allowed: true, code: "GIT_OWNED_BY_INTENT_GUARD", git: gitFindings[0] };
   if (outputRedirection(String(command || ""))) {
@@ -484,8 +513,7 @@ if (require.main === module) {
     let payload;
     try { payload = JSON.parse(input || "{}"); }
     catch {
-      process.stderr.write("shell-mutation-guard: invalid hook input; command blocked\n");
-      return process.exit(2);
+      return block("shell-mutation-guard: invalid hook input; command blocked");
     }
     const projectRoot = process.env.CLAUDE_PROJECT_DIR || process.cwd();
     let decision;
@@ -496,13 +524,11 @@ if (require.main === module) {
         sessionId: payload.session_id,
       });
     } catch (error) {
-      process.stderr.write("shell-mutation-guard: policy evaluation failed; command blocked: " + error.message + "\n");
-      return process.exit(2);
+      return block("shell-mutation-guard: policy evaluation failed; command blocked: " + error.message);
     }
     if (decision.allowed) return process.exit(0);
-    process.stderr.write("shell-mutation-guard: blocked before execution: " + decision.code +
+    block("shell-mutation-guard: blocked before execution: " + decision.code +
       "\n" + decision.detail + "\nNEXT: " + decision.next + "\n");
-    process.exit(2);
   });
 }
 

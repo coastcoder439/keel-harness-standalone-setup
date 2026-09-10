@@ -37,6 +37,46 @@ function erlaubteWurzeln(projectRoot = process.env.CLAUDE_PROJECT_DIR || null) {
   return w.map(norm);
 }
 
+// --- Projekt-Container-/Schreibwurzeln aus dem Instanzprofil (Fund 424) ---
+// Installationsspezifische Container-Ordner leben ausschliesslich in
+// docs/harness-instance.md (Feld "Additional allowed write roots") -- KEIN fest
+// eingebauter Name wie "user-projects" (CLAUDE.md: "keinen fest eingebauten ...
+// Workspace-Namen"). schreibwurzelnAusText ist rein und wortgleich in repo-status.js
+// gespiegelt (wie erlaubteWurzeln zwischen danger-/write-guard); aendert sich das Muster,
+// zieht die andere Kopie mit. Ordnernamen sind entweder explizite Referenzen
+// (`back-quoted` oder mit Schraegstrich) oder -- ganz ohne Prosa -- eine reine, getrennte
+// Liste blosser Bezeichner. "none"/"keine"/leer/[AUSFUELLEN] => keine Wurzel, Regel inaktiv.
+function schreibwurzelnAusText(md) {
+  const zeile = String(md).match(/^[ \t]*[-*][ \t]*Additional allowed write roots:[ \t]*(.*)$/im);
+  if (!zeile) return [];
+  const wert = zeile[1].trim();
+  if (!wert || /^\[AUSFUELLEN\]/i.test(wert) || /^(none|keine)\b/i.test(wert)) return [];
+  const gefunden = [];
+  const merke = (roh) => {
+    const t = String(roh).trim().replace(/^[`'"]+|[`'"]+$/g, "").replace(/\/+$/, "");
+    if (t && /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/.test(t) && !gefunden.includes(t)) gefunden.push(t);
+  };
+  // 1) Explizite Ordner-Referenzen: `back-quoted` oder mit Schraegstrich, irgendwo im Text.
+  const explizit = /`([^`]+)`|(?:^|[\s,;(])([A-Za-z0-9._-]+\/(?:[A-Za-z0-9._-]+\/?)*)/g;
+  let treffer;
+  while ((treffer = explizit.exec(wert))) merke(treffer[1] || treffer[2]);
+  if (gefunden.length) return gefunden;
+  // 2) Keine Marker -> nur eine reine, getrennte Liste blosser Ordnernamen zaehlt; Prosa mit
+  //    Leerzeichen bleibt bewusst wirkungslos (Regel inaktiv statt geratenem Ordnernamen).
+  const teile = wert.split(/\s*[,;]\s*|\s+(?:and|und|or|oder|&|\+)\s+/i).map((s) => s.trim()).filter(Boolean);
+  if (teile.length && teile.every((p) => /^[A-Za-z0-9._-]+$/.test(p))) teile.forEach(merke);
+  return gefunden;
+}
+
+function leseSchreibwurzeln(projektWurzel) {
+  if (!projektWurzel) return [];
+  try {
+    return schreibwurzelnAusText(fs.readFileSync(path.join(projektWurzel, "docs", "harness-instance.md"), "utf8"));
+  } catch {
+    return [];
+  }
+}
+
 // --- W2: Zugangs-Muster. Nur WERT-Formate (Prefix+Laenge), keine Woerter --
 // ein Muster auf "password" wuerde jede Doku blocken. Die Muster sind
 // zerstueckelt geschrieben, damit dieser Guard sich nicht selbst trifft.
@@ -56,21 +96,31 @@ const ZUGANGS_MUSTER = [
 const W2_AUSNAHMEN = [/\/dashboard\/test\//, /\/\.claude\/write-guard\.js$/];
 
 // --- W3: .gitignore-Reihenfolge (CLAUDE.md Abschnitt 2) ---
-// Blockt nur den messbaren Schadensfall: eine konkrete (glob-freie) Zeile unter
-// user-projects/ zeigt auf einen EXISTIERENDEN Ordner, der nicht selbst der
-// naechste echte Git-Root ist oder kein origin hat. Beliebig tiefe Projektpfade
-// sind erlaubt; "eigenes Repo" meint damit exakt dieses User-Projekt, nicht ein
-// zufaelliges Eltern-Repo. Nicht existente Ordner bleiben frei.
+// Blockt nur den messbaren Schadensfall: eine konkrete (glob-freie) Zeile unter einer
+// installationsspezifischen Projekt-Container-Wurzel (deps.containerWurzeln aus
+// docs/harness-instance.md -- NICHT fest "user-projects", Fund 424) zeigt auf einen
+// EXISTIERENDEN Ordner, der nicht selbst der naechste echte Git-Root ist oder kein
+// origin hat. Beliebig tiefe Projektpfade sind erlaubt; "eigenes Repo" meint exakt
+// dieses User-Projekt, nicht ein zufaelliges Eltern-Repo. Nicht existente Ordner bleiben
+// frei. Ohne definierte Container-Wurzel ist die Regel ehrlich inaktiv -- kein Fehlalarm
+// UND keine Scheinaktivitaet in einer Fremdinstallation ohne dieses Layout.
 function gitignoreVerstoss(inhalt, werkbank, deps) {
+  const wurzeln = (deps.containerWurzeln || []).map((w) => String(w).replace(/\/+$/, "")).filter(Boolean);
+  if (!wurzeln.length) return null;
   const zeilen = String(inhalt).split(/\r?\n/);
-  for (const z of zeilen) {
-    const m = z.trim().match(/^user-projects\/([^\s!#*?\[\]]+?)\/?$/);
-    if (!m) continue;
-    const relProjekt = m[1].replaceAll("/", path.sep);
-    const ordner = path.join(werkbank, "user-projects", relProjekt);
-    if (!deps.existiert(ordner)) continue;
-    if (!deps.istEigenesRepo(ordner)) return { projekt: m[1], grund: "ist kein eigener echter Git-Root" };
-    if (!deps.hatRemote(ordner)) return { projekt: m[1], grund: "hat kein origin-Remote (nie gepusht)" };
+  for (const roh of zeilen) {
+    const z = roh.trim();
+    for (const wurzel of wurzeln) {
+      const prefix = wurzel + "/";
+      if (!z.startsWith(prefix)) continue;
+      const m = z.slice(prefix.length).match(/^([^\s!#*?\[\]]+?)\/?$/);
+      if (!m) continue;
+      const rel = wurzel + "/" + m[1];
+      const ordner = path.join(werkbank, rel.replaceAll("/", path.sep));
+      if (!deps.existiert(ordner)) continue;
+      if (!deps.istEigenesRepo(ordner)) return { zeile: rel, grund: "ist kein eigener echter Git-Root" };
+      if (!deps.hatRemote(ordner)) return { zeile: rel, grund: "hat kein origin-Remote (nie gepusht)" };
+    }
   }
   return null;
 }
@@ -114,7 +164,7 @@ function pruefen(toolInput, deps) {
     const v = gitignoreVerstoss(inhalt, deps.werkbank, deps);
     if (v) {
       return (
-        `W3: Die Zeile "user-projects/${v.projekt}/" wuerde einen Ordner unsichtbar machen, ` +
+        `W3: Die Zeile "${v.zeile}/" wuerde einen Ordner unsichtbar machen, ` +
         `der ${v.grund}. Reihenfolge (CLAUDE.md): erst Repo anlegen und verifiziert pushen, ` +
         `DANN die Ignorier-Zeile.`
       );
@@ -128,6 +178,7 @@ function echteDeps(projectRoot = process.env.CLAUDE_PROJECT_DIR || null) {
   return {
     wurzeln: erlaubteWurzeln(projectRoot),
     werkbank: projectRoot,
+    containerWurzeln: leseSchreibwurzeln(projectRoot),
     existiert: fs.existsSync,
     istEigenesRepo: (ordner) => {
       try {
@@ -161,6 +212,7 @@ function selfTest() {
   const deps = {
     wurzeln: [norm(wb), norm(os.tmpdir())],
     werkbank: wb,
+    containerWurzeln: ["user-projects"],
     existiert: (p) => vorhanden.has(norm(p)),
     istEigenesRepo: (ordner) => vorhanden.has(norm(path.join(ordner, ".git"))),
     hatRemote: (ordner) => norm(ordner).endsWith("mit-git") || norm(ordner).endsWith("gruppe/nested"),
@@ -189,6 +241,26 @@ function selfTest() {
     if (!ok) fehler++;
     console.log(`${ok ? "ok  " : "FEHL"} ${soll ? "BLOCK" : "frei "} ${name}`);
   }
+  // --- Fund 424: Container-Wurzeln aus dem Instanzprofil; "none"/leer/Prosa => keine Wurzel ---
+  const wurzelFaelle = [
+    ["none-Prosa (Lab)", "- Additional allowed write roots: none beyond the owning repository and bounded temporary storage\n", []],
+    ["Platzhalter", "- Additional allowed write roots: [AUSFUELLEN]\n", []],
+    ["Zeile fehlt", "# Instance\n- Owner role: eine Person\n", []],
+    ["blosse Liste", "- Additional allowed write roots: user-projects, work\n", ["user-projects", "work"]],
+    ["Backtick/Schraegstrich", "- Additional allowed write roots: `clients/` and `vendor/`\n", ["clients", "vendor"]],
+    ["Einzelordner", "- Additional allowed write roots: projekte\n", ["projekte"]],
+    ["reine Prosa ohne none", "- Additional allowed write roots: only the owning repository here\n", []],
+  ];
+  for (const [name, md, soll] of wurzelFaelle) {
+    const ist = schreibwurzelnAusText(md);
+    const ok = JSON.stringify(ist) === JSON.stringify(soll);
+    if (!ok) fehler++;
+    console.log(`${ok ? "ok  " : "FEHL"} wurzeln ${name.padEnd(24)} -> [${ist.join(", ")}]`);
+  }
+  // W3 bleibt ohne definierte Container-Wurzel ehrlich inaktiv (Fremdinstallation).
+  const w3Inaktiv = pruefen({ file_path: wb + "\\.gitignore", content: "user-projects/ohne-git/\n" }, { ...deps, containerWurzeln: [] });
+  if (w3Inaktiv !== null) fehler++;
+  console.log(`${w3Inaktiv === null ? "ok  " : "FEHL"} frei  W3 inaktiv ohne Container-Wurzel im Instanzprofil`);
   const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "write-guard-package-context-"));
   let childResolved = false;
   try {
@@ -204,7 +276,8 @@ function selfTest() {
   }
   if (!childResolved) fehler++;
   console.log(`${childResolved ? "ok  " : "FEHL"} frei  Paketresolver bindet Schreibziel an Kind-Repo`);
-  console.log(`${faelle.length + 1 - fehler} von ${faelle.length + 1} Faellen richtig.`);
+  const gesamt = faelle.length + wurzelFaelle.length + 2; // + W3-inaktiv + Paketresolver
+  console.log(`${gesamt - fehler} von ${gesamt} Faellen richtig.`);
   return fehler;
 }
 
@@ -229,4 +302,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { echteDeps, gitignoreVerstoss, pruefen, selfTest };
+module.exports = { echteDeps, gitignoreVerstoss, pruefen, selfTest, schreibwurzelnAusText, leseSchreibwurzeln };
