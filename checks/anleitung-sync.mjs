@@ -84,6 +84,7 @@ const GRUPPEN_LABEL = new Map([
   ["checks/", "Installierte Prüfungen der Auslieferung (`checks/run-all.mjs` und Einzelprüfer)"],
   ["docs/", "Doku, Instanzdatei mit `[AUSFUELLEN]`-Marke, Paketvorlage"],
   ["templates/", "Vorlagen für Paket-Bundles (OWNER, GATES)"],
+  ["roles/", "Fachrollen-Profile des Assistenten (Accountability, Coaching, Ernährung, Training, Wohlbefinden, Business, Projekt)"],
   ["licenses/", "Lizenztexte übernommener Fremdteile"],
 ]);
 const WURZEL_LABEL = "Wurzeldateien: ";
