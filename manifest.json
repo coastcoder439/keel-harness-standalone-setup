@@ -3,10 +3,10 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.1.7"
+    "version": "1.2.0"
   },
   "payload": {
-    "treeSha256": "740ec63902f2a1581c7319539a99508474062e68356d2b91e6c36c72da90ea8f"
+    "treeSha256": "c05ed2b34ae84ba387cf771c751df89c2dd1c521a0bb60ca61f544f5e3fe2ea1"
   },
   "provenance": {
     "unlazy": {
@@ -40,7 +40,7 @@
     },
     "deprecations": []
   },
-  "fileCount": 176,
+  "fileCount": 184,
   "files": [
     {
       "source": "test-harness/.agents/skills/completeness/SKILL.md",
@@ -858,19 +858,19 @@
       "mode": "copy",
       "generated": true,
       "sourceBytes": 334,
-      "sourceSha256": "0105785348ef932e9fb496b5f486010c16add38022e2afbac1955a4881e5cb42",
+      "sourceSha256": "4be495c48f82bfa061a1d91f2ccc6d412abe3603976505bd04ed0b73a44b21b7",
       "bytes": 334,
-      "sha256": "0105785348ef932e9fb496b5f486010c16add38022e2afbac1955a4881e5cb42"
+      "sha256": "4be495c48f82bfa061a1d91f2ccc6d412abe3603976505bd04ed0b73a44b21b7"
     },
     {
       "source": "generated/dashboard/runtime.keel.gz",
       "target": "dashboard/runtime.keel.gz",
       "mode": "copy",
       "generated": true,
-      "sourceBytes": 13557275,
-      "sourceSha256": "e4a5c2aeeccd40c1a6887f730984365f168d7cc01fcf900de2ffa7867a5e155e",
-      "bytes": 13557275,
-      "sha256": "e4a5c2aeeccd40c1a6887f730984365f168d7cc01fcf900de2ffa7867a5e155e"
+      "sourceBytes": 14344332,
+      "sourceSha256": "ba0f484b920bf5647b4b951fc8a3bf57ce7bc150ea46becb7a9eb854af239746",
+      "bytes": 14344332,
+      "sha256": "ba0f484b920bf5647b4b951fc8a3bf57ce7bc150ea46becb7a9eb854af239746"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-serve.mjs",
@@ -1140,7 +1140,87 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 571,
-      "sha256": "1fad3e4f846fc8faa6d5b17223059c99ea27729ba40dfb38d8b5b1f420b893f7"
+      "sha256": "f5ceb5fcce7fd289e23aa9151ce2b2051184c88d220793e4b3d47b4898dc2d03"
+    },
+    {
+      "source": "test-harness/roles/accountability.md",
+      "target": "roles/accountability.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 5607,
+      "sourceSha256": "69fad6452dfea8638640c95537b44f54ec9f9c962bb7032111e09c457b6c1f74",
+      "bytes": 5607,
+      "sha256": "69fad6452dfea8638640c95537b44f54ec9f9c962bb7032111e09c457b6c1f74"
+    },
+    {
+      "source": "test-harness/roles/business.md",
+      "target": "roles/business.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 5552,
+      "sourceSha256": "9ab4cdb9c98aaedf05857946d8f1b04f31ec2a416c6601c5882e8092b073c79b",
+      "bytes": 5552,
+      "sha256": "9ab4cdb9c98aaedf05857946d8f1b04f31ec2a416c6601c5882e8092b073c79b"
+    },
+    {
+      "source": "test-harness/roles/manifest.json",
+      "target": "roles/manifest.json",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 11793,
+      "sourceSha256": "e0bc6cec7365538e491e8bd7ebe6d2438ed1ef9958a58d486f7cbf4e2be44c07",
+      "bytes": 11793,
+      "sha256": "e0bc6cec7365538e491e8bd7ebe6d2438ed1ef9958a58d486f7cbf4e2be44c07"
+    },
+    {
+      "source": "test-harness/roles/nutrition.md",
+      "target": "roles/nutrition.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6560,
+      "sourceSha256": "73c58495369c05e8de82b9a520bb4c6a2f0128da67a4d8c2a0ddd75149ae7858",
+      "bytes": 6560,
+      "sha256": "73c58495369c05e8de82b9a520bb4c6a2f0128da67a4d8c2a0ddd75149ae7858"
+    },
+    {
+      "source": "test-harness/roles/personal-coaching.md",
+      "target": "roles/personal-coaching.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 5593,
+      "sourceSha256": "661d8a574be8328800de62d98c30227b90a8422eaf775ae4ac6f73981ae5df93",
+      "bytes": 5593,
+      "sha256": "661d8a574be8328800de62d98c30227b90a8422eaf775ae4ac6f73981ae5df93"
+    },
+    {
+      "source": "test-harness/roles/project.md",
+      "target": "roles/project.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 5675,
+      "sourceSha256": "6ed6d95d758d5e63575689460d57f97b8fdd9b0f0753896729acc6ffedb52bfd",
+      "bytes": 5675,
+      "sha256": "6ed6d95d758d5e63575689460d57f97b8fdd9b0f0753896729acc6ffedb52bfd"
+    },
+    {
+      "source": "test-harness/roles/training.md",
+      "target": "roles/training.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6594,
+      "sourceSha256": "a3820fb90dcd3bbc4a2637b8c245af396ad5e7eddce9f2035463971c40662dce",
+      "bytes": 6594,
+      "sha256": "a3820fb90dcd3bbc4a2637b8c245af396ad5e7eddce9f2035463971c40662dce"
+    },
+    {
+      "source": "test-harness/roles/wellbeing.md",
+      "target": "roles/wellbeing.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6840,
+      "sourceSha256": "703114605aa94ec99c080f1027462b626e3460f84c755d42bd800f19d85c56f0",
+      "bytes": 6840,
+      "sha256": "703114605aa94ec99c080f1027462b626e3460f84c755d42bd800f19d85c56f0"
     },
     {
       "source": "test-harness/templates/GATES-LEAF.md",
