@@ -2,13 +2,14 @@
 // checks/run-all.mjs -- ein Einstieg fuer alle Pruefer dieses Setup-Repos.
 //
 // WARUM ES DAS GIBT
-// Vier Pruefer, die einzeln aufgerufen werden muessen, sind vier Pruefer, von
+// Fuenf Phasen, die einzeln aufgerufen werden muessen, sind fuenf Phasen, von
 // denen regelmaessig drei vergessen werden. Dieser Einstieg fuehrt sie in fester
 // Reihenfolge aus (billig vor teuer, damit ein banaler Fehler nicht erst nach
 // Minuten auffaellt) und bricht beim ersten roten ab.
 //
 // AUFRUF
 //   node checks/run-all.mjs                     Alltagslauf (Trockenlauf des Installers)
+//   node --test test/fresh-clone-failure.test.mjs   nur der Selbsttest der Pruefer
 //   node checks/run-all.mjs --voll              zusaetzlich echte Probe-Installation
 //   node checks/run-all.mjs --release --installed-checks
 //                                               Ausliefer-Lauf: Herkunft muss ausliefer-rein
@@ -47,6 +48,12 @@ if (ziel) freshCloneArgs.push("--target", ziel);
 
 const phasen = [
   { name: "Node-Untergrenze", datei: "checks/node-version.mjs", args: [], timeoutMs: 60_000 },
+  // Erst der Selbstschutz, dann die Pruefer: ein Pruefer, der bei Rot nicht
+  // zurueckkommt, kostet sonst die volle Zeitgrenze der Phase (15.09.2026,
+  // checks/fresh-clone.mjs hing im Node-Fatal-Pfad). Der Test belegt, dass der
+  // Fehlschlag binnen 10 s rot zurueckkommt.
+  { name: "Pruefer brechen selbst ab", datei: "test/fresh-clone-failure.test.mjs",
+    nodeArgs: ["--test"], args: [], timeoutMs: 5 * 60_000 },
   { name: "Herkunft der Payload", datei: "checks/payload-provenance.mjs",
     args: hat("--release") ? ["--release"] : [], timeoutMs: 5 * 60_000 },
   { name: "Anleitung gegen Bestand", datei: "checks/anleitung-sync.mjs", args: [], timeoutMs: 5 * 60_000 },
@@ -61,9 +68,14 @@ process.stdout.write("Setup-Repo-Pruefer -- Node " + gemessen.running + ", " + p
 for (const [index, phase] of phasen.entries()) {
   process.stdout.write("[" + (index + 1) + "/" + phasen.length + "] " + phase.name +
     " (" + phase.datei + (phase.args.length ? " " + phase.args.join(" ") : "") + ")\n");
-  const lauf = spawnSync(process.execPath, [join(repoRoot, ...phase.datei.split("/")), ...phase.args], {
-    cwd: repoRoot, stdio: "inherit", windowsHide: true, timeout: phase.timeoutMs,
-  });
+  const lauf = spawnSync(process.execPath,
+    [...(phase.nodeArgs ?? []), join(repoRoot, ...phase.datei.split("/")), ...phase.args], {
+      // killSignal: SIGKILL -- ein Kind, das im Teardown haengt, nimmt SIGTERM
+      // nicht mehr an; ohne den harten Schuss bliebe es nach der Zeitgrenze als
+      // Waise stehen und hielte das Wegwerf-Ziel offen.
+      cwd: repoRoot, stdio: "inherit", windowsHide: true,
+      timeout: phase.timeoutMs, killSignal: "SIGKILL",
+    });
   if (lauf.error && lauf.error.code === "ETIMEDOUT") {
     process.stderr.write("\nSETUP_REPO_SUITE_FAILED " + phase.datei + " -- Zeitgrenze " +
       Math.round(phase.timeoutMs / 60_000) + " min ueberschritten\n");
