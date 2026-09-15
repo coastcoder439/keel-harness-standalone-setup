@@ -73,6 +73,7 @@ const VERIFIER_PATHS = new Set([
   "checks/requirements-audit.mjs",
   "checks/run-all.mjs",
   "checks/test-matrix.mjs",
+  "voice/check.mjs",
   "standalone/checks/dashboard-list.mjs",
   "standalone/checks/fresh-install.mjs",
   "standalone/checks/manifest-check.mjs",
@@ -84,6 +85,7 @@ const VERIFIER_PATHS = new Set([
 
 const TEST_PATHS = new Set([
   "test/mcp-write-guard.test.js",
+  "test/voice-sidecar.test.js",
   "test/package-ownership.test.js",
   "test/bounded-runner-hardening.test.js",
   "test/bounded-runner.test.js",
@@ -131,7 +133,11 @@ const LIBRARY_PATHS = new Set([
 
 // Langlaufende, empfaengerseitige Dienste: der einzige Dashboard-Startweg des Vertrags.
 // Ohne diese Deklaration war `node dashboard/serve.mjs` fuer jeden Agenten gesperrt
-// (Audit H5). Erlaubt ist ausschliesslich die Form `node dashboard/serve.mjs [--port <n>]`.
+// (Audit H5). Erlaubt ist die Form `node dashboard/serve.mjs [--port <n>]` plus die
+// Sprachflags des Starters (--voice | --speech | --microphone | --no-inference); ohne sie
+// waere die portierte Sprachlaufzeit fuer Agenten unerreichbar.
+const SERVICE_VOICE_FLAGS = new Set(["--voice", "--speech", "--microphone", "--no-inference"]);
+
 const SERVICE_PATHS = new Set([
   "dashboard/serve.mjs",
 ]);
@@ -359,10 +365,18 @@ function classifyNode(words, start, context) {
   const service = declaredPath(script, context.cwd, context.projectRoot, declarations(context, "service", SERVICE_PATHS));
   if (service) {
     const rest = args.slice(scriptIndex + 1);
-    const portForm = rest.length === 0 || (rest.length === 2 && rest[0] === "--port" && /^[0-9]{1,5}$/u.test(rest[1]));
-    return portForm
+    let index = 0;
+    let port = false;
+    const seen = new Set();
+    while (index < rest.length) {
+      if (rest[index] === "--port" && !port && /^[0-9]{1,5}$/u.test(rest[index + 1] || "")) { port = true; index += 2; continue; }
+      if (SERVICE_VOICE_FLAGS.has(rest[index]) && !seen.has(rest[index])) { seen.add(rest[index]); index += 1; continue; }
+      break;
+    }
+    return index === rest.length
       ? { allowed: true, code: "DECLARED_SERVICE", path: service }
-      : denial("SERVICE_ARGUMENTS", "the Dashboard service accepts only --port <n>", "Run: node dashboard/serve.mjs [--port <n>].");
+      : denial("SERVICE_ARGUMENTS", "the Dashboard service accepts only --port <n> and the voice flags --voice, --speech, --microphone, --no-inference",
+        "Run: node dashboard/serve.mjs [--port <n>] [--voice|--speech|--microphone] [--no-inference].");
   }
   const mutation = declaredPath(script, context.cwd, context.projectRoot, declarations(context, "mutation", CANONICAL_MUTATION_PATHS));
   if (mutation) return { allowed: true, code: "CANONICAL_MUTATION_TOOL", path: mutation };
@@ -538,6 +552,7 @@ module.exports = {
   POLICY_FILE,
   loadMutationPolicy,
   SERVICE_PATHS,
+  SERVICE_VOICE_FLAGS,
   TEST_PATHS,
   VERIFIER_PATHS,
   declaredPath,
