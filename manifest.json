@@ -3,10 +3,10 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.2.0"
+    "version": "1.2.1"
   },
   "payload": {
-    "treeSha256": "c05ed2b34ae84ba387cf771c751df89c2dd1c521a0bb60ca61f544f5e3fe2ea1"
+    "treeSha256": "0aedfddd4d934026814d47c9993833eeaa5497176f294d84937197d7601d17a5"
   },
   "provenance": {
     "unlazy": {
@@ -40,7 +40,7 @@
     },
     "deprecations": []
   },
-  "fileCount": 184,
+  "fileCount": 197,
   "files": [
     {
       "source": "test-harness/.agents/skills/completeness/SKILL.md",
@@ -547,10 +547,10 @@
       "target": ".claude/shell-mutation-guard.js",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 26451,
-      "sourceSha256": "da021a0e163f1ad26b0f2bc16fd58336625b8090dba2647b3ce6526b20f4f2b6",
-      "bytes": 26451,
-      "sha256": "da021a0e163f1ad26b0f2bc16fd58336625b8090dba2647b3ce6526b20f4f2b6"
+      "sourceBytes": 27166,
+      "sourceSha256": "d877f419ad80c5ba801ab1b78e1d5087071df71d32571703aae2c4872767d62d",
+      "bytes": 27166,
+      "sha256": "d877f419ad80c5ba801ab1b78e1d5087071df71d32571703aae2c4872767d62d"
     },
     {
       "source": "test-harness/.claude/skills/completeness/SKILL.md",
@@ -737,10 +737,10 @@
       "target": ".gitignore",
       "mode": "merge-lines",
       "generated": false,
-      "sourceBytes": 368,
-      "sourceSha256": "37a305c1c28238f23781afcf408a6efcc6d06e6bda2eba01f469f030587e10ef",
-      "bytes": 368,
-      "sha256": "37a305c1c28238f23781afcf408a6efcc6d06e6bda2eba01f469f030587e10ef"
+      "sourceBytes": 383,
+      "sourceSha256": "6f70a8d083c5eafeb7d557c7bc6c7c3aed5dc98a17d01b4192022b56edca4942",
+      "bytes": 383,
+      "sha256": "6f70a8d083c5eafeb7d557c7bc6c7c3aed5dc98a17d01b4192022b56edca4942"
     },
     {
       "source": "test-harness/.keel-harness.json",
@@ -757,10 +757,10 @@
       "target": "AGENTS.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 8219,
-      "sourceSha256": "d28d5242da204f58a89aa176abab3dc01062bc521df573598e0506bccf4cd74b",
-      "bytes": 8219,
-      "sha256": "d28d5242da204f58a89aa176abab3dc01062bc521df573598e0506bccf4cd74b"
+      "sourceBytes": 8605,
+      "sourceSha256": "db154be004132047bcf20e43a203f58e3b7e16578cb7e7ce66b675154178347e",
+      "bytes": 8605,
+      "sha256": "db154be004132047bcf20e43a203f58e3b7e16578cb7e7ce66b675154178347e"
     },
     {
       "source": "test-harness/checks/bounded-runner.mjs",
@@ -827,10 +827,10 @@
       "target": "CLAUDE.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 8219,
-      "sourceSha256": "d28d5242da204f58a89aa176abab3dc01062bc521df573598e0506bccf4cd74b",
-      "bytes": 8219,
-      "sha256": "d28d5242da204f58a89aa176abab3dc01062bc521df573598e0506bccf4cd74b"
+      "sourceBytes": 8605,
+      "sourceSha256": "db154be004132047bcf20e43a203f58e3b7e16578cb7e7ce66b675154178347e",
+      "bytes": 8605,
+      "sha256": "db154be004132047bcf20e43a203f58e3b7e16578cb7e7ce66b675154178347e"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-runtime-archive.mjs",
@@ -858,29 +858,29 @@
       "mode": "copy",
       "generated": true,
       "sourceBytes": 334,
-      "sourceSha256": "4be495c48f82bfa061a1d91f2ccc6d412abe3603976505bd04ed0b73a44b21b7",
+      "sourceSha256": "332457a74203f69220ec63576cdd0db955413de3e8d33576d047389e6c79aea5",
       "bytes": 334,
-      "sha256": "4be495c48f82bfa061a1d91f2ccc6d412abe3603976505bd04ed0b73a44b21b7"
+      "sha256": "332457a74203f69220ec63576cdd0db955413de3e8d33576d047389e6c79aea5"
     },
     {
       "source": "generated/dashboard/runtime.keel.gz",
       "target": "dashboard/runtime.keel.gz",
       "mode": "copy",
       "generated": true,
-      "sourceBytes": 14344332,
-      "sourceSha256": "ba0f484b920bf5647b4b951fc8a3bf57ce7bc150ea46becb7a9eb854af239746",
-      "bytes": 14344332,
-      "sha256": "ba0f484b920bf5647b4b951fc8a3bf57ce7bc150ea46becb7a9eb854af239746"
+      "sourceBytes": 14342397,
+      "sourceSha256": "152af5a639751a2fb6c1f78b9d9dbadda6bc97f11ab646f863835dc859d5eb06",
+      "bytes": 14342397,
+      "sha256": "152af5a639751a2fb6c1f78b9d9dbadda6bc97f11ab646f863835dc859d5eb06"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-serve.mjs",
       "target": "dashboard/serve.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 2056,
-      "sourceSha256": "aa3801df46ee8d0637dac730578a58c53c7a246bb80ee144b3e47b41be430102",
-      "bytes": 2056,
-      "sha256": "aa3801df46ee8d0637dac730578a58c53c7a246bb80ee144b3e47b41be430102"
+      "sourceBytes": 3479,
+      "sourceSha256": "f6b869faeb96d73d2e42b9f43a867091338ba940586ab6f2a60de158c322e1c2",
+      "bytes": 3479,
+      "sha256": "f6b869faeb96d73d2e42b9f43a867091338ba940586ab6f2a60de158c322e1c2"
     },
     {
       "source": "test-harness/docs/08-sessions-rollen.md",
@@ -897,10 +897,10 @@
       "target": "docs/active-harness-inventory.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 15518,
-      "sourceSha256": "b01545cd6c56621ada0cd55f7557b010657882e19482bac41138a608b6a492f2",
-      "bytes": 15518,
-      "sha256": "b01545cd6c56621ada0cd55f7557b010657882e19482bac41138a608b6a492f2"
+      "sourceBytes": 15848,
+      "sourceSha256": "ce4a2037da436a4d08c850bad8b2bd5b33f30492cc805cf3635235912747c9bd",
+      "bytes": 15848,
+      "sha256": "ce4a2037da436a4d08c850bad8b2bd5b33f30492cc805cf3635235912747c9bd"
     },
     {
       "source": "generated/docs/completeness-check.md",
@@ -1140,7 +1140,7 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 571,
-      "sha256": "f5ceb5fcce7fd289e23aa9151ce2b2051184c88d220793e4b3d47b4898dc2d03"
+      "sha256": "d188072854fa03bee2fab9e43c111ec9e94e561fed7fac0d87ac5dbaf654c264"
     },
     {
       "source": "test-harness/roles/accountability.md",
@@ -1881,9 +1881,143 @@
       "sourceSha256": "e6984e6ac8e9d70731deaf583d64424615644ecc23eae6c975a7cdcd0e607917",
       "bytes": 312,
       "sha256": "e6984e6ac8e9d70731deaf583d64424615644ecc23eae6c975a7cdcd0e607917"
+    },
+    {
+      "source": "test-harness/voice/check.mjs",
+      "target": "voice/check.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 3393,
+      "sourceSha256": "70719bdfb33a3df3d7155e7131ac688c1db8fc0fcb4806f3d5c4d20039f501ce",
+      "bytes": 3393,
+      "sha256": "70719bdfb33a3df3d7155e7131ac688c1db8fc0fcb4806f3d5c4d20039f501ce"
+    },
+    {
+      "source": "test-harness/voice/config.mjs",
+      "target": "voice/config.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 5356,
+      "sourceSha256": "4a74b176dcfb771395a7fe32351ef2fe173e4aa4ce348bac242b7821d623a5f2",
+      "bytes": 5356,
+      "sha256": "4a74b176dcfb771395a7fe32351ef2fe173e4aa4ce348bac242b7821d623a5f2"
+    },
+    {
+      "source": "test-harness/voice/inspect-voicebox.py",
+      "target": "voice/inspect-voicebox.py",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4314,
+      "sourceSha256": "3f92a0c16403e87e75d7356b1eb257047c658c2ada1858295e2a7648673e4294",
+      "bytes": 4314,
+      "sha256": "3f92a0c16403e87e75d7356b1eb257047c658c2ada1858295e2a7648673e4294"
+    },
+    {
+      "source": "test-harness/voice/launcher.mjs",
+      "target": "voice/launcher.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 3958,
+      "sourceSha256": "7a4412f621014a39eb8e0e3133c4e6655004aaa4894b3e433107d40c6f6c642c",
+      "bytes": 3958,
+      "sha256": "7a4412f621014a39eb8e0e3133c4e6655004aaa4894b3e433107d40c6f6c642c"
+    },
+    {
+      "source": "test-harness/voice/piper-server.mjs",
+      "target": "voice/piper-server.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6274,
+      "sourceSha256": "26c6886b88467ff26e347f8c0848c0f3e65f30bf607c72f11d48b05abbf0fd31",
+      "bytes": 6274,
+      "sha256": "26c6886b88467ff26e347f8c0848c0f3e65f30bf607c72f11d48b05abbf0fd31"
+    },
+    {
+      "source": "test-harness/voice/piper-worker.py",
+      "target": "voice/piper-worker.py",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2515,
+      "sourceSha256": "a02fb14c26757a02ac624a752442448c3fd71e0f9622fa5cabdcccdea273efc8",
+      "bytes": 2515,
+      "sha256": "a02fb14c26757a02ac624a752442448c3fd71e0f9622fa5cabdcccdea273efc8"
+    },
+    {
+      "source": "test-harness/voice/profile-process.py",
+      "target": "voice/profile-process.py",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4840,
+      "sourceSha256": "e36ca43bd6be4bcfe9129ed18e43cb87740a0ee59e9907a7150a065bc81eaf2d",
+      "bytes": 4840,
+      "sha256": "e36ca43bd6be4bcfe9129ed18e43cb87740a0ee59e9907a7150a065bc81eaf2d"
+    },
+    {
+      "source": "test-harness/voice/profile-service.mjs",
+      "target": "voice/profile-service.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 5793,
+      "sourceSha256": "7cd9572d3121242c04c89109701af15e251b97d5dc202c781e9c675c2329227f",
+      "bytes": 5793,
+      "sha256": "7cd9572d3121242c04c89109701af15e251b97d5dc202c781e9c675c2329227f"
+    },
+    {
+      "source": "test-harness/voice/README.md",
+      "target": "voice/README.md",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 7392,
+      "sourceSha256": "721948fcdfd820a76806c91269fad63e7d37df067589b16458d451944f4ced43",
+      "bytes": 7392,
+      "sha256": "721948fcdfd820a76806c91269fad63e7d37df067589b16458d451944f4ced43"
+    },
+    {
+      "source": "test-harness/voice/start.mjs",
+      "target": "voice/start.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4675,
+      "sourceSha256": "30bad31572fc44dd549ad56e16c565d9d98c48cce17b85c7717d2cee7f4586fc",
+      "bytes": 4675,
+      "sha256": "30bad31572fc44dd549ad56e16c565d9d98c48cce17b85c7717d2cee7f4586fc"
+    },
+    {
+      "source": "test-harness/voice/stt-server.py",
+      "target": "voice/stt-server.py",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 6316,
+      "sourceSha256": "1d46eb2deaa40014ce9ba157a6d0b16ecd727633211620b14e99e4ed1f6fb047",
+      "bytes": 6316,
+      "sha256": "1d46eb2deaa40014ce9ba157a6d0b16ecd727633211620b14e99e4ed1f6fb047"
+    },
+    {
+      "source": "test-harness/voice/verify-local.mjs",
+      "target": "voice/verify-local.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 4816,
+      "sourceSha256": "980cce6588a95c7c883600571b4cbe3533f105bc93c2d172fdcc25bf8c9c1851",
+      "bytes": 4816,
+      "sha256": "980cce6588a95c7c883600571b4cbe3533f105bc93c2d172fdcc25bf8c9c1851"
+    },
+    {
+      "source": "test-harness/voice/web-start.mjs",
+      "target": "voice/web-start.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 1528,
+      "sourceSha256": "367d7c8262fa415588353dbe3f4ff2684d61305c8fb168f59d9ec870c7be9696",
+      "bytes": 1528,
+      "sha256": "367d7c8262fa415588353dbe3f4ff2684d61305c8fb168f59d9ec870c7be9696"
     }
   ],
   "excluded": [
+    {
+      "source": "test-harness/voice/*.test.mjs",
+      "reason": "the voice sidecar tests transpile the dashboard source tree, which is not delivered; the installed route is node voice/check.mjs"
+    },
     {
       "source": "test-harness/.claude/settings.local.json",
       "reason": "machine-local permissions and plugin choices are not delivery truth"

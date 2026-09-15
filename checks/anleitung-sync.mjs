@@ -85,6 +85,7 @@ const GRUPPEN_LABEL = new Map([
   ["docs/", "Doku, Instanzdatei mit `[AUSFUELLEN]`-Marke, Paketvorlage"],
   ["templates/", "Vorlagen für Paket-Bundles (OWNER, GATES)"],
   ["roles/", "Fachrollen-Profile des Assistenten (Accountability, Coaching, Ernährung, Training, Wohlbefinden, Business, Projekt)"],
+  ["voice/", "Sprachlaufzeit als Sidecar: Piper (Sprachausgabe), Whisper (Mikrofon), Voicebox-Profildienst, Prüfskript `voice/check.mjs`; Starter `dashboard/serve.mjs --voice`"],
   ["licenses/", "Lizenztexte übernommener Fremdteile"],
 ]);
 const WURZEL_LABEL = "Wurzeldateien: ";

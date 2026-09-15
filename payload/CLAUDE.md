@@ -151,6 +151,11 @@ ein ausdrücklich freigegebener Publish erfolgen.
   Startweg; dashboard/serve.mjs
   startet die gebaute Runtime als einen Prozess lokal auf 127.0.0.1; Pruefung:
   npm run test:dashboard:runtime
+- Sprachlaufzeit: node dashboard/serve.mjs --voice (oder --speech / --microphone)
+  startet Piper und Whisper aus voice/ VOR dem Web-Start und stoppt sie beim Ende;
+  --no-inference pausiert die KI (ohne Flag ist sie an). Installationsstand:
+  node voice/check.mjs (--require-ready liefert Exitcode 1, wenn die Dienste nicht
+  laufen); Regeln und Umgebungsschluessel in voice/README.md
 - Dashboard-Entwicklung (nur Quellbaum): npm run dashboard:dev — setzt
   KEEL_ACCOUNTABILITY_NEXT_DIST_DIR=.next-dev nur fuer seinen Kindprozess und
   bindet 127.0.0.1; ohne die Variable baut next dev in .next und zerstoert den
