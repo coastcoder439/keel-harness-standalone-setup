@@ -41,6 +41,10 @@ The six governance columns (who may invoke, who sees it, settings location, log 
   atomically materializes the archive under
   `.keel-harness/runtime/dashboard/<tree-sha256>` before starting the local
   server with the recipient repository as both Harness and repository root.
+- `dashboard/serve.mjs --voice` (or `--speech` / `--microphone`) additionally starts the
+  local voice runtime from `voice/` before the web process and stops it on exit;
+  `--no-inference` pauses the model. Without a flag nothing extra starts. The
+  installation state is reported by `node voice/check.mjs`, which starts nothing.
 - `dashboard/runtime-check.mjs` starts only the local HTTP runtime and checks
   `/` plus `/api/state`. It does not start a model, Voice provider, microphone
   or audio process.

@@ -13,6 +13,7 @@ dashboard/.next/
 dashboard/.test-build/
 dashboard/tsconfig.tsbuildinfo
 node_modules/
+runtime/voice/
 .test-results/
 .env
 .env.*
