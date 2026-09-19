@@ -15,6 +15,7 @@ Aus dem Harness-Wurzelverzeichnis:
 ```powershell
 node voice/check.mjs                      # Installationsstand, startet nichts
 node voice/check.mjs --require-ready      # Exitcode 1, wenn Piper/Whisper nicht laufen
+node voice/latency-run.mjs --rounds 5     # Messprotokoll der Latenz gegen LAUFENDE Dienste
 node dashboard/serve.mjs --voice          # Dienste + Dashboard auf 127.0.0.1:4190
 node dashboard/serve.mjs --speech --port 4193
 ```
@@ -71,6 +72,67 @@ Je Fundstelle in genau dieser Reihenfolge:
 `node voice/check.mjs` nennt je Dienst, welches Stueck fehlt, welche Variable es setzt
 und welche Pfade durchsucht wurden.
 
+## Einrichtungshilfe
+
+Die Pruefung selbst liegt in `install-report.mjs` (`installationReport(env)`,
+`voiceModelReport(env)`). `check.mjs` gibt sie auf der Konsole aus, und
+`GET /api/accountability/voice/setup` liefert sie dem Dashboard; die Einstellungen zeigen
+sie unter *Stimme* als „Einrichtung der Sprachdienste". Beide Wege nutzen dieselbe
+Funktion und zeigen deshalb dieselben Saetze. Die Hilfe prueft nur Dateien: sie startet
+keinen Dienst, laedt nichts herunter und braucht kein Netz.
+
+Je Fundstelle nennt sie „installiert" mit dem gefundenen Pfad oder „fehlt" mit der
+Umgebungsvariable, den durchsuchten Pfaden und dem naechsten Schritt in einem Satz.
+Zusaetzlich wird gewarnt, wenn eine Piper-Stimme ohne ihre `.onnx.json` liegt — ohne diese
+Datei bleibt die Stimme unbenutzbar. Ob die Dienste LAUFEN, steht daneben; gestartet
+werden sie mit `node dashboard/serve.mjs --voice`.
+
+Was der Mensch selbst hinlegen muss (`<VOICE>` = `KEEL_VOICE_ROOT`, Default
+`<harness>/runtime/voice`):
+
+| Stueck | Erwarteter Ort | Alternative |
+| --- | --- | --- |
+| Piper-Python | `<VOICE>/piper-env/Scripts/python.exe` (Windows) bzw. `bin/python` — eine venv mit `pip install piper-tts` | `KEEL_VOICE_PIPER_PYTHON` |
+| Piper-Stimme Deutsch | `<VOICE>/models/de_DE-thorsten-high.onnx` **plus** `de_DE-thorsten-high.onnx.json` | `KEEL_VOICE_PIPER_DE` |
+| Piper-Stimme Englisch | `<VOICE>/models/en_US-lessac-medium.onnx` **plus** `.onnx.json` | `KEEL_VOICE_PIPER_EN` |
+| Whisper-Python | `<VOICE>/stt-env/Scripts/python.exe` bzw. `bin/python` — eine venv mit `pip install faster-whisper` | `KEEL_VOICE_STT_PYTHON` |
+| Whisper-Modell | `<VOICE>/models/whisper-base/` mit `model.bin` und `config.json` | `KEEL_VOICE_STT_MODEL` |
+| Stimmenmodell (eigene Stimme, Cortana/Jarvis) | `<VOICE>/cache/hub/models--Qwen--Qwen3-TTS-12Hz-0.6B-Base/snapshots/5d83992436eae1d760afd27aff78a71d676296fc/` mit den 13 gepinnten Dateien (inkl. Unterordner `speech_tokenizer/`) | Knopf „Stimmenmodell herunterladen" in den Einstellungen |
+
+Die Modell- und Stimmdateien liegen NICHT im Repository und werden nicht automatisch
+geholt; die einzige Ausnahme ist der ausdruecklich angeklickte Download des
+Stimmenmodells. Der erwartete Dateisatz des Stimmenmodells steht in
+`install-report.mjs` (`VOICE_MODEL.files`) und ist identisch mit `ALLOWED_FILES` in
+`dashboard/lib/companion/own-voice-model.ts`; ein Test vergleicht beide Listen.
+
+## Latenz
+
+Die Grenzwerte stehen in `dashboard/lib/companion/latency-limits.ts` und gespiegelt in
+`latency-run.mjs` (`LATENCY_LIMITS`); ein Test vergleicht beide Zahl fuer Zahl.
+
+| Fall | Ziel | langsam ab | zu langsam ab |
+| --- | --- | --- | --- |
+| bis hoerbare Stimme | 1000 ms | 1500 ms | 3000 ms |
+| bis vollstaendige Antwort | 6000 ms | 6000 ms | 10000 ms |
+
+Im Gespraech bewertet `components/voice-v4/VoiceSessionV4.tsx` jede Runde aus dem
+vorhandenen Ereignis `keel:companion-turn-latency` und zeigt eine ruhige Zeile
+„x,y s bis Stimme" mit dem Zustand; die Erklaerung steht in einem `<details>`.
+
+```powershell
+node voice/latency-run.mjs                       # 5 Runden Piper, Standardausgabe unter <VOICE>/verification
+node voice/latency-run.mjs --rounds 10 --out runtime\voice\verification\latenz.json
+node voice/latency-run.mjs --with-stt            # zusaetzlich Whisper auf dem eben erzeugten WAV
+node voice/latency-run.mjs --with-model          # zusaetzlich eine Ollama-Runde, nur wenn erreichbar
+```
+
+Das Skript startet KEINE Dienste; es misst gegen die laufenden. Je Runde werden Start bis
+erste hoerbare Bytes und Start bis fertig gemessen, das JSON enthaelt Median, Maximum und
+die Bewertung gegen die Grenzwerte, und der Exitcode ist 1, sobald eine Runde die Grenze
+erreicht. Nicht gemessen wird das Ende der gesprochenen Wiedergabe und nicht die
+Wiedergabe im Browser; es liegt keine WAV-Datei im Bestand, deshalb dient das in derselben
+Runde erzeugte Piper-Audio als Whisper-Eingabe.
+
 ## Eigene Stimmen
 
 Der Profilservice ist unabhaengig von Piper, Whisper und Agentenmodell. Der Knopf
@@ -125,7 +187,7 @@ Referenz- und Sample-URLs antworten mit HTTP 410.
 
 ```powershell
 # Modellfreie Regressionen (brauchen den Dashboard-Quellbaum; nicht Teil der Auslieferung)
-node --test voice/profile-service.test.mjs voice/provider-contract.test.mjs voice/regression.test.mjs voice/web-start.test.mjs voice/own-voice-model.test.mjs voice/coaching-topic.test.mjs
+node --test voice/profile-service.test.mjs voice/provider-contract.test.mjs voice/regression.test.mjs voice/web-start.test.mjs voice/own-voice-model.test.mjs voice/coaching-topic.test.mjs voice/install-report.test.mjs voice/latency-run.test.mjs
 
 # Flag- und Discovery-Vertrag der Starter
 node --test test/voice-sidecar.test.js
