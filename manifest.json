@@ -3,10 +3,10 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.2.2"
+    "version": "1.2.3"
   },
   "payload": {
-    "treeSha256": "7d2b8b734059041e3772a73afcb48e6173f735e1ee589e31d897a46ff092e81f"
+    "treeSha256": "7a2baebcce0563726c3f9a8fd198a47311ed83bf0a28857d244c9e1ab4fa8b1e"
   },
   "provenance": {
     "unlazy": {
@@ -858,19 +858,19 @@
       "mode": "copy",
       "generated": true,
       "sourceBytes": 334,
-      "sourceSha256": "d4eb845d6838d56909e369e894e934ffb3306fa0859705d36341b3b15a0c0179",
+      "sourceSha256": "d3346b9d8da3cba5cd0cc8a38b9ff6208844a66f6d6a7882c297c9e1fab9081f",
       "bytes": 334,
-      "sha256": "d4eb845d6838d56909e369e894e934ffb3306fa0859705d36341b3b15a0c0179"
+      "sha256": "d3346b9d8da3cba5cd0cc8a38b9ff6208844a66f6d6a7882c297c9e1fab9081f"
     },
     {
       "source": "generated/dashboard/runtime.keel.gz",
       "target": "dashboard/runtime.keel.gz",
       "mode": "copy",
       "generated": true,
-      "sourceBytes": 14761075,
-      "sourceSha256": "4fb92c39d0468bd295d8b0f0414a6cdf5924ae00b34f359146de62c3ea52e6b2",
-      "bytes": 14761075,
-      "sha256": "4fb92c39d0468bd295d8b0f0414a6cdf5924ae00b34f359146de62c3ea52e6b2"
+      "sourceBytes": 14776391,
+      "sourceSha256": "25865920e353b748f2463a510d663243feb30fb22297732acc9c5aa7f2978e39",
+      "bytes": 14776391,
+      "sha256": "25865920e353b748f2463a510d663243feb30fb22297732acc9c5aa7f2978e39"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-serve.mjs",
@@ -887,10 +887,10 @@
       "target": "docs/08-sessions-rollen.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 541,
-      "sourceSha256": "5e7a821f0c86f30df5fba9b18c7e7b8d700caccf9d33da08701b9b8ac6e4763c",
-      "bytes": 541,
-      "sha256": "5e7a821f0c86f30df5fba9b18c7e7b8d700caccf9d33da08701b9b8ac6e4763c"
+      "sourceBytes": 1191,
+      "sourceSha256": "b4ec5f996af232095bc0caa4ca2ddd6784a78399620dcf3fbf8fb701da7eb0de",
+      "bytes": 1191,
+      "sha256": "b4ec5f996af232095bc0caa4ca2ddd6784a78399620dcf3fbf8fb701da7eb0de"
     },
     {
       "source": "test-harness/standalone/templates/active-harness-inventory.md",
@@ -1140,7 +1140,7 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 571,
-      "sha256": "70b7013c32bef723e71cbb43b4d06541851db065f26f17e673afec24469eb3bf"
+      "sha256": "c5c745eed62f6646c369a1c559e2ebaf68f4f376c1007a7ebc9f5e1c257f3c5b"
     },
     {
       "source": "test-harness/roles/accountability.md",
