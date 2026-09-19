@@ -3,10 +3,10 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.2.1"
+    "version": "1.2.2"
   },
   "payload": {
-    "treeSha256": "0aedfddd4d934026814d47c9993833eeaa5497176f294d84937197d7601d17a5"
+    "treeSha256": "7d2b8b734059041e3772a73afcb48e6173f735e1ee589e31d897a46ff092e81f"
   },
   "provenance": {
     "unlazy": {
@@ -40,7 +40,7 @@
     },
     "deprecations": []
   },
-  "fileCount": 197,
+  "fileCount": 199,
   "files": [
     {
       "source": "test-harness/.agents/skills/completeness/SKILL.md",
@@ -858,19 +858,19 @@
       "mode": "copy",
       "generated": true,
       "sourceBytes": 334,
-      "sourceSha256": "332457a74203f69220ec63576cdd0db955413de3e8d33576d047389e6c79aea5",
+      "sourceSha256": "d4eb845d6838d56909e369e894e934ffb3306fa0859705d36341b3b15a0c0179",
       "bytes": 334,
-      "sha256": "332457a74203f69220ec63576cdd0db955413de3e8d33576d047389e6c79aea5"
+      "sha256": "d4eb845d6838d56909e369e894e934ffb3306fa0859705d36341b3b15a0c0179"
     },
     {
       "source": "generated/dashboard/runtime.keel.gz",
       "target": "dashboard/runtime.keel.gz",
       "mode": "copy",
       "generated": true,
-      "sourceBytes": 14342397,
-      "sourceSha256": "152af5a639751a2fb6c1f78b9d9dbadda6bc97f11ab646f863835dc859d5eb06",
-      "bytes": 14342397,
-      "sha256": "152af5a639751a2fb6c1f78b9d9dbadda6bc97f11ab646f863835dc859d5eb06"
+      "sourceBytes": 14761075,
+      "sourceSha256": "4fb92c39d0468bd295d8b0f0414a6cdf5924ae00b34f359146de62c3ea52e6b2",
+      "bytes": 14761075,
+      "sha256": "4fb92c39d0468bd295d8b0f0414a6cdf5924ae00b34f359146de62c3ea52e6b2"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-serve.mjs",
@@ -1140,7 +1140,7 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 571,
-      "sha256": "d188072854fa03bee2fab9e43c111ec9e94e561fed7fac0d87ac5dbaf654c264"
+      "sha256": "70b7013c32bef723e71cbb43b4d06541851db065f26f17e673afec24469eb3bf"
     },
     {
       "source": "test-harness/roles/accountability.md",
@@ -1887,10 +1887,10 @@
       "target": "voice/check.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 3393,
-      "sourceSha256": "70719bdfb33a3df3d7155e7131ac688c1db8fc0fcb4806f3d5c4d20039f501ce",
-      "bytes": 3393,
-      "sha256": "70719bdfb33a3df3d7155e7131ac688c1db8fc0fcb4806f3d5c4d20039f501ce"
+      "sourceBytes": 2739,
+      "sourceSha256": "383f5dfdf5ebf1889f2bb093ce846d85577fa51a3dadbc0a453e161034e7b23b",
+      "bytes": 2739,
+      "sha256": "383f5dfdf5ebf1889f2bb093ce846d85577fa51a3dadbc0a453e161034e7b23b"
     },
     {
       "source": "test-harness/voice/config.mjs",
@@ -1911,6 +1911,26 @@
       "sourceSha256": "3f92a0c16403e87e75d7356b1eb257047c658c2ada1858295e2a7648673e4294",
       "bytes": 4314,
       "sha256": "3f92a0c16403e87e75d7356b1eb257047c658c2ada1858295e2a7648673e4294"
+    },
+    {
+      "source": "test-harness/voice/install-report.mjs",
+      "target": "voice/install-report.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 7014,
+      "sourceSha256": "832bcc4296d71aa9d72d859ed6e5769bdd2cb417d2d602c4c21c78c4c391151b",
+      "bytes": 7014,
+      "sha256": "832bcc4296d71aa9d72d859ed6e5769bdd2cb417d2d602c4c21c78c4c391151b"
+    },
+    {
+      "source": "test-harness/voice/latency-run.mjs",
+      "target": "voice/latency-run.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 10290,
+      "sourceSha256": "4d599014855373e0e70afa27a21614252636a5367f31c3379446e650b1aebe07",
+      "bytes": 10290,
+      "sha256": "4d599014855373e0e70afa27a21614252636a5367f31c3379446e650b1aebe07"
     },
     {
       "source": "test-harness/voice/launcher.mjs",
@@ -1967,10 +1987,10 @@
       "target": "voice/README.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 7392,
-      "sourceSha256": "721948fcdfd820a76806c91269fad63e7d37df067589b16458d451944f4ced43",
-      "bytes": 7392,
-      "sha256": "721948fcdfd820a76806c91269fad63e7d37df067589b16458d451944f4ced43"
+      "sourceBytes": 11471,
+      "sourceSha256": "27acd0936223b22badcacafff3c3ea9007b135ca46b79be43cca161ee467f57b",
+      "bytes": 11471,
+      "sha256": "27acd0936223b22badcacafff3c3ea9007b135ca46b79be43cca161ee467f57b"
     },
     {
       "source": "test-harness/voice/start.mjs",
