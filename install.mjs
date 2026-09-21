@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import process from "node:process";
+import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -120,6 +122,19 @@ if (process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(proce
       console.error("keel harness installer: a follow-up installation would inherit " + activation.packageRefs.length +
         " active package activation pointer(s) in .unlazy/ (" + activation.packageRefs.join(", ") +
         "); the real uninstall clears them.");
+    }
+    // Systemprofil (Paket system-profile, 21.09.2026): direkt nach einer echten Installation misst der
+    // Harness den Rechner (CPU/RAM/GPU/Platte) und schreibt runtime/voice/system-profile.json — die
+    // Voreinstellungen fuer Stimme und Hoeren kommen daraus. Ein Fehlschlag bricht die Installation
+    // nicht ab; er wird gemeldet, der Scan laesst sich mit node voice/system-profile.mjs nachholen.
+    if (options.command === "install" && !options.dryRun && result.state !== "planned") {
+      const scanner = resolve(options.target, "voice", "system-profile.mjs");
+      if (existsSync(scanner)) {
+        const scan = spawnSync(process.execPath, [scanner], { cwd: resolve(options.target), encoding: "utf8", windowsHide: true, timeout: 60000 });
+        result = { ...result, systemProfile: scan.status === 0 ? "written" : "failed" };
+        if (scan.status === 0) console.error(String(scan.stderr || "").trim());
+        else console.error("keel harness installer: system profile not written (" + String(scan.stderr || scan.error?.message || "unknown").trim().split("\n").pop() + "); run node voice/system-profile.mjs later.");
+      }
     }
     process.stdout.write((options.json ? JSON.stringify(result, null, 2) : render(result)) + "\n");
   } catch (error) {

@@ -1,6 +1,5 @@
 import path from 'node:path';
 import { loopbackAddress, serviceAddresses } from './config.mjs';
-import { installationReport } from './check.mjs';
 
 // Ein Vertrag fuer beide Startwege (Quellbaum dashboard/serve.mjs und die
 // ausgelieferte standalone/templates/dashboard-serve.mjs). Ohne Flag bleibt alles
@@ -36,8 +35,6 @@ export function voiceEnvironment({ harnessRoot, flags, env = process.env }) {
       KEEL_PROTOTYPE_SPEECH: flags.speech ? '1' : '0',
       KEEL_PROTOTYPE_MICROPHONE: flags.microphone ? '1' : '0',
       KEEL_PROTOTYPE_INFERENCE: flags.inference ? '1' : '0',
-      KEEL_PROTOTYPE_PIPER_URL: addresses.speech,
-      KEEL_PROTOTYPE_STT_URL: addresses.transcription,
       ACCOUNTABILITY_VOICEBOX_URL: profiles,
       // Die Runtime laeuft mit cwd .next/standalone bzw. im materialisierten
       // Archiv; der Quell-Fallback "../roles" in specialist-roles.ts zeigt dort
@@ -47,13 +44,11 @@ export function voiceEnvironment({ harnessRoot, flags, env = process.env }) {
   };
 }
 
-export function missingVoiceInstallation({ flags, env = process.env }) {
-  if (!flags.speech && !flags.microphone) return [];
-  const report = installationReport(env);
-  return [
-    ...(flags.speech && !report.speech.installed ? report.speech.missing : []),
-    ...(flags.microphone && !report.microphone.installed ? report.microphone.missing : []),
-  ];
+// Stimme UND Hoeren laufen ueber Voicebox, das bei Bedarf ueber den Profildienst startet
+// (Knopf „Stimmendienst starten“ bzw. POST /api/accountability/voice/service). Es gibt keinen
+// Sidecar-Dienst mit Vorab-Gate mehr: die Flags schalten nur die Routen frei bzw. pausieren sie.
+export function missingVoiceInstallation() {
+  return [];
 }
 
 export function missingInstallationMessage(missing) {
@@ -62,14 +57,10 @@ export function missingInstallationMessage(missing) {
     '  Vollständige Liste der gesuchten Pfade: node voice/check.mjs'].join('\n');
 }
 
-// Dienste VOR dem Web-Start. Fehlt die Installation, wird bewusst kein Web-Prozess
-// gestartet: ein Dashboard mit Sprach-Flag und ohne Dienste ist eine Luege.
-export async function startConfiguredVoice({ flags, env = process.env }) {
-  if (!flags.speech && !flags.microphone) return { children: [], addresses: null, stop: async () => {} };
-  const missing = missingVoiceInstallation({ flags, env });
-  if (missing.length) throw new Error(missingInstallationMessage(missing));
-  const { startVoiceServices } = await import('./start.mjs');
-  return startVoiceServices({ speech: flags.speech, microphone: flags.microphone, env });
+// Kein Dienst startet vor dem Web-Start: Voicebox wird aus dem Dashboard heraus gestartet und
+// beim Stop des Dashboards ueber denselben Profildienst beendet (lib/companion/profile-service.ts).
+export async function startConfiguredVoice() {
+  return { children: [], addresses: null, stop: async () => {} };
 }
 
 export const voiceStatusLine = flags =>
