@@ -64,11 +64,11 @@ gegen den tatsächlichen Bestand und macht einen Trockenlauf des Installers gege
 Wegwerf-Repo. Gemessener Erfolg (Rückgabewert 0), letzte Zeile:
 
 ```
-SETUP_REPO_SUITE_OK payload=199 version=1.2.3
+SETUP_REPO_SUITE_OK payload=198 version=1.2.4
 ```
 
 Wer nur den Installer-Teil will: `node <PAKET>\checks\fresh-clone.mjs` endet bei
-gesundem Klon mit `SETUP_REPO_OK payload=199 version=1.2.3 dry-run=ok`.
+gesundem Klon mit `SETUP_REPO_OK payload=198 version=1.2.4 dry-run=ok`.
 
 `manifest.json` ist die Stückliste — jede Datei mit Herkunft, Größe und Prüfsumme;
 unter `excluded` steht, was **absichtlich** fehlt (unten als Tabelle).
@@ -106,7 +106,7 @@ node C:\w\keel-harness-standalone-setup\install.mjs --target C:\w\mein-harness -
 Gemessene Ausgabe an einem frischen Ziel (Rückgabewert 0, geschrieben wird nichts):
 
 ```
-keel harness distribution: command=install state=planned version=1.2.3 dry-run=true managed=203
+keel harness distribution: command=install state=planned version=1.2.4 dry-run=true managed=202
 ```
 
 `managed=` ist die Zahl der Dateien, die der Installer im Ziel verwalten würde —
@@ -123,7 +123,7 @@ node <PAKET>\install.mjs --target <HARNESS>
 Gemessener Erfolg:
 
 ```
-keel harness distribution: command=install state=installed version=1.2.3 promotions=201 managed=203 rollback=available
+keel harness distribution: command=install state=installed version=1.2.4 promotions=201 managed=202 rollback=available
 ```
 
 Der Lauf ist transaktional und wiederholbar — ein zweiter Aufruf schreibt nichts
@@ -260,13 +260,13 @@ Die Tabelle ist aus `manifest.json` erzeugt; die Zahlen sind gezählt, nicht ges
 | `vendor/` | Eingebettete Unlazy-Fassung: Paket-Bundles, Skripte, Tests | 63 |
 | `dashboard/` | React-Dashboard: Starter, geprüftes Laufzeit-Archiv, Runtime-Check | 5 |
 | `checks/` | Installierte Prüfungen der Auslieferung (`checks/run-all.mjs` und Einzelprüfer) | 6 |
-| `docs/` | Doku, Instanzdatei mit `[AUSFUELLEN]`-Marke, Paketvorlage | 10 |
+| `docs/` | Doku, Instanzdatei mit `[AUSFUELLEN]`-Marke, Paketvorlage | 11 |
 | `templates/` | Vorlagen für Paket-Bundles (OWNER, GATES) | 3 |
 | `roles/` | Fachrollen-Profile des Assistenten (Accountability, Coaching, Ernährung, Training, Wohlbefinden, Business, Projekt) | 8 |
-| `voice/` | Sprachlaufzeit als Sidecar: Piper (Sprachausgabe), Whisper (Mikrofon), Voicebox-Profildienst, Prüfskript `voice/check.mjs`; Starter `dashboard/serve.mjs --voice` | 15 |
+| `voice/` | Sprachlaufzeit als Sidecar: Piper (Sprachausgabe), Whisper (Mikrofon), Voicebox-Profildienst, Prüfskript `voice/check.mjs`; Starter `dashboard/serve.mjs --voice` | 13 |
 | `licenses/` | Lizenztexte übernommener Fremdteile | 1 |
 | (Wurzel) | Wurzeldateien: `.gitignore`, `.keel-harness.json`, `AGENTS.md`, `CLAUDE.md`, `package.json` | 5 |
-| **Summe** | | **199** |
+| **Summe** | | **198** |
 <!-- /ERZEUGT:was-installiert-wird -->
 
 ## Was bewusst fehlt
@@ -301,14 +301,14 @@ woraus die Payload in deinen Händen entstanden ist.
 <!-- ERZEUGT:stand-der-auslieferung (node checks/anleitung-sync.mjs --nachziehen; nicht von Hand ändern) -->
 | Feld | Wert |
 |---|---|
-| Produkt und Version | `keel-harness` 1.2.3 |
-| Payload-Posten | 199 |
-| Baum-Fingerabdruck | `7a2baebcce056372...` |
+| Produkt und Version | `keel-harness` 1.2.4 |
+| Payload-Posten | 198 |
+| Baum-Fingerabdruck | `badad00dd97af37a...` |
 | Quelle | `harness-lab`, Unterbaum `test-harness/standalone` |
-| Quell-Commit | `0cae5ffa1d317197f9130d61e8cb0e6b8183ebbd` |
+| Quell-Commit | `6eb1b70d6d68a4898b28db77779c6941d47f944f` |
 | Standalone frisch gebaut | ja |
 | Ungesicherte Dateien der Quelle beim Bau | Arbeitsbaum 0, `test-harness/standalone` 0 |
-| Erzeugt am | 2026-09-19T22:36:48.028Z |
+| Erzeugt am | 2026-09-21T07:08:00.173Z |
 <!-- /ERZEUGT:stand-der-auslieferung -->
 
 ---

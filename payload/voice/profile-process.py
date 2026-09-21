@@ -13,6 +13,9 @@ import time
 parser = argparse.ArgumentParser()
 parser.add_argument("--binary", required=True)
 parser.add_argument("--port", type=int, default=4299)
+# Datenverzeichnis der Voicebox-App (voicebox.db, profiles/, generations/). Plan Schritt 1
+# (21.09.2026): kein privates character-data mehr; profile-service.mjs reicht den Pfad durch.
+parser.add_argument("--data-dir", required=True)
 parser.add_argument("--lifetime", type=int, default=300)
 args = parser.parse_args()
 if os.name != "nt":
@@ -38,10 +41,17 @@ kernel.CloseHandle.argtypes = [wintypes.HANDLE]
 job = kernel.CreateJobObjectW(None, None)
 if not job: raise ctypes.WinError(ctypes.get_last_error())
 limits = ExtendedLimits()
-# Hard commit ceiling for the complete process tree, inherited two-core affinity,
-# and KILL_ON_JOB_CLOSE. Libraries can have more idle threads, never more CPU cores.
+# Hard commit ceiling for the complete process tree, a CPU affinity mask sized by
+# KEEL_VOICEBOX_CPU_CORES (Systemprofil, Paket system-profile 21.09.2026: physische Kerne minus
+# zwei; ohne Variable 2 Kerne wie bisher), and KILL_ON_JOB_CLOSE. Libraries can have more idle
+# threads, never more CPU cores than the mask allows.
 limits.BasicLimitInformation.LimitFlags = 0x2000 | 0x200 | 0x10
-limits.BasicLimitInformation.Affinity = 3
+try:
+    cpu_cores = int(os.environ.get("KEEL_VOICEBOX_CPU_CORES", "2"))
+except ValueError:
+    cpu_cores = 2
+cpu_cores = max(1, min(cpu_cores, os.cpu_count() or 1, 62))
+limits.BasicLimitInformation.Affinity = (1 << cpu_cores) - 1
 try:
     job_mib = int(os.environ.get("KEEL_VOICEBOX_JOB_MIB", "5120"))
 except ValueError:
@@ -57,14 +67,14 @@ started = time.monotonic()
 process = None
 try:
     with (root / "profile-server.log").open("a", encoding="utf8") as log:
-        process = subprocess.Popen([args.binary, "--parent-pid", str(os.getpid()), "--host", "127.0.0.1", "--port", str(args.port), "--data-dir", str(root / "character-data")], cwd=root, env=os.environ.copy(), stdin=subprocess.DEVNULL, stdout=log, stderr=log, creationflags=subprocess.CREATE_NO_WINDOW)
+        process = subprocess.Popen([args.binary, "--parent-pid", str(os.getpid()), "--host", "127.0.0.1", "--port", str(args.port), "--data-dir", str(Path(args.data_dir).resolve())], cwd=root, env=os.environ.copy(), stdin=subprocess.DEVNULL, stdout=log, stderr=log, creationflags=subprocess.CREATE_NO_WINDOW)
         if not kernel.AssignProcessToJobObject(job, wintypes.HANDLE(int(process._handle))):
             process.terminate()
             raise ctypes.WinError(ctypes.get_last_error())
         while process.poll() is None and not stopped.wait(1) and (args.lifetime == 0 or time.monotonic() - started < min(args.lifetime, 600)):
             current = ExtendedLimits()
             kernel.QueryInformationJobObject(job, 9, ctypes.byref(current), ctypes.sizeof(current), None)
-            report = {"wrapperPid": os.getpid(), "launcherPid": process.pid, "binary": args.binary, "elapsedSeconds": round(time.monotonic() - started, 1), "cpuCores": 2, "memoryLimitMiB": job_mib, "peakCommitMiB": round(current.PeakJobMemoryUsed / 1048576, 1)}
+            report = {"wrapperPid": os.getpid(), "launcherPid": process.pid, "binary": args.binary, "dataDir": str(Path(args.data_dir).resolve()), "elapsedSeconds": round(time.monotonic() - started, 1), "cpuCores": cpu_cores, "memoryLimitMiB": job_mib, "peakCommitMiB": round(current.PeakJobMemoryUsed / 1048576, 1)}
             (root / "profile-process.json").write_text(json.dumps(report), encoding="utf8")
         if process.poll() is not None and process.returncode:
             raise RuntimeError(f"Profile service exited with {process.returncode}; see profile-server.log.")

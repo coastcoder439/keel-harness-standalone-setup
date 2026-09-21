@@ -3,107 +3,156 @@
 Dieser Ordner ist ein Sidecar neben `dashboard/` und `roles/`. Er gehoert NICHT in den
 Next-Build: `dashboard/serve.mjs` importiert `voice/launcher.mjs` beim Start, und
 `dashboard/lib/companion/profile-service.ts` laedt `voice/profile-service.mjs` erst zur
-Laufzeit ueber `KEEL_VOICE_SIDECAR_ROOT`. Die Kette nutzt bereits installierte Piper- und
-Whisper-Dateien LESEND. Geschrieben wird ausschliesslich nach `<harness>/runtime/voice`
-(ueberschreibbar mit `KEEL_VOICE_ROOT`; der Ordner ist gitignoriert). Es gibt keine
-automatische Installation und keinen automatischen Stimmwechsel.
+Laufzeit ueber `KEEL_VOICE_SIDECAR_ROOT`.
+
+**Es gibt genau einen Sprachdienst: Voicebox** (Plan
+`docs/packages/focus-dashboard-v4/design/voicebox-integration-2026-09-21.md`). Stimme
+(`/generate`), Hoeren (`/transcribe`), Profile und Modelle laufen ueber Voicebox' eigene
+HTTP-API auf `127.0.0.1:4299`. Der Sidecar startet nur noch die installierte Voicebox in
+einem begrenzten Windows-Job — auf dem **Datenverzeichnis der Voicebox-App**, damit App und
+Dashboard dieselben Profile sehen. Entfernt sind: Piper (A14), der eigene Whisper-Dienst
+(`stt-server.py`, Port 4298, `start.mjs`), die Privatkopie `runtime/voice/character-data`
+und der eigene Modelldownload (`own-voice-model.ts`, Route `/voice/model`).
 
 ## Bedienung
 
 Aus dem Harness-Wurzelverzeichnis:
 
 ```powershell
-node voice/check.mjs                      # Installationsstand, startet nichts
-node voice/check.mjs --require-ready      # Exitcode 1, wenn Piper/Whisper nicht laufen
-node voice/latency-run.mjs --rounds 5     # Messprotokoll der Latenz gegen LAUFENDE Dienste
-node dashboard/serve.mjs --voice          # Dienste + Dashboard auf 127.0.0.1:4190
-node dashboard/serve.mjs --speech --port 4193
+node voice/check.mjs                      # Installationsstand + ob Voicebox laeuft; startet nichts
+node voice/check.mjs --require-ready      # Exitcode 1, wenn Voicebox nicht laeuft
+node voice/migrate-profiles.mjs           # Cortana/Jarvis einmalig in die App-Datenbank uebernehmen (idempotent)
+node dashboard/serve.mjs --voice          # Dashboard auf 127.0.0.1:4190, Sprach-Routen frei
 ```
 
 Flags (identisch im Quellbaum und in der installierten Auslieferung):
 
 | Flag | Wirkung |
 | --- | --- |
-| `--voice` | Sprachausgabe (Piper) und Mikrofon (Whisper) |
-| `--speech` | nur Sprachausgabe |
-| `--microphone` | nur Mikrofon |
+| `--voice` | Sprachausgabe und Mikrofon-Routen frei |
+| `--speech` | nur Sprachausgabe frei |
+| `--microphone` | nur Hoeren (Transkription) frei |
 | `--no-inference` | KI pausieren (ohne Flag ist die KI AN) |
 
-Der Starter setzt fuer den Dashboard-Kindprozess `KEEL_PROTOTYPE_ROOT`,
-`KEEL_VOICE_ROOT`, `KEEL_VOICE_SIDECAR_ROOT`, `KEEL_PROTOTYPE_SPEECH`,
-`KEEL_PROTOTYPE_MICROPHONE`, `KEEL_PROTOTYPE_INFERENCE`, `KEEL_PROTOTYPE_PIPER_URL`,
-`KEEL_PROTOTYPE_STT_URL`, `ACCOUNTABILITY_VOICEBOX_URL` und `KEEL_ROLE_PROFILE_ROOT`. Die Dienste starten VOR dem
-Web-Prozess und werden bei Exit oder Signal wieder gestoppt. Fehlt die Installation,
-bricht der Starter mit einer `FEHLER:`-Zeile und Exitcode 2 ab und startet keinen
-Webserver; die genaue Liste liefert `node voice/check.mjs`.
+Kein Flag startet einen Dienst: Voicebox startet aus dem Dashboard heraus (Knopf
+„Stimmendienst starten“ bzw. `POST /api/accountability/voice/service {operation:"start"}`)
+und wird beim Stop wieder beendet. Der Starter setzt fuer den Dashboard-Kindprozess
+`KEEL_PROTOTYPE_ROOT`, `KEEL_VOICE_ROOT`, `KEEL_VOICE_SIDECAR_ROOT`, `KEEL_PROTOTYPE_SPEECH`,
+`KEEL_PROTOTYPE_MICROPHONE`, `KEEL_PROTOTYPE_INFERENCE`, `ACCOUNTABILITY_VOICEBOX_URL` und
+`KEEL_ROLE_PROFILE_ROOT`.
 
-- Piper: `127.0.0.1:4297`, Deutsch Thorsten / Englisch Lessac.
-- Whisper: `127.0.0.1:4298`, base / CPU / INT8 / zwei Rechenthreads; eine Aufnahme
-  gleichzeitig, maximal 30 Sekunden und 8 MB.
-- Profildienst (eigene Stimmen): `127.0.0.1:4299`.
-- `GET /api/prototype/status` meldet pausierte Pfade ausdruecklich.
+## Eine Datenbank, ein Modell-Cache
 
-Bereits laufende Dienste derselben Kennung (`keel-v4-piper`, `keel-v4-stt`) werden
-wiederverwendet und nie fremd beendet; ein fremder Listener auf derselben Adresse ist
-ein Fehler, kein Grund zum Abschiessen.
+Gemessen 21.09.2026 (Windows): die Voicebox-App startet ihren Server mit
+`--data-dir %APPDATA%\sh.voicebox.app` (dort `voicebox.db`, `profiles/`, `generations/`) und
+haelt ihre Modelle im Standard-Cache von huggingface_hub (`%USERPROFILE%\.cache\huggingface\hub`,
+App-Antwort auf `GET /models/cache-dir`). Der Harness startet `voicebox-server.exe` auf GENAU
+diesem Verzeichnis und laesst den Cache unangetastet — Profile, Samples und Modelle sind in
+App und Dashboard dieselben Zeilen bzw. Dateien. Laeuft die App gleichzeitig (ihr Server auf
+`127.0.0.1:17493`), teilen sich beide Prozesse dieselbe SQLite-Datei.
 
-## Wo die Installation gesucht wird
+| Variable | Setzt | Standard |
+| --- | --- | --- |
+| `KEEL_VOICEBOX_DATA_DIR` | Datenverzeichnis (voicebox.db) | `%APPDATA%\sh.voicebox.app` |
+| `KEEL_VOICEBOX_MODELS_DIR` | Modell-Cache (wird als `HF_HUB_CACHE` an Voicebox gereicht) | huggingface-Standard (`HF_HUB_CACHE` → `HF_HOME/hub` → `~/.cache/huggingface/hub`) |
+| `KEEL_VOICEBOX_BINARY` | `voicebox-server.exe` | `%LOCALAPPDATA%\Voicebox\voicebox-server.exe` |
+| `KEEL_VOICE_PYTHON` | Python fuer den begrenzten Windows-Job (`profile-process.py`) | `<VOICE>/voicebox-env/Scripts/python.exe`, Fallback aeltere Envs |
+| `KEEL_VOICE_ROOT` | Schreibwurzel des Harness (Log, `hearing.json`, `tmp/`) | `<harness>/runtime/voice` |
+| `KEEL_VOICE_SIDECAR_ROOT` | dieser Ordner | `<KEEL_HARNESS_ROOT>/voice` |
+| `KEEL_VOICEBOX_JOB_MIB` | Commit-Grenze des Prozessbaums (2560–16384) | 10240 |
 
-Je Fundstelle in genau dieser Reihenfolge:
+Kein Offline-Zwang mehr (`HF_HUB_OFFLINE` wird fuer den Kindprozess entfernt): Downloads
+laufen ausschliesslich ueber Voicebox' eigene Endpunkte, angestossen aus dem Dashboard
+(`POST /api/accountability/voice/models {operation:"download"}`). Profilstart und Statuspruefung
+laden nichts.
 
-1. die ausdrueckliche Umgebungsvariable,
-2. die eigene Sprachruntime dieser Installation unter `<KEEL_VOICE_ROOT>`
-   (`piper-env/`, `stt-env/`, `models/`),
-3. ein ausdruecklich benannter Legacy-Pfad unter dem Repository-Root
-   (`KEEL_HARNESS_REPOSITORY_ROOT`): `focus-orb-prototype/runtime` und
-   `focus-dashboard-v3/runtime`. Diese Stufe existiert nur, damit eine Werkbank mit
-   den frueher eingerichteten Prototyp-Runtimes ohne Neuinstallation weiterlaeuft.
+Migration (einmalig, 21.09.2026): `node voice/migrate-profiles.mjs` legt Cortana und Jarvis mit
+je einer Referenz (Quelle `focus-dashboard-v4/runtime/voice/references`, Texte aus
+`manifest.json`) in der App-Datenbank an und setzt `default_engine: chatterbox` (Owner 21.09.:
+Klonstimmen laufen ueber Chatterbox Multilingual; `luxtts` ist nur Englisch und kuerzt Saetze,
+Qwen-TTS-Base hat hier keinen Einsatz — beide geloescht). Die Privatkopie der Datenbank liegt
+stillgelegt unter `runtime/voice/character-data.stillgelegt-2026-09-21`.
 
-| Variable | Setzt |
-| --- | --- |
-| `KEEL_VOICE_PIPER_PYTHON` | Python-Interpreter mit Piper |
-| `KEEL_VOICE_STT_PYTHON` | Python-Interpreter mit faster-whisper |
-| `KEEL_VOICE_PIPER_DE` | `de_DE-thorsten-high.onnx` (mit `.json` daneben) |
-| `KEEL_VOICE_PIPER_EN` | `en_US-lessac-medium.onnx` (mit `.json` daneben) |
-| `KEEL_VOICE_STT_MODEL` | Ordner mit `model.bin` und `config.json` |
-| `KEEL_VOICE_ROOT` | Schreibwurzel der Sprachdaten |
-| `KEEL_VOICE_SIDECAR_ROOT` | dieser Ordner (Default `<KEEL_HARNESS_ROOT>/voice`) |
+## Modelle und Engines
 
-`node voice/check.mjs` nennt je Dienst, welches Stueck fehlt, welche Variable es setzt
-und welche Pfade durchsucht wurden.
+`GET /api/accountability/voice/models` reicht Voicebox' `/models/status` durch, je Modell mit
+`role` (`tts` | `stt` | `llm`) und `recommendation` (ein Satz aus der Plan-Tabelle, sonst leer).
+`POST {operation:"download"|"load", model_name}` leitet an `/models/download` bzw.
+`/models/load` weiter; Laden per Aufruf gibt es in Voicebox 0.5.0 nur fuer Qwen TTS, alle
+anderen Engines laedt Voicebox beim ersten Sprechen selbst (die Route meldet das mit
+`voice_model_load_on_demand`).
+
+Genau drei Sprech-Modelle sind im Einsatz (Owner 21.09.2026, alle mehrsprachig inkl. Deutsch;
+`ALLOWED_MODELS` in `dashboard/lib/companion/voicebox-models.ts` filtert die Liste und verhindert,
+dass geloeschte Modelle wieder angeboten werden):
+
+- `chatterbox-tts` (Chatterbox Multilingual) — Engine `chatterbox`: eigene Stimme, Cortana, Jarvis
+  (Klon aus der Referenz, Emotion-Staerke). Gemessen 21.09.2026 auf CPU: englischer Satz vollstaendig
+  (4,2 s Audio in 45 s), deutscher Satz verstaendlich (3,9 s Audio in 26 s).
+- `qwen-custom-voice-0.6B` / `qwen-custom-voice-1.7B` — Engine `qwen_custom_voice`: fertige
+  Preset-Stimmen mit Sprechanweisung, ohne Referenzaufnahme.
+
+Nur-englische Modelle (LuxTTS, Chatterbox Turbo, TADA 1B) und Qwen-TTS-Base werden weder
+gelistet noch geladen. `POST /api/accountability/voice/speak` prueft die Bereitschaft GENAU der
+Profil-Engine ueber `/models/status` und sendet `engine` an `/generate`.
+
+## Hoeren (Whisper in Voicebox)
+
+Die Hoerstufe liegt weiter als `runtime/voice/hearing.json` `{variant}` (IDs bleiben die
+faster-whisper-Namen, damit gespeicherte Wahlen gueltig bleiben):
+
+| Stufe | `variant` | Voicebox-Modell | `/transcribe model=` |
+| --- | --- | --- | --- |
+| Schnell | `base` | `whisper-base` | `base` |
+| Genau | `large-v3-turbo` | `whisper-turbo` | `turbo` |
+
+Gemessen 21.09.2026 gegen Voicebox 0.5.0: `POST /transcribe` nimmt `model` als Groesse
+(`base|small|medium|large|turbo`), `language` nur konkret (`de`/`en`; weggelassen erkennt Whisper
+selbst) und antwortet `{text, duration}` ohne erkannte Sprache. Bei Gespraechssprache „auto“
+schaetzt `transcribeVoiceboxAudio` die Sprache aus dem Text (`guessTranscriptLanguage`,
+deutsche/englische Funktionswoerter) und markiert das mit `languageGuessed:true`. Ein
+Wechsel der Stufe wirkt beim naechsten Hoeren; Whisper base lud kalt in ≈3,6 s, warm ≈0,7 s.
+`GET /api/prototype/status` meldet `transcription.service:"voicebox"` mit Modell und Stand.
+
+Die Umgebungsvariable `KEEL_VOICE_STT_VARIANT` erzwingt eine Stufe; `KEEL_PROTOTYPE_STT_URL`,
+`KEEL_VOICE_STT_PYTHON` und `KEEL_VOICE_STT_MODEL` sind ohne Wirkung (entfernt).
 
 ## Einrichtungshilfe
 
-Die Pruefung selbst liegt in `install-report.mjs` (`installationReport(env)`,
-`voiceModelReport(env)`). `check.mjs` gibt sie auf der Konsole aus, und
-`GET /api/accountability/voice/setup` liefert sie dem Dashboard; die Einstellungen zeigen
-sie unter *Stimme* als „Einrichtung der Sprachdienste". Beide Wege nutzen dieselbe
-Funktion und zeigen deshalb dieselben Saetze. Die Hilfe prueft nur Dateien: sie startet
-keinen Dienst, laedt nichts herunter und braucht kein Netz.
+Die Pruefung liegt in `install-report.mjs` (`installationReport(env)`, `voiceModelReport(env)`,
+`hearingModelReport(env, variant)`). `check.mjs` gibt sie auf der Konsole aus, und
+`GET /api/accountability/voice/setup` liefert sie dem Dashboard. Geprueft werden nur Dateien:
+Binary, Python, Datenverzeichnis (`voicebox.db` vorhanden?), Modell-Cache; welche Modelle
+Voicebox als heruntergeladen fuehrt, sagt der laufende Dienst (`/models/status`). Das Feld
+`microphone` bleibt fuer die Oberflaeche: installiert = Voicebox installiert UND das Whisper-Repo
+der gewaehlten Stufe liegt im Cache. Nichts wird gestartet oder geladen.
 
-Je Fundstelle nennt sie „installiert" mit dem gefundenen Pfad oder „fehlt" mit der
-Umgebungsvariable, den durchsuchten Pfaden und dem naechsten Schritt in einem Satz.
-Zusaetzlich wird gewarnt, wenn eine Piper-Stimme ohne ihre `.onnx.json` liegt — ohne diese
-Datei bleibt die Stimme unbenutzbar. Ob die Dienste LAUFEN, steht daneben; gestartet
-werden sie mit `node dashboard/serve.mjs --voice`.
+## Eigene Stimmen und Stimmendienst
 
-Was der Mensch selbst hinlegen muss (`<VOICE>` = `KEEL_VOICE_ROOT`, Default
-`<harness>/runtime/voice`):
+`profile-service.mjs` startet das installierte Binary ueber `profile-process.py`
+(`--data-dir` = Datenverzeichnis der App). Der Windows-Job begrenzt den Prozessbaum auf zwei
+CPU-Kerne und standardmaessig 10240 MiB zugesicherten Speicher (`KEEL_VOICEBOX_JOB_MIB`,
+geklemmt auf 2560–16384). Der Start braucht mindestens 3 GiB freien Arbeitsspeicher, wartet
+hoechstens 60 Sekunden auf Bereitschaft und beendet bei Fehler den selbst gestarteten Prozess.
+Ein laufender fremder Dienst wird nicht beendet.
 
-| Stueck | Erwarteter Ort | Alternative |
-| --- | --- | --- |
-| Piper-Python | `<VOICE>/piper-env/Scripts/python.exe` (Windows) bzw. `bin/python` — eine venv mit `pip install piper-tts` | `KEEL_VOICE_PIPER_PYTHON` |
-| Piper-Stimme Deutsch | `<VOICE>/models/de_DE-thorsten-high.onnx` **plus** `de_DE-thorsten-high.onnx.json` | `KEEL_VOICE_PIPER_DE` |
-| Piper-Stimme Englisch | `<VOICE>/models/en_US-lessac-medium.onnx` **plus** `.onnx.json` | `KEEL_VOICE_PIPER_EN` |
-| Whisper-Python | `<VOICE>/stt-env/Scripts/python.exe` bzw. `bin/python` — eine venv mit `pip install faster-whisper` | `KEEL_VOICE_STT_PYTHON` |
-| Whisper-Modell | `<VOICE>/models/whisper-base/` mit `model.bin` und `config.json` | `KEEL_VOICE_STT_MODEL` |
-| Stimmenmodell (eigene Stimme, Cortana/Jarvis) | `<VOICE>/cache/hub/models--Qwen--Qwen3-TTS-12Hz-0.6B-Base/snapshots/5d83992436eae1d760afd27aff78a71d676296fc/` mit den 13 gepinnten Dateien (inkl. Unterordner `speech_tokenizer/`) | Knopf „Stimmenmodell herunterladen" in den Einstellungen |
+Der Vertrag:
 
-Die Modell- und Stimmdateien liegen NICHT im Repository und werden nicht automatisch
-geholt; die einzige Ausnahme ist der ausdruecklich angeklickte Download des
-Stimmenmodells. Der erwartete Dateisatz des Stimmenmodells steht in
-`install-report.mjs` (`VOICE_MODEL.files`) und ist identisch mit `ALLOWED_FILES` in
-`dashboard/lib/companion/own-voice-model.ts`; ein Test vergleicht beide Listen.
+- `GET /api/accountability/voice/service`: `{ok,status,available,owned,message}`;
+  `POST` mit `{operation:"start"|"stop"}`, Mutation erfordert denselben Origin. Start meldet
+  zunaechst `status:"starting"`; die Oberflaeche fragt den GET-Status ab, bis `ready` oder `error`.
+- `GET /api/accountability/voice/status` liefert die Profile und `voicebox.synthesis`
+  (Chatterbox Multilingual in Voicebox vorhanden?).
+- `GET|POST /api/accountability/voice/models` — siehe „Modelle und Engines“.
+- `GET|POST /api/accountability/voice/hearing` — Stufe lesen/setzen, Stand laut Voicebox.
+- `POST /api/accountability/voice/transcribe` — Hoeren ueber Voicebox (`provider:"local"`) oder
+  den eingerichteten Online-Dienst (`provider:"online"`).
+- `POST /api/accountability/voice/profiles` akzeptiert optional `language:"de"` oder
+  `language:"en"`; ohne Feld bleibt Deutsch der Default. Neue Profile bekommen `default_engine:"chatterbox"`.
+
+Cortana und Jarvis sind feste Preset-Optionen; sie sprechen nur ueber ihr eigenes Klonprofil
+mit Referenzaufnahme und der Engine des Profils, nie mit einer anderen Stimme. Die abgelehnten
+Alt-Assets (`drycen`, `jgkawell`, `lux`) bleiben gesperrt (HTTP 410).
 
 ## Latenz
 
@@ -115,85 +164,17 @@ Die Grenzwerte stehen in `dashboard/lib/companion/latency-limits.ts` und gespieg
 | bis hoerbare Stimme | 1000 ms | 1500 ms | 3000 ms |
 | bis vollstaendige Antwort | 6000 ms | 6000 ms | 10000 ms |
 
-Im Gespraech bewertet `components/voice-v4/VoiceSessionV4.tsx` jede Runde aus dem
-vorhandenen Ereignis `keel:companion-turn-latency` und zeigt eine ruhige Zeile
-„x,y s bis Stimme" mit dem Zustand; die Erklaerung steht in einem `<details>`.
-
-```powershell
-node voice/latency-run.mjs                       # 5 Runden Piper, Standardausgabe unter <VOICE>/verification
-node voice/latency-run.mjs --rounds 10 --out runtime\voice\verification\latenz.json
-node voice/latency-run.mjs --with-stt            # zusaetzlich Whisper auf dem eben erzeugten WAV
-node voice/latency-run.mjs --with-model          # zusaetzlich eine Ollama-Runde, nur wenn erreichbar
-```
-
-Das Skript startet KEINE Dienste; es misst gegen die laufenden. Je Runde werden Start bis
-erste hoerbare Bytes und Start bis fertig gemessen, das JSON enthaelt Median, Maximum und
-die Bewertung gegen die Grenzwerte, und der Exitcode ist 1, sobald eine Runde die Grenze
-erreicht. Nicht gemessen wird das Ende der gesprochenen Wiedergabe und nicht die
-Wiedergabe im Browser; es liegt keine WAV-Datei im Bestand, deshalb dient das in derselben
-Runde erzeugte Piper-Audio als Whisper-Eingabe.
-
-## Eigene Stimmen
-
-Der Profilservice ist unabhaengig von Piper, Whisper und Agentenmodell. Der Knopf
-„Stimmendienst starten" in den Einstellungen verwendet die vorhandene
-Voicebox-Installation auf `127.0.0.1:4299`. Dabei wird kein Synthesemodell geladen und
-kein Profil angelegt.
-
-`profile-service.mjs` startet das installierte Binary ueber `profile-process.py`. Der
-Windows-Job begrenzt den eigenen Prozessbaum auf zwei CPU-Kerne und standardmaessig
-5120 MiB zugesicherten Speicher (`KEEL_VOICEBOX_JOB_MIB`, geklemmt auf 2560-16384). Der
-Start braucht mindestens 3 GiB freien Arbeitsspeicher, wartet hoechstens 60 Sekunden auf
-Bereitschaft und beendet bei Fehler den selbst gestarteten Prozess. Ein laufender fremder
-Dienst wird nicht beendet. Liegt das Binary nicht unter
-`%LOCALAPPDATA%/Voicebox/voicebox-server.exe`, zeigt `KEEL_VOICEBOX_BINARY` darauf.
-
-Der Voicebox-Kindprozess behaelt Netzwerkzugriff, damit ausschliesslich der ausdruecklich
-angeklickte Modelldownload ueber die Model-API arbeiten kann. Profilstart und
-Statuspruefung laden nichts. Die Syntheseroute prueft den vollstaendigen isolierten Cache
-vor `/generate`; ein fehlendes Modell startet deshalb auch bei einer normalen Stimmprobe
-keinen automatischen Download.
-
-Der Vertrag:
-
-- `GET /api/accountability/voice/service`: `{ok,status,available,owned,message}`.
-- `POST /api/accountability/voice/service` mit `{operation:"start"}` oder
-  `{operation:"stop"}`; Mutation erfordert denselben Origin.
-- Start meldet zunaechst `status:"starting"`. Die Oberflaeche fragt den GET-Status ab, bis
-  `ready` oder `error` eintritt. HTTP-Erfolg allein bedeutet keine Bereitschaft.
-- `GET /api/accountability/voice/status` liefert die eigenen Profile und separat
-  `voicebox.synthesis:{available,model,message}`.
-- `GET /api/accountability/voice/model` liefert den reloadfaehigen Einrichtungsstand als
-  `setup`: `state` (`missing`, `downloading`, `ready`, `canceled`, `error`), feste
-  Modellmetadaten, Ressourcenhinweis sowie `canDownload`, `canCancel`, `modelReady` und
-  `canAttemptSynthesis`. Die letzten beiden bestaetigen nur die Modelldateien, keinen
-  RAM-, Klang- oder Audioerfolg.
-- `GET /api/accountability/voice/model/progress` reicht den vorhandenen
-  Voicebox-SSE-Stream gleichen Ursprungs durch; solange Voicebox keine Zahlen meldet,
-  bleibt `setup.progress.indeterminate:true` statt eines erfundenen Prozentwerts.
-- `POST /api/accountability/voice/model` mit `{operation:"download"}` startet
-  ausschliesslich den Download von `qwen-tts-0.6B` in den isolierten Cache;
-  `{operation:"cancel"}` bricht ihn ab. Beide Mutationen erfordern denselben Origin.
-- `POST /api/accountability/voice/profiles` akzeptiert optional `language:"de"` oder
-  `language:"en"`; ohne Feld bleibt Deutsch der Default.
-
-Cortana und Jarvis sind feste Preset-Optionen. Solange ihr lokaler Klon
-(Voicebox/Qwen) kein geprueftes Referenzprofil und Synthesemodell hat, zeigen sie einen
-ehrlichen Nicht-bereit-Status und geben nie eine andere Stimme als Original aus. Die
-abgelehnten Alt-Assets (`drycen`, `jgkawell`, `lux`) bleiben gesperrt: ihre frueheren
-Referenz- und Sample-URLs antworten mit HTTP 410.
+Die Live-Mess-Runden von `latency-run.mjs` stammten aus dem entfernten Piper-Weg (A14) und sind
+stillgelegt; die Auswertungsfunktionen bleiben in Gebrauch und getestet (`voice/latency-run.test.mjs`).
 
 ## Pruefung
 
 ```powershell
 # Modellfreie Regressionen (brauchen den Dashboard-Quellbaum; nicht Teil der Auslieferung)
-node --test voice/profile-service.test.mjs voice/provider-contract.test.mjs voice/regression.test.mjs voice/web-start.test.mjs voice/own-voice-model.test.mjs voice/coaching-topic.test.mjs voice/install-report.test.mjs voice/latency-run.test.mjs
+node --test voice/*.test.mjs
 
 # Flag- und Discovery-Vertrag der Starter
 node --test test/voice-sidecar.test.js
-
-# Nach Ressourcenabstimmung: echte neutrale Piper-Ausgabe in Whisper-Erkennung
-node voice/verify-local.mjs
 ```
 
 Automatische Audiotests sind keine menschliche Hoerpruefung. Klangqualitaet und eine echte
