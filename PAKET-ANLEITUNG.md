@@ -64,11 +64,11 @@ gegen den tatsächlichen Bestand und macht einen Trockenlauf des Installers gege
 Wegwerf-Repo. Gemessener Erfolg (Rückgabewert 0), letzte Zeile:
 
 ```
-SETUP_REPO_SUITE_OK payload=198 version=1.2.5
+SETUP_REPO_SUITE_OK payload=198 version=1.2.6
 ```
 
 Wer nur den Installer-Teil will: `node <PAKET>\checks\fresh-clone.mjs` endet bei
-gesundem Klon mit `SETUP_REPO_OK payload=198 version=1.2.5 dry-run=ok`.
+gesundem Klon mit `SETUP_REPO_OK payload=198 version=1.2.6 dry-run=ok`.
 
 `manifest.json` ist die Stückliste — jede Datei mit Herkunft, Größe und Prüfsumme;
 unter `excluded` steht, was **absichtlich** fehlt (unten als Tabelle).
@@ -106,7 +106,7 @@ node C:\w\keel-harness-standalone-setup\install.mjs --target C:\w\mein-harness -
 Gemessene Ausgabe an einem frischen Ziel (Rückgabewert 0, geschrieben wird nichts):
 
 ```
-keel harness distribution: command=install state=planned version=1.2.5 dry-run=true managed=202
+keel harness distribution: command=install state=planned version=1.2.6 dry-run=true managed=202
 ```
 
 `managed=` ist die Zahl der Dateien, die der Installer im Ziel verwalten würde —
@@ -123,7 +123,7 @@ node <PAKET>\install.mjs --target <HARNESS>
 Gemessener Erfolg:
 
 ```
-keel harness distribution: command=install state=installed version=1.2.5 promotions=201 managed=202 rollback=available
+keel harness distribution: command=install state=installed version=1.2.6 promotions=201 managed=202 rollback=available
 ```
 
 Der Lauf ist transaktional und wiederholbar — ein zweiter Aufruf schreibt nichts
@@ -301,14 +301,14 @@ woraus die Payload in deinen Händen entstanden ist.
 <!-- ERZEUGT:stand-der-auslieferung (node checks/anleitung-sync.mjs --nachziehen; nicht von Hand ändern) -->
 | Feld | Wert |
 |---|---|
-| Produkt und Version | `keel-harness` 1.2.5 |
+| Produkt und Version | `keel-harness` 1.2.6 |
 | Payload-Posten | 198 |
-| Baum-Fingerabdruck | `58b19def5a5b3db2...` |
+| Baum-Fingerabdruck | `8aa03cfcd368c554...` |
 | Quelle | `harness-lab`, Unterbaum `test-harness/standalone` |
-| Quell-Commit | `52386bc430080c7bc196ac654e222cd6b733a69d` |
+| Quell-Commit | `f4274e7aac56ef5a5a5dc78b45f7cfd33f65e061` |
 | Standalone frisch gebaut | ja |
 | Ungesicherte Dateien der Quelle beim Bau | Arbeitsbaum 0, `test-harness/standalone` 0 |
-| Erzeugt am | 2026-09-21T07:19:40.037Z |
+| Erzeugt am | 2026-09-21T07:59:01.595Z |
 <!-- /ERZEUGT:stand-der-auslieferung -->
 
 ---

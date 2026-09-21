@@ -34,7 +34,10 @@ const VOICEBOX_JOB_MIB = { default: 10240, min: 2560, max: 16384 };
 // sonst die Empfehlung aus runtime/voice/system-profile.json, sonst der feste Standard.
 function profileRecommendation(env, key) {
   const profile = readProfile(env);
-  return profile ? recommendSettings(profile)[key]?.value : undefined;
+  if (!profile) return undefined;
+  const override = profile.overrides?.[key];
+  if (Number.isFinite(Number(override)) && Number(override) > 0) return Number(override);
+  return recommendSettings(profile)[key]?.value;
 }
 export function resolveVoiceboxJobMiB(env = process.env) {
   const parsed = Number.parseInt(env.KEEL_VOICEBOX_JOB_MIB ?? '', 10);
