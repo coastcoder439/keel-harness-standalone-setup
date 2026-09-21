@@ -3,10 +3,10 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.2.4"
+    "version": "1.2.5"
   },
   "payload": {
-    "treeSha256": "badad00dd97af37a766f550fd36b7cfac918cdd71ebdcd8133c58f5a706093b7"
+    "treeSha256": "58b19def5a5b3db2d6d48ef3dd74473998caea6cc5a4e6915fc88e6fbac816ef"
   },
   "provenance": {
     "unlazy": {
@@ -757,10 +757,10 @@
       "target": "AGENTS.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 8605,
-      "sourceSha256": "db154be004132047bcf20e43a203f58e3b7e16578cb7e7ce66b675154178347e",
-      "bytes": 8605,
-      "sha256": "db154be004132047bcf20e43a203f58e3b7e16578cb7e7ce66b675154178347e"
+      "sourceBytes": 8727,
+      "sourceSha256": "ff0e8991e6bd8152b70c98e7fc0a89c518512b1338c352c50909078a4779958b",
+      "bytes": 8727,
+      "sha256": "ff0e8991e6bd8152b70c98e7fc0a89c518512b1338c352c50909078a4779958b"
     },
     {
       "source": "test-harness/checks/bounded-runner.mjs",
@@ -827,10 +827,10 @@
       "target": "CLAUDE.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 8605,
-      "sourceSha256": "db154be004132047bcf20e43a203f58e3b7e16578cb7e7ce66b675154178347e",
-      "bytes": 8605,
-      "sha256": "db154be004132047bcf20e43a203f58e3b7e16578cb7e7ce66b675154178347e"
+      "sourceBytes": 8727,
+      "sourceSha256": "ff0e8991e6bd8152b70c98e7fc0a89c518512b1338c352c50909078a4779958b",
+      "bytes": 8727,
+      "sha256": "ff0e8991e6bd8152b70c98e7fc0a89c518512b1338c352c50909078a4779958b"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-runtime-archive.mjs",
@@ -1150,7 +1150,7 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 571,
-      "sha256": "794633d891794066ce6794d23c8a94c31db055320709bd85095c4e93a19d3c8c"
+      "sha256": "425fe5198182b12039431348f2fe733c3a529aa81574c5cc157c95f841bdb60f"
     },
     {
       "source": "test-harness/roles/accountability.md",
@@ -1987,10 +1987,10 @@
       "target": "voice/README.md",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 10590,
-      "sourceSha256": "09b96e44d49d0160cab488ea50f8c8905230d0288e1f2b7068fc420b2c1ee25d",
-      "bytes": 10590,
-      "sha256": "09b96e44d49d0160cab488ea50f8c8905230d0288e1f2b7068fc420b2c1ee25d"
+      "sourceBytes": 11075,
+      "sourceSha256": "a7952722a709cf0092e4d7c49bb7c1e6f3dec2a15483b3454dbc915893c53974",
+      "bytes": 11075,
+      "sha256": "a7952722a709cf0092e4d7c49bb7c1e6f3dec2a15483b3454dbc915893c53974"
     },
     {
       "source": "test-harness/voice/system-profile.mjs",

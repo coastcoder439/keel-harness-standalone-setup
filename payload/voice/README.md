@@ -59,7 +59,9 @@ App und Dashboard dieselben Zeilen bzw. Dateien. Laeuft die App gleichzeitig (ih
 | `KEEL_VOICE_PYTHON` | Python fuer den begrenzten Windows-Job (`profile-process.py`) | `<VOICE>/voicebox-env/Scripts/python.exe`, Fallback aeltere Envs |
 | `KEEL_VOICE_ROOT` | Schreibwurzel des Harness (Log, `hearing.json`, `tmp/`) | `<harness>/runtime/voice` |
 | `KEEL_VOICE_SIDECAR_ROOT` | dieser Ordner | `<KEEL_HARNESS_ROOT>/voice` |
-| `KEEL_VOICEBOX_JOB_MIB` | Commit-Grenze des Prozessbaums (2560–16384) | 10240 |
+| `KEEL_VOICEBOX_JOB_MIB` | Commit-Grenze des Prozessbaums (2560–16384) | Empfehlung aus `runtime/voice/system-profile.json` (40 % RAM), sonst 10240 |
+| `KEEL_VOICEBOX_CPU_CORES` | CPU-Kerne des Prozessbaums (Affinitaetsmaske) | Empfehlung aus dem Systemprofil (physische Kerne − 2), sonst 2 |
+| `KEEL_ONLINE_VOICE_CONNECTION_PATH` | Datei der Cloud-Stimme (Schluessel, ausserhalb des Workspace) | `<Datenordner>/online-voice-connection.json` |
 
 Kein Offline-Zwang mehr (`HF_HUB_OFFLINE` wird fuer den Kindprozess entfernt): Downloads
 laufen ausschliesslich ueber Voicebox' eigene Endpunkte, angestossen aus dem Dashboard
@@ -130,9 +132,10 @@ der gewaehlten Stufe liegt im Cache. Nichts wird gestartet oder geladen.
 ## Eigene Stimmen und Stimmendienst
 
 `profile-service.mjs` startet das installierte Binary ueber `profile-process.py`
-(`--data-dir` = Datenverzeichnis der App). Der Windows-Job begrenzt den Prozessbaum auf zwei
-CPU-Kerne und standardmaessig 10240 MiB zugesicherten Speicher (`KEEL_VOICEBOX_JOB_MIB`,
-geklemmt auf 2560–16384). Der Start braucht mindestens 3 GiB freien Arbeitsspeicher, wartet
+(`--data-dir` = Datenverzeichnis der App). Der Windows-Job begrenzt den Prozessbaum auf die
+Kerne und den Speicher aus dem Systemprofil (Paket system-profile: physische Kerne − 2, 40 % RAM;
+`KEEL_VOICEBOX_CPU_CORES` / `KEEL_VOICEBOX_JOB_MIB` ueberschreiben, Speicher geklemmt auf 2560–16384,
+ohne Profil 2 Kerne / 10240 MiB). Der Start braucht mindestens 3 GiB freien Arbeitsspeicher, wartet
 hoechstens 60 Sekunden auf Bereitschaft und beendet bei Fehler den selbst gestarteten Prozess.
 Ein laufender fremder Dienst wird nicht beendet.
 
