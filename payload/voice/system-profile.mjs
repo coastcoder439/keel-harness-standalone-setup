@@ -97,6 +97,22 @@ export function writeProfile(profile, env = process.env) {
 }
 
 // Gemessene Werte (Latenz) ergaenzen, ohne die Hardware-Messung zu verlieren.
+// Manuelle Kontrolle (Owner 21.09.): der Nutzer darf Kerne und Speichergrenze im Dashboard setzen; die
+// Wahl liegt als `overrides` im Profil, Umgebungsvariablen gewinnen weiterhin, null loescht die Wahl.
+export const OVERRIDE_LIMITS = { voiceCores: { min: 1, max: 32 }, voiceJobMiB: { min: 2560, max: 16384 } };
+export function mergeOverrides(profile, overrides) {
+  const next = { ...(profile.overrides || {}) };
+  for (const [key, limit] of Object.entries(OVERRIDE_LIMITS)) {
+    if (!(key in overrides)) continue;
+    const value = overrides[key];
+    if (value === null || value === undefined || value === '') { delete next[key]; continue; }
+    const number = Number(value);
+    if (!Number.isInteger(number) || number < limit.min || number > limit.max) throw new Error(`${key} muss eine ganze Zahl zwischen ${limit.min} und ${limit.max} sein.`);
+    next[key] = number;
+  }
+  return { ...profile, overrides: next };
+}
+
 export function mergeMeasured(profile, measured) {
   return { ...profile, measured: { ...(profile.measured || {}), ...measured, at: new Date().toISOString() } };
 }
@@ -106,6 +122,7 @@ export async function refreshProfile(options = {}) {
   const previous = readProfile(env);
   const profile = await measureSystem(options);
   if (previous?.measured) profile.measured = previous.measured;
+  if (previous?.overrides) profile.overrides = previous.overrides;
   const file = writeProfile(profile, env);
   return { profile, recommendations: recommendSettings(profile), file };
 }
