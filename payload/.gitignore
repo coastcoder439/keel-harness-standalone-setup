@@ -22,3 +22,6 @@ runtime/voice/
 *.pem
 secrets.json
 credentials.json
+# Bauausgaben des vendorierten Understand-Anything-Plugins (Vorbau, harness-dashboard-repair Gate A4)
+vendor/understand-anything-plugin/**/node_modules/
+vendor/understand-anything-plugin/**/dist/

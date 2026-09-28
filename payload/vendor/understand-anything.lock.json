@@ -1,0 +1,51 @@
+{
+  "schema": 1,
+  "name": "understand-anything-plugin",
+  "repository": "https://github.com/Egonex-AI/Understand-Anything",
+  "approvedBy": "Owner, 2026-09-26 (Chat, wörtlich: „KLAR DOWNLOAD OK …“), Vorlage docs/packages/new-harness-architecture-maps/evidence/download-approval.md, Stand B",
+  "commit": "6df3065f1d8ddc2ce3615314d1d493f36d6b1c80",
+  "commitDate": "2026-09-12T05:31:43Z",
+  "pluginVersion": "2.9.7",
+  "sourceInArchive": "understand-anything-plugin",
+  "archive": {
+    "url": "https://codeload.github.com/Egonex-AI/Understand-Anything/tar.gz/6df3065f1d8ddc2ce3615314d1d493f36d6b1c80",
+    "sha256": "67cdd19ffecd4df2f572b5126d73071224f5e0f07f8c4c313538a70f63b99ea1",
+    "fetchedAt": "2026-09-26T03:40:00Z",
+    "bytes": 25083242
+  },
+  "vendoredPlugin": {
+    "files": 370,
+    "bytes": 7231091,
+    "dirSha256": "3bcf92ab18ab33f9d959b133ba5272905be0033de43fe69887247b1d95bd5b55"
+  },
+  "buildOutputs": {
+    "excludedFromChecksum": [
+      "node_modules",
+      "dist"
+    ],
+    "gitignored": true,
+    "note": "Vorbau (pnpm install, core build) legt sie an; nicht Teil des freigegebenen Quellstands (harness-dashboard-repair Gate A4)."
+  },
+  "pnpm": {
+    "required": "10.6.2",
+    "source": "Freigabe docs/packages/new-harness-architecture-maps/evidence/download-approval.md 1c und 5.2 (packageManager pnpm@10.6.2 in package.json:28 des Upstream-Repos); SKILL.md:122 verlangt pnpm >= 10",
+    "measuredOnMachine": "9.15.4 (28.09.2026, pnpm --version)",
+    "prebuild": [
+      "cd test-harness/vendor/understand-anything-plugin",
+      "npx -y pnpm@10.6.2 install --frozen-lockfile",
+      "npx -y pnpm@10.6.2 --filter @understand-anything/core build",
+      "git show HEAD:test-harness/vendor/understand-anything-plugin/pnpm-lock.yaml > pnpm-lock.yaml   (pnpm 10.6.2 ergaenzt trotz --frozen-lockfile den Importer packages/viewer; ohne Wiederherstellung bricht die Pruefsumme)"
+    ],
+    "prebuildMeasured": "28.09.2026 im Arbeitsbaum rarch: install 6,9 s, node_modules 494 MB, Pruefsumme danach unveraendert 3bcf92ab…"
+  },
+  "license": {
+    "spdxId": "MIT",
+    "holders": [
+      "Yuxiang Lin",
+      "Infinite Universe, Inc."
+    ],
+    "textPath": "test-harness/licenses/understand-anything/LICENSE"
+  },
+  "autoUpdate": false,
+  "note": "Nur für den Architekturbild-Job geladen (--plugin-dir), nie nach ~/.claude installiert, nie als Marketplace-Plugin registriert (design/decisions.md F5, Gates J1/J2)."
+}

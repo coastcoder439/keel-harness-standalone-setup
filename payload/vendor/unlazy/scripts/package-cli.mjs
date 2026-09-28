@@ -4,19 +4,23 @@ import { randomBytes } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
+  readFileSync,
   renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
 import packageContext from "./lib/package-context.cjs";
+import ownerContract from "./lib/owner-contract.cjs";
 import {
   assertPackageModeBoundary,
+  resolveAllPackageTargets,
   resolvePackageTarget,
   resolveRepository,
 } from "./lib/packages.mjs";
 import { inspectPackageBundle, publicPackageStatus, PACKAGE_SCHEMA_VERSION } from "./lib/package-schema.mjs";
 import { activatePackage, closePackage, transitionFollowUpDuty } from "./lib/package-lifecycle.mjs";
+import { measureRepositoryPackages } from "./lib/package-measure.mjs";
 
 const {
   assertNoLinkedComponent,
@@ -24,13 +28,20 @@ const {
   resolvePackageBundle,
   validatePackageId,
 } = packageContext;
+const { harnessConfig } = ownerContract;
 
 const HELP = `usage: package-cli.mjs <command> [options]
 
 commands:
-  create --package ID       create one validated solo bundle atomically
+  create --package ID [--owner-request TEXT | --owner-request-file PATH] [--owner-source TEXT]
+                            create one validated solo bundle atomically in the
+                            standard format (Scope, Context); writes OWNER.md
+                            when the repository requires an Owner contract or a
+                            request is given (without one: skeleton to fill in)
   activate --package ID --scope ID   atomically bind package runtime
   list                      list bundles in exactly one repository
+  measure                   status, fields and plan steps of every bundle in
+                            one process (the one package measurement)
   lint --package ID         validate bundle schema and contract mapping
   status --package ID       emit separated PackageStatus dimensions
   doctor --package ID       validate one bundle and repository boundary
@@ -63,6 +74,7 @@ const VALUE_OPTIONS = new Set([
   "--root", "--package", "--scope", "--repo-key", "--session",
   "--timeout", "--jobs", "--shell",
   "--duty", "--owner", "--trigger", "--due-state", "--gate", "--owner-ok", "--reuse-integration",
+  "--owner-request", "--owner-request-file", "--owner-source",
 ]);
 const FLAG_OPTIONS = new Set(["--all", "--json", "--help", "-h"]);
 
@@ -128,6 +140,8 @@ function defaultPackage(packageId) {
 **Problem:** The package outcome has not been implemented yet.
 **Intent:** Keep the work bounded by a versioned package and executable gate.
 **Goal:** The declared package outcome is implemented and verified.
+**Scope:** Drin: the declared package outcome and its verification. Nicht drin: work that the Goal does not name.
+**Context:** Created by package-cli create; replace with the measured starting point before activation.
 
 ## Plan
 
@@ -162,9 +176,54 @@ function defaultGates(packageId) {
 `;
 }
 
-function createBundle(root, packageId, repoKey) {
+function localDate(now = new Date()) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate());
+}
+
+// OWNER.md written by create. With an Owner request the contract is complete;
+// without one it is a skeleton whose placeholder keeps lint and doctor red
+// (OWNER_REQUEST) until the original request is captured, so a repository
+// with ownerContractRequired=true can create bundles without inventing one.
+function defaultOwner(packageId, owner) {
+  const request = owner.request
+    ? owner.request.replace(/\r\n/g, "\n").replace(/\s+$/u, "")
+    : "<Copy the original Owner request here verbatim before activation.>";
+  return `# Owner contract: ${packageId}
+
+Schema: 1
+Source: ${owner.source || (owner.request ? "package-cli create --owner-request" : "package-cli create (Owner request not captured yet)")}
+Captured: ${localDate()}
+
+## Original request
+
+${request}
+
+## Requirements
+
+- R1 -> C1: The declared package outcome is implemented and verified.
+`;
+}
+
+function ownerRequestOption(options) {
+  if (options["owner-request"] && options["owner-request-file"]) {
+    throw new Error("use either --owner-request or --owner-request-file, not both");
+  }
+  let request = options["owner-request"] || null;
+  if (options["owner-request-file"]) request = readFileSync(options["owner-request-file"], "utf8");
+  if (request !== null) {
+    if (request.includes("\0")) throw new Error("Owner request must not contain NUL");
+    if (!request.trim()) throw new Error("Owner request must not be empty");
+  }
+  if (options["owner-source"] && /[\r\n]/u.test(options["owner-source"])) throw new Error("--owner-source must be one line");
+  return { request, source: options["owner-source"] || null };
+}
+
+function createBundle(root, packageId, repoKey, owner = { request: null, source: null }) {
   const invalid = validatePackageId(packageId);
   if (invalid) throw new Error(invalid);
+  const config = harnessConfig(root);
+  const writeOwner = config.required || Boolean(owner.request);
   const packagesDir = join(root, "docs", "packages");
   const targetDir = join(packagesDir, packageId);
   const flatLegacy = join(packagesDir, packageId + ".md");
@@ -180,6 +239,9 @@ function createBundle(root, packageId, repoKey) {
     writeFileSync(join(temporary, "PACKAGE.md"), defaultPackage(packageId), { encoding: "utf8", flag: "wx" });
     writeFileSync(join(temporary, "GATES.md"), defaultGates(packageId), { encoding: "utf8", flag: "wx" });
     writeFileSync(join(temporary, "gates", ".gitkeep"), "", { encoding: "utf8", flag: "wx" });
+    if (writeOwner) {
+      writeFileSync(join(temporary, "OWNER.md"), defaultOwner(packageId, owner), { encoding: "utf8", flag: "wx" });
+    }
     const temporaryTarget = {
       repoRoot: root,
       repoKey,
@@ -190,8 +252,10 @@ function createBundle(root, packageId, repoKey) {
       scope: null,
     };
     const inspected = inspectPackageBundle(temporaryTarget);
-    if (inspected.diagnostics.length) {
-      throw new Error("generated bundle failed schema: " + inspected.diagnostics.map((item) => item.message).join("; "));
+    // The only tolerated finding is the placeholder of an OWNER.md skeleton.
+    const blocking = inspected.diagnostics.filter((item) => !(writeOwner && !owner.request && item.code === "OWNER_REQUEST"));
+    if (blocking.length) {
+      throw new Error("generated bundle failed schema: " + blocking.map((item) => item.message).join("; "));
     }
     renameSync(temporary, targetDir);
   } catch (error) {
@@ -207,10 +271,8 @@ function packageStatus(root, options) {
 }
 
 function packageStatuses(root, options) {
-  return listPackageBundles(root, { assertRoot: false }).map((bundle) => {
-    const target = resolvePackageTarget({ root, packageId: bundle.packageId, repoKey: options["repo-key"] || "." });
-    return inspectPackageBundle(target);
-  });
+  return resolveAllPackageTargets({ root, repoKey: options["repo-key"] || "." })
+    .map((target) => inspectPackageBundle(target));
 }
 
 function collisionDiagnostics(root, packageId) {
@@ -242,9 +304,11 @@ if (!parsed) {
       if (command === "create") {
         if (!options.package) throw new Error("create requires --package ID");
         if (options.all || options.scope) throw new Error("create does not accept --all or --scope");
-        createBundle(root, options.package, repoKey);
+        createBundle(root, options.package, repoKey, ownerRequestOption(options));
         const status = packageStatus(root, options);
-        print(options.json ? publicPackageStatus(status) : "created docs/packages/" + status.packageId, options.json);
+        const pendingOwner = status.diagnostics.some((item) => item.code === "OWNER_REQUEST");
+        print(options.json ? publicPackageStatus(status) : "created docs/packages/" + status.packageId +
+          (pendingOwner ? "; OWNER.md is a skeleton: capture the original Owner request before activation" : ""), options.json);
       } else if (command === "activate") {
         if (!options.package || !options.scope) throw new Error("activate requires --package ID and --scope ID");
         if (options.all || options.timeout || options.jobs || options.shell) {
@@ -267,6 +331,18 @@ if (!parsed) {
           print({ schemaVersion: PACKAGE_SCHEMA_VERSION, repoRoot: root, repoKey, packageCount: statuses.length, packages: statuses }, true);
         } else if (!statuses.length) console.log("(no package bundles)");
         else for (const status of statuses) console.log(status.repoKey + "::" + status.packageId + " " + status.status);
+      } else if (command === "measure") {
+        if (options.package || options.scope || options.all) throw new Error("measure does not accept --package, --scope, or --all");
+        const measured = measureRepositoryPackages({ root, repoKey });
+        const packages = measured.packages;
+        if (options.json) {
+          print({ ...measured, repoRoot: root }, true);
+        } else if (!packages.length) console.log("(no package bundles)");
+        else {
+          for (const item of packages) {
+            console.log(item.repoKey + "::" + item.packageId + " " + item.status + " " + item.plan.done + "/" + item.plan.total);
+          }
+        }
       } else if (command === "lint" || command === "status") {
         if (options.all) throw new Error(command + " does not accept --all");
         if (!options.package && !options.scope) throw new Error(command + " requires --package ID or --scope ID");

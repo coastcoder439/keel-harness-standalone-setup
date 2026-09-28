@@ -4,7 +4,8 @@ import { voiceDiscoveryPlan, voiceboxModelsDir } from './config.mjs';
 
 // Einrichtungshilfe: prueft den Installationsstand OHNE Dienststart und ohne Netz. Je
 // fehlendem Stueck nennt der Bericht Namen, Umgebungsvariable, die durchsuchten Pfade und
-// den naechsten Schritt in einem Satz. `voice/check.mjs` (CLI) und die Dashboard-Route
+// den naechsten Schritt (`step`), dazu einen Befehl zum Abtippen als eigenes Feld (`command`)
+// und den anderen Weg (`note`). `voice/check.mjs` (CLI) und die Dashboard-Route
 // /api/accountability/voice/setup laden genau diese Funktion, damit Konsole und
 // Oberflaeche nie verschiedene Saetze zeigen.
 //
@@ -77,7 +78,8 @@ export function voiceModelReport(env = process.env) {
     files, missingFiles: absent.map(file => file.name),
     step: absent.length === 0
       ? 'Der Dateisatz ist vollständig. Geladen oder klanglich geprüft ist das Modell damit noch nicht.'
-      : `Lade „${VOICE_MODEL.displayName}“ in den Einstellungen unter „Stimme › Modelle“ über Voicebox herunter (Ziel: ${voiceboxModelsDir(env)}); KEEL_VOICEBOX_MODELS_DIR verschiebt den gemeinsamen Modell-Cache.`,
+      // P34 (B244, P23-N18): the place that exists -- the card "Stimmen-Modelle" in the group "Technik & Stimme".
+      : `Lade „${VOICE_MODEL.displayName}“ unter Einstellungen → Technik & Stimme → Stimmen-Modelle herunter (Ziel: ${voiceboxModelsDir(env)}); KEEL_VOICEBOX_MODELS_DIR verschiebt den gemeinsamen Modell-Cache.`,
     message: absent.length === 0
       ? `Alle ${VOICE_MODEL.files.length} Dateien liegen in ${directory}.`
       : `${absent.length} von ${VOICE_MODEL.files.length} Dateien fehlen in ${directory}.`,
@@ -93,7 +95,27 @@ export function hearingModelReport(env = process.env, variant = 'base') {
   return {
     variant: model.variant, model_name: model.model_name, repository: model.repository, stage: model.stage,
     directory: cacheRoot, installed,
-    message: installed ? `Whisper „${model.stage}“ (${model.model_name}) liegt in ${cacheRoot}.` : `Whisper „${model.stage}“ (${model.model_name}) fehlt in ${cacheRoot}; Download in den Einstellungen unter „Hören“ über Voicebox.`,
+    message: installed ? `Whisper „${model.stage}“ (${model.model_name}) liegt in ${cacheRoot}.` : `Whisper „${model.stage}“ (${model.model_name}) fehlt in ${cacheRoot}; herunterladen unter Einstellungen → Technik & Stimme → Sprache → „Alle Whisper-Modelle“.`,
+  };
+}
+
+// P34 (B244, P23-A1): the Python step is a guide a person can follow -- which Python, where from, the one command
+// that creates the environment the start looks for first (voice/config.mjs: <voiceRoot>/voicebox-env), and how the
+// Einstellungen notice it. voice/profile-process.py needs only the standard library, so any Python 3.11 or newer works.
+// P34-R1 (E30): a gap carries the text a person reads (`step`), the command a person types as a field of its own
+// (`command`: shown as <code> on a line of its own by VoiceModelSetup.tsx, printed alone on a line by voice/check.mjs --
+// never inside a sentence, so no full stop is copied with it) and the other way (`note`). The environment variable is
+// not repeated in the sentences: it is the gap's `env`, shown once, as a literal, beside them.
+export const PYTHON_VERSION = '3.11';
+export function pythonSetupGuide(plan, platform = process.platform) {
+  const venv = path.join(plan.voiceRoot, 'voicebox-env');
+  const windows = platform === 'win32';
+  return {
+    step: windows
+      ? `Installiere Python ${PYTHON_VERSION} von python.org und kreuze dabei „Add python.exe to PATH“ an. Führe danach in PowerShell den Befehl darunter aus und wähle dann in den Einstellungen „Stimmstatus erneut prüfen“.`
+      : `Installiere Python ${PYTHON_VERSION} oder neuer. Führe danach im Terminal den Befehl darunter aus und wähle dann in den Einstellungen „Stimmstatus erneut prüfen“.`,
+    command: windows ? `py -${PYTHON_VERSION} -m venv "${venv}"` : `python3 -m venv "${venv}"`,
+    note: `Hast du schon Python ${PYTHON_VERSION} oder neuer, setze stattdessen die Umgebungsvariable auf dessen Programmdatei.`,
   };
 }
 
@@ -105,15 +127,16 @@ export function installationReport(env = process.env) {
   const database = path.join(dataDir, 'voicebox.db');
   const python = found(plan.voicePython);
   const missing = [];
-  if (!binary) missing.push({ label: plan.voicebox.label, env: plan.voicebox.key, searched: plan.voicebox.candidates.filter(Boolean), step: `Installiere die Voicebox-App (Einstellungen › Stimme › „Voicebox installieren“) oder setze ${plan.voicebox.key} auf voicebox-server.exe.` });
-  if (!python) missing.push({ label: plan.voicePython.label, env: plan.voicePython.key, searched: plan.voicePython.candidates.filter(Boolean), step: `Lege eine Python-Umgebung unter ${path.join(plan.voiceRoot, 'voicebox-env')} ab (Windows: Scripts\\python.exe) oder setze ${plan.voicePython.key} auf einen vorhandenen Interpreter; er startet nur den begrenzten Windows-Job.` });
+  // P34 (B244, P23-N18): the places that exist -- Einstellungen → Technik & Stimme → Sprache einrichten.
+  if (!binary) missing.push({ label: plan.voicebox.label, env: plan.voicebox.key, searched: plan.voicebox.candidates.filter(Boolean), step: 'Installiere den Stimmendienst unter Einstellungen → Technik & Stimme → Sprache einrichten → „Stimmendienst installieren“.', note: 'Liegt er schon auf dem Rechner, setze stattdessen die Umgebungsvariable auf seine Programmdatei.' });
+  if (!python) missing.push({ label: plan.voicePython.label, env: plan.voicePython.key, searched: plan.voicePython.candidates.filter(Boolean), ...pythonSetupGuide(plan) });
   const voicebox = {
     installed: missing.length === 0,
     binary, python, dataDir, database, databasePresent: existsSync(database), modelsDir, modelsDirPresent: existsSync(modelsDir),
     missing,
     message: missing.length === 0
-      ? `Voicebox-Server ${binary}; Datenverzeichnis ${dataDir}${existsSync(database) ? ' (voicebox.db vorhanden)' : ' (voicebox.db wird beim ersten Start angelegt)'}; Modell-Cache ${modelsDir}.`
-      : `${missing.length} Stück fehlt: ${missing.map(item => item.label).join(', ')}.`,
+      ? `Stimmendienst ${binary}; Datenverzeichnis ${dataDir}${existsSync(database) ? ' (voicebox.db vorhanden)' : ' (voicebox.db wird beim ersten Start angelegt)'}; Modell-Cache ${modelsDir}.`
+      : `${missing.length === 1 ? 'Es fehlt' : `Es fehlen ${missing.length} Stücke`}: ${missing.map(item => item.label).join(', ')}.`,
   };
   // Vertragsfeld `microphone` bleibt fuer die Oberflaeche erhalten: das Hoeren ist Voicebox-Whisper,
   // installiert heisst hier: Voicebox selbst ist installiert UND das Whisper-Repo liegt im Cache.

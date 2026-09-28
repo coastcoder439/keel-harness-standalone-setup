@@ -61,15 +61,15 @@ export function voiceboxBinary(env = process.env) {
 export function voiceDiscoveryPlan(env = process.env) {
   const voice = resolveVoiceRoot(env);
   const repository = repositoryRoot(env);
-  const orb = path.join(repository, 'focus-orb-prototype', 'runtime');
-  const previous = path.join(repository, 'focus-dashboard-v3', 'runtime');
   return {
     voiceRoot: voice,
     repositoryRoot: repository,
-    // Python fuer den begrenzten Voicebox-Start (profile-process.py steuert voicebox-server.exe).
-    // Eigene voicebox-env zuerst; die frueheren piper-env/stt-env bleiben als Fallback, damit
-    // bestehende Installationen ohne Neuaufbau weiterlaufen.
-    voicePython: { key: 'KEEL_VOICE_PYTHON', label: 'Python für den Voicebox-Start', candidates: [env.KEEL_VOICE_PYTHON, path.join(voice, 'voicebox-env', ...executable), path.join(voice, 'piper-env', ...executable), path.join(voice, 'stt-env', ...executable), path.join(orb, 'piper-env', ...executable), path.join(previous, 'stt-env', ...executable)] },
+    // Python fuer den begrenzten Voicebox-Start (profile-process.py steuert voicebox-server.exe; nur Standardbibliothek).
+    // harness-dashboard-repair Plan-Schritt 28 (Gate V2, Inventar ET-57): fest an genau zwei Orten -- KEEL_VOICE_PYTHON
+    // oder die eigene Umgebung <voiceRoot>/voicebox-env. Die frueheren Fallbacks (piper-env, stt-env und die Prototyp-
+    // Runtimes unter focus-orb-prototype/ und focus-dashboard-v3/, unversionierte Altordner) sind entfernt: der Start
+    // hing sonst still an einem Ordner, den kein Repository kennt. Anlegen: python -m venv <voiceRoot>/voicebox-env.
+    voicePython: { key: 'KEEL_VOICE_PYTHON', label: 'Python für den Voicebox-Start', candidates: [env.KEEL_VOICE_PYTHON, path.join(voice, 'voicebox-env', ...executable)] },
     voicebox: { key: 'KEEL_VOICEBOX_BINARY', label: 'Voicebox-Server (voicebox-server.exe)', candidates: [voiceboxBinary(env)] },
     voiceboxData: { key: 'KEEL_VOICEBOX_DATA_DIR', label: 'Voicebox-Datenverzeichnis (voicebox.db der App)', candidates: [voiceboxDataDir(env)] },
     voiceboxModels: { key: 'KEEL_VOICEBOX_MODELS_DIR', label: 'Modell-Cache von Voicebox (huggingface hub)', candidates: [voiceboxModelsDir(env)] },

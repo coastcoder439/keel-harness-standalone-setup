@@ -36,6 +36,9 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToP
   for (const item of section.missing) {
     console.error(`  fehlt: ${item.label} — setzbar über ${item.env}; gesucht in: ${item.searched.join(' | ')}`);
     if (item.step) console.error(`    nächster Schritt: ${item.step}`);
+    // P34-R1: the command stands alone on its line (copy the whole line), the other way after it.
+    if (item.command) console.error(`      ${item.command}`);
+    if (item.note) console.error(`    ${item.note}`);
   }
   const model = report.voiceModel;
   console.error(`Stimmenmodell (${model.displayName}, eigene Stimme): ${model.installed ? 'vollständig' : 'nicht vollständig'} — ${model.message}`);

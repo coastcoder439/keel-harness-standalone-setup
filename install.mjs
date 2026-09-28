@@ -127,7 +127,10 @@ if (process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(proce
     // Harness den Rechner (CPU/RAM/GPU/Platte) und schreibt runtime/voice/system-profile.json — die
     // Voreinstellungen fuer Stimme und Hoeren kommen daraus. Ein Fehlschlag bricht die Installation
     // nicht ab; er wird gemeldet, der Scan laesst sich mit node voice/system-profile.mjs nachholen.
-    if (options.command === "install" && !options.dryRun && result.state !== "planned") {
+    // Eine No-op-Neuinstallation misst nicht neu: sie schreibt nichts (sonst aenderte measuredAt den
+    // Baum). Die Deinstallation entfernt die Datei wieder (removeInstallerSystemProfile in
+    // lib/distribution-lifecycle.mjs), weil sie in keinem Installations-Journal steht.
+    if (options.command === "install" && !options.dryRun && !result.noOp && result.state !== "planned") {
       const scanner = resolve(options.target, "voice", "system-profile.mjs");
       if (existsSync(scanner)) {
         const scan = spawnSync(process.execPath, [scanner], { cwd: resolve(options.target), encoding: "utf8", windowsHide: true, timeout: 60000 });
