@@ -69,7 +69,7 @@ function splitSections(text, diagnostics) {
   return { preamble: text.slice(0, preambleEnd), sections };
 }
 
-function parsePreamble(preamble, packageId, diagnostics) {
+function parsePreamble(preamble, packageId, diagnostics, options = {}) {
   const titles = [...preamble.matchAll(/^# Work package: (\S.*)$/gm)];
   if (titles.length !== 1) addDiagnostic(diagnostics, "PACKAGE_TITLE", "exactly one '# Work package: <packageId>' title is required");
   else if (titles[0][1].trim() !== packageId) {
@@ -90,7 +90,87 @@ function parsePreamble(preamble, packageId, diagnostics) {
   if (positions.length === 3 && !(positions[0] < positions[1] && positions[1] < positions[2])) {
     addDiagnostic(diagnostics, "PACKAGE_PIG_ORDER", "Problem, Intent, and Goal must appear in that order");
   }
+  parseStandardFields(preamble, fields, positions, Boolean(options.standardFormat), diagnostics);
   return fields;
+}
+
+// Keel package standard (Scope, Context, planned dates). The fields are always
+// read so every consumer sees one parse; Scope and Context are required only
+// when the repository opts in through .keel-harness.json. Planned dates are
+// optional everywhere but validated wherever they appear.
+const STANDARD_FIELDS = [
+  { label: "Scope", key: "scope", code: "SCOPE" },
+  { label: "Context", key: "context", code: "CONTEXT" },
+  { label: "Planned start", key: "plannedStart", code: "PLANNED_START" },
+  { label: "Planned end", key: "plannedEnd", code: "PLANNED_END" },
+];
+const SCOPE_FORM_RE = /^Drin:\s*(\S.*?)\s+Nicht drin:\s*(\S.*)$/u;
+const PLANNED_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/u;
+
+function validCalendarDate(value) {
+  const match = value.match(PLANNED_DATE_RE);
+  if (!match) return false;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  return date.getUTCFullYear() === Number(match[1]) && date.getUTCMonth() === Number(match[2]) - 1 &&
+    date.getUTCDate() === Number(match[3]);
+}
+
+function parseStandardFields(preamble, fields, pigPositions, required, diagnostics) {
+  const found = Object.create(null);
+  for (const field of STANDARD_FIELDS) {
+    const matches = [...preamble.matchAll(new RegExp("^\\*\\*" + field.label + ":\\*\\*[ \\t]*(.*)$", "gm"))];
+    const value = matches.length === 1 ? matches[0][1].trim() : "";
+    const mandatory = required && (field.key === "scope" || field.key === "context");
+    if (matches.length > 1) {
+      addDiagnostic(diagnostics, "PACKAGE_" + field.code, "at most one " + field.label + " field is allowed");
+      continue;
+    }
+    if (!value) {
+      if (mandatory || matches.length === 1) {
+        addDiagnostic(diagnostics, "PACKAGE_" + field.code, "exactly one non-empty " + field.label + " field is required" +
+          (mandatory ? " by the package standard" : " when the field is present"));
+      }
+      continue;
+    }
+    fields[field.key] = value;
+    found[field.key] = matches[0].index;
+  }
+  if (fields.scope && required && !SCOPE_FORM_RE.test(fields.scope)) {
+    addDiagnostic(diagnostics, "PACKAGE_SCOPE_FORM", "Scope must read 'Drin: <what belongs> Nicht drin: <what is excluded>' with both parts filled");
+  }
+  for (const key of ["plannedStart", "plannedEnd"]) {
+    if (fields[key] && !validCalendarDate(fields[key])) {
+      addDiagnostic(diagnostics, key === "plannedStart" ? "PACKAGE_PLANNED_START" : "PACKAGE_PLANNED_END",
+        (key === "plannedStart" ? "Planned start" : "Planned end") + " must be a real calendar date YYYY-MM-DD");
+    }
+  }
+  if (fields.plannedStart && fields.plannedEnd && validCalendarDate(fields.plannedStart) &&
+      validCalendarDate(fields.plannedEnd) && fields.plannedStart > fields.plannedEnd) {
+    addDiagnostic(diagnostics, "PACKAGE_PLANNED_RANGE", "Planned start must not be after Planned end");
+  }
+  if (required) {
+    // One line per field: every reader takes the field from its own line, so a
+    // wrapped continuation line would silently drop out of Goal or Scope.
+    const lines = preamble.split(/\r?\n/u);
+    for (let index = 1; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (/^\*\*[^*]+:\*\*/u.test(lines[index - 1]) && line.trim() && !/^\*\*[^*]+:\*\*/u.test(line) &&
+          !/^[#>]/u.test(line)) {
+        addDiagnostic(diagnostics, "PACKAGE_FIELD_CONTINUATION",
+          "each package field must stay on one line; join the continuation line: " + line.trim().slice(0, 80));
+      }
+    }
+    const sequence = [...pigPositions];
+    if (pigPositions.length === 3) {
+      for (const key of ["scope", "context", "plannedStart", "plannedEnd"]) {
+        if (found[key] !== undefined) sequence.push(found[key]);
+      }
+      if (sequence.some((position, index) => index > 0 && position <= sequence[index - 1])) {
+        addDiagnostic(diagnostics, "PACKAGE_FIELD_ORDER",
+          "package fields must appear in the order Problem, Intent, Goal, Scope, Context, Planned start, Planned end");
+      }
+    }
+  }
 }
 
 function parsePlan(section = "", diagnostics) {
@@ -796,7 +876,7 @@ export function parsePackageDocument(text, options = {}) {
   if (source.startsWith("\uFEFF")) addDiagnostic(diagnostics, "PACKAGE_BOM", "PACKAGE.md must not start with a BOM");
   if (!source.endsWith("\n")) addDiagnostic(diagnostics, "PACKAGE_FINAL_NEWLINE", "PACKAGE.md must end with a newline");
   const { preamble, sections } = splitSections(source, diagnostics);
-  const pig = parsePreamble(preamble, options.packageId || "", diagnostics);
+  const pig = parsePreamble(preamble, options.packageId || "", diagnostics, options);
   const plan = parsePlan(sections.Plan, diagnostics);
   const contract = parseContract(sections.Abnahme, diagnostics);
   const conclusion = parseConclusion(sections.Abschluss, diagnostics);
@@ -828,7 +908,10 @@ export function parsePackageDocument(text, options = {}) {
 
 export function inspectPackageBundle(target) {
   const text = readFileSync(target.packageFile, "utf8");
-  const parsed = parsePackageDocument(text, { packageId: target.packageId });
+  const parsed = parsePackageDocument(text, {
+    packageId: target.packageId,
+    standardFormat: ownerContract.harnessConfig(target.repoRoot).standardFormat === true,
+  });
   const diagnostics = [...parsed.diagnostics];
   const owner = inspectOwnerContract(
     target.repoRoot,

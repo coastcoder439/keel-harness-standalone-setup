@@ -46,18 +46,29 @@ function readRegular(file, label) {
 function harnessConfig(repoRoot) {
   const file = path.join(repoRoot, CONFIG_FILE);
   const text = readRegular(file, CONFIG_FILE);
-  if (text === null) return { required: false, diagnostics: [] };
+  if (text === null) return { required: false, standardFormat: false, diagnostics: [] };
   let value;
   try { value = JSON.parse(text); }
-  catch { return { required: true, diagnostics: [diagnostic("HARNESS_CONFIG_JSON", CONFIG_FILE + " is invalid JSON", CONFIG_FILE)] }; }
+  catch { return { required: true, standardFormat: false, diagnostics: [diagnostic("HARNESS_CONFIG_JSON", CONFIG_FILE + " is invalid JSON", CONFIG_FILE)] }; }
   if (!value || value.schemaVersion !== 1 || value.packageContract?.ownerContractRequired !== true) {
-    return { required: true, diagnostics: [diagnostic(
+    return { required: true, standardFormat: false, diagnostics: [diagnostic(
       "HARNESS_CONFIG_SCHEMA",
       CONFIG_FILE + " must use schemaVersion 1 and packageContract.ownerContractRequired=true",
       CONFIG_FILE,
     )] };
   }
-  return { required: true, diagnostics: [] };
+  // Keel package standard: Scope and Context become required PACKAGE.md fields
+  // when the repository opts in. Absent means off, so upstream-shaped
+  // repositories keep their contract unchanged.
+  const standard = value.packageContract.standardFormatRequired;
+  if (standard !== undefined && typeof standard !== "boolean") {
+    return { required: true, standardFormat: false, diagnostics: [diagnostic(
+      "HARNESS_CONFIG_SCHEMA",
+      CONFIG_FILE + " packageContract.standardFormatRequired must be true or false",
+      CONFIG_FILE,
+    )] };
+  }
+  return { required: true, standardFormat: standard === true, diagnostics: [] };
 }
 
 function section(text, name) {

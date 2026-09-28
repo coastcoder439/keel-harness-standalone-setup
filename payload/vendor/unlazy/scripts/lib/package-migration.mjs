@@ -106,7 +106,9 @@ function parsePreamble(preamble, blockers) {
     const parts = [lines[index].slice(("**" + name + ":**").length).trim()];
     for (let cursor = index + 1; cursor < lines.length; cursor++) {
       const line = lines[cursor];
-      if (/^\*\*(?:Problem|Intent|Goal):\*\*/.test(line)) break;
+      // Any bold field line ends the field, so a following Scope/Context line
+      // is not swallowed into Goal.
+      if (/^\*\*[^*]+:\*\*/.test(line)) break;
       if (/^#/.test(line)) break;
       if (!line.trim() && parts.some(Boolean)) break;
       if (line.trim()) parts.push(line.trim());
@@ -116,10 +118,50 @@ function parsePreamble(preamble, blockers) {
       blockers.push({ code: "EMPTY_PIG", field: name, message: name + " is empty" });
     }
   }
+  // Keel package standard: Scope, Context and planned dates are optional in a
+  // legacy file. Present fields are carried over (wrapped lines joined);
+  // missing Scope/Context get the same marked scaffold as `package-cli create`.
+  for (const [name, key] of LEGACY_STANDARD_FIELDS) {
+    const index = lines.findIndex((line) => line.startsWith("**" + name + ":**"));
+    if (index === -1) continue;
+    const parts = [lines[index].slice(("**" + name + ":**").length).trim()];
+    for (let cursor = index + 1; cursor < lines.length; cursor++) {
+      const line = lines[cursor];
+      if (/^\*\*[^*]+:\*\*/.test(line) || /^#/.test(line) || !line.trim()) break;
+      parts.push(line.trim());
+    }
+    const value = oneLine(parts.join(" "));
+    if (value) fields[key] = value;
+  }
   return {
     title: title ? title.replace(/^# Work package:\s*/, "").trim() : "",
     ...fields,
   };
+}
+
+const LEGACY_STANDARD_FIELDS = [
+  ["Scope", "scope"],
+  ["Context", "context"],
+  ["Planned start", "plannedStart"],
+  ["Planned end", "plannedEnd"],
+];
+const SCAFFOLD_SCOPE = "Drin: the declared package outcome and its verification. Nicht drin: work that the Goal does not name.";
+
+function standardHeader(packageId, pig, warnings) {
+  if (!pig.scope) {
+    warnings.push({ code: "SCAFFOLD_SCOPE", message: "legacy package has no Scope field; a scaffold Scope was written and must be replaced" });
+  }
+  if (!pig.context) {
+    warnings.push({ code: "SCAFFOLD_CONTEXT", message: "legacy package has no Context field; a scaffold Context was written and must be replaced" });
+  }
+  const lines = [
+    "**Scope:** " + (pig.scope || SCAFFOLD_SCOPE),
+    "**Context:** " + (pig.context || "Migrated by package-migrate from docs/packages/" + packageId +
+      ".md; replace with the measured starting point before activation."),
+  ];
+  if (pig.plannedStart) lines.push("**Planned start:** " + pig.plannedStart);
+  if (pig.plannedEnd) lines.push("**Planned end:** " + pig.plannedEnd);
+  return lines.join("\n");
 }
 
 function parsePlan(section, blockers) {
@@ -228,7 +270,7 @@ function demoteHeadings(text) {
   return String(text || "").replace(/^## /gm, "### ").replace(/^# /gm, "### ").trim();
 }
 
-function renderBundle(packageId, sourceDigest, parsed, pig, steps, status, criteria, conclusion, extras) {
+function renderBundle(packageId, sourceDigest, parsed, pig, steps, status, criteria, conclusion, extras, header) {
   const plan = steps.map((step, index) => {
     const marker = step.marker === "x" ? "x" : " ";
     return (index + 1) + ". [" + marker + "] " + step.text;
@@ -253,6 +295,7 @@ function renderBundle(packageId, sourceDigest, parsed, pig, steps, status, crite
 **Problem:** ${pig.problem}
 **Intent:** ${pig.intent}
 **Goal:** ${pig.goal}
+${header}
 
 ## Plan
 
@@ -318,8 +361,11 @@ export function prepareLegacyMigration(packageId, text) {
   const appendix = appendixMatches[0]?.body || "";
   const preserved = [...extras];
   if (appendix.trim()) preserved.push({ name: "Legacy Anhang", body: appendix });
-  const rendered = renderBundle(packageId, sourceDigest, parsed, pig, steps, status, criteria, conclusion, preserved);
-  const targetParsed = parsePackageDocument(rendered.packageText, { packageId });
+  const header = standardHeader(packageId, pig, warnings);
+  const rendered = renderBundle(packageId, sourceDigest, parsed, pig, steps, status, criteria, conclusion, preserved, header);
+  // Checked in the enforced standard mode so a migrated bundle stays valid in a
+  // repository that sets packageContract.standardFormatRequired.
+  const targetParsed = parsePackageDocument(rendered.packageText, { packageId, standardFormat: true });
   for (const diagnostic of targetParsed.diagnostics) {
     blockers.push({ code: "GENERATED_" + diagnostic.code, message: diagnostic.message });
   }

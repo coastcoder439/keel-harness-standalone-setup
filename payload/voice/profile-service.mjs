@@ -85,19 +85,37 @@ export function profileServiceEnvironment(env = process.env) {
 // The installed app's startup and profile routes are lazy: no TTS model loads.
 // The server runs on the app's own data directory (voicebox.db), so the profiles the user
 // created in the Voicebox app and the ones the dashboard creates are the same rows.
+// P34 (B244, P23-N17): every message says what is wrong and what to do, and the service is the Stimmendienst -- the
+// messages reach the owner through POST /api/accountability/voice/service ("Stimmendienst starten").
+// P34-R2: `memory` names the threshold the start checks (at least 3 GB free, os.freemem() below), not an amount
+// that is missing -- with 2.5 GB free, 0.5 GB are missing, not 3.
+// harness-dashboard-repair Plan-Schritt 28 (Gate V2), gemessen 28.09.2026: gleich nach einem Stopp brauchte
+// voicebox-server.exe (ein 513-MB-Einzelpaket, das sich beim Start entpackt) zweimal ueber 60 s, bevor es die erste
+// Logzeile schrieb (profile-process.json: peakCommitMiB 2,2 bzw. 16,4), ein kalter Start sonst 20-21 s. Der Start bei
+// Bedarf wartet deshalb bis zu 150 s statt nach 60 s abzubrechen.
+export const START_DEADLINE_MS = 150000;
+export const PROFILE_SERVICE_MESSAGES = {
+  occupied: 'Der Port des Stimmendienstes ist von einem anderen oder hängenden Programm belegt; es wurde nichts beendet. Beende es oder starte den Rechner neu, dann starte erneut.',
+  platform: 'Der Stimmendienst startet nur unter Windows. Auf diesem Rechner spricht die Cloud-Stimme.',
+  memory: 'Zu wenig freier Arbeitsspeicher: Der Stimmendienst braucht zum Start mindestens 3 GB. Schließe andere Programme und starte ihn erneut.',
+  notInstalled: 'Der Stimmendienst ist nicht installiert. Installiere ihn unter Einstellungen → Technik & Stimme → Sprache einrichten → „Stimmendienst installieren“.',
+  python: 'Für den Start des Stimmendienstes fehlt Python. Die Schritte stehen unter Einstellungen → Technik & Stimme → Sprache einrichten → „Technische Einzelheiten“.',
+  timeout: 'Der Stimmendienst wurde in 150 Sekunden nicht bereit und ist wieder beendet. Starte ihn erneut; Einzelheiten stehen in runtime/voice/profile-server.log.',
+};
+
 export async function startProfileService({ env = process.env, signal } = {}) {
   signal?.throwIfAborted();
   const existing = await probeProfileService(env);
   if (existing.available) return { base: existing.base, child: null, owned: false, stop: async () => {} };
-  if (existing.occupied) throw new Error('Der lokale Voicebox-Port ist durch einen anderen oder fehlerhaften Dienst belegt. Es wurde kein bestehender Prozess beendet.');
-  if (process.platform !== 'win32') throw new Error('Der installierte Profilservice benötigt den begrenzten Windows-Start.');
-  if (os.freemem() < 3 * 1024 ** 3) throw new Error('Für den begrenzten Stimmendienst werden mindestens 3 GiB freier Arbeitsspeicher benötigt.');
+  if (existing.occupied) throw new Error(PROFILE_SERVICE_MESSAGES.occupied);
+  if (process.platform !== 'win32') throw new Error(PROFILE_SERVICE_MESSAGES.platform);
+  if (os.freemem() < 3 * 1024 ** 3) throw new Error(PROFILE_SERVICE_MESSAGES.memory);
   const binary = voiceboxBinary(env);
-  await fs.access(binary).catch(() => { throw new Error('Die vorhandene Voicebox-Installation wurde nicht gefunden. Es wurde nichts installiert.'); });
+  await fs.access(binary).catch(() => { throw new Error(PROFILE_SERVICE_MESSAGES.notInstalled); });
   const voiceRoot = resolveVoiceRoot(env);
   const dataDir = voiceboxDataDir(env);
   const python = discoverVoiceInstallation(env).voicePython;
-  if (!python) throw new Error('Der vorhandene lokale Python-Interpreter für den begrenzten Dienststart fehlt.');
+  if (!python) throw new Error(PROFILE_SERVICE_MESSAGES.python);
   const temporary = path.join(voiceRoot, 'tmp');
   await fs.mkdir(temporary, { recursive: true });
   await fs.mkdir(dataDir, { recursive: true });
@@ -118,14 +136,14 @@ export async function startProfileService({ env = process.env, signal } = {}) {
   const abort = () => { void stop(); };
   signal?.addEventListener('abort', abort, { once: true });
   try {
-    const deadline = Date.now() + 60000;
+    const deadline = Date.now() + START_DEADLINE_MS;
     while (Date.now() < deadline && child.exitCode === null && child.signalCode === null && !startupError) {
       signal?.throwIfAborted();
       const status = await probeProfileService(env);
       if (status.available) return { base: existing.base, child, owned: true, dataDir, stop };
       await new Promise(resolve => setTimeout(resolve, 400));
     }
-    throw startupError || new Error('Voicebox wurde innerhalb von 60 Sekunden nicht bereit. Details: runtime/voice/profile-server.log. Ein gestarteter eigener Prozess wurde beendet.');
+    throw startupError || new Error(PROFILE_SERVICE_MESSAGES.timeout);
   } catch (error) { await stop(); throw error; }
   finally { signal?.removeEventListener('abort', abort); }
 }

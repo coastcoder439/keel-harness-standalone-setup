@@ -14,6 +14,8 @@ const {
   assertRepositoryRoot,
   assertUniqueNames,
   isPathInside,
+  listBundleGateFiles,
+  listPackageBundles,
   resolvePackageBundle,
   resolveRepositoryRoot,
   validatePackageId,
@@ -262,6 +264,32 @@ export function resolvePackageTarget(options = {}) {
   const invalidScopes = records.filter((record) => record.error);
   if (invalidScopes.length) fail("no valid active scope; " + invalidScopes.map((item) => item.scope + ": " + item.error).join("; "));
   fail("no package target; pass --package or activate exactly one scope");
+}
+
+// Every bundle of one repository as targets, resolved once: one repository
+// check, one scan of the active scopes and one listing of docs/packages. The
+// per-package checks are the same as resolvePackageTarget({ packageId }) so a
+// status built from these targets equals `package-cli status` for each one;
+// resolving each package separately repeated the Git call and the directory
+// listing per package (quadratic in the package count).
+export function resolveAllPackageTargets(options = {}) {
+  // verifiedRoot: the caller already bound this exact directory as the real
+  // repository root (the dashboard does so before it measures), so the Git
+  // process of assertRepositoryRoot is skipped; the path is still canonicalised.
+  const repoRoot = options.verifiedRoot === true && typeof options.root === "string"
+    ? realpathSync(options.root)
+    : repositoryForOptions(options);
+  const repoKey = validateRepoKey(options.repoKey || ".");
+  const records = listActiveScopes(repoRoot, { assertRoot: false, includeInvalid: true });
+  assertUniquePackageBindings(records);
+  return listPackageBundles(repoRoot, { assertRoot: false }).map((bundle) => {
+    assertPackageModeBoundary(repoRoot, bundle.packageId);
+    const active = records.filter((record) => !record.error && comparisonKey(record.packageId) === comparisonKey(bundle.packageId));
+    return targetFromBundle(repoRoot, repoKey, {
+      ...bundle,
+      gateFiles: listBundleGateFiles(repoRoot, bundle.packageDir),
+    }, active.length === 1 ? active[0].scope : null);
+  });
 }
 
 export function resolveRepository(options = {}) {
