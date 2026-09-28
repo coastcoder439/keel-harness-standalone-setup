@@ -13,6 +13,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { replaceFileSync } from "./atomic-file.mjs";
 import { resolveClaudeExecutable } from "./codex-plugin-bootstrap.mjs";
+import { CODEX_PIN, claudeWorkerModelArgs, resolvePackageExecutionModel } from "../process-models/index.mjs";
 import {
   launchProviderRun,
   readProviderRun,
@@ -389,27 +390,63 @@ function safeModel(value, fallback) {
   return text;
 }
 
-function delegation(provider, briefFile, options) {
-  const quoted = JSON.stringify(briefFile);
-  if (provider === "codex") {
-    const model = safeModel(options.model, "gpt-5.6-sol");
-    const effort = safeModel(options.effort, "max");
-    if (model !== "gpt-5.6-sol" || effort !== "max") {
-      fail("CODEX_DEFAULTS", "delegated Codex package work requires gpt-5.6-sol with effort max");
+// Modell eines Claude-Workers; „[1m]“ am Ende ist die Kontextwahl 1M (resolve.mjs, cliModel).
+export function workerModel(value) {
+  const text = String(value || "");
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}(?:\[1m\])?$/u.test(text)) fail("USAGE", "invalid model or effort identifier");
+  return text;
+}
+
+// OWNS-Pfade eines Leafs; die Codex-Sperre für Dashboard-Pakete hängt an genau diesen Werten.
+export function leafOwns(ledgerText) {
+  const line = String(ledgerText).match(/^OWNS:\s*(.+)$/mu);
+  return line ? line[1].split(",").map((item) => item.trim()).filter(Boolean) : [];
+}
+
+// Modellwahl je Prozess (new-harness-process-model-settings, Plan-Schritt 10): Anbieter und Modell der
+// Paket-Ausführung kommen aus harness-core/process-models (Einstellung, Voreinstellung Claude, oder
+// ausdrücklich im Aufruf, dann gegen die Regeln geprüft). Codex ist für Dashboard-Pakete gesperrt.
+function packageModel(context, options, owns, fallbackProvider) {
+  const provider = options.provider !== undefined ? String(options.provider) : fallbackProvider;
+  if (provider !== undefined && !PROVIDERS.has(provider)) fail("USAGE", "provider must be claude or codex");
+  let resolution;
+  try {
+    resolution = resolvePackageExecutionModel({ harnessRoot: context.harnessRoot, env: process.env, owns,
+      call: { provider, model: options.model, effort: options.effort } });
+  } catch (error) {
+    if (error?.name === "ProcessModelError" || error?.name === "ProcessModelUnavailableError") {
+      fail(error.code === "process_model_not_allowed" ? "PROVIDER_LOCKED" : "PROCESS_MODEL", error.message);
     }
+    throw error;
+  }
+  if (resolution.provider === "codex" && ((options.model && options.model !== CODEX_PIN.model) || (options.effort && options.effort !== CODEX_PIN.effort))) {
+    fail("CODEX_DEFAULTS", `delegated Codex package work requires ${CODEX_PIN.model} with effort ${CODEX_PIN.effort}`);
+  }
+  return resolution;
+}
+
+function delegation(resolution, briefFile) {
+  const quoted = JSON.stringify(briefFile);
+  const modelChoice = { source: resolution.source, label: resolution.label, side: resolution.side, ...(resolution.reason ? { reason: resolution.reason } : {}) };
+  if (resolution.provider === "codex") {
+    const model = safeModel(resolution.model, CODEX_PIN.model);
+    const effort = safeModel(resolution.effort, CODEX_PIN.effort);
     return {
-      provider,
+      provider: "codex",
       model,
       effort,
+      modelChoice,
       pluginCommand: `/codex:rescue --wait --fresh --model ${model} --effort ${effort} ` +
         `Read ${quoted}, execute exactly that bound leaf contract, and return the Codex runtime result unchanged.`,
     };
   }
+  const model = resolution.cliModel ? workerModel(resolution.cliModel) : null;
   return {
-    provider,
-    model: null,
+    provider: "claude",
+    model,
     effort: null,
-    pluginCommand: `claude -p --output-format stream-json --verbose ` +
+    modelChoice,
+    pluginCommand: `claude ${model ? `--model ${model} ` : ""}-p --output-format stream-json --verbose ` +
       `${JSON.stringify(`Read ${briefFile} and execute exactly that bound leaf contract.`)}`,
   };
 }
@@ -479,9 +516,9 @@ function prepare(context, options, explicitLeaf) {
     return { state, entry: existing, idempotent: true };
   }
   const leaf = leafForNext(context, state, explicitLeaf);
-  const provider = String(options.provider || "codex");
-  if (!PROVIDERS.has(provider)) fail("USAGE", "provider must be claude or codex");
   const ledger = ledgerRecord(context.packageInfo, leaf);
+  const modelResolution = packageModel(context, options, leafOwns(ledger.text));
+  const provider = modelResolution.provider;
   childOk(runNode(context.tools.gateCheck, ["--claim", "--root", context.repoRoot, "--package", context.packageId,
     "--scope", context.scope, "--leaf", leaf], { cwd: context.repoRoot }), "leaf claim");
   try {
@@ -501,7 +538,7 @@ function prepare(context, options, explicitLeaf) {
     };
     const brief = writeBrief(context, state, entry, ledger);
     Object.assign(entry, { briefFile: path.relative(context.repoRoot, brief.file).replaceAll("\\", "/"),
-      briefDigest: brief.digest, owns: brief.binding.owns, delegation: delegation(provider, brief.file, options) });
+      briefDigest: brief.digest, owns: brief.binding.owns, delegation: delegation(modelResolution, brief.file) });
     state.sessions[sessionId] = entry;
     transition(state, "session-prepared", sessionId, null, "prepared", { leaf, provider, attempt: 1 });
     saveState(context, state);
@@ -586,7 +623,7 @@ async function dispatch(context, options) {
           startTimeoutSeconds: options.startTimeoutSeconds || 30,
           maxTurns: options.maxTurns || 32,
           claudeExecutable: resolveClaudeExecutable(options.claudeExecutable),
-          claudePrefixArgs: options.claudePrefixArgs,
+          claudePrefixArgs: [...options.claudePrefixArgs, ...claudeWorkerModelArgs(entry.delegation)],
           attempt: entry.attempt || 1,
         });
       } catch (error) {
@@ -828,9 +865,9 @@ function reassignExecution(context, options) {
   }
   if (!["provider-start-failed", "provider-failed", "aborted", "timed-out", "vanished", "abort-requested", "timeout-requested"]
     .includes(source.state)) fail("SESSION_STATE", "source session is not reassignable");
-  const provider = String(options.provider || source.provider);
-  if (!PROVIDERS.has(provider)) fail("USAGE", "provider must be claude or codex");
   const ledger = ledgerRecord(context.packageInfo, source.leaf);
+  const modelResolution = packageModel(context, options, leafOwns(ledger.text), source.provider);
+  const provider = modelResolution.provider;
   packageBinding.createBinding({ startPath: context.repoRoot, packageId: context.packageId,
     scope: context.scope, sessionId: targetId, leaf: source.leaf, controlRoot: context.harnessRoot });
   const target = {
@@ -847,7 +884,7 @@ function reassignExecution(context, options) {
   };
   const brief = writeBrief(context, state, target, ledger);
   Object.assign(target, { briefFile: path.relative(context.repoRoot, brief.file).replaceAll("\\", "/"),
-    briefDigest: brief.digest, owns: brief.binding.owns, delegation: delegation(provider, brief.file, options) });
+    briefDigest: brief.digest, owns: brief.binding.owns, delegation: delegation(modelResolution, brief.file) });
   setSessionState(state, source, "reassigned", "session-reassigned", { replacedBy: targetId, reassignedAt: new Date().toISOString() });
   state.sessions[targetId] = target;
   transition(state, "session-prepared", targetId, null, "prepared", { leaf: target.leaf, provider, reassignedFrom: sourceId });
@@ -1604,7 +1641,8 @@ says so. --reverify always forces the full re-verification.
 --timeout S is the per-CHECK budget the gate runner receives, not the budget for
 a whole re-verification: the runner executes CHECKs serially, so the wall clock
 allows S seconds for every executable gate of the addressed ledgers plus a fixed
-margin. Codex defaults to gpt-5.6-sol with effort max. A provider return is
+margin. Without --provider the package-execution model choice applies (settings,
+otherwise Claude); Codex always runs its pin and never for dashboard packages. A provider return is
 accepted only after local gate re-verification. First execution of pending
 integration oracles requires the explicit integrate --approve-checks switch.
 integrate is idempotent: a repeat call runs the same bottom-up re-verification

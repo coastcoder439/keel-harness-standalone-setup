@@ -6,12 +6,29 @@
 > `gates/*.md` sidecars are the executable acceptance contract. `.unlazy/` is
 > ignored runtime only. Copy this file into the bundle as `PACKAGE.md` and
 > create `OWNER.md` from `templates/OWNER.md` before activation.
-> Sections stay in exactly this order; nothing appears between the PIG block
-> and `## Plan`.
+> Sections stay in exactly this order; nothing appears between the field block
+> and `## Plan`. Package standard (enforced by `package-cli lint` when
+> `.keel-harness.json` sets `packageContract.standardFormatRequired`): one line
+> each for Problem, Intent, Goal, Scope and Context in this order; Scope reads
+> `Drin: ... Nicht drin: ...` (Goal says how the end is recognised, Scope what
+> belongs to the package and what explicitly does not; the leaf `OWNS:` lists
+> stay the file ownership). Optional, directly under Context:
+> `**Planned start:** YYYY-MM-DD` and `**Planned end:** YYYY-MM-DD` (real
+> dates, start not after end; lint checks them wherever they appear).
+> Every plan step is exactly one line; a step that needs sub-points becomes
+> several numbered steps.
+> UI work copies what is finished: every UI step names the finished building
+> blocks it reuses (file, component) and only adapts data and labels — nothing
+> new and nothing removed without an owner order [Owner 26.09.2026: „Fertiges
+> kopieren und anpassen, nichts Neues"]. Dashboard work reads the work deck
+> `test-harness/dashboard/DESIGN.md` first and takes its build order from its
+> template (section 10).
 
 **Problem:** <what is concretely broken or wanted>
 **Intent:** <why - what the solution shall achieve>
 **Goal:** <the checkable target state>
+**Scope:** Drin: <what belongs to this package> Nicht drin: <what explicitly does not, with the package that owns it>
+**Context:** <short measured starting point: sources, numbers, neighbouring packages>
 
 ## Plan
 

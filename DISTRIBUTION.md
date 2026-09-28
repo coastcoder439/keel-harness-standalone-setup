@@ -22,6 +22,17 @@ and superseded digest caches are cleaned by the transactional lifecycle. The
 smoke check starts only that local HTTP runtime and reads `/` plus `/api/state`;
 it never starts a model, Voice provider, microphone, or audio process.
 
+The architecture picture's analysis plugin (Understand-Anything) ships as its
+approved source under `vendor/understand-anything-plugin/` next to
+`vendor/understand-anything.lock.json`, byte-exact and pinned by the lock
+file's directory checksum (manifest `provenance.understandAnything`). Its
+build outputs (`node_modules/`, `dist/`) are not delivered: when the Owner
+first enables an architecture picture in the Dashboard, the Dashboard runs the
+lock file's prebuild once in the background (`npx pnpm@<pnpm.required>`,
+network required), restores the plugin's `pnpm-lock.yaml`, and verifies the
+checksum before and after. Until that succeeds no analysis run starts, and the
+card names the reason of a failure.
+
 ## Transaction lifecycle
 
 Install performs every read-only check before it creates `.keel-harness/`.

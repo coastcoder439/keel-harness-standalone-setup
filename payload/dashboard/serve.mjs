@@ -1,9 +1,21 @@
 #!/usr/bin/env node
 
-// Startweg der installierten Auslieferung. Die Runtime kommt aus dem verifizierten
-// Runtime-Archiv. Sprachlaufzeit: --voice | --speech | --microphone starten die
-// lokalen Dienste aus ../voice VOR dem Web-Start; --no-inference pausiert die KI
-// (ohne Flag bleibt sie an, wie bisher).
+// Startweg der installierten Auslieferung (Gegenstueck zu dashboard/serve.mjs im Quellbaum).
+// Die Runtime kommt aus dem verifizierten Runtime-Archiv.
+//
+// Was mit dem Server wirklich startet (Stand 28.09.2026):
+// - der Web-Prozess (materialisierte Runtime, server.js) mit den Pfaden der Sprachlaufzeit in
+//   seiner Umgebung (voiceEnvironment in ../voice/launcher.mjs). Das sind Pfade, keine Dienste.
+// - --voice | --speech | --microphone schalten Sprachausgabe und Mikrofon frei, --no-inference
+//   pausiert die KI (ohne Flag: Sprache und Mikrofon aus, KI an). Vor dem Web-Start startet
+//   dabei KEIN Sprachdienst (startConfiguredVoice ist leer): Voicebox startet erst bei Bedarf aus
+//   dem Dashboard (Knopf „Stimmendienst starten“, POST /api/accountability/voice/service).
+// - KEIN Hintergrund-Auslöser für das Architekturbild, wie in dashboard/serve.mjs: es wird nur
+//   auf Knopfdruck aktualisiert (Knopf „Jetzt aktualisieren“ auf der Projektseite), und die Karte
+//   sagt daneben, wie viele Dateien sich seit der letzten Aktualisierung geändert haben und wie
+//   lange die her ist (Owner-Entscheid 28.09.2026: „nur auf knopfdruck mit angabe wieviel
+//   änderungen seit wielange her“). startArchitectureMapsTrigger in
+//   ../harness-core/architecture-maps/job.mjs bleibt bestehen, wird aber nicht gestartet.
 
 import { spawn } from "node:child_process";
 import path from "node:path";
@@ -50,22 +62,24 @@ const runtimeRoot = materializeDashboardRuntime({ dashboardRoot, harnessRoot });
 const serverFile = path.join(runtimeRoot, "server.js");
 const lease = acquireDashboardRuntimeLease({ harnessRoot, runtimeRoot });
 
+const webEnv = {
+  ...process.env,
+  HOSTNAME: "127.0.0.1",
+  PORT: String(port),
+  NODE_ENV: "production",
+  KEEL_HARNESS_ROOT: harnessRoot,
+  KEEL_HARNESS_REPOSITORY_ROOT: harnessRoot,
+  // Sprach-, Mikrofon- und KI-Zustand, die Pfade der Sprachlaufzeit und der
+  // gelieferte roles/-Ordner (der Quell-Fallback "../roles" zeigt aus dem
+  // materialisierten Runtime-Verzeichnis ins Leere).
+  ...voiceEnvironment({ harnessRoot, flags }).env,
+};
+
 let child;
 try {
   child = spawn(process.execPath, [serverFile], {
     cwd: runtimeRoot,
-    env: {
-      ...process.env,
-      HOSTNAME: "127.0.0.1",
-      PORT: String(port),
-      NODE_ENV: "production",
-      KEEL_HARNESS_ROOT: harnessRoot,
-      KEEL_HARNESS_REPOSITORY_ROOT: harnessRoot,
-      // Sprach-, Mikrofon- und KI-Zustand, die Pfade der Sprachlaufzeit und der
-      // gelieferte roles/-Ordner (der Quell-Fallback "../roles" zeigt aus dem
-      // materialisierten Runtime-Verzeichnis ins Leere).
-      ...voiceEnvironment({ harnessRoot, flags }).env,
-    },
+    env: webEnv,
     stdio: "inherit",
     windowsHide: true,
   });

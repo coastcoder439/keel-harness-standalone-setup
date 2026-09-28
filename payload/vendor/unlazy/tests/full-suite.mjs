@@ -24,6 +24,7 @@ export const UNLAZY_SUITES = Object.freeze([
   "package-lifecycle-tests.mjs",
   "package-contract-tests.mjs",
   "package-migrate-tests.mjs",
+  "package-standard-tests.mjs",
   "mvp-workbench-tests.mjs",
   "self-check.mjs",
 ]);

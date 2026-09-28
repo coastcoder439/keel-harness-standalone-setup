@@ -87,8 +87,18 @@ const targets = [...root.querySelectorAll('button, input, select')].filter(vis);
 const small = targets.filter(e => { const b = e.getBoundingClientRect(); return b.height < 24 || b.width < 24; }).length;
 const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT); let words = 0, node;
 while ((node = walker.nextNode())) { if (node.nodeType === 1 && ['BUTTON', 'A'].includes(node.tagName) && vis(node)) break; if (node.nodeType === 3 && vis(node.parentElement)) words += node.textContent.trim().split(/\s+/).filter(Boolean).length; }
-({ sizes: [...sizes.entries()].sort((a, b) => a[0] - b[0]), h1: root.querySelectorAll('h1').length, wordsBeforeFirstAction: words, smallControls: small, uppercase: textEls.filter(e => getComputedStyle(e).textTransform === 'uppercase').length });
+// Felder: ihr Wert ist kein Textknoten -- Schrift des Feldwerts und Kontrast des Feldrands (gegen Feldfuellung und Umgebung) eigens.
+const rgb = (v) => { const m = v.match(/rgba?\(([^)]+)\)/); if (!m) return null; const [r, g, b, a = 1] = m[1].split(/[ ,/]+/).filter(Boolean).map(Number); return { r, g, b, a }; };
+const lum = ({ r, g, b }) => [r, g, b].map(v => { const c = v / 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }).reduce((s, c, i) => s + c * [0.2126, 0.7152, 0.0722][i], 0);
+const ratio = (x, y) => { const [hi, lo] = [lum(x), lum(y)].sort((p, q) => q - p); return (hi + 0.05) / (lo + 0.05); };
+const fill = (e) => { for (let el = e; el; el = el.parentElement) { const c = rgb(getComputedStyle(el).backgroundColor); if (c && c.a > 0.5) return c; } return { r: 255, g: 255, b: 255 }; };
+const fields = [...root.querySelectorAll('input:not([type=checkbox]):not([type=radio]):not([type=hidden]), select, textarea')].filter(vis).map(e => { const st = getComputedStyle(e); const line = rgb(st.borderTopColor); const width = parseFloat(st.borderTopWidth); return { field: e.getAttribute('aria-label') || e.name || e.placeholder || e.tagName.toLowerCase(), valuePx: parseFloat(st.fontSize), border: width > 0 && line ? Math.round(Math.min(ratio(line, fill(e)), ratio(line, fill(e.parentElement))) * 100) / 100 : 0 }; });
+({ sizes: [...sizes.entries()].sort((a, b) => a[0] - b[0]), h1: root.querySelectorAll('h1').length, wordsBeforeFirstAction: words, smallControls: small, uppercase: textEls.filter(e => getComputedStyle(e).textTransform === 'uppercase').length,
+   fieldValuePx: [...new Set(fields.map(f => f.valuePx))].sort((a, b) => a - b), fieldTextBelow12: fields.filter(f => f.valuePx < 12).length, fieldBorderBelow3: fields.filter(f => f.border < 3).map(f => `${f.field}: ${f.border}`) });
 ```
+
+Feldwerte zaehlen zu den Schriftgroessen der Ansicht (`fieldValuePx` zu `sizes` legen); ein Feldrand ohne Rahmen (`border: 0`)
+braucht eine andere Kante mit 3:1 (Fuellung gegen Umgebung), sonst ist er ein Befund.
 
 Kontrast rechnen (WCAG-Formel, Python): Luminanz je Kanal `c/12.92` bzw. `((c+0.055)/1.055)^2.4`,
 `L = 0.2126 R + 0.7152 G + 0.0722 B`, Verhaeltnis `(L1+0.05)/(L2+0.05)`. Beispiel aus dem Bau:

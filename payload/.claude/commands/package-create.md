@@ -6,9 +6,14 @@ description: Erfasst den unveraenderlichen Owner-Auftrag und baut ein neues Unla
    Planungsbindung:
    `node <HARNESS_ROOT>/harness-core/execution/package-bootstrap.mjs begin --harness-root <HARNESS_ROOT> --root <REPO> --package <ID> --scope <ID> --session <PLANER_SESSION> --json`.
 2. Schreibe in diesem Bundle zuerst den Originalauftrag unveraendert nach `OWNER.md`.
-   Leite danach Requirements `R -> C`, PIG, Plan, den vollstaendigen Depth Tree,
-   disjunkte `OWNS`, Abhaengigkeiten und Gate-Orakel ab. Die Bootstrap-Bindung erlaubt
-   ausschliesslich `OWNER.md`, `PACKAGE.md`, `GATES.md` und unmittelbare `gates/*.md`.
+   Leite danach Requirements `R -> C`, die Felder im Paketstandard (je eine Zeile
+   Problem, Intent, Goal, Scope als `Drin: ... Nicht drin: ...`, Context, optional
+   Planned start und Planned end als JJJJ-MM-TT), Plan (ein Schritt je Zeile), den
+   vollstaendigen Depth Tree, disjunkte `OWNS`, Abhaengigkeiten und Gate-Orakel ab.
+   Die Bootstrap-Bindung erlaubt ausschliesslich `OWNER.md`, `PACKAGE.md`, `GATES.md`
+   und unmittelbare `gates/*.md`. Ohne Planungsbindung legt der Skill `package-standard`
+   oder `package-cli.mjs create --package <ID> --owner-request-file <DATEI>` dasselbe
+   Standardformat samt `OWNER.md` an.
 3. Pruefe den fertigen Vertrag read-only mit
    `node <HARNESS_ROOT>/vendor/unlazy/scripts/package-cli.mjs doctor --root <REPO> --package <ID>`.
    Keine Platzhalter, Ueberschneidungen, ungemappten Requirements oder zweiten Statusorte
