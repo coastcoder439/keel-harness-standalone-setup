@@ -3,10 +3,10 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.3.1"
+    "version": "1.3.2"
   },
   "payload": {
-    "treeSha256": "7c89f083f97927e2ee2fa908e28de77ce18ee252250d9231c49b2a9f71521df3"
+    "treeSha256": "88e9e05eac86a2f483d3651cdaf782942c8b1f250b06a5d13464ff2b2279a35e"
   },
   "provenance": {
     "unlazy": {
@@ -888,19 +888,19 @@
       "mode": "copy",
       "generated": true,
       "sourceBytes": 334,
-      "sourceSha256": "ff24cb523adc33089beb899935ba1b3c429503df56e398b120033accdc14e3ca",
+      "sourceSha256": "54d2ff16abbe6d5b0659ce2bb08b88fcc07697302196942c97feb0d0e4d3254c",
       "bytes": 334,
-      "sha256": "ff24cb523adc33089beb899935ba1b3c429503df56e398b120033accdc14e3ca"
+      "sha256": "54d2ff16abbe6d5b0659ce2bb08b88fcc07697302196942c97feb0d0e4d3254c"
     },
     {
       "source": "generated/dashboard/runtime.keel.gz",
       "target": "dashboard/runtime.keel.gz",
       "mode": "copy",
       "generated": true,
-      "sourceBytes": 16574685,
-      "sourceSha256": "a58613fa366b8fb9c91a92697bbd10db6fd8337bf40481f35e64681f885aee4f",
-      "bytes": 16574685,
-      "sha256": "a58613fa366b8fb9c91a92697bbd10db6fd8337bf40481f35e64681f885aee4f"
+      "sourceBytes": 16575213,
+      "sourceSha256": "4c020eeae1b67baae3ad334613125577782abcd190c2f39a3a91ac561681de6b",
+      "bytes": 16575213,
+      "sha256": "4c020eeae1b67baae3ad334613125577782abcd190c2f39a3a91ac561681de6b"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-serve.mjs",
@@ -1350,7 +1350,7 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 571,
-      "sha256": "a79da1ea8f5259cd6c20213cb62e9a54a0d869e62b8f27810b7b4c216c52048b"
+      "sha256": "330d0dc549f326e962f1416485efae2ac9c2d469d354a2ac3d579347dc9e5b76"
     },
     {
       "source": "test-harness/roles/accountability.md",
