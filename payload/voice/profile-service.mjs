@@ -98,8 +98,8 @@ export const PROFILE_SERVICE_MESSAGES = {
   occupied: 'Der Port des Stimmendienstes ist von einem anderen oder hängenden Programm belegt; es wurde nichts beendet. Beende es oder starte den Rechner neu, dann starte erneut.',
   platform: 'Der Stimmendienst startet nur unter Windows. Auf diesem Rechner spricht die Cloud-Stimme.',
   memory: 'Zu wenig freier Arbeitsspeicher: Der Stimmendienst braucht zum Start mindestens 3 GB. Schließe andere Programme und starte ihn erneut.',
-  notInstalled: 'Der Stimmendienst ist nicht installiert. Installiere ihn unter Einstellungen → Technik & Stimme → Sprache einrichten → „Stimmendienst installieren“.',
-  python: 'Für den Start des Stimmendienstes fehlt Python. Die Schritte stehen unter Einstellungen → Technik & Stimme → Sprache einrichten → „Technische Einzelheiten“.',
+  notInstalled: 'Der Stimmendienst ist nicht installiert. Installiere ihn unter Einstellungen → Sprache & Stimme → Sprache einrichten → „Stimmendienst installieren“.',
+  python: 'Für den Start des Stimmendienstes fehlt Python. Die Schritte stehen unter Einstellungen → Sprache & Stimme → Sprache einrichten → „Technische Einzelheiten“.',
   timeout: 'Der Stimmendienst wurde in 150 Sekunden nicht bereit und ist wieder beendet. Starte ihn erneut; Einzelheiten stehen in runtime/voice/profile-server.log.',
 };
 
