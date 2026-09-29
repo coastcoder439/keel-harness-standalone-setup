@@ -29,7 +29,7 @@ function choiceLabel(choice) {
 export function selectProcessModel({ processId, store, env = {}, legacy = null, owns, call }) {
   const definition = processDefinition(processId);
   if (!definition) throw new ProcessModelError(404, "process_model_unknown", `Unbekannter Prozess „${String(processId).slice(0, 60)}“.`);
-  if (!definition.choosable) throw new ProcessModelError(400, "process_model_not_choosable", `${definition.label} wird unter Technik & Stimme gewählt.`);
+  if (!definition.choosable) throw new ProcessModelError(400, "process_model_not_choosable", `${definition.label} wird unter Sprache & Stimme gewählt.`);
   const stored = store?.choices?.[processId] || null;
   const fallbackDefault = defaultChoice(processId, { env, legacy });
   if (call && (call.provider || call.model || call.effort)) {
