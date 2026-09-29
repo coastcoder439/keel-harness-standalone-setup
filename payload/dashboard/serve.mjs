@@ -10,6 +10,10 @@
 //   pausiert die KI (ohne Flag: Sprache und Mikrofon aus, KI an). Vor dem Web-Start startet
 //   dabei KEIN Sprachdienst (startConfiguredVoice ist leer): Voicebox startet erst bei Bedarf aus
 //   dem Dashboard (Knopf „Stimmendienst starten“, POST /api/accountability/voice/service).
+// - Nach dem Web-Start, im Server-Prozess selbst (dashboard/instrumentation.ts -> lib/harness/boot-services.ts): ist in den
+//   Einstellungen der Voice Agent an, starten Voicebox (der Stimmendienst), das Sprechmodell und ein gewähltes lokales
+//   Ollama-Modell von selbst; ist Architekturbilder an, wird das Werkzeug im Hintergrund eingerichtet (kein Analyse-Lauf).
+//   Beides kein Auslöser dieser Datei (Paket sprache-stimme-2026-09-29, Owner 29.09.2026).
 // - KEIN Hintergrund-Auslöser für das Architekturbild, wie in dashboard/serve.mjs: es wird nur
 //   auf Knopfdruck aktualisiert (Knopf „Jetzt aktualisieren“ auf der Projektseite), und die Karte
 //   sagt daneben, wie viele Dateien sich seit der letzten Aktualisierung geändert haben und wie

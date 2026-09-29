@@ -84,7 +84,7 @@ export function codexLockedFor(owns) {
 export function processRuleReason(processId, provider, { owns } = {}) {
   const definition = processDefinition(processId);
   if (!definition) return "Unbekannter Prozess";
-  if (!definition.choosable) return "Wird unter Technik & Stimme gewählt";
+  if (!definition.choosable) return "Wird unter Sprache & Stimme gewählt";
   const side = PROVIDERS[provider]?.side;
   if (!side) return "Unbekannter Anbieter";
   if (!definition.sides.includes(side)) return `Für diesen Prozess nicht erlaubt: nur ${definition.sides.map((item) => SIDE_LABEL[item]).join(" und ")}`;
@@ -118,7 +118,7 @@ function cleanModel(value) {
 export function validateChoice(processId, choice, { catalog, owns } = {}) {
   const definition = processDefinition(processId);
   if (!definition) throw new ProcessModelError(404, "process_model_unknown", `Unbekannter Prozess „${String(processId).slice(0, 60)}“.`);
-  if (!definition.choosable) invalid(`${definition.label} wird unter Technik & Stimme gewählt, nicht in der Prozessliste.`);
+  if (!definition.choosable) invalid(`${definition.label} wird unter Sprache & Stimme gewählt, nicht in der Prozessliste.`);
   if (!choice || typeof choice !== "object" || Array.isArray(choice)) invalid("Die Modellwahl fehlt.");
   if (choice.kind === "auto") {
     if (!definition.auto) invalid(`Für ${definition.label} gibt es „automatisch“ nicht.`);

@@ -69,7 +69,7 @@ export const CLASSIFIER_MISSING = "Klassifizierer noch nicht angeschlossen";
 /**
  * Die Prozessliste aus design/process-models.md Punkt 1. `sides`: erlaubte Seite; `providers`:
  * Anbieter, die der Prozess tatsächlich starten kann; `choosable`: Wahl in der Prozessliste
- * (Sprache wird in „Technik & Stimme“ gewählt); `auto`: Platz „automatisch“ erlaubt;
+ * (Sprache wird in „Sprache & Stimme“ gewählt); `auto`: Platz „automatisch“ erlaubt;
  * `fallback`: Regel bei nicht verfügbarem Modell (Punkt 6).
  */
 export const PROCESSES = Object.freeze([

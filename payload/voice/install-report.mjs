@@ -78,8 +78,8 @@ export function voiceModelReport(env = process.env) {
     files, missingFiles: absent.map(file => file.name),
     step: absent.length === 0
       ? 'Der Dateisatz ist vollständig. Geladen oder klanglich geprüft ist das Modell damit noch nicht.'
-      // P34 (B244, P23-N18): the place that exists -- the card "Stimmen-Modelle" in the group "Technik & Stimme".
-      : `Lade „${VOICE_MODEL.displayName}“ unter Einstellungen → Technik & Stimme → Stimmen-Modelle herunter (Ziel: ${voiceboxModelsDir(env)}); KEEL_VOICEBOX_MODELS_DIR verschiebt den gemeinsamen Modell-Cache.`,
+      // P34 (B244, P23-N18): the place that exists -- the card "Stimmen-Modelle" in the group "Sprache & Stimme".
+      : `Lade „${VOICE_MODEL.displayName}“ unter Einstellungen → Sprache & Stimme → Stimmen-Modelle herunter (Ziel: ${voiceboxModelsDir(env)}); KEEL_VOICEBOX_MODELS_DIR verschiebt den gemeinsamen Modell-Cache.`,
     message: absent.length === 0
       ? `Alle ${VOICE_MODEL.files.length} Dateien liegen in ${directory}.`
       : `${absent.length} von ${VOICE_MODEL.files.length} Dateien fehlen in ${directory}.`,
@@ -95,7 +95,7 @@ export function hearingModelReport(env = process.env, variant = 'base') {
   return {
     variant: model.variant, model_name: model.model_name, repository: model.repository, stage: model.stage,
     directory: cacheRoot, installed,
-    message: installed ? `Whisper „${model.stage}“ (${model.model_name}) liegt in ${cacheRoot}.` : `Whisper „${model.stage}“ (${model.model_name}) fehlt in ${cacheRoot}; herunterladen unter Einstellungen → Technik & Stimme → Sprache → „Alle Whisper-Modelle“.`,
+    message: installed ? `Whisper „${model.stage}“ (${model.model_name}) liegt in ${cacheRoot}.` : `Whisper „${model.stage}“ (${model.model_name}) fehlt in ${cacheRoot}; herunterladen unter Einstellungen → Sprache & Stimme → Sprache → „Alle Whisper-Modelle“.`,
   };
 }
 
@@ -127,8 +127,8 @@ export function installationReport(env = process.env) {
   const database = path.join(dataDir, 'voicebox.db');
   const python = found(plan.voicePython);
   const missing = [];
-  // P34 (B244, P23-N18): the places that exist -- Einstellungen → Technik & Stimme → Sprache einrichten.
-  if (!binary) missing.push({ label: plan.voicebox.label, env: plan.voicebox.key, searched: plan.voicebox.candidates.filter(Boolean), step: 'Installiere den Stimmendienst unter Einstellungen → Technik & Stimme → Sprache einrichten → „Stimmendienst installieren“.', note: 'Liegt er schon auf dem Rechner, setze stattdessen die Umgebungsvariable auf seine Programmdatei.' });
+  // P34 (B244, P23-N18): the places that exist -- Einstellungen → Sprache & Stimme → Sprache einrichten.
+  if (!binary) missing.push({ label: plan.voicebox.label, env: plan.voicebox.key, searched: plan.voicebox.candidates.filter(Boolean), step: 'Installiere den Stimmendienst unter Einstellungen → Sprache & Stimme → Sprache einrichten → „Stimmendienst installieren“.', note: 'Liegt er schon auf dem Rechner, setze stattdessen die Umgebungsvariable auf seine Programmdatei.' });
   if (!python) missing.push({ label: plan.voicePython.label, env: plan.voicePython.key, searched: plan.voicePython.candidates.filter(Boolean), ...pythonSetupGuide(plan) });
   const voicebox = {
     installed: missing.length === 0,
