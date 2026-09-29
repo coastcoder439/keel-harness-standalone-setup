@@ -102,6 +102,7 @@ const TEST_PATHS = new Set([
   "test/codex-plugin-integration.test.js",
   "test/dashboard-runtime-archive.test.js",
   "test/distribution-lifecycle.test.js",
+  "test/harness-self-update.test.js",
   "test/endgoal-e2e.test.js",
   "test/evidence-integrity.test.js",
   "test/external-boundary.test.js",
