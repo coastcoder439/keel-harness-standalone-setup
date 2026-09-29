@@ -49,17 +49,28 @@ Der Agent öffnet `console.cloud.google.com`, geht über die Projektauswahl auf 
 Projekt** und setzt den **Projektnamen = Inhaber + Zweck + Umfang**, z. B.
 „Beispiel Admin-Vollzugriff" (höchstens 30 Zeichen: Buchstaben, Ziffern, Leerzeichen,
 Bindestrich). Die **Projekt-ID** ist derselbe Name klein geschrieben mit Bindestrichen
-(z. B. `wee-google-admin-vollzugriff`); sie ist später nicht mehr änderbar.
+(z. B. `beispiel-admin-vollzugriff`); sie ist später nicht mehr änderbar. Mit dem Wort „google"
+lehnte die Konsole die ID ab („Die Projekt-ID ist nicht verfügbar", 29.09.2026).
 
 **Warum:** Das Projekt ist der Google-Zugang der ganzen Organisation, nicht eines
 einzelnen Harness-Ordners. Weitere Nutzer und Installationen hängen sich an dasselbe
 Projekt; am Namen muss im Google-Konto sofort erkennbar sein, wem der Zugang gehört und
 dass er vollen Zugriff gibt [Owner 29.09.2026].
 
-## Schritt 3 — Den ganzen Kosmos in EINEM Klick aktivieren
+## Schritt 3 — Den ganzen Kosmos aktivieren (nur fehlende, je Aufruf höchstens 20)
 
-Auf einem **frischen** Projekt aktiviert **ein** Sammel-Link alle APIs zusammen. Der Agent
-öffnet:
+Google aktiviert **höchstens 20 Schnittstellen je Aufruf** („A single request can enable a
+maximum of 20 services at a time", Service-Usage-Doku zu `services.batchEnable`) und der
+Aufruf **scheitert ganz**, wenn eine Schnittstelle der Liste schon aktiv ist
+[Owner 29.09.2026; Beleg Projekt `beispiel-admin-vollzugriff`: alle 40 in einem Aufruf
+scheiterten mit „Aktivierung fehlgeschlagen", 20 + 19 gingen durch]. Deshalb in dieser
+Reihenfolge:
+
+1. Unter **APIs und Dienste → Aktivierte APIs und Dienste** lesen, was schon an ist. Google
+   schaltet in jedem neuen Projekt selbst eine Reihe ein, darunter
+   „Google Cloud Storage JSON API" (`storage-api.googleapis.com`) aus der Liste unten.
+2. Aus der Liste unten **nur die fehlenden** nehmen.
+3. Sie in **Teilen von höchstens 20** über den Sammel-Link aktivieren:
 
 ```
 https://console.cloud.google.com/flows/enableapi?apiid=<APIID-LISTE>&project=<PROJEKT-ID>
@@ -83,18 +94,13 @@ storage-api.googleapis.com,
 tagmanager.googleapis.com,tasks.googleapis.com,vault.googleapis.com,youtube.googleapis.com
 ```
 
-Im Flow: **„Projekt bestätigen" → Weiter → APIs aktivieren**. Fertig, wenn „Sie haben
-Folgendes aktiviert" erscheint.
+Im Flow je Teil: **„Projekt bestätigen" → Weiter → Aktivieren**. Fertig, wenn jeder Teil
+„Sie haben Folgendes aktiviert" zeigt.
 
 Das sind **40 bewusst aktivierte APIs**. Unter „Aktivierte APIs und Dienste" zählt die
 Konsole danach **mehr** (typisch um die 60) — die Differenz sind GCP-Standard-APIs, die
 Google in jedem neuen Projekt selbst anschaltet (BigQuery, Logging, Monitoring,
 Storage und weitere). Das ist normal und kein Fehler.
-
-> **Wichtige Bedingung:** Der Sammel-Link funktioniert nur, wenn im Projekt **noch keine**
-> dieser APIs einzeln aktiviert wurde. Ist z. B. Gmail schon an, kippt der Flow mit
-> „Aktivierung fehlgeschlagen". Auf einem frischen Projekt (Schritt 2) tritt das nicht auf —
-> deshalb keine API vorab einzeln einschalten.
 
 Ein Teil des Sets (z. B. `admin`, `vault`, `reseller`, `licensing`, `cloudchannel`,
 `chromemanagement`, `cloudidentity`, `meet`, `chat`, `classroom`) ist nur mit einem echten
@@ -112,7 +118,10 @@ Schritte** und füllt aus:
   Kontakt = deine Konto-Mail.
 - **Nutzertyp: Extern** (ein `gmail.com`-Konto hat nur diese Wahl; ein Workspace-Konto
   könnte „Intern" nehmen).
-- Richtlinie bestätigen → Meldung „OAuth-Konfiguration erstellt".
+- Den Haken „Ich akzeptiere die Richtlinie zu Nutzerdaten für Google API-Dienste" setzt der
+  **Agent selbst** und klickt durch; das Ja dazu gibt der Mensch einmal beim Start der
+  Einrichtung im Chat, nicht mitten im Lauf [Owner 29.09.2026]. Danach „Erstellen" →
+  Meldung „OAuth-Konfiguration erstellt".
 
 ## Schritt 5 — Dich selbst als Testnutzer eintragen
 
@@ -143,6 +152,10 @@ Loopback-Rücklauf).
 Im Dialog „OAuth-Client erstellt" auf **„JSON herunterladen"** klicken. Die Warnung „Sie
 können den Clientschlüssel nicht mehr ansehen, nachdem Sie das Dialogfeld geschlossen haben"
 ist normal — die heruntergeladene Datei enthält alles. Behandle die JSON wie ein Passwort.
+
+**Sofort danach verschiebt der Agent die Datei aus dem Download-Ordner an den Ablageort aus
+Schritt 7 (Weg B)**; im Download-Ordner bleibt nichts liegen. Der Mensch klickt nur
+„Herunterladen", er wählt keinen Ordner und verschiebt nichts [Owner 29.09.2026].
 
 ## Schritt 7 — Zugangsdatei ablegen
 
