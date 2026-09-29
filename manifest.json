@@ -3,14 +3,14 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.3.9",
+    "version": "1.3.10",
     "updateSource": {
       "repository": "https://github.com/coastcoder439/keel-harness-standalone-setup",
       "branch": "main"
     }
   },
   "payload": {
-    "treeSha256": "b00b844501af66093dc102b402c1e88239e03c7adfaae3c590fd52411bed4560"
+    "treeSha256": "8a1fc54f6dfe9c0595083827b5ca1a19ded759c2042f57a261ffeb12d6efb3c0"
   },
   "provenance": {
     "unlazy": {
@@ -892,19 +892,19 @@
       "mode": "copy",
       "generated": true,
       "sourceBytes": 334,
-      "sourceSha256": "f6d86010e32f4f10454531e71818a1fd19118491e85ddec2f8d733c7167467a7",
+      "sourceSha256": "062aab6a33e9dcc551782a0b1afc6f5e3a8aa8a88f0a971e9ac8916d61e3c8bb",
       "bytes": 334,
-      "sha256": "f6d86010e32f4f10454531e71818a1fd19118491e85ddec2f8d733c7167467a7"
+      "sha256": "062aab6a33e9dcc551782a0b1afc6f5e3a8aa8a88f0a971e9ac8916d61e3c8bb"
     },
     {
       "source": "generated/dashboard/runtime.keel.gz",
       "target": "dashboard/runtime.keel.gz",
       "mode": "copy",
       "generated": true,
-      "sourceBytes": 16669782,
-      "sourceSha256": "e9099d71f1fc6982a72a319b13d303e39edb7e78e1daac116dc3e64ad2240535",
-      "bytes": 16669782,
-      "sha256": "e9099d71f1fc6982a72a319b13d303e39edb7e78e1daac116dc3e64ad2240535"
+      "sourceBytes": 16677507,
+      "sourceSha256": "3b2a53a65eec84cb7f98630eed01da32a0d716dbc3e8ea2a4b430aa3d3add87d",
+      "bytes": 16677507,
+      "sha256": "3b2a53a65eec84cb7f98630eed01da32a0d716dbc3e8ea2a4b430aa3d3add87d"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-serve.mjs",
@@ -1373,8 +1373,8 @@
       "generated": false,
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
-      "bytes": 571,
-      "sha256": "3990e0491e4a0d8af496f98945b7917e269c56b4131d6f04f7c8436176037466"
+      "bytes": 572,
+      "sha256": "3e196975979267c2cde5c555d00c6c927b8228177514fb7d58ca4e073facbf3c"
     },
     {
       "source": "test-harness/roles/accountability.md",

@@ -1,7 +1,7 @@
 # Distribution update contract
 
 - Product: `keel-harness`
-- Current version: `1.1.0`
+- Current version: see `manifest.json` `product.version` (single source of truth; no version number is kept in this file)
 - Update owner: **Keel Harness distribution maintainer**
 - Version policy: monotonic SemVer; a changed artifact without a version bump
   is rejected.
@@ -20,6 +20,17 @@ the new payload from those originals, stages the complete result, promotes it
 through the journal, and restores the previously installed version if any
 step fails. Downgrade requires an explicit uninstall followed by installation
 of the chosen older artifact.
+
+Five targets are Owner data, not distribution content, and are exempt from the
+clean-files rule: `.claude/launch.json` (dev servers), `.claude/mutation-policy.json`,
+`docs/08-sessions-rollen.md` (running session roles), `docs/harness-instance.md` and
+`docs/tool-landscape.md`. A fresh installation lays the template down only where the
+file is absent; an existing file stays untouched, and every later edit is a local
+change that never blocks `status`, `doctor` or `--upgrade`. An upgrade never rewrites
+such a file and an uninstall keeps an edited one. `launch.json` and
+`08-sessions-rollen.md` became Owner data in 1.3.10 (before, each edit there was drift
+and locked the Dashboard update button); state written by an older release is accepted
+and reclassified by the next upgrade.
 
 The production Dashboard is delivered as a platform-neutral verified archive.
 Rebuild its production Next runtime before rebuilding the standalone payload;
