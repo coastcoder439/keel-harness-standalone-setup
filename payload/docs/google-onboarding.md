@@ -42,11 +42,19 @@ Daten liefern soll (inkl. 2-Faktor). Danach übernimmt der Agent.
 
 ## Schritt 2 — Neues Projekt anlegen
 
+**Vorher prüfen:** Hat das Konto schon ein Projekt für diesen Zugang, wird es
+weiterverwendet und kein zweites angelegt. Andere Projekte im Konto werden nicht angefasst.
+
 Der Agent öffnet `console.cloud.google.com`, geht über die Projektauswahl auf **Neues
-Projekt** und setzt den **Projektnamen deterministisch = Name des Harness**, gelesen aus
-`docs/harness-instance.md` (Feld „Owning repository"). Der Name wird **nicht erfunden**.
-Nach „Erstellen" bekommt das Projekt eine eigene Projekt-ID: dein Harness-Name plus ein
-Zahlensuffix, das Google anhängt.
+Projekt** und setzt den **Projektnamen = Inhaber + Zweck + Umfang**, z. B.
+„Beispiel Admin-Vollzugriff" (höchstens 30 Zeichen: Buchstaben, Ziffern, Leerzeichen,
+Bindestrich). Die **Projekt-ID** ist derselbe Name klein geschrieben mit Bindestrichen
+(z. B. `wee-google-admin-vollzugriff`); sie ist später nicht mehr änderbar.
+
+**Warum:** Das Projekt ist der Google-Zugang der ganzen Organisation, nicht eines
+einzelnen Harness-Ordners. Weitere Nutzer und Installationen hängen sich an dasselbe
+Projekt; am Namen muss im Google-Konto sofort erkennbar sein, wem der Zugang gehört und
+dass er vollen Zugriff gibt [Owner 29.09.2026].
 
 ## Schritt 3 — Den ganzen Kosmos in EINEM Klick aktivieren
 
@@ -100,7 +108,8 @@ ist der Kosmos vollständig, falls das Konto später eine Domain bekommt. Für e
 Der Agent öffnet die **Google Auth Platform** (`console.cloud.google.com/auth`) → **Erste
 Schritte** und füllt aus:
 
-- App-Name = Harness-Name (wie Schritt 2), Support-Mail und Kontakt = deine Konto-Mail.
+- App-Name = voller Name der Organisation + „Google Admin-Vollzugriff" (z. B. „Beispiel-Organisation – Google Admin-Vollzugriff"; den sieht jeder Nutzer beim Anmelden), Support-Mail und
+  Kontakt = deine Konto-Mail.
 - **Nutzertyp: Extern** (ein `gmail.com`-Konto hat nur diese Wahl; ein Workspace-Konto
   könnte „Intern" nehmen).
 - Richtlinie bestätigen → Meldung „OAuth-Konfiguration erstellt".

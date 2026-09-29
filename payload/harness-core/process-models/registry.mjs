@@ -16,6 +16,24 @@ export const PROCESS_MODELS_SCHEMA = 1;
 /** Installationsmodell für lokale Prozesse, wenn keine Umgebungsvariable gesetzt ist. */
 export const DEFAULT_LOCAL_MODEL = "gemma4:latest";
 
+/**
+ * Lokale Modelle, die die Karte „Modell des Assistenten“ zum Herunterladen empfiehlt (harness-dashboard-repair
+ * Plan-Schritt 41, Gate V9). Nur hier stehen Namen; die Empfehlung nach Arbeitsspeicher liefert
+ * lib/companion/system-profile.ts (recommendations.ollama.maxParamsB). `paramsB` = Parameter in Milliarden.
+ * Beleg der Namen: `ollama list` auf dem Owner-Rechner (evidence/voice/inventar.md EM-3, 28.09.2026); ein frischer
+ * `ollama pull` ist damit nicht belegt.
+ */
+export const RECOMMENDED_LOCAL_MODELS = Object.freeze([
+  Object.freeze({ model: "qwen3.5:4b", paramsB: 4, note: "klein und schnell, läuft auch mit wenig Arbeitsspeicher" }),
+  Object.freeze({ model: "gemma4:12b", paramsB: 12, note: "größer und besser, braucht deutlich mehr Arbeitsspeicher" }),
+]);
+
+/** Empfohlene Modelle, die nicht größer sind als die Grenze des Systemprofils; größte zuerst. */
+export function recommendedLocalModels(maxParamsB) {
+  const limit = Number.isFinite(maxParamsB) ? Number(maxParamsB) : 0;
+  return RECOMMENDED_LOCAL_MODELS.filter((entry) => entry.paramsB <= limit).sort((a, b) => b.paramsB - a.paramsB);
+}
+
 /** Umgebungsvariablen, die ein Modell oder einen Anbieter vorgeben; nur hier gelesen. */
 export const MODEL_ENVIRONMENT = Object.freeze({
   localModel: "ACCOUNTABILITY_OLLAMA_MODEL",

@@ -68,8 +68,8 @@ export function recommendGpu(profile) {
 export function recommendOllama(profile) {
   const total = Number(profile?.memory?.totalMiB) || 8192;
   const gpu = profile?.voicebox?.gpuAvailable === true;
-  if (total >= 64000) return { value: '30b:32K', maxParamsB: 30, context: 32768, reason: `${gb(total)} GB RAM: Modelle bis 30B Parameter (z. B. qwen3.5:30b) mit 32K Kontext; ohne CUDA-GPU rechnet Ollama auf der CPU — 7–14B antworten spürbar schneller.` };
-  if (total >= 32000) return { value: '14b:32K', maxParamsB: 14, context: 32768, reason: `${gb(total)} GB RAM: Modelle bis 14B Parameter (z. B. qwen3.5:14b) mit 32K Kontext; 4B (qwen3.5:4b) bleibt die schnelle Wahl${gpu ? '' : ' auf der CPU'}.` };
+  if (total >= 64000) return { value: '30b:32K', maxParamsB: 30, context: 32768, reason: `${gb(total)} GB RAM: Modelle bis 30B Parameter mit 32K Kontext; ohne CUDA-GPU rechnet Ollama auf der CPU — 7–14B antworten spürbar schneller.` };
+  if (total >= 32000) return { value: '14b:32K', maxParamsB: 14, context: 32768, reason: `${gb(total)} GB RAM: Modelle bis 14B Parameter mit 32K Kontext; ein Modell mit 4B bleibt die schnelle Wahl${gpu ? '' : ' auf der CPU'}.` };
   if (total >= 16000) return { value: '8b:24K', maxParamsB: 8, context: 24576, reason: `${gb(total)} GB RAM: Modelle bis 8B Parameter mit 24K Kontext; daneben brauchen Voicebox-Modell und Browser Platz.` };
   return { value: '4b:8K', maxParamsB: 4, context: 8192, reason: `${gb(total)} GB RAM: nur kleine Modelle (bis 4B) mit 8K Kontext, sonst schwappt Ollama auf die Platte.` };
 }
