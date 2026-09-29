@@ -3,10 +3,14 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.3.4"
+    "version": "1.3.5",
+    "updateSource": {
+      "repository": "https://github.com/coastcoder439/keel-harness-standalone-setup",
+      "branch": "main"
+    }
   },
   "payload": {
-    "treeSha256": "23c1f24a1c4bb2b67ef77b1376d07652ae60244a5dcfa5995c343e265c6232cc"
+    "treeSha256": "441340442a62d78a32e246db6d4d7b2809af9aedb27f592e39faec530e2bae13"
   },
   "provenance": {
     "unlazy": {
@@ -50,7 +54,7 @@
     },
     "deprecations": []
   },
-  "fileCount": 590,
+  "fileCount": 592,
   "files": [
     {
       "source": "test-harness/.agents/skills/completeness/SKILL.md",
@@ -557,10 +561,10 @@
       "target": ".claude/shell-mutation-guard.js",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 27497,
-      "sourceSha256": "507f14333dc3c8afc8ad285f6b656200c909b1be6ea5fe909ad971abbc1652d3",
-      "bytes": 27497,
-      "sha256": "507f14333dc3c8afc8ad285f6b656200c909b1be6ea5fe909ad971abbc1652d3"
+      "sourceBytes": 27535,
+      "sourceSha256": "d7d62db4feb254bc0d69e1ce2f555b1796c95b6a7aaca7138072fc9964a30cd6",
+      "bytes": 27535,
+      "sha256": "d7d62db4feb254bc0d69e1ce2f555b1796c95b6a7aaca7138072fc9964a30cd6"
     },
     {
       "source": "test-harness/.claude/skills/completeness/SKILL.md",
@@ -888,19 +892,19 @@
       "mode": "copy",
       "generated": true,
       "sourceBytes": 334,
-      "sourceSha256": "80f5995a23eb947be1fe47ac88a2848c1ec25dc239907e3c05dbb359eeeb4262",
+      "sourceSha256": "c300760fd7a82186de81d171a44980c843189cc44e57dca921c61d98f821977b",
       "bytes": 334,
-      "sha256": "80f5995a23eb947be1fe47ac88a2848c1ec25dc239907e3c05dbb359eeeb4262"
+      "sha256": "c300760fd7a82186de81d171a44980c843189cc44e57dca921c61d98f821977b"
     },
     {
       "source": "generated/dashboard/runtime.keel.gz",
       "target": "dashboard/runtime.keel.gz",
       "mode": "copy",
       "generated": true,
-      "sourceBytes": 16576836,
-      "sourceSha256": "9ba5c961f68026a835d0c162438fb0e8984fa4070d165c5a3bd3fb04b10ddd11",
-      "bytes": 16576836,
-      "sha256": "9ba5c961f68026a835d0c162438fb0e8984fa4070d165c5a3bd3fb04b10ddd11"
+      "sourceBytes": 16593473,
+      "sourceSha256": "d3c75db4953b3da0754158f81999136c3d1df1270b17805516ea119aa5264818",
+      "bytes": 16593473,
+      "sha256": "d3c75db4953b3da0754158f81999136c3d1df1270b17805516ea119aa5264818"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-serve.mjs",
@@ -1283,6 +1287,26 @@
       "sha256": "0e9d5df1fef9735f03b3d9713f47aa554f7ae3e7e7f235c16d09d71073e0ef67"
     },
     {
+      "source": "test-harness/harness-core/self-update/update-core.mjs",
+      "target": "harness-core/self-update/update-core.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 12289,
+      "sourceSha256": "6067ffacb3fc8bfd73760ef91030e500dc3814d3cadc9e194dee8277eff48480",
+      "bytes": 12289,
+      "sha256": "6067ffacb3fc8bfd73760ef91030e500dc3814d3cadc9e194dee8277eff48480"
+    },
+    {
+      "source": "test-harness/harness-core/self-update/update-helper.mjs",
+      "target": "harness-core/self-update/update-helper.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 16245,
+      "sourceSha256": "97015edd49b15ae7483a8d7e16e5988b0bee0715684dfd6659672083da266647",
+      "bytes": 16245,
+      "sha256": "97015edd49b15ae7483a8d7e16e5988b0bee0715684dfd6659672083da266647"
+    },
+    {
       "source": "test-harness/licenses/elkjs/LICENSE.md",
       "target": "licenses/elkjs/LICENSE.md",
       "mode": "copy",
@@ -1350,7 +1374,7 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 571,
-      "sha256": "2c6c333a7a61cc3fd34aff711829b85107fa4da7c98f2b2dc6ec031b0a8937b2"
+      "sha256": "3ea025442d00de845d74d45744fc39fad953c863c97860941c5748523809202f"
     },
     {
       "source": "test-harness/roles/accountability.md",
