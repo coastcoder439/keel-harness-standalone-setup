@@ -1,7 +1,7 @@
 # Keel Harness standalone delivery
 
 This directory is the generic, project-local Keel Harness distribution. The
-manifest names product version `1.1.0`, pins the exact Unlazy upstream base and
+manifest names the product version (`manifest.json` `product.version`, the single source of truth), pins the exact Unlazy upstream base and
 the adapted vendored tree, and assigns update and deprecation ownership. Build
 provenance may name distributor source paths; installed content never carries
 distributor sessions, accounts, project identity, local settings, or secrets.
