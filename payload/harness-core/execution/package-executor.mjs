@@ -343,16 +343,92 @@ function setSessionState(state, entry, next, type, detail = {}) {
   return entry;
 }
 
+// Owner 30.09.2026: "dass der Paketstarter sich weigert, ein neues Paket ... zu starten. Wenn du das fixst,
+// dann muss ich hier auch nichts verschieben." A package activated weeks ago and never touched again still
+// held its OWNS and blocked every later package on the same files (measured: six scopes idle for three weeks).
+// A dormant scope is one whose runtime has not changed for DORMANT_DAYS and has no wave deadline ahead; only
+// such a scope that actually overlaps is set aside, unchanged, to .unlazy/.suspended/ and reported. Its
+// package bundle stays untouched and can be started again. A younger overlap keeps blocking.
+const DORMANT_DAYS = 7;
+const DORMANT_MS = DORMANT_DAYS * 24 * 60 * 60 * 1000;
+
+function newestRuntimeChange(directory) {
+  let newest = fs.lstatSync(directory).mtimeMs;
+  const pending = [directory];
+  let visited = 0;
+  while (pending.length) {
+    if (++visited > 10_000) return Date.now();
+    const current = pending.pop();
+    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      const info = fs.lstatSync(full);
+      // A link inside runtime state is unusual; treat the scope as live instead of following it.
+      if (info.isSymbolicLink()) return Date.now();
+      newest = Math.max(newest, info.mtimeMs);
+      if (info.isDirectory()) pending.push(full);
+    }
+  }
+  return newest;
+}
+
+function waveDeadlineAhead(directory, now) {
+  let dispatchState;
+  try { dispatchState = JSON.parse(fs.readFileSync(path.join(directory, "dispatch.json"), "utf8")); }
+  catch { return false; }
+  const deadlines = [];
+  const collect = (value) => {
+    if (!value || typeof value !== "object") return;
+    for (const [key, item] of Object.entries(value)) {
+      if (/deadline/iu.test(key) && typeof item === "string") deadlines.push(Date.parse(item));
+      else if (item && typeof item === "object") collect(item);
+    }
+  };
+  collect(dispatchState.waves);
+  return deadlines.some((deadline) => Number.isFinite(deadline) && deadline > now);
+}
+
+function suspendDormantOverlaps(context, overlaps, now = Date.now()) {
+  const suspended = [];
+  const scopes = [...new Set(overlaps.filter((item) => item.kind === "owns-overlap").map((item) => item.scope))];
+  for (const scope of scopes) {
+    if (scope === context.scope || scope.startsWith(".")) continue;
+    const directory = path.join(context.repoRoot, ".unlazy", scope);
+    let info;
+    try { info = fs.lstatSync(directory); } catch { continue; }
+    if (info.isSymbolicLink() || !info.isDirectory()) continue;
+    const lastChange = newestRuntimeChange(directory);
+    if (now - lastChange < DORMANT_MS || waveDeadlineAhead(directory, now)) continue;
+    const root = path.join(context.repoRoot, ".unlazy", ".suspended");
+    fs.mkdirSync(root, { recursive: true });
+    const destination = path.join(root, scope + "-" + new Date(now).toISOString().replace(/[:.]/gu, "-"));
+    fs.renameSync(directory, destination);
+    suspended.push({ scope, lastChange: new Date(lastChange).toISOString(),
+      movedTo: path.relative(context.repoRoot, destination).split(path.sep).join("/") });
+  }
+  return suspended;
+}
+
 function ensureActive(context) {
-  const args = ["activate", "--root", context.repoRoot, "--package", context.packageId, "--scope", context.scope];
-  childOk(runNode(context.tools.packageCli, args, { cwd: context.repoRoot }), "package activation");
+  const args = ["activate", "--root", context.repoRoot, "--package", context.packageId, "--scope", context.scope, "--json"];
+  const activation = childOk(runNode(context.tools.packageCli, args, { cwd: context.repoRoot }), "package activation");
+  try {
+    const retired = JSON.parse(activation).retiredScopes;
+    if (Array.isArray(retired) && retired.length) context.retiredScopes = retired;
+  } catch { /* an older Unlazy prints no JSON report; activation itself already succeeded */ }
   childOk(runNode(context.tools.packageCli, ["doctor", "--root", context.repoRoot, "--package", context.packageId],
     { cwd: context.repoRoot }), "package doctor");
   // Audit 06.09.2026, B1: the schema proves disjoint OWNS inside one package only. Two packages
   // active in the same repository must not claim the same files, or every "bound leaf owns this
   // path" authorization would accept both. Measured by "[ownership] a second active package with
   // overlapping OWNS blocks activation until it is gone".
-  const overlaps = packageOwnership.crossPackageOverlaps(context.repoRoot, context.packageId, context.scope);
+  let overlaps = packageOwnership.crossPackageOverlaps(context.repoRoot, context.packageId, context.scope);
+  if (overlaps.length) {
+    const suspended = suspendDormantOverlaps(context, overlaps);
+    if (suspended.length) {
+      context.suspendedScopes = suspended;
+      overlaps = packageOwnership.crossPackageOverlaps(context.repoRoot, context.packageId, context.scope);
+    }
+  }
   if (overlaps.length) {
     fail("PACKAGE_CROSS_OWNERSHIP_OVERLAP", "another active package claims ownership this package needs: " +
       overlaps.slice(0, 5).map(packageOwnership.describeConflict).join("; "), 1);
@@ -1672,6 +1748,8 @@ async function main() {
     result = { idempotent: prepared.idempotent, originalOwnerDigest: prepared.state.originalOwnerDigest,
       originalOwnerRequestDigest: prepared.state.originalOwnerRequestDigest,
       originalGoal: prepared.state.originalGoal, originalGoalDigest: prepared.state.originalGoalDigest,
+      ...(context.retiredScopes ? { retiredScopes: context.retiredScopes } : {}),
+      ...(context.suspendedScopes ? { suspendedScopes: context.suspendedScopes } : {}),
       ...publicEntry(prepared.entry) };
   } else if (options.command === "dispatch") result = await dispatch(context, options);
   else if (options.command === "return") result = await returnLeaf(context, options);

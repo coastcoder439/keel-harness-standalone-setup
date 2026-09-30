@@ -3,14 +3,14 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.3.10",
+    "version": "1.3.11",
     "updateSource": {
       "repository": "https://github.com/coastcoder439/keel-harness-standalone-setup",
       "branch": "main"
     }
   },
   "payload": {
-    "treeSha256": "8a1fc54f6dfe9c0595083827b5ca1a19ded759c2042f57a261ffeb12d6efb3c0"
+    "treeSha256": "d29019fa511c5af95735faeb5e5e60972f6c00de3aad893d7924c919fc25c7d7"
   },
   "provenance": {
     "unlazy": {
@@ -27,9 +27,9 @@
         "adapted": 30,
         "added": 28,
         "removed": 0,
-        "sha256": "293c559862b2d26aee4e9a254d0dcd596a6f1bf9d27a1136f3d29b612bcbcae2"
+        "sha256": "c294590febf263fc663d99c3e38993b81ade8db5f7cd9c6b2ada61a0d9fa33bb"
       },
-      "vendoredTreeSha256": "483e09b46c68d0893feb939804c53d6929ad2ecc6e90279c891dd7c7b15d930c",
+      "vendoredTreeSha256": "8c883ec4af8b1734325a3b1e9ad6a091818031e2e93de558cb800d8d39497ae3",
       "adaptation": "The exact upstream base is pinned by revision; the delivered adapted tree is pinned separately by its deterministic tree digest."
     },
     "understandAnything": {
@@ -892,19 +892,19 @@
       "mode": "copy",
       "generated": true,
       "sourceBytes": 334,
-      "sourceSha256": "062aab6a33e9dcc551782a0b1afc6f5e3a8aa8a88f0a971e9ac8916d61e3c8bb",
+      "sourceSha256": "b4c1e9598a57287b4ab25a5dc7f86d367fe5e098d9aa69aa57bf58fa4c3cbb5c",
       "bytes": 334,
-      "sha256": "062aab6a33e9dcc551782a0b1afc6f5e3a8aa8a88f0a971e9ac8916d61e3c8bb"
+      "sha256": "b4c1e9598a57287b4ab25a5dc7f86d367fe5e098d9aa69aa57bf58fa4c3cbb5c"
     },
     {
       "source": "generated/dashboard/runtime.keel.gz",
       "target": "dashboard/runtime.keel.gz",
       "mode": "copy",
       "generated": true,
-      "sourceBytes": 16677507,
-      "sourceSha256": "3b2a53a65eec84cb7f98630eed01da32a0d716dbc3e8ea2a4b430aa3d3add87d",
-      "bytes": 16677507,
-      "sha256": "3b2a53a65eec84cb7f98630eed01da32a0d716dbc3e8ea2a4b430aa3d3add87d"
+      "sourceBytes": 16679346,
+      "sourceSha256": "5c90e6de092204d9e6a0a9045328b0ffa9a1496262fabfcf6accf8850490daad",
+      "bytes": 16679346,
+      "sha256": "5c90e6de092204d9e6a0a9045328b0ffa9a1496262fabfcf6accf8850490daad"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-serve.mjs",
@@ -1191,10 +1191,10 @@
       "target": "harness-core/execution/package-executor.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 93906,
-      "sourceSha256": "b20a44b3d054bcd803c0b0448bac322c66fcc1d972076c3f4f09b453e2bfd460",
-      "bytes": 93906,
-      "sha256": "b20a44b3d054bcd803c0b0448bac322c66fcc1d972076c3f4f09b453e2bfd460"
+      "sourceBytes": 97803,
+      "sourceSha256": "bae337aac48ab040bdd5c4b66e0ebd20a815749c40381895e130f9a80355095b",
+      "bytes": 97803,
+      "sha256": "bae337aac48ab040bdd5c4b66e0ebd20a815749c40381895e130f9a80355095b"
     },
     {
       "source": "test-harness/harness-core/execution/provider-runtime.mjs",
@@ -1374,7 +1374,7 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 572,
-      "sha256": "3e196975979267c2cde5c555d00c6c927b8228177514fb7d58ca4e073facbf3c"
+      "sha256": "a2d3e36cf1e32ff65029ddb3fbaf146957be7be48ba85461aabc0c2be2063cf5"
     },
     {
       "source": "test-harness/roles/accountability.md",
@@ -5451,10 +5451,10 @@
       "target": "vendor/unlazy/scripts/lib/package-lifecycle.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 43103,
-      "sourceSha256": "f30098a0ecf995e63a985867ac13d3f309ba2afd785a77033f11a1318f02f99e",
-      "bytes": 43103,
-      "sha256": "f30098a0ecf995e63a985867ac13d3f309ba2afd785a77033f11a1318f02f99e"
+      "sourceBytes": 45624,
+      "sourceSha256": "d0c43f12df84a1008e822507e8782d55fdbbec75726a4767f00df0b6a46ecb77",
+      "bytes": 45624,
+      "sha256": "d0c43f12df84a1008e822507e8782d55fdbbec75726a4767f00df0b6a46ecb77"
     },
     {
       "source": "vendor/unlazy/scripts/lib/package-measure.mjs",
@@ -5741,10 +5741,10 @@
       "target": "vendor/unlazy/tests/package-lifecycle-tests.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 20730,
-      "sourceSha256": "de9ccfe2edf2cbd5bb96aec7670e740d53ae42ef4b26ea76989f8dc8c8d274e5",
-      "bytes": 20730,
-      "sha256": "de9ccfe2edf2cbd5bb96aec7670e740d53ae42ef4b26ea76989f8dc8c8d274e5"
+      "sourceBytes": 22550,
+      "sourceSha256": "c829f7ec4b5047e220153abc58fdc2114af046ab36a17b0af60dcfc5aae6d0e7",
+      "bytes": 22550,
+      "sha256": "c829f7ec4b5047e220153abc58fdc2114af046ab36a17b0af60dcfc5aae6d0e7"
     },
     {
       "source": "vendor/unlazy/tests/package-migrate-tests.mjs",
