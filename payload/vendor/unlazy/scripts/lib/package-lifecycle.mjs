@@ -503,6 +503,45 @@ function lifecycleRegistry(repoRoot) {
   return join(repoRoot, ".unlazy", "lifecycle-registry");
 }
 
+// Owner 30.09.2026: "dass der Paketstarter sich weigert, ein neues Paket ... zu starten. Wenn du das fixst,
+// dann muss ich hier auch nichts verschieben." A runtime scope whose package.ref names a bundle that no
+// longer exists in the repository (the package was removed or renamed) is an orphan: nothing can resume
+// it, and it used to block every later activation in the repository. Only that exact case is retired:
+// the directory moves unchanged to .unlazy/.retired/ (ignored runtime, nothing deleted) and the activation
+// reports it. Any other invalid runtime keeps blocking.
+const PACKAGE_REF = /^docs\/packages\/([A-Za-z0-9][A-Za-z0-9._-]*)\r?\n?$/u;
+
+function orphanedScopePackage(repoRoot, scope) {
+  const ref = join(repoRoot, ".unlazy", scope, "package.ref");
+  if (!existsSync(ref)) return null;
+  const info = lstatSync(ref);
+  if (info.isSymbolicLink() || !info.isFile() || info.size > 4096) return null;
+  const match = readFileSync(ref, "utf8").match(PACKAGE_REF);
+  if (!match) return null;
+  const packages = join(repoRoot, "docs", "packages");
+  if (existsSync(join(packages, match[1])) || existsSync(join(packages, match[1] + ".md"))) return null;
+  return match[1];
+}
+
+function retireOrphanedScopes(repoRoot, invalidRecords, now) {
+  const retired = [];
+  for (const record of invalidRecords) {
+    const scopeDirectory = join(repoRoot, ".unlazy", record.scope);
+    if (validateScopeId(record.scope) || !existsSync(scopeDirectory)) continue;
+    const info = lstatSync(scopeDirectory);
+    if (info.isSymbolicLink() || !info.isDirectory()) continue;
+    const packageId = orphanedScopePackage(repoRoot, record.scope);
+    if (!packageId) continue;
+    const retiredRoot = join(repoRoot, ".unlazy", ".retired");
+    mkdirSync(retiredRoot, { recursive: true, mode: 0o700 });
+    assertNoLinkedComponent(repoRoot, retiredRoot);
+    const destination = join(retiredRoot, record.scope + "-" + now.replace(/[:.]/gu, "-"));
+    renameSync(scopeDirectory, destination);
+    retired.push({ scope: record.scope, packageId, movedTo: relative(repoRoot, destination).split("\\").join("/") });
+  }
+  return retired;
+}
+
 export async function activatePackage(options) {
   const repoRoot = realpathSync(resolve(options.root));
   const packageId = String(options.packageId || "");
@@ -524,8 +563,15 @@ export async function activatePackage(options) {
 
   return withFileLock(repoRoot, lifecycleRegistry(repoRoot), async () => {
     cleanActivationRemnants(repoRoot, scope);
-    const records = listActiveScopes(repoRoot, { assertRoot: false, includeInvalid: true });
-    const invalidRecords = records.filter((record) => record.error);
+    let records = listActiveScopes(repoRoot, { assertRoot: false, includeInvalid: true });
+    let invalidRecords = records.filter((record) => record.error);
+    const retiredScopes = invalidRecords.length
+      ? retireOrphanedScopes(repoRoot, invalidRecords, options.now || new Date().toISOString())
+      : [];
+    if (retiredScopes.length) {
+      records = listActiveScopes(repoRoot, { assertRoot: false, includeInvalid: true });
+      invalidRecords = records.filter((record) => record.error);
+    }
     if (invalidRecords.length) {
       throw lifecycleError("invalid active runtime blocks activation: " +
         invalidRecords.map((record) => record.scope + ": " + record.error).join("; "));
@@ -543,6 +589,7 @@ export async function activatePackage(options) {
         action: "activate",
         activated: false,
         recovered: true,
+        retiredScopes,
         repoRoot,
         repoKey: options.repoKey || ".",
         packageId,
@@ -584,6 +631,7 @@ export async function activatePackage(options) {
       action: "activate",
       activated: true,
       recovered: false,
+      retiredScopes,
       repoRoot,
       repoKey: options.repoKey || ".",
       packageId,
