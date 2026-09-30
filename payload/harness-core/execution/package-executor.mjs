@@ -57,7 +57,7 @@ const COMMANDS = new Set([
   "start", "next", "dispatch", "return", "verify", "resume", "integrate", "status", "close",
   "abort", "abandon", "heartbeat", "liveness", "timeout", "retry", "reassign", "recover",
   "duty-assess", "duty-add", "duty-resolve", "duty-waive",
-  "recover-close", "publish",
+  "recover-close", "publish", "review-manual",
 ]);
 const MAX_WAVE_MEMBERS = 8;
 
@@ -141,6 +141,7 @@ function parseArgs(argv) {
     else if (key === "--trigger") options.trigger = take(key);
     else if (key === "--due-state") options.dueState = take(key);
     else if (key === "--gate") options.gate = take(key);
+    else if (key === "--evidence") options.evidence = take(key);
     else if (key === "--owner-ok") options.ownerOk = ownerWording(take(key));
     else if (key === "--reverify") options.reverify = true;
     else if (key === "--receipt") options.receipt = take(key);
@@ -1090,6 +1091,180 @@ function waiveDuty(context, options) {
   return { duty: result.duties[duty.id], ownerOk: record, waiverReceipt: receipt.receipt };
 }
 
+// Owner 30.09.2026, "los" auf den Vorschlag: "Neuer Befehl im Harness, etwa package-executor.mjs
+// review-manual --gate [id] --evidence [datei], nur der Orchestrator darf ihn aufrufen; er hakt nur Gates
+// ohne Pruefbefehl ab, verlangt eine Beleg-Datei im Paket und schreibt Datum und Sitzung mit; freie
+// Aenderungen an Gate-Dateien bleiben gesperrt." Anlass: im Paket owner-rules-from-memory konnte kein
+// Agent die drei manuellen Gates abhaken -- gate-check setzt [x] nur aus CHECK-Ergebnissen, und paket-gate
+// sperrt Gate-Dateien fuer jede Sitzung (OUTSIDE_LEAF_OWNS). Diese Grenzen bleiben: der Befehl ist der eine
+// Weg, ein Gate OHNE CHECK abzuhaken, und er schreibt nur die Haken- und EVIDENCE-Zeile genau dieses Gates.
+// Proven by test/manual-gate-review.test.js.
+const REVIEW_SESSION = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
+const WORKING_LEAF_STATES = new Set(["prepared", "starting", "running", "abort-requested", "timeout-requested"]);
+
+// LEDGER:GATE in der Schreibweise, die gate-check selbst ausgibt (GATES:M1, leaf-work:L2) oder als Datei
+// (GATES.md:M1, gates/leaf-work.md:L2). Der Doppelpunkt vor der Gate-ID ist der letzte.
+function reviewTarget(context, value) {
+  const text = String(value || "");
+  const split = text.lastIndexOf(":");
+  if (split <= 0 || split === text.length - 1) {
+    fail("USAGE", "review-manual requires --gate LEDGER:GATE, for example GATES.md:M1 or leaf-work:L2");
+  }
+  const ledger = text.slice(0, split).replaceAll("\\", "/");
+  const gateId = id(text.slice(split + 1), "gate");
+  let relative;
+  if (/^GATES(?:\.md)?$/u.test(ledger)) relative = "GATES.md";
+  else {
+    const match = ledger.match(/^(?:gates\/)?((?:leaf|node)-[A-Za-z0-9][A-Za-z0-9._-]{0,58}?)(?:\.md)?$/u);
+    if (!match) fail("USAGE", "unknown ledger " + ledger + "; use GATES.md or gates/<leaf-|node-name>.md");
+    relative = "gates/" + match[1] + ".md";
+  }
+  const file = path.join(context.packageInfo.packageDir, ...relative.split("/"));
+  if (!fs.existsSync(file) || !fs.lstatSync(file).isFile()) fail("GATE_MISSING", "ledger does not exist in this package: " + relative, 1);
+  const leaf = relative.startsWith("gates/leaf-") ? relative.slice("gates/".length, -".md".length) : null;
+  if (leaf && !context.packageInfo.leaves.includes(leaf)) fail("GATE_MISSING", "leaf ledger is not in the Depth Tree: " + leaf, 1);
+  return { relative, file, gateId, leaf };
+}
+
+// Der Beleg liegt unter evidence/ DIESES Pakets (nicht unter evidence/close/, das gehoert dem Abschluss),
+// ist eine einzelne regulaere, nicht leere Datei und wird mit seiner Pruefsumme gebunden.
+function reviewEvidence(context, value) {
+  const raw = String(value || "").replaceAll("\\", "/");
+  if (!raw) fail("USAGE", "review-manual requires --evidence evidence/<file>");
+  const packagePrefix = "docs/packages/" + context.packageId + "/";
+  const inside = raw.startsWith(packagePrefix) ? raw.slice(packagePrefix.length) : raw;
+  const absolute = path.resolve(context.packageInfo.packageDir, ...inside.split("/"));
+  const evidenceDir = path.join(context.packageInfo.packageDir, "evidence");
+  if (!repository.isPathInside(evidenceDir, absolute) ||
+      repository.samePath(path.join(evidenceDir, "close"), absolute) ||
+      repository.isPathInside(path.join(evidenceDir, "close"), absolute)) {
+    fail("REVIEW_EVIDENCE", "the evidence file must lie under evidence/ of package " + context.packageId +
+      " (evidence/close/ belongs to close)", 1);
+  }
+  if (!fs.existsSync(absolute)) fail("REVIEW_EVIDENCE", "evidence file does not exist: " + raw, 1);
+  const info = fs.lstatSync(absolute);
+  if (!info.isFile() || info.isSymbolicLink() || (typeof info.nlink === "number" && info.nlink !== 1)) {
+    fail("REVIEW_EVIDENCE", "evidence must be one single-link regular file: " + raw, 1);
+  }
+  if (!repository.isPathInside(fs.realpathSync(evidenceDir), fs.realpathSync(absolute))) {
+    fail("REVIEW_EVIDENCE", "evidence path leaves evidence/ through a link: " + raw, 1);
+  }
+  const bytes = fs.readFileSync(absolute);
+  if (!bytes.length) fail("REVIEW_EVIDENCE", "evidence file is empty: " + raw, 1);
+  const relative = path.relative(context.packageInfo.packageDir, absolute).replaceAll("\\", "/");
+  if (/[;\0-\x1f]/u.test(relative)) fail("REVIEW_EVIDENCE", "evidence path must not contain ';' or control characters", 1);
+  return { relative, sha256: crypto.createHash("sha256").update(bytes).digest("hex") };
+}
+
+// Nur der Orchestrator: kein Prozess eines gestarteten Leaf-Arbeiters (provider-runtime setzt
+// KEEL_PACKAGE_SESSION), keine Leaf-Sitzung dieses Pakets, keine Sitzung mit einer Leaf-Bindung.
+function assertReviewer(context, state, sessionId) {
+  const worker = String(process.env.KEEL_PACKAGE_SESSION || "").trim();
+  if (worker) {
+    fail("REVIEW_NOT_ORCHESTRATOR", "review-manual runs only in the orchestrating session; this process belongs to " +
+      "the bound leaf worker " + worker, 1);
+  }
+  const leafSessions = new Set([...Object.keys(state.sessions || {}), ...Object.keys(state.history?.sessions || {})]);
+  if (leafSessions.has(sessionId)) {
+    fail("REVIEW_NOT_ORCHESTRATOR", "session " + sessionId + " is a leaf session of this package; " +
+      "a leaf never reviews a gate", 1);
+  }
+  try {
+    packageBinding.findSessionBinding(context.repoRoot, sessionId, { controlRoot: context.harnessRoot });
+  } catch (error) {
+    if (/found 0|no active Harness runtime/u.test(String(error.message))) return;
+  }
+  fail("REVIEW_NOT_ORCHESTRATOR", "session " + sessionId + " holds a leaf binding; review-manual runs only " +
+    "in the orchestrating session", 1);
+}
+
+// Zeitpunkt: kein Leaf-Gate, solange ein Arbeiter an dem Leaf ist (seine Bindung haengt am Ledger-Text);
+// Knoten- und Wurzel-Gates bottom-up erst, wenn jedes Leaf-Gate erfuellt ist; nichts mehr, sobald die
+// Integration begonnen hat, denn deren Checkpoint friert die Ledger ein.
+function assertReviewMoment(context, state, target) {
+  if (state.integration?.state === "prepared" || state.integration?.state === "committed") {
+    fail("REVIEW_AFTER_INTEGRATION", "the integration checkpoint already froze the ledgers; a manual review " +
+      "now would change integrated content", 1);
+  }
+  const working = Object.values(state.sessions || {})
+    .filter((entry) => WORKING_LEAF_STATES.has(entry.state) && (!target.leaf || entry.leaf === target.leaf));
+  if (working.length) {
+    fail("REVIEW_LEAF_BUSY", "a bound leaf worker is still on " + working.map((entry) => entry.leaf + "=" +
+      entry.state).join(", ") + "; review after the provider returned", 1);
+  }
+  if (!target.leaf) {
+    const open = context.packageInfo.leaves.filter((leaf) => ledgerRecord(context.packageInfo, leaf).open);
+    if (open.length) {
+      fail("REVIEW_ORDER", "root and node gates are reviewed bottom-up after every leaf gate is met; open: " +
+        open.join(", "), 1);
+    }
+  }
+}
+
+async function reviewManual(context, options) {
+  ensureActive(context);
+  if (!options.sessionId) fail("USAGE", "review-manual requires --session ID of the orchestrating session");
+  const sessionId = String(options.sessionId);
+  if (!REVIEW_SESSION.test(sessionId)) fail("USAGE", "--session must match " + REVIEW_SESSION);
+  const state = readState(context, true);
+  assertReviewer(context, state, sessionId);
+  const target = reviewTarget(context, options.gate);
+  const parseGates = await loadGateParser(context.repoRoot, context.unlazyRoot);
+  const before = fs.readFileSync(target.file, "utf8");
+  const doc = parseGates(before);
+  if (doc.errors.length) fail("LEDGER_INVALID", target.relative + ": " + doc.errors.join("; "), 1);
+  const gate = doc.gates.find((item) => item.id === target.gateId);
+  if (!gate) fail("GATE_MISSING", "gate " + target.gateId + " is not in " + target.relative, 1);
+  if (doc.abandoned.has(gate.id)) fail("GATE_ABANDONED", "gate " + target.gateId + " is abandoned", 1);
+  if (gate.check) {
+    fail("GATE_EXECUTABLE", "gate " + target.relative + ":" + gate.id + " has a CHECK; only gate-check ticks it " +
+      "from its own result", 1);
+  }
+  assertReviewMoment(context, state, target);
+  const evidence = reviewEvidence(context, options.evidence);
+  const qualified = target.relative + ":" + gate.id;
+  const bound = "file=" + evidence.relative + "; sha256=" + evidence.sha256;
+  const met = gate.checked && gate.evidence && !/^pending$/iu.test(gate.evidence);
+  if (met) {
+    if (gate.evidence.startsWith("manual-review;") && gate.evidence.endsWith(bound)) {
+      return { packageId: context.packageId, scope: context.scope, gate: qualified, reviewed: true,
+        idempotent: true, evidence: evidence.relative, evidenceSha256: evidence.sha256, evidenceLine: gate.evidence };
+    }
+    fail("GATE_ALREADY_MET", "gate " + qualified + " is already met with other evidence: " + gate.evidence, 1);
+  }
+  const date = todayLocal();
+  const value = "manual-review; date=" + date + "; session=" + sessionId + "; " + bound;
+  const lines = [...doc.lines];
+  lines[gate.line] = lines[gate.line].replace(/^- \[( |x|X)\]/u, "- [x]");
+  if (gate.evidenceLine !== -1) {
+    const indent = (lines[gate.evidenceLine].match(/^\s*/u) || ["  "])[0];
+    lines[gate.evidenceLine] = indent + "EVIDENCE: " + value;
+  } else {
+    let line = gate.line + 1;
+    while (line < lines.length && /^\s+(CHECK|EXPECT|EVIDENCE|CWD|WRITES):/u.test(lines[line])) line++;
+    lines.splice(line, 0, "  EVIDENCE: " + value);
+  }
+  let next = lines.join(doc.eol);
+  if (doc.finalNewline && !next.endsWith(doc.eol)) next += doc.eol;
+  const after = parseGates(next);
+  const written = after.gates.find((item) => item.id === gate.id);
+  if (after.errors.length || !written || !written.checked || written.evidence !== value) {
+    fail("LEDGER_INVALID", "the reviewed ledger would not parse back to exactly this gate", 2);
+  }
+  if (fs.readFileSync(target.file, "utf8") !== before) {
+    fail("LEDGER_CHANGED", target.relative + " changed during the review; repeat review-manual", 1);
+  }
+  const temporary = target.file + "." + process.pid + "." + crypto.randomBytes(8).toString("hex") + ".tmp";
+  fs.writeFileSync(temporary, next, { encoding: "utf8", flag: "wx" });
+  try { replaceFileSync(temporary, target.file); }
+  finally { try { fs.unlinkSync(temporary); } catch { /* renamed or absent */ } }
+  transition(state, "manual-gate-reviewed", qualified, "unmet", "met",
+    { reviewer: sessionId, date, evidence: evidence.relative, evidenceSha256: evidence.sha256 });
+  saveState(context, state);
+  return { packageId: context.packageId, scope: context.scope, gate: qualified, reviewed: true, idempotent: false,
+    date, session: sessionId, evidence: evidence.relative, evidenceSha256: evidence.sha256, evidenceLine: value };
+}
+
 function completePlanFromEvidence(context) {
   const current = fs.readFileSync(context.packageInfo.packageFile, "utf8");
   if (current !== context.packageInfo.packageText) {
@@ -1693,6 +1868,7 @@ commands:
   duty-add --duty ID --owner TEXT --trigger TEXT --due-state open|due --gate LEDGER:GATE
   duty-resolve --duty ID [--gate LEDGER:GATE]
   duty-waive --duty ID --owner-ok TEXT
+  review-manual --gate LEDGER:GATE --evidence evidence/FILE --session ID
   close [--owner-ok TEXT] [--message TEXT] [--timeout S] [--reverify]
   recover-close --receipt CLOSE_RECEIPT [--message TEXT] [--timeout S]
   publish --closure-receipt PATH --owner-ok TEXT
@@ -1728,7 +1904,17 @@ bottom-up like close before writing it; once that commit exists it returns
 unchanged and without re-verifying (locallyReverified: false). A red recovery
 re-verification writes no closure commit and reports CLOSE_RECOVERY_REVERIFY:
 repair the gate and repeat, or ask the Owner for a new Owner-OK line and close
-again.`;
+again.
+
+review-manual is the one way to tick a gate WITHOUT a CHECK. Only the
+orchestrating session calls it: a bound leaf worker (KEEL_PACKAGE_SESSION), a
+leaf session of the package and a session holding a leaf binding are refused.
+It needs an evidence file under evidence/ of the package, writes
+  EVIDENCE: manual-review; date=YYYY-MM-DD; session=ID; file=evidence/FILE; sha256=HEX
+and records the event in the executor state. A leaf gate is reviewed after its
+worker returned (before return); root and node gates after every leaf gate is
+met; nothing after integration began. Gates with a CHECK stay gate-check's, and
+the ledger files stay closed to every session's own writes.`;
 
 async function main() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
@@ -1778,6 +1964,7 @@ async function main() {
   else if (["duty-assess", "duty-add", "duty-resolve"].includes(options.command)) {
     result = dutyTransition(context, options);
   } else if (options.command === "duty-waive") result = waiveDuty(context, options);
+  else if (options.command === "review-manual") result = await reviewManual(context, options);
   else if (options.command === "integrate") result = await integrate(context, options);
   else if (options.command === "status") result = await status(context);
   else if (options.command === "close") result = close(context, options);
