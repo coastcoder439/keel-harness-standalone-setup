@@ -18,6 +18,7 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, realpathSync, rmSync } from "node:fs";
+import http from "node:http";
 import net from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -123,14 +124,28 @@ function defaultStartDashboard(job, { env }) {
   } finally { closeSync(log); }
 }
 
+/**
+ * Antwortet das Dashboard auf dem Port mit einem Status unter 500? Bewusst node:http und nicht fetch: fetch verweigert
+ * die Ports der „bad ports“-Liste des Fetch-Standards, darunter 4190, den Standardport des Dashboards („fetch failed |
+ * bad port“). Bis 1.3.11 meldete der Helfer deshalb auf 4190 nach drei Minuten immer „ließ sich nicht neu starten“,
+ * obwohl das Dashboard lief (Aktualisierung vom 30.09.2026).
+ */
+export function dashboardAnswers(port, { timeoutMs = 3_000 } = {}) {
+  return new Promise((resolve) => {
+    const request = http.get({ host: "127.0.0.1", port, path: "/", timeout: timeoutMs }, (response) => {
+      response.resume();
+      resolve((response.statusCode ?? 500) < 500);
+    });
+    request.once("timeout", () => { request.destroy(); resolve(false); });
+    request.once("error", () => resolve(false));
+  });
+}
+
 async function defaultWaitReady(job, { sleep, handle }) {
   const deadline = Date.now() + READY_TIMEOUT_MS;
   while (Date.now() < deadline) {
     if (handle && !handle.alive()) return false;
-    try {
-      const response = await fetch(`http://127.0.0.1:${job.port}/`, { signal: AbortSignal.timeout(3_000), redirect: "manual" });
-      if (response.status < 500) return true;
-    } catch { /* noch nicht bereit */ }
+    if (await dashboardAnswers(job.port)) return true;
     await sleep(1_000);
   }
   return false;
@@ -266,10 +281,25 @@ export function loadJob(file) {
   return job;
 }
 
+/**
+ * Wechselt in den Ergebnisordner des Auftrags. Der Hilfsprozess erbt sonst den Arbeitsordner des Dashboard-Servers, und
+ * der liegt im Laufzeitordner .keel-harness/runtime/dashboard/<digest>, den der Installer beim Upgrade entfernt. Unter
+ * Windows lässt sich ein Ordner nicht löschen, solange er Arbeitsordner eines lebenden Prozesses ist: der Installer
+ * brach mit „EPERM, Permission denied: …\runtime\dashboard\<digest>“ ab (Aktualisierung vom 30.09.2026).
+ */
+export function leaveRuntimeFolder(job, chdir = (directory) => process.chdir(directory)) {
+  const directory = path.resolve(job.updateDirectory);
+  mkdirSync(directory, { recursive: true });
+  chdir(directory);
+  return directory;
+}
+
 const invokedDirectly = process.argv[1] && realpathSync(path.resolve(process.argv[1])) === realpathSync(fileURLToPath(import.meta.url));
 if (invokedDirectly) {
   try {
     const job = loadJob(path.resolve(process.argv[2] || ""));
+    const workingDirectory = leaveRuntimeFolder(job);
+    try { appendLog(workingDirectory, `Arbeitsordner: ${process.cwd()}`); } catch { /* das Protokoll ist Beiwerk */ }
     const status = await runUpdateJob(job);
     process.exitCode = status.state === "succeeded" || status.state === "current" ? 0 : 1;
   } catch (error) {
