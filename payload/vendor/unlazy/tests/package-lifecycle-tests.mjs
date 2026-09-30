@@ -315,6 +315,35 @@ test("missing or legacy runtime refs fail closed in package resolution", () => {
   assert.match(result.stderr, /missing package\.ref|invalid scope/);
 });
 
+test("activation retires the runtime of a removed package and reports it, while other invalid runtime still blocks", async () => {
+  const root = repo("orphan-runtime");
+  bundle(root, "alpha");
+  mkdirSync(join(root, ".unlazy", "removed"), { recursive: true });
+  writeFileSync(join(root, ".unlazy", "removed", "package.ref"), "docs/packages/gone\n", "utf8");
+  writeFileSync(join(root, ".unlazy", "removed", "status.log"), "2026-09-09T00:00:00.000Z package gone activated\n", "utf8");
+  const result = await activatePackage({ root, packageId: "alpha", scope: "main", sessionId: "session-orphan" });
+  assert.equal(result.activated, true);
+  assert.equal(result.retiredScopes.length, 1);
+  assert.equal(result.retiredScopes[0].scope, "removed");
+  assert.equal(result.retiredScopes[0].packageId, "gone");
+  assert.match(result.retiredScopes[0].movedTo, /^\.unlazy\/\.retired\/removed-/u);
+  assert.equal(existsSync(join(root, ".unlazy", "removed")), false);
+  const retired = readdirSync(join(root, ".unlazy", ".retired"));
+  assert.equal(retired.length, 1);
+  assert.equal(readFileSync(join(root, ".unlazy", ".retired", retired[0], "package.ref"), "utf8"), "docs/packages/gone\n");
+  assert.equal(status(root, "alpha").status, "active");
+
+  const blocked = repo("broken-runtime-still-blocks");
+  bundle(blocked, "alpha");
+  mkdirSync(join(blocked, ".unlazy", "broken"), { recursive: true });
+  writeFileSync(join(blocked, ".unlazy", "broken", "GATES.md"), "# legacy\n", "utf8");
+  const refused = activate(blocked, "alpha");
+  assert.equal(refused.status, 2, refused.stderr + refused.stdout);
+  assert.match(refused.stderr, /invalid active runtime blocks activation/u);
+  assert.equal(existsSync(join(blocked, ".unlazy", "broken")), true);
+  assert.equal(existsSync(join(blocked, ".unlazy", ".retired")), false);
+});
+
 test("close actually reverifies, writes a valid receipt, releases only its leases, and removes only its scope", async () => {
   const root = repo("close-success");
   bundle(root, "alpha");
