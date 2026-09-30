@@ -116,6 +116,7 @@ const TEST_PATHS = new Set([
   "test/installed-run-all-counts.test.js",
   "test/inventory-refresh.test.js",
   "test/lifecycle-gate-evidence.test.js",
+  "test/manual-gate-review.test.js",
   "test/no-google-identity.test.js",
   "test/owner-ok.test.js",
   "test/package-bootstrap.test.js",
