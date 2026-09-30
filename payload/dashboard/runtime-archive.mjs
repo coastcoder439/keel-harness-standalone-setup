@@ -195,6 +195,38 @@ function removeInside(base, candidate) {
   if (existsSync(full)) rmSync(full, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 });
 }
 
+const HELD_DIRECTORY = new Set(["EBUSY", "EPERM", "EACCES"]);
+
+/**
+ * Entfernt einen veralteten Cache-Ordner, ohne einen festgehaltenen Ordner zu beschaedigen. Steht ein lebender Prozess
+ * mit seinem Arbeitsordner darin (etwa der Update-Helfer einer aelteren Fassung, der waehrend dieses Starts noch auf die
+ * Bereitschaft wartet), laesst Windows den Ordner weder loeschen noch umbenennen; ein direktes rmSync wuerde zuerst den
+ * Inhalt leeren und dann mit EPERM scheitern. Deshalb erst umbenennen: klappt das nicht, bleibt der Ordner unberuehrt
+ * stehen und faellt beim naechsten Start weg; klappt es, wird der umbenannte Ordner entfernt, und ein Rest mit
+ * .staging-Namen faellt ebenfalls beim naechsten Start weg. Liefert true, wenn der Ordner weg ist.
+ */
+export function removeStaleRuntime(base, candidate) {
+  const root = path.resolve(base);
+  const full = path.resolve(candidate);
+  if (full === root || !full.startsWith(root + path.sep)) fail(`Cleanup verlaesst Runtime-Basis: ${full}`);
+  if (!existsSync(full)) return true;
+  let target = full;
+  if (!path.basename(full).startsWith(".staging-")) {
+    target = path.join(root, `.staging-${process.pid}-${randomBytes(8).toString("hex")}`);
+    try { renameSync(full, target); }
+    catch (error) {
+      if (HELD_DIRECTORY.has(error?.code)) return false;
+      throw error;
+    }
+  }
+  try { rmSync(target, { recursive: true, force: true, maxRetries: 20, retryDelay: 50 }); }
+  catch (error) {
+    if (HELD_DIRECTORY.has(error?.code)) return false;
+    throw error;
+  }
+  return !existsSync(target);
+}
+
 function processAlive(pid) {
   if (!Number.isSafeInteger(pid) || pid < 1) return false;
   try { process.kill(pid, 0); return true; }
@@ -316,7 +348,7 @@ export function materializeDashboardRuntime(options = {}) {
         (!/^[a-f0-9]{64}$/u.test(entry.name) && !entry.name.startsWith(".staging-"))) {
       fail(`unerwarteter Runtime-Cache-Eintrag: ${entry.name}`);
     }
-    removeInside(runtimeBase, candidate);
+    removeStaleRuntime(runtimeBase, candidate);
   }
   return destination;
 }
