@@ -145,6 +145,8 @@ ein ausdrücklich freigegebener Publish erfolgen.
 - Paketstatus: node harness-core/execution/package-executor.mjs status ...
 - Nächstes Leaf/Fan-out: next|start, dann dispatch
 - Rücklauf: return; Integration: integrate --approve-checks
+- Gates ohne CHECK: review-manual --gate LEDGER:GATE --evidence evidence/<datei>
+  --session <id> (nur Orchestrator; Beleg im Paket, Datum und Sitzung in EVIDENCE)
 - Abschluss: close
 - Dashboard-Betrieb: npm run dashboard (Mensch) oder node dashboard/serve.mjs [--port <n>]
   (Agent; npm-Skripte sind fuer Agenten gesperrt) — beide starten denselben einzigen

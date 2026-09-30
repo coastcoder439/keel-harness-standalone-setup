@@ -31,6 +31,13 @@ Jeder Aufruf nennt `--harness-root <HARNESS_ROOT>` und `--root <ECHTES_GIT_REPO>
 - Ein Rücklauf benutzt `return --session <SESSION> --json`; `resume --session
   <SESSION> --json` liest ausschließlich den dauerhaft gebundenen Lauf.
 - Provider-Ausgabe ist nie Evidence. Nur lokale Gate-Reverify darf ein Leaf zurückgeben; `integrate --approve-checks` prüft zuerst Node und Root bottom-up, leitet daraus die Planhaken ab und erzeugt danach genau einen gemeinsamen Checkpoint. Ein erneuter `integrate` führt dieselbe Reverify erneut aus und liefert denselben Checkpoint statt eines zweiten -- er ist idempotent, aber nicht billig. `close` reverifiziert erneut.
+- Gates ohne CHECK hakt nur der Orchestrator ab, mit
+  `review-manual --gate <LEDGER:GATE> --evidence evidence/<DATEI> --session <ORCHESTRATOR_SESSION> --json`:
+  der Beleg liegt unter `evidence/` des Pakets, die EVIDENCE-Zeile traegt Datum, Sitzung,
+  Belegpfad und Pruefsumme. Ein Leaf-Gate nach dem Anbieter-Ruecklauf und vor `return`,
+  Knoten- und Wurzel-Gates erst, wenn jedes Leaf-Gate erfuellt ist, nichts mehr nach
+  `integrate`. Leaf-Arbeiter, Leaf-Sitzungen und Gates mit CHECK weist der Befehl ab; die
+  Gate-Dateien bleiben fuer eigene Schreibzugriffe jeder Sitzung gesperrt.
 - Git-Mutationen laufen ausschließlich über `harness-core/git/git-intent.mjs`.
 - Leaf-Agenten committen nicht mitten in einer parallelen Welle (der git-intent checkpoint verweigert WAVE_IN_PROGRESS, solange die Welle offen oder versiegelt ist). Sichere Rücknahme nutzt ausschließlich die Receipt-basierten Git-Intents.
 - Follow-up-Duties sind strukturiert: erst `duty-assess --gate <LEDGER:GATE>`;
