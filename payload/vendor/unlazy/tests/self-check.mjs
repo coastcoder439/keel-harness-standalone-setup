@@ -31,6 +31,7 @@ const SCRIPTS = [
   "scripts/lib/package-lifecycle.mjs",
   "scripts/lib/package-migration.mjs",
   "scripts/lib/package-measure.mjs",
+  "scripts/lib/project-roadmap.mjs",
   "scripts/lib/check-supervisor.mjs",
   "scripts/lib/process-tree.mjs",
   "scripts/lib/regex-worker.mjs",
@@ -49,6 +50,7 @@ const SCRIPTS = [
   "tests/package-hook-tests.mjs",
   "tests/package-migrate-tests.mjs",
   "tests/package-standard-tests.mjs",
+  "tests/project-roadmap-tests.mjs",
   "tests/self-check.mjs",
 ];
 

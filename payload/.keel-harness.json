@@ -2,6 +2,7 @@
   "schemaVersion": 1,
   "packageContract": {
     "ownerContractRequired": true,
-    "standardFormatRequired": true
+    "standardFormatRequired": true,
+    "ownerStartRequired": true
   }
 }

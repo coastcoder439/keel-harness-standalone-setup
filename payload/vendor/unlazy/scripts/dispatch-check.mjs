@@ -6,7 +6,7 @@ import { getDispatchWave, updateDispatch } from "./lib/dispatch.mjs";
 import { resolvePackageTarget } from "./lib/packages.mjs";
 import { inspectPackageBundle } from "./lib/package-schema.mjs";
 
-const COMMANDS = new Set(["open", "start", "seal", "return", "abandon", "recover", "status"]);
+const COMMANDS = new Set(["open", "start", "seal", "return", "abandon", "recover", "restart", "reopen", "status"]);
 const args = process.argv.slice(2);
 
 function usage() {
@@ -18,10 +18,16 @@ function usage() {
     "  dispatch-check.mjs return --scope ID [--package ID] --wave ID --leaf ID [--root PATH]",
     "  dispatch-check.mjs abandon --scope ID [--package ID] --wave ID --reason TEXT [--root PATH]",
     "  dispatch-check.mjs recover --scope ID [--package ID] --wave ID --replacement-wave ID [--root PATH]",
+    "  dispatch-check.mjs recover --scope ID [--package ID] --wave ID [--root PATH]",
+    "  dispatch-check.mjs restart --scope ID [--package ID] --wave ID --leaf ID --handle OPAQUE_ID [--root PATH]",
+    "  dispatch-check.mjs reopen --scope ID [--package ID] --wave ID --leaf ID --reason TEXT [--root PATH]",
     "  dispatch-check.mjs status --scope ID [--package ID] --wave ID [--root PATH]",
     "",
     "Normal commands resolve an active package.ref and persist schema-2 scope/package identity.",
     "Use --legacy only for explicit schema-1 diagnosis during migration.",
+    "recover without --replacement-wave needs a return of every leaf in the abandoned wave itself or in a",
+    "complete wave. restart gives a started, unreturned member of a sealed wave a new handle; reopen moves the",
+    "return of a member back so that it can be restarted and returned again.",
   ].join("\n");
 }
 
@@ -86,7 +92,14 @@ if (command === "open") {
   if (options.leaves.length || options.handle !== null || options.reason !== null) {
     die("recover does not accept --leaf, --handle, or --reason");
   }
-  if (options.replacementWave === null) die("recover requires --replacement-wave");
+} else if (command === "restart") {
+  if (options.leaves.length !== 1) die("restart requires exactly one --leaf");
+  if (options.handle === null) die("restart requires --handle");
+  if (options.reason !== null) die("restart does not accept --reason");
+} else if (command === "reopen") {
+  if (options.leaves.length !== 1) die("reopen requires exactly one --leaf");
+  if (options.handle !== null) die("reopen does not accept --handle");
+  if (options.reason === null || !options.reason.trim()) die("reopen requires --reason");
 } else if (options.leaves.length || options.handle !== null || options.reason !== null) {
   die(command + " does not accept --leaf, --handle, or --reason");
 }
@@ -135,6 +148,10 @@ const summary = (wave, id) => {
   if (wave.state === "complete") return "COMPLETE " + id + " (" + returned + "/" + wave.leaves.length + " returned)";
   if (wave.state === "abandoned") return "ABANDONED " + id + " (" + started + "/" + wave.leaves.length +
     " started, " + returned + "/" + wave.leaves.length + " returned): " + wave.reason;
+  if (wave.state === "recovered" && wave.recoveredBy) {
+    return "RECOVERED " + id + " through returns: " + Object.entries(wave.recoveredBy)
+      .map(([leaf, by]) => leaf + "@" + by).join(", ");
+  }
   if (wave.state === "recovered") return "RECOVERED " + id + " -> " + wave.replacementWave;
   return wave.state.toUpperCase() + " " + id + " (" + started + "/" + wave.leaves.length +
     " started, " + returned + "/" + wave.leaves.length + " returned)";
@@ -165,6 +182,8 @@ try {
   else if (command === "seal") console.log("SEALED " + options.wave + " (" + started + "/" + wave.leaves.length + " started)");
   else if (command === "abandon") console.log(summary(wave, options.wave));
   else if (command === "recover") console.log(summary(wave, options.wave));
+  else if (command === "restart") console.log("RESTARTED " + options.wave + " " + options.leaves[0] + " (" + started + "/" + wave.leaves.length + " started)");
+  else if (command === "reopen") console.log("REOPENED " + options.wave + " " + options.leaves[0] + " (" + returned + "/" + wave.leaves.length + " returned)");
   else if (wave.state === "complete") console.log("COMPLETE " + options.wave + " (" + returned + "/" + wave.leaves.length + " returned)");
   else console.log("RETURNED " + options.wave + " " + options.leaves[0] + " (" + returned + "/" + wave.leaves.length + " returned)");
 } catch (error) {

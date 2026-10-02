@@ -59,16 +59,24 @@ export const LOCAL_THINKING_MODELS = /qwen3|deepseek|gemma3|gemma4/i;
  * Cloud-Modelle je Anbieter. Keine der beiden CLIs liefert eine Modellliste ohne Modellaufruf
  * (design/process-models.md Punkt 5); deshalb steht die Liste hier, jedes Modell mit Beleg.
  * Codex läuft mit der Voreinstellung des Abos (Modell leer); ihr Name ist der Pin aus codex-pin.mjs.
+ * Claude-Einträge: nur IDs, die zwei unabhängige Quellen führen (Modelltabelle der CLI 2.1.284 und die
+ * Modellübersicht des Herstellers, Stand 01.10.2026); `evidence` nennt beide. Reihenfolge nach Familie.
  */
 export const CLOUD_MODELS = Object.freeze([
-  Object.freeze({ provider: "claude", model: "claude-opus-5-5", label: "Claude Opus 5.5", note: "stärkstes Modell für Bau-Arbeit",
-    evidence: "Modelltabelle der Claude-API-Referenz (Stand 24.06.2026) und Modell-ID der Bau-Sitzung 26.09.2026" }),
+  Object.freeze({ provider: "claude", model: "claude-fable-5-1", label: "Claude Fable 5.1", note: "stärkstes Modell, teurer als Opus",
+    evidence: "claude.exe 2.1.284 Byte 203318384; https://platform.claude.com/docs/en/about-claude/models/overview.md Zeile „Claude API ID“ `claude-fable-5-1`" }),
+  Object.freeze({ provider: "claude", model: "claude-fable-5", label: "Claude Fable 5", note: "Vorgänger von Fable 5.1",
+    evidence: "claude.exe 2.1.284 Byte 203317416; https://platform.claude.com/docs/en/about-claude/models/overview.md „Legacy models (still available): Claude Fable 5“" }),
+  Object.freeze({ provider: "claude", model: "claude-opus-5-5", label: "Claude Opus 5.5", note: "Standard für Bau-Arbeit",
+    evidence: "claude.exe 2.1.284 Byte 203316419; https://platform.claude.com/docs/en/about-claude/models/overview.md Zeile „Claude API ID“ `claude-opus-5-5`" }),
   Object.freeze({ provider: "claude", model: "claude-opus-5", label: "Claude Opus 5", note: "starkes Modell",
-    evidence: "Modelltabelle der Claude-API-Referenz (Stand 24.06.2026); bisherige Chat-Liste Dashboard.tsx:269" }),
+    evidence: "claude.exe 2.1.284 Byte 203315431; https://platform.claude.com/docs/en/about-claude/models/overview.md „Legacy models (still available): … Claude Opus 5“" }),
+  Object.freeze({ provider: "claude", model: "claude-sonnet-5-5", label: "Claude Sonnet 5.5", note: "schnell, für klar umrissene Schritte",
+    evidence: "claude.exe 2.1.284 Byte 203310195; https://platform.claude.com/docs/en/about-claude/models/overview.md Zeile „Claude API ID“ `claude-sonnet-5-5`" }),
   Object.freeze({ provider: "claude", model: "claude-sonnet-5", label: "Claude Sonnet 5", note: "schnell und günstig",
-    evidence: "Modelltabelle der Claude-API-Referenz (Stand 24.06.2026); bisherige Chat-Liste Dashboard.tsx:269" }),
+    evidence: "claude.exe 2.1.284 Byte 203309272; https://platform.claude.com/docs/en/about-claude/models/overview.md „Legacy models (still available): … Claude Sonnet 5“" }),
   Object.freeze({ provider: "claude", model: "claude-haiku-4-5", label: "Claude Haiku 4.5", note: "kleinstes Modell",
-    evidence: "Modelltabelle der Claude-API-Referenz (Stand 24.06.2026)" }),
+    evidence: "claude.exe 2.1.284 Byte 203305558; https://platform.claude.com/docs/en/about-claude/models/overview.md Zeile „Claude API alias“ `claude-haiku-4-5`" }),
   Object.freeze({ provider: "codex", model: "", label: CODEX_MODEL, note: "Voreinstellung des Abos",
     evidence: "Codex-Pin harness-core/execution/codex-pin.mjs" }),
 ]);
@@ -77,6 +85,13 @@ export const CODEX_PIN = Object.freeze({ model: CODEX_MODEL, effort: CODEX_EFFOR
 
 /** Voreinstellung des Prozesses Architekturbilder (Owner 26.09.2026: nur Haiku; Gate A2 in harness-dashboard-repair). */
 export const ARCHITECTURE_MAPS_DEFAULT = Object.freeze({ model: "claude-haiku-4-5", effort: "low" });
+
+/**
+ * Voreinstellung der Paket-Ausführung ohne gespeicherte Wahl (Owner 30.09.2026: „ausführung der pakete mit
+ * sonnet 5.5 auf hoch“). Nie die leere Voreinstellung der CLI: Claude-Leaves tragen die volle Modell-ID
+ * (harness-gaps-2026-10-01 R4). Quelle des Modells bleibt die Einstellung Prozess-Modelle.
+ */
+export const PACKAGE_EXECUTION_DEFAULT = Object.freeze({ model: "claude-sonnet-5-5", effort: "high" });
 
 /** Ein Dashboard-Paket (OWNS unter diesem Pfad) bekommt kein Codex (Owner, 18.09.2026). */
 export const CODEX_LOCKED_OWNS_PREFIX = "test-harness/dashboard/";
@@ -151,7 +166,7 @@ export function defaultChoice(processId, { env = {}, legacy = null } = {}) {
     return choice;
   }
   if (processId === "mail-sorting") return { kind: "model", provider: "ollama", model: localDefaultModel(processId, env) };
-  if (processId === "package-execution") return { kind: "model", provider: "claude", model: "" };
+  if (processId === "package-execution") return { kind: "model", provider: "claude", model: PACKAGE_EXECUTION_DEFAULT.model, effort: PACKAGE_EXECUTION_DEFAULT.effort };
   // Architekturbilder: nur Haiku 4.5, Stufe low (Owner-Zwischennachricht 26.09.2026 „… daer skill das
   // plugin nur mit haiku benutzen …“, PACKAGE.md harness-dashboard-repair Status; Gate A2).
   if (processId === "architecture-maps") return { kind: "model", provider: "claude", model: ARCHITECTURE_MAPS_DEFAULT.model, effort: ARCHITECTURE_MAPS_DEFAULT.effort };

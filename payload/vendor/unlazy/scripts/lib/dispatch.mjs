@@ -92,8 +92,22 @@ function validateState(state, expected = {}) {
       wave.reason = validReason(wave.reason);
       if (wave.state === "recovered") {
         validTime(wave.recoveredAt, "wave " + waveId + " recoveredAt");
-        validId(wave.replacementWave, "replacement wave");
-        if (wave.replacementWave === waveId) fail("wave " + waveId + " cannot recover through itself");
+        if (hasOwn(wave, "recoveredBy")) {
+          // Recovered without a replacement wave: every leaf names the wave in
+          // which its return stands, the abandoned wave itself included.
+          if (hasOwn(wave, "replacementWave")) fail("wave " + waveId + " names both a replacement wave and recoveredBy");
+          if (!wave.recoveredBy || typeof wave.recoveredBy !== "object" || Array.isArray(wave.recoveredBy)) {
+            fail("wave " + waveId + " has an invalid recoveredBy");
+          }
+          wave.recoveredBy = record(wave.recoveredBy);
+          for (const leaf of wave.leaves) validId(wave.recoveredBy[leaf], "recovering wave of " + leaf);
+          for (const leaf of Object.keys(wave.recoveredBy)) {
+            if (!wave.leaves.includes(leaf)) fail("wave " + waveId + " recoveredBy names unknown leaf " + leaf);
+          }
+        } else {
+          validId(wave.replacementWave, "replacement wave");
+          if (wave.replacementWave === waveId) fail("wave " + waveId + " cannot recover through itself");
+        }
       }
     } else if (hasOwn(wave, "abandonedAt") || hasOwn(wave, "reason")) {
       fail(wave.state + " wave " + waveId + " contains abandonment metadata");
@@ -108,6 +122,34 @@ function validateState(state, expected = {}) {
     const handles = new Set();
     const startTimes = record();
     let latestStart = openedAt;
+    // Additive history of the restart and reopen actions. A wave without them
+    // validates exactly as before.
+    const restarts = validLeafHistory(wave, "restarts", leaves, waveId);
+    const reopened = validLeafHistory(wave, "reopened", leaves, waveId);
+    const firstStart = record();
+    for (const [leaf, entries] of Object.entries(restarts)) {
+      let previous = openedAt;
+      for (const entry of entries) {
+        const handle = validHandle(entry.handle);
+        if (handles.has(handle)) fail("wave " + waveId + " reuses handle " + handle);
+        handles.add(handle);
+        const startedAt = validTime(entry.startedAt, "wave " + waveId + " restarted start time for " + leaf);
+        const restartedAt = validTime(entry.at, "wave " + waveId + " restart time for " + leaf);
+        if (startedAt < previous || restartedAt < startedAt) fail("wave " + waveId + " restarts " + leaf + " out of order");
+        if (!(leaf in firstStart)) firstStart[leaf] = startedAt;
+        previous = restartedAt;
+      }
+      if (!wave.started[leaf]) fail("wave " + waveId + " restarted unstarted leaf " + leaf);
+    }
+    for (const [leaf, entries] of Object.entries(reopened)) {
+      for (const entry of entries) {
+        validReason(entry.reason);
+        const returnedAt = validTime(entry.returnedAt, "wave " + waveId + " reopened return time for " + leaf);
+        const at = validTime(entry.at, "wave " + waveId + " reopen time for " + leaf);
+        if (at < returnedAt) fail("wave " + waveId + " reopens " + leaf + " before its return");
+      }
+      if (!wave.started[leaf]) fail("wave " + waveId + " reopened unstarted leaf " + leaf);
+    }
     for (const [leaf, start] of Object.entries(wave.started)) {
       if (!leaves.has(leaf)) fail("wave " + waveId + " started unknown leaf " + leaf);
       if (!start || typeof start !== "object" || Array.isArray(start)) fail("wave " + waveId + " has invalid start for " + leaf);
@@ -117,7 +159,9 @@ function validateState(state, expected = {}) {
       const at = validTime(start.at, "wave " + waveId + " start time for " + leaf);
       if (at < openedAt) fail("wave " + waveId + " starts " + leaf + " before it opened");
       startTimes[leaf] = at;
-      latestStart = Math.max(latestStart, at);
+      // A restarted leaf was sealed with its first start; its replacement start
+      // follows the seal by design.
+      latestStart = Math.max(latestStart, leaf in firstStart ? firstStart[leaf] : at);
     }
 
     const returnTimes = [];
@@ -171,11 +215,28 @@ function validateState(state, expected = {}) {
       if (wave.state === "recovered" && Date.parse(wave.recoveredAt) < abandonedAt) {
         fail("wave " + waveId + " was recovered before it was abandoned");
       }
-    } else if (hasOwn(wave, "recoveredAt") || hasOwn(wave, "replacementWave")) {
+    } else if (hasOwn(wave, "recoveredAt") || hasOwn(wave, "replacementWave") || hasOwn(wave, "recoveredBy")) {
       fail(wave.state + " wave " + waveId + " contains recovery metadata");
     }
   }
   return state;
+}
+
+// restarts[leaf] and reopened[leaf]: optional per-leaf lists, absent in every
+// wave that never used restart or reopen.
+function validLeafHistory(wave, key, leaves, waveId) {
+  if (!hasOwn(wave, key)) return record();
+  const value = wave[key];
+  if (!value || typeof value !== "object" || Array.isArray(value)) fail("wave " + waveId + " has an invalid " + key);
+  wave[key] = record(value);
+  for (const [leaf, entries] of Object.entries(wave[key])) {
+    if (!leaves.has(leaf)) fail("wave " + waveId + " " + key + " names unknown leaf " + leaf);
+    if (!Array.isArray(entries) || !entries.length ||
+        entries.some((entry) => !entry || typeof entry !== "object" || Array.isArray(entry))) {
+      fail("wave " + waveId + " has an invalid " + key + " list for " + leaf);
+    }
+  }
+  return wave[key];
 }
 
 function readState(path, expected) {
@@ -281,21 +342,42 @@ export async function updateDispatch(root, spec) {
         if (current.state !== "abandoned") {
           fail("wave " + waveId + " is " + current.state + "; recover requires an abandoned wave");
         }
-        const replacementWave = validId(spec.replacementWave, "replacement wave");
-        if (replacementWave === waveId) fail("wave " + waveId + " cannot recover through itself");
-        const replacement = state.waves[replacementWave];
-        if (!replacement || replacement.state !== "complete") {
-          fail("replacement wave " + replacementWave + " must exist and be complete before recovery");
+        if (spec.replacementWave === undefined || spec.replacementWave === null) {
+          // Without a replacement wave: every leaf returned in this wave before it
+          // was abandoned, or in a complete wave of the same scope.
+          const recoveredBy = record();
+          const missing = [];
+          for (const leaf of current.leaves) {
+            if (current.returned[leaf]) { recoveredBy[leaf] = waveId; continue; }
+            const other = Object.keys(state.waves).sort().find((id) => id !== waveId &&
+              state.waves[id].state === "complete" && state.waves[id].returned[leaf]);
+            if (other) recoveredBy[leaf] = other;
+            else missing.push(leaf);
+          }
+          if (missing.length) {
+            fail("wave " + waveId + " cannot recover without a replacement wave: no return for " + missing.join(", "));
+          }
+          current.state = "recovered";
+          current.recoveredAt = now;
+          current.recoveredBy = recoveredBy;
+          event = "dispatch " + waveId + " recovered through existing returns";
+        } else {
+          const replacementWave = validId(spec.replacementWave, "replacement wave");
+          if (replacementWave === waveId) fail("wave " + waveId + " cannot recover through itself");
+          const replacement = state.waves[replacementWave];
+          if (!replacement || replacement.state !== "complete") {
+            fail("replacement wave " + replacementWave + " must exist and be complete before recovery");
+          }
+          const replacementLeaves = new Set(replacement.leaves);
+          const missingLeaves = current.leaves.filter((leaf) => !replacementLeaves.has(leaf));
+          if (missingLeaves.length) {
+            fail("replacement wave " + replacementWave + " does not cover " + missingLeaves.join(", "));
+          }
+          current.state = "recovered";
+          current.recoveredAt = now;
+          current.replacementWave = replacementWave;
+          event = "dispatch " + waveId + " recovered through " + replacementWave;
         }
-        const replacementLeaves = new Set(replacement.leaves);
-        const missingLeaves = current.leaves.filter((leaf) => !replacementLeaves.has(leaf));
-        if (missingLeaves.length) {
-          fail("replacement wave " + replacementWave + " does not cover " + missingLeaves.join(", "));
-        }
-        current.state = "recovered";
-        current.recoveredAt = now;
-        current.replacementWave = replacementWave;
-        event = "dispatch " + waveId + " recovered through " + replacementWave;
       } else if (spec.action === "start") {
         const leaf = validId(spec.leaf, "leaf");
         const handle = validHandle(spec.handle);
@@ -324,6 +406,42 @@ export async function updateDispatch(root, spec) {
           current.completedAt = now;
         }
         event = "dispatch " + waveId + " returned " + leaf;
+      } else if (spec.action === "restart") {
+        // One member of a sealed wave starts again under a new native handle; the
+        // old start moves into restarts[leaf].
+        const leaf = validId(spec.leaf, "leaf");
+        const handle = validHandle(spec.handle);
+        if (current.state !== "sealed") fail("restart requires a sealed wave; " + waveId + " is " + current.state);
+        if (!current.leaves.includes(leaf)) fail("unknown leaf " + leaf + " in wave " + waveId);
+        if (!current.started[leaf]) fail("leaf " + leaf + " was never started in wave " + waveId);
+        if (current.returned[leaf]) fail("leaf " + leaf + " already returned; reopen it first");
+        const used = [
+          ...Object.values(current.started).map((start) => start.handle),
+          ...Object.values(current.restarts || {}).flat().map((entry) => entry.handle),
+        ];
+        if (used.includes(handle)) fail("handle is already used in wave " + waveId);
+        if (!current.restarts) current.restarts = record();
+        current.restarts[leaf] = [...(current.restarts[leaf] || []),
+          { handle: current.started[leaf].handle, startedAt: current.started[leaf].at, at: now }];
+        current.started[leaf] = { handle, at: now };
+        event = "dispatch " + waveId + " restarted " + leaf + " as " + handle;
+      } else if (spec.action === "reopen") {
+        // A returned member is reworked: its return moves into reopened[leaf] and
+        // the wave is sealed again until the reworked return arrives.
+        const leaf = validId(spec.leaf, "leaf");
+        const reason = validReason(spec.reason);
+        if (current.state !== "sealed" && current.state !== "complete") {
+          fail("reopen requires a sealed or complete wave; " + waveId + " is " + current.state);
+        }
+        if (!current.leaves.includes(leaf)) fail("unknown leaf " + leaf + " in wave " + waveId);
+        if (!current.returned[leaf]) fail("leaf " + leaf + " has not returned in wave " + waveId);
+        if (!current.reopened) current.reopened = record();
+        current.reopened[leaf] = [...(current.reopened[leaf] || []),
+          { returnedAt: current.returned[leaf].at, at: now, reason }];
+        delete current.returned[leaf];
+        current.state = "sealed";
+        delete current.completedAt;
+        event = "dispatch " + waveId + " reopened " + leaf + ": " + reason;
       } else fail("unknown dispatch action " + spec.action);
     }
 

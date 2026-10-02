@@ -9,26 +9,61 @@
 //   W2  Zugangs-Muster (Token/Key-WERTE) im Inhalt          -> Block
 //   W3  .gitignore-Zeile macht ein existierendes Projekt ohne
 //       eigenen echten Git-Root + origin unsichtbar          -> Block
+//   W4  Owner-Politikdatei .claude/mutation-policy.json       -> Block
+//   W5  vom Installer verwaltete Harness-Datei der Installation -> Block
+//       (guard-parity E10: den Harness selbst aendert keine Sitzung direkt; die Sperre nennt
+//       dem Agenten seinen Weg ueber Produkt-Quellbaum, Release und Harness-Update)
+// W1 und W4 darf allein der Owner aendern (ownerOnly); W3 und W5 nennen den Agentenweg.
+// Ziel und Wurzeln werden in derselben kanonischen Form verglichen (hook-context
+// canonicalPath): ein Windows-Kurzpfad (8.3) ist derselbe Ort wie seine Langform.
 // Selbsttest: node write-guard.js --selbsttest
 
 const { execFileSync, execSync } = require("child_process");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
-const packageContext = require("./package-context.js");
 
-// MSYS/Git-Bash schreibt Laufwerke als /c/... (Muster: danger-guard, belegt 22.08.2026).
-function msysPfad(p) {
-  if (process.platform !== "win32" || !p) return p;
-  return String(p).replace(/^\/([A-Za-z])(?=\/|$)/, "$1:");
+const GUARD_TARGET = ".claude/write-guard.js";
+
+// Inline deny transport (identical in every PreToolUse guard; guard-parity E5): a missing
+// sibling module must never turn a denial into an allow. Under the Codex hook runner a
+// JSON deny with exit 0 survives Windows PowerShell, which maps a native exit 2 to 1.
+function block(message) {
+  const reason = String(message).trim() || GUARD_TARGET + ": tool denied";
+  if (process.env.KEEL_HARNESS_ROOT && process.env.KEEL_HOOK_TARGET === GUARD_TARGET) {
+    fs.writeSync(1, JSON.stringify({ hookSpecificOutput: {
+      hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason,
+    } }) + "\n");
+    process.exit(0);
+  }
+  fs.writeSync(2, reason + "\n");
+  process.exit(2);
 }
 
-const norm = (p) => path.resolve(msysPfad(String(p))).split(path.sep).join("/").toLowerCase();
+// Fehlt eine Nachbardatei, sperrt der Waechter, statt abzustuerzen (ein Absturz waere fuer
+// Claude ein nicht blockierender Hook-Fehler).
+let packageContext;
+let ownerHandoff;
+let hookContext;
+try {
+  packageContext = require("./package-context.js");
+  ownerHandoff = require("../harness-core/guards/owner-handoff.cjs");
+  hookContext = require("../harness-core/guards/hook-context.cjs");
+} catch (error) {
+  if (require.main === module) block("write-guard: dependency load failed; write blocked: " + error.message);
+  throw error;
+}
+
+// Die Regelwurzel: die Harness-Wurzel, die ein Arbeitsagent oder der Codex-Runner nennt,
+// sonst das Projektverzeichnis der Sitzung (hook-context, guard-parity E6).
+const REGELWURZEL = hookContext.ruleRoot();
+
+const norm = (p) => hookContext.canonicalPath(String(p)).split(path.sep).join("/").toLowerCase();
 const liegtUnter = (kind, wurzel) => kind === wurzel || kind.startsWith(wurzel + "/");
 
 // Gespiegelt aus danger-guard erlaubteWurzeln() -- erweitert der Owner dort,
 // muss diese Liste mitziehen (Onboarding Punkt "Schreibziele des Waechters").
-function erlaubteWurzeln(projectRoot = process.env.CLAUDE_PROJECT_DIR || null) {
+function erlaubteWurzeln(projectRoot = REGELWURZEL) {
   const w = [];
   if (projectRoot) w.push(projectRoot);
   w.push(os.tmpdir(), "/tmp");
@@ -125,14 +160,81 @@ function gitignoreVerstoss(inhalt, werkbank, deps) {
   return null;
 }
 
+// --- W5: vom Installer verwaltete Harness-Dateien (guard-parity E10) ---
+// Der Installer fuehrt jede Datei, die er ausliefert, in .keel-harness/state.json. Wer eine
+// davon direkt aendert, aendert den Harness, unter dem gerade gearbeitet wird; der Installer
+// saehe die Abweichung erst beim naechsten Update. Gesperrt sind Eintraege mit ownership
+// "distribution" -- ausser entryMode "merge-lines" (etwa .gitignore: dort gehoeren nur die
+// Installer-Zeilen der Distribution) --, dazu der Installer-Zustand selbst und die lokalen
+// Freigaben. Owner-Daten (ownership "owner") bleiben frei. Ohne state.json keine Regel:
+// ein Produkt-Quellbaum ist keine Installation.
+function verwalteteZiele(werkbank) {
+  if (!werkbank) return null;
+  let zustand;
+  try { zustand = JSON.parse(fs.readFileSync(path.join(werkbank, ".keel-harness", "state.json"), "utf8")); }
+  catch { return null; }
+  const ziele = new Set();
+  for (const eintrag of Array.isArray(zustand?.entries) ? zustand.entries : []) {
+    if (!eintrag || typeof eintrag.target !== "string") continue;
+    if (eintrag.ownership === "distribution" && eintrag.entryMode !== "merge-lines") ziele.add(norm(path.join(werkbank, eintrag.target)));
+  }
+  return ziele;
+}
+
+function istVerwaltet(zielNorm, deps) {
+  if (!deps.werkbank || !deps.verwaltet) return false;
+  const wurzel = norm(deps.werkbank);
+  return deps.verwaltet.has(zielNorm) || liegtUnter(zielNorm, wurzel + "/.keel-harness") ||
+    zielNorm === wurzel + "/.claude/settings.local.json";
+}
+
+// Der Weg des Agenten zu einer Aenderung am Harness der Installation (guard-scope R9, R10):
+// das Update laeuft wie der Aktualisieren-Knopf ueber das Dashboard der Installation
+// (Standard-Port des Produkts, dashboard/serve.mjs). Kein Owner-Befehl: die Arbeit macht der
+// Agent, der Owner gibt nur sein OK.
+const W5_AGENT_ROUTE = "Aenderung im Produkt-Quellbaum (Test-Harness), Release, dann nach dem OK des Owners das " +
+  "Harness-Update: der Agent klickt Aktualisieren im Dashboard (Standard-Port 4190, POST /api/harness-update) im Browser-Bereich";
+
+// Der Weg des Agenten bei W3 (CLAUDE.md, Reihenfolge fuer ein neues Projekt).
+const W3_AGENT_ROUTE = "erst das eigene Repo anlegen und verifiziert pushen, danach die Ignorier-Zeile schreiben";
+
+// Die Vorlage zu einer Sperre (guard-parity E9). W5 und W3: der Agentenweg, kein Befehl.
+// W2: ein Zugang erscheint nie in einem Befehl im Chat. W1 und W4 darf allein der Owner
+// (ownerOnly): die gesperrte Dateiaenderung als PowerShell-Befehl.
+function vorlage(grund, operationen, deps) {
+  const regel = String(grund || "").slice(0, 2);
+  if (regel === "W5") {
+    return ownerHandoff.handoffText({ what: "Aenderung an einer vom Installer verwalteten Harness-Datei",
+      route: W5_AGENT_ROUTE });
+  }
+  if (regel === "W2") {
+    return ownerHandoff.handoffText({ what: "ein Zugang soll in eine Datei",
+      ownerAction: "Ein Zugang erscheint nie in einem Befehl im Chat. Der Owner legt ihn selbst in den Schluesselbund " +
+        "oder eine Umgebungsvariable; der Agent liest ihn von dort." });
+  }
+  const files = (operationen || []).filter(Boolean);
+  if (regel === "W3") {
+    return ownerHandoff.handoffText({ what: "Dateiaenderung, die der write-guard sperrt (W3)", route: W3_AGENT_ROUTE, files });
+  }
+  return ownerHandoff.handoffText({ what: "Dateiaenderung, die der write-guard sperrt (" + regel + ")", files, ownerOnly: true });
+}
+
 function pruefen(toolInput, deps) {
   const ziel = toolInput.file_path || toolInput.notebook_path || "";
   const inhalt = toolInput.content ?? toolInput.new_string ?? toolInput.new_source ?? "";
   if (!ziel) return null;
   const zielNorm = norm(ziel);
 
+  // W5 -- Harness selbst (vor W1: auch innerhalb der Werkbank gesperrt)
+  if (istVerwaltet(zielNorm, deps)) {
+    return (
+      `W5: "${ziel}" ist eine vom Installer verwaltete Harness-Datei (.keel-harness/state.json). ` +
+      `Den Harness, unter dem gearbeitet wird, aendert keine Sitzung direkt. Weg des Agenten: ${W5_AGENT_ROUTE}.`
+    );
+  }
+
   // W1 -- Schreibziel
-  if (!deps.wurzeln.some((w) => liegtUnter(zielNorm, w))) {
+  if (!deps.wurzeln.map(norm).some((w) => liegtUnter(zielNorm, w))) {
     return (
       `W1: "${ziel}" liegt ausserhalb der erlaubten Schreibziele ` +
       `(Werkbank, tmp, ~/.claude, ~/.codex). Gewollt? Der Mensch traegt den Ort in ` +
@@ -174,10 +276,11 @@ function pruefen(toolInput, deps) {
   return null;
 }
 
-function echteDeps(projectRoot = process.env.CLAUDE_PROJECT_DIR || null) {
+function echteDeps(projectRoot = REGELWURZEL) {
   return {
     wurzeln: erlaubteWurzeln(projectRoot),
     werkbank: projectRoot,
+    verwaltet: verwalteteZiele(projectRoot),
     containerWurzeln: leseSchreibwurzeln(projectRoot),
     existiert: fs.existsSync,
     istEigenesRepo: (ordner) => {
@@ -212,6 +315,7 @@ function selfTest() {
   const deps = {
     wurzeln: [norm(wb), norm(os.tmpdir())],
     werkbank: wb,
+    verwaltet: new Set([norm(path.join(wb, ".claude", "danger-guard.js"))]),
     containerWurzeln: ["user-projects"],
     existiert: (p) => vorhanden.has(norm(p)),
     istEigenesRepo: (ordner) => vorhanden.has(norm(path.join(ordner, ".git"))),
@@ -233,6 +337,10 @@ function selfTest() {
     ["W3 tiefes Projekt nur im Eltern-Repo", { file_path: wb + "\\.gitignore", content: "user-projects/gruppe/nur-eltern/\n" }, true],
     ["W3 Ordner existiert nicht", { file_path: wb + "\\.gitignore", content: "user-projects/geplant/\n" }, false],
     ["W3 .unlazy-Regel bleibt frei", { file_path: wb + "\\.gitignore", content: ".unlazy/\n" }, false],
+    ["W5 verwaltete Harness-Datei", { file_path: wb + "\\.claude\\danger-guard.js", content: "x" }, true],
+    ["W5 lokale Freigaben", { file_path: wb + "\\.claude\\settings.local.json", content: "{}" }, true],
+    ["W5 Installer-Zustand", { file_path: wb + "\\.keel-harness\\state.json", content: "{}" }, true],
+    ["W5 Owner-Datei bleibt frei", { file_path: wb + "\\docs\\harness-instance.md", content: "x" }, false],
   ];
   let fehler = 0;
   for (const [name, input, soll] of faelle) {
@@ -289,17 +397,27 @@ if (require.main === module) {
   let eingabe = "";
   process.stdin.on("data", (c) => (eingabe += c));
   process.stdin.on("end", () => {
-    let daten = {};
+    let daten;
     try {
       daten = JSON.parse(eingabe || "{}");
-    } catch {}
-    const grund = pruefen(daten?.tool_input || {}, echteDeps());
-    if (grund) {
-      process.stderr.write(`write-guard hat den Schreibzugriff NICHT ausgefuehrt.\n\n  ${grund}\n`);
-      process.exit(2);
+    } catch {
+      return block("write-guard: invalid hook input; write blocked");
     }
-    process.exit(0);
+    const werkzeugEingabe = daten?.tool_input || {};
+    let deps;
+    let grund;
+    try {
+      deps = echteDeps();
+      grund = pruefen(werkzeugEingabe, deps);
+    } catch (error) {
+      return block("write-guard: policy evaluation failed; write blocked: " + error.message);
+    }
+    if (!grund) return process.exit(0);
+    const ziel = werkzeugEingabe.file_path ? path.resolve(hookContext.msysPath(String(werkzeugEingabe.file_path))) : "";
+    block(`write-guard hat den Schreibzugriff NICHT ausgefuehrt.\n\n  ${grund}\n` +
+      vorlage(grund, [ownerHandoff.toolFileOperation(daten.tool_name, werkzeugEingabe, ziel)], deps));
   });
 }
 
-module.exports = { echteDeps, gitignoreVerstoss, pruefen, selfTest, schreibwurzelnAusText, leseSchreibwurzeln };
+module.exports = { echteDeps, gitignoreVerstoss, pruefen, selfTest, schreibwurzelnAusText, leseSchreibwurzeln,
+  verwalteteZiele, vorlage };

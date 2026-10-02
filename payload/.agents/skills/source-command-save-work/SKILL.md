@@ -15,11 +15,15 @@ description: Sichert genau den verifizierten Stand des gebundenen Arbeitspakets 
    aus. Die Option erlaubt nur die sichtbaren pending CHECK-Orakel.
 4. Nutze fuer einen ausdruecklich vorgesehenen einzelnen Checkpoint nur
    `git-intent.mjs checkpoint` mit exakten gebundenen Pfaden.
-5. Veroeffentlichen ist nach Package-Close ein Schritt: der Owner sagt im Chat OK, dann
+5. Ein geschriebenes, noch nicht gestartetes Paket sichert genau
+   `node <HARNESS_ROOT>/harness-core/git/git-intent.mjs checkpoint --root <REPO> --package <ID> --message "<TEXT>"`.
+   Er sichert nur OWNER.md, PACKAGE.md, GATES.md und gates/*.md; ein gestartetes Paket
+   sichern der Leaf-Checkpoint oder integrate.
+6. Veroeffentlichen ist nach Package-Close ein Schritt: der Owner sagt im Chat OK, dann
    laeuft `package-executor.mjs publish --closure-receipt <RECEIPT> --owner-ok "<WORTLAUT>"`.
    Der Befehl zeigt Repo, Branch, HEAD und Remote und legt die Owner-OK-Zeile im
    Publish-Beleg ab; ohne `--owner-ok` bricht er ab.
-6. Berichte Receipts und lokalen Reverify-Stand. Commit und Provider-Erfolg sind keine
+7. Berichte Receipts und lokalen Reverify-Stand. Commit und Provider-Erfolg sind keine
    Fulfillment-Evidence.
 
 Rohes mutierendes Git ist kein Ausweichweg. Bei einer nicht abgedeckten Absicht stoppt
