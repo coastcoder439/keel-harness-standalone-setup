@@ -101,23 +101,55 @@ Breite Historienumschreibungen und nicht recoverable Löschungen bleiben
 Owner-Entscheidungen. Leaf-Agenten committen nicht mitten in einer parallelen
 Welle; der Parent integriert alle verifizierten disjunkten Pfade einmal — der
 git-intent checkpoint erzwingt das aus dem Dispatch-Zustand (WAVE_IN_PROGRESS).
+Einzige Ausnahme ist das Release des Produkts selbst: im Produkt-Quellbaum
+führt scripts/release-standalone.mjs alle Git-Schritte des Releases aus, nur
+als Fast-Forward, nur aus sauberen Bäumen und mit dem Owner-OK-Wortlaut in
+beiden Release-Commits.
 
 ## Claude, Codex und aktive Schutzschichten
 
-.claude/settings.json aktiviert das offizielle projektbezogene
-codex@openai-codex-Plugin. Delegierte Codex-Arbeit nutzt standardmäßig
-gpt-5.6-sol mit max; der Package-Executor erzeugt den exakten
-/codex:rescue-Aufruf. Codex- oder Claude-Erfolg ersetzt nie lokale Evidence.
+Dieselben Wächter gelten für jeden Agenten des Harness und für Bash wie
+PowerShell: die eigene Claude-Sitzung, Arbeitsagenten der Claude CLI und Codex.
+Der Package-Executor startet Claude-Arbeitsagenten mit den PreToolUse-Wächtern
+der Harness-Wurzel als einziger Einstellung (--setting-sources "" --settings)
+und Codex-Leaves mit codex exec, denselben Wächtern als Hooks und
+--dangerously-bypass-hook-trust; delegierte Codex-Arbeit nutzt gpt-5.6-sol mit
+max. Beide sehen ihre Paketsitzung in KEEL_PACKAGE_SESSION. .claude/settings.json
+aktiviert weiter das offizielle projektbezogene codex@openai-codex-Plugin; seine
+Befehle laufen über ein Node-Skript außerhalb der Installation und sind in
+bewachten Sitzungen gesperrt. Eine eigene Codex-Sitzung bekommt die Wächter über
+.codex/hooks.json, sobald der Owner sie dort einmal mit /hooks freigibt. Codex-
+oder Claude-Erfolg ersetzt nie lokale Evidence.
+
+Einen Befehl an den Owner gibt es nur für die Handlungen, die allein der Owner
+darf; die Liste steht in docs/guard-scope.md. Sperrt ein Wächter eine solche
+Handlung, die für das Ziel des Owners nötig ist, legt der Agent sie dem Owner
+vor: ein Satz, was passiert und warum, „Achtung, du musst diesen Befehl ausführen:“
+und genau der Befehl, den die Sperrmeldung selbst mitliefert, als einzeiliger
+bash-Block, den die App mit dem Ausführen-Knopf zeigt und in PowerShell
+ausführt. Arbeit, die ein Agent erledigen soll (Sichern, Aufräumen, Stilllegen,
+Abschließen), landet nie als Befehl beim Owner; die Sperrmeldung nennt dafür den
+erlaubten Agentenweg, etwa Sichern über harness-core/git/git-intent.mjs
+checkpoint (mit --session für ein gebundenes Leaf, mit --root und --package für
+ein geschriebenes, noch nicht gestartetes Paket) und Stilllegen oder
+Zusammenführen über harness-core/execution/package-resolve.mjs resolve. Gibt es
+keinen erlaubten Weg, meldet der Agent die Sperre unter Offen:. Vom Installer
+verwaltete Harness-Dateien (.keel-harness/state.json) ändert keine Sitzung
+direkt (write-guard W5); der Weg ist Release plus Harness-Update, das der Agent
+nach dem OK des Owners auslöst.
 
 Aktiv verdrahtet sind:
 
 - SessionStart: installationsdefinierte Rollen, Onboarding, Projektkontext und
   Scope-Verschmutzung; das Produkt liefert keine vorgegebenen Sessions aus.
+  Läuft das Dashboard nicht, startet dashboard-ensure es (nur in Installationen
+  mit Runtime-Archiv; KEEL_DASHBOARD_AUTOSTART=0 schaltet das ab).
 - UserPromptSubmit: knappe Antwortform und bereits gebundene Paketidentität.
-- PreToolUse: git-intent-guard, endliche shell-mutation-guard-Schnittstelle,
-  nicht-Git-danger-guard, write-guard, exakte Leaf-paket-gate-Bindung,
-  Sessionpost-Regel und MCP-Schreibgrenze (mcp-write-guard; Owner-Erweiterungen
-  und MCP-Allowlist in .claude/mutation-policy.json).
+- PreToolUse: git-intent-guard, endliche shell-mutation-guard-Schnittstelle und
+  nicht-Git-danger-guard (diese drei für Bash und PowerShell), write-guard,
+  exakte Leaf-paket-gate-Bindung, Sessionpost-Regel und MCP-Schreibgrenze
+  (mcp-write-guard; Owner-Erweiterungen, Produkt-Wurzeln und MCP-Allowlist in
+  .claude/mutation-policy.json); Zuschnitt: docs/guard-scope.md.
 - Stop: vollständiger Unlazy-Gate-/Dispatch-Schutz, Berichtsformat durch
   dod-guard und lokaler Backup-Hinweis.
 - Statusline: tatsächliches Repo, Branch und Sicherungszustand.
@@ -164,3 +196,8 @@ ein ausdrücklich freigegebener Publish erfolgen.
   bindet 127.0.0.1; ohne die Variable baut next dev in .next und zerstoert den
   standalone-Build; Regeln in dashboard/README.md des Quellbaums
 - Harness prüfen: node checks/run-all.mjs
+- Release (nur Produkt-Quellbaum): node scripts/release-standalone.mjs --version
+  X.Y.Z --summary TEXT --owner-ok TEXT --clone DIR [--setup DIR] [--dry-run];
+  eine Setup-Version entsteht nur mit grünem node checks/run-all.mjs auf
+  demselben Stand und einem Owner-Satz, der genau diese Version nennt; nur mit
+  --dry-run ist --owner-ok optional.

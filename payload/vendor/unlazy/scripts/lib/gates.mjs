@@ -8,6 +8,7 @@ import {
 } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
+import { parsePackageRefText, samePackageId } from "./packages.mjs";
 export { resolvePackageTarget } from "./packages.mjs";
 
 export const UNLAZY_DIR = ".unlazy";
@@ -621,6 +622,35 @@ export function readLeases(root) {
 
 const leaseRegistry = (root) => join(resolve(root), LOCK_DIR, "lease-registry");
 
+// A package lease (schema 2) is orphaned when its scope directory is gone, its
+// package.ref is gone, or package.ref names another package. A present but
+// unreadable or invalid package.ref keeps the lease: only the unambiguous case
+// is released. Legacy and invalid lease files are never touched here.
+function scopeNoLongerBindsPackage(root, lease) {
+  const scopeDirectory = join(resolve(root), UNLAZY_DIR, lease.scope);
+  if (!existsSync(scopeDirectory)) return true;
+  const refPath = join(scopeDirectory, "package.ref");
+  if (!existsSync(refPath)) return true;
+  let parsed;
+  try {
+    const info = lstatSync(refPath);
+    if (info.isSymbolicLink() || !info.isFile()) return false;
+    parsed = parsePackageRefText(readFileSync(refPath, "utf8"));
+  } catch { return false; }
+  return !samePackageId(parsed.packageId, lease.packageId);
+}
+
+function releaseOrphanedPackageLeasesUnlocked(root) {
+  const released = [];
+  for (const lease of readLeasesUnlocked(root)) {
+    if (lease.invalid || lease.schema !== 2 || !lease.packageId) continue;
+    if (!scopeNoLongerBindsPackage(root, lease)) continue;
+    try { unlinkSync(lease.file); } catch { continue; /* raced or absent */ }
+    released.push({ packageId: lease.packageId, scope: lease.scope, leaf: lease.leaf, file: lease.file });
+  }
+  return released;
+}
+
 export async function claimLeases(root, spec) {
   return withFileLock(root, leaseRegistry(root), () => {
     const scopeError = validateScopeId(spec.scope);
@@ -628,26 +658,29 @@ export async function claimLeases(root, spec) {
     const packageMode = spec.packageId !== undefined && spec.packageId !== null;
     const packageError = packageMode ? validateScopeId(spec.packageId, "packageId") : null;
     if (scopeError || leafError || packageError) {
-      return { ok: false, conflicts: [], error: scopeError || leafError || packageError };
+      return { ok: false, conflicts: [], releasedOrphans: [], error: scopeError || leafError || packageError };
     }
     let ledger = null;
     if (packageMode) {
       if (!String(spec.leaf).startsWith("leaf-")) {
-        return { ok: false, conflicts: [], error: "package claims require an exact leaf-* ledger" };
+        return { ok: false, conflicts: [], releasedOrphans: [], error: "package claims require an exact leaf-* ledger" };
       }
       ledger = "docs/packages/" + spec.packageId + "/gates/" + spec.leaf + ".md";
       if (spec.ledger !== ledger) {
-        return { ok: false, conflicts: [], error: "package claim ledger must be exactly " + ledger };
+        return { ok: false, conflicts: [], releasedOrphans: [], error: "package claim ledger must be exactly " + ledger };
       }
     }
     const normalized = [];
     for (const glob of spec.globs || []) {
       const result = normalizeOwnsGlob(glob);
-      if (result.error) return { ok: false, conflicts: [], error: result.error };
+      if (result.error) return { ok: false, conflicts: [], releasedOrphans: [], error: result.error };
       normalized.push(result.value);
     }
-    if (!normalized.length) return { ok: false, conflicts: [], error: "no OWNS paths to claim" };
+    if (!normalized.length) return { ok: false, conflicts: [], releasedOrphans: [], error: "no OWNS paths to claim" };
 
+    // Only package claims release orphaned package leases. A legacy claim must
+    // not: a foreign package lease in a legacy scope is not its to judge.
+    const releasedOrphans = packageMode ? releaseOrphanedPackageLeasesUnlocked(root) : [];
     const conflicts = [];
     for (const glob of normalized) {
       for (const held of readLeasesUnlocked(root)) {
@@ -659,14 +692,14 @@ export async function claimLeases(root, spec) {
         });
       }
     }
-    if (conflicts.length) return { ok: false, conflicts };
+    if (conflicts.length) return { ok: false, conflicts, releasedOrphans };
     const identity = packageMode ? spec.packageId + "::" + spec.scope + "::" + spec.leaf : spec.scope + "::" + spec.leaf;
     const file = join(lockDirectory(root), sha256(identity).slice(0, 24) + ".lease");
     const value = packageMode
       ? { schema: 2, scope: spec.scope, packageId: spec.packageId, leaf: spec.leaf, ledger, globs: normalized, pid: process.pid }
       : { scope: spec.scope, leaf: spec.leaf, globs: normalized, pid: process.pid };
     writeAtomic(file, JSON.stringify(value, null, 2) + "\n", { root });
-    return { ok: true, file, conflicts: [], globs: normalized };
+    return { ok: true, file, conflicts: [], globs: normalized, releasedOrphans };
   });
 }
 

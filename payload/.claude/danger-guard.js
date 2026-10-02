@@ -31,18 +31,35 @@ const path = require("path");
 const os = require("os");
 const fs = require("node:fs");
 
-// A self-contained transport avoids a shared dependency becoming a fail-open
-// startup error. The existing Codex runner identifies its target in the env.
+const GUARD_TARGET = ".claude/danger-guard.js";
+
+// Inline deny transport (identical in every PreToolUse guard; guard-parity E5): a missing
+// sibling module must never turn a denial into an allow. Under the Codex hook runner a
+// JSON deny with exit 0 survives Windows PowerShell, which maps a native exit 2 to 1.
 function block(message) {
-  const reason = String(message).trim() || "danger-guard: tool denied";
-  if (process.env.KEEL_HARNESS_ROOT && process.env.KEEL_HOOK_TARGET === ".claude/danger-guard.js") {
+  const reason = String(message).trim() || GUARD_TARGET + ": tool denied";
+  if (process.env.KEEL_HARNESS_ROOT && process.env.KEEL_HOOK_TARGET === GUARD_TARGET) {
     fs.writeSync(1, JSON.stringify({ hookSpecificOutput: {
       hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason,
     } }) + "\n");
-    process.exit(0); // PowerShell otherwise changes a native exit 2 to exit 1.
+    process.exit(0);
   }
   fs.writeSync(2, reason + "\n");
   process.exit(2);
+}
+
+// Befehle zerlegt das gemeinsame Befehlsmodell (guard-parity E1): Bash mit dem einen
+// Zerleger des Harness, PowerShell mit PowerShells eigenem Parser.
+let commandModel;
+let ownerHandoff;
+let hookContext;
+try {
+  commandModel = require("../harness-core/guards/command-model.cjs");
+  ownerHandoff = require("../harness-core/guards/owner-handoff.cjs");
+  hookContext = require("../harness-core/guards/hook-context.cjs");
+} catch (error) {
+  if (require.main === module) block("danger-guard: dependency load failed; command blocked: " + error.message);
+  throw error;
 }
 
 const HOME = os.homedir();
@@ -84,64 +101,16 @@ function erlaubteWurzeln() {
   const wurzeln = [os.tmpdir(), "/tmp", path.join(HOME, ".claude"), path.join(HOME, ".codex")];
   if (process.platform === "darwin") wurzeln.push("/private/tmp", "/var/folders");
   if (process.env.CLAUDE_PROJECT_DIR) wurzeln.push(path.resolve(process.env.CLAUDE_PROJECT_DIR));
+  // Arbeitsagenten und Codex nennen die Harness-Wurzel ausdruecklich (guard-parity E6).
+  if (process.env.KEEL_HARNESS_ROOT) wurzeln.push(path.resolve(process.env.KEEL_HARNESS_ROOT));
   return wurzeln;
 }
 
-/** Heredoc-Rumpf ist Daten, nicht Befehl (zum Beispiel geschriebene Dateien). */
-function ohneHeredocs(befehl) {
-  return befehl.replace(
-    /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1[\s\S]*?^\s*\2\s*$/gm,
-    "<<HEREDOC-ENTFERNT"
-  );
-}
-
-/** Zerlegt in Befehls-Segmente. Trenner: ; && || | Zeilenumbruch — aber NUR
- *  ausserhalb von Anfuehrungszeichen. Der blinde Split koepfte Nutzlasten
- *  (python3 -c "a; b" verlor das b samt rmtree) und haette umgekehrt Prosa
- *  wie ein zitierter Beispielbefehl zum ausgefuehrten Befehl erklaert. */
-function segmente(befehl) {
-  const teile = [];
-  let akt = "";
-  let q = null;
-  for (let i = 0; i < befehl.length; i++) {
-    const c = befehl[i];
-    if (q) {
-      akt += c;
-      if (c === q && befehl[i - 1] !== "\\") q = null;
-      continue;
-    }
-    if (c === '"' || c === "'") {
-      q = c;
-      akt += c;
-      continue;
-    }
-    if (c === "\n" || c === ";" || c === "|") {
-      teile.push(akt);
-      akt = "";
-      if (c === "|" && befehl[i + 1] === "|") i++;
-      continue;
-    }
-    if (c === "&" && befehl[i + 1] === "&") {
-      teile.push(akt);
-      akt = "";
-      i++;
-      continue;
-    }
-    akt += c;
-  }
-  teile.push(akt);
-  return teile.map((s) => s.trim()).filter(Boolean);
-}
-
-/** Der Befehlsname eines Segments -- Umgebungszuweisungen und Vorspann uebersprungen. */
+/** Der Befehlsname eines Segments -- Umgebungszuweisungen und Vorspann (sudo, env, nohup …
+ *  samt Optionen) uebersprungen; Zerlegung und Anfuehrungszeichen wie in jedem Waechter. */
 function kopf(segment) {
-  const worte = segment.split(/\s+/);
-  for (const w of worte) {
-    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(w)) continue;
-    if (/^(sudo|command|nohup|time|env|xargs|nice|exec)$/.test(w)) continue;
-    return path.basename(w.replace(/^["']|["']$/g, ""));
-  }
-  return "";
+  const worte = commandModel.tokens(segment);
+  return commandModel.executableName(worte[commandModel.commandStart(worte)] || "");
 }
 
 /**
@@ -338,30 +307,61 @@ const SELBSTTEST = [
   // --- muss durchgehen ---
   { blockt: false, befehl: "echo hallo > /tmp/f.txt", warum: "/tmp ist erlaubt" },
   { blockt: false, befehl: "rm -rf node_modules", warum: "relativer Pfad im Arbeitsbereich" },
+  // --- PowerShell: dieselben Regeln ueber die Bash-Entsprechung jedes Datei-Befehls ---
+  { blockt: true, dialekt: "powershell", befehl: "Remove-Item -Recurse -Force ~", warum: "Loeschen der Heimat (PowerShell)" },
+  { blockt: true, dialekt: "powershell", befehl: "Copy-Item -Path . -Destination ~/Desktop/backup -Recurse", warum: "Schreiben ausserhalb (PowerShell)" },
+  { blockt: true, befehl: "powershell -Command \"Remove-Item -Recurse -Force ~\"", warum: "PowerShell-Huelle aus Bash" },
+  { blockt: false, dialekt: "powershell", befehl: "Remove-Item -Recurse node_modules", warum: "relativer Pfad im Arbeitsbereich (PowerShell)" },
 ];
 
-function pruefeBefehl(roh) {
-  const verletzt = [];
-  for (const seg of segmente(ohneHeredocs(roh))) {
-    const k = kopf(seg);
-    if (k === "git") continue; // exclusively owned by git-intent-guard
-    for (const r of REGELN) {
-      if (verletzt.includes(r.name)) continue;
-      try {
-        if (r.gilt(k, seg) && r.treffer(seg, k)) verletzt.push(r.name);
-      } catch {}
+/** Prueft ein Segment gegen REGELN. Git gehoert allein dem git-intent-guard. */
+function pruefeSegment(seg, verletzt) {
+  const k = kopf(seg);
+  if (k === "git") return;
+  for (const r of REGELN) {
+    if (verletzt.has(r.name)) continue;
+    try {
+      if (r.gilt(k, seg) && r.treffer(seg, k)) verletzt.set(r.name, { r, seg });
+    } catch {
+      /* eine kaputte Regel darf nie den ganzen Waechter kippen */
+    }
+  }
+}
+
+/** Ein Befehl in seiner Shell (guard-parity E1/E3): Bash-Segmente direkt; PowerShell ueber
+ *  die Bash-Entsprechung jedes Datei-Befehls und jeder Umleitung, damit genau dieselben
+ *  REGELN urteilen; eine PowerShell-Huelle in Bash wird als PowerShell geprueft. */
+function pruefe(roh, dialekt = "bash", verletzt = new Map(), tiefe = 0) {
+  if (tiefe > 4) return verletzt;
+  if (dialekt === "powershell") {
+    const modell = commandModel.parse(roh, "powershell");
+    // Nicht zerlegbares PowerShell sperrt der shell-mutation-guard (POWERSHELL_PARSE).
+    if (!modell.ok) return verletzt;
+    for (const umleitung of modell.redirections) pruefeSegment("echo > " + JSON.stringify(umleitung.target), verletzt);
+    for (const aufruf of modell.invocations) {
+      const entsprechung = commandModel.posixEquivalent(aufruf);
+      pruefeSegment(entsprechung || aufruf.words.map((wort) => (/\s/u.test(wort) ? JSON.stringify(wort) : wort)).join(" "), verletzt);
+      for (const nutzlast of commandModel.wrapperPayloadsFromWords(aufruf.words)) {
+        if (nutzlast.dialect === "powershell" || nutzlast.dialect === "bash") pruefe(nutzlast.value, nutzlast.dialect, verletzt, tiefe + 1);
+      }
+    }
+    return verletzt;
+  }
+  for (const seg of commandModel.segments(commandModel.withoutHeredocs(roh))) {
+    pruefeSegment(seg, verletzt);
+    for (const nutzlast of commandModel.wrapperPayloadsFromWords(commandModel.tokens(seg))) {
+      if (nutzlast.dialect === "powershell") pruefe(nutzlast.value, "powershell", verletzt, tiefe + 1);
     }
   }
   return verletzt;
 }
 
-if (process.argv.includes("--selbsttest")) {
+if (require.main === module && process.argv.includes("--selbsttest")) {
   let schlecht = 0;
   let geprueft = 0;
   for (const f of SELBSTTEST) {
-    const teile = segmente(ohneHeredocs(f.befehl));
     geprueft++;
-    const treffer = pruefeBefehl(f.befehl);
+    const treffer = [...pruefe(f.befehl, f.dialekt || "bash").keys()];
     const ok = f.blockt ? treffer.length > 0 : treffer.length === 0;
     if (!ok) schlecht++;
     console.log(
@@ -374,37 +374,38 @@ if (process.argv.includes("--selbsttest")) {
   process.exit(schlecht ? 1 : 0);
 }
 
-let eingabe = "";
-process.stdin.on("data", (c) => (eingabe += c));
-process.stdin.on("end", () => {
-  let daten = {};
-  try {
-    daten = JSON.parse(eingabe || "{}");
-  } catch {
-    return block("danger-guard: invalid hook input; command blocked");
-  }
-  const roh = daten?.tool_input?.command || "";
-  if (!roh) return process.exit(0);
-
-  const verletzt = new Map();
-  for (const seg of segmente(ohneHeredocs(roh))) {
-    const k = kopf(seg);
-    if (k === "git") continue; // avoid competing Git block messages
-    for (const r of REGELN) {
-      if (verletzt.has(r.name)) continue;
-      try {
-        if (r.gilt(k, seg) && r.treffer(seg, k)) verletzt.set(r.name, { r, seg });
-      } catch {
-        /* eine kaputte Regel darf nie den ganzen Waechter kippen */
-      }
+if (require.main === module) {
+  let eingabe = "";
+  process.stdin.on("data", (c) => (eingabe += c));
+  process.stdin.on("end", () => {
+    let daten = {};
+    try {
+      daten = JSON.parse(eingabe || "{}");
+    } catch {
+      return block("danger-guard: invalid hook input; command blocked");
     }
-  }
-  if (!verletzt.size) return process.exit(0);
+    const roh = daten?.tool_input?.command || "";
+    if (!roh) return process.exit(0);
+    const dialekt = commandModel.dialectFor(daten);
+    let verletzt;
+    try {
+      verletzt = pruefe(roh, dialekt);
+    } catch (error) {
+      return block("danger-guard: policy evaluation failed; command blocked: " + error.message);
+    }
+    if (!verletzt.size) return process.exit(0);
+    block(
+      "danger-guard hat den Befehl NICHT ausgefuehrt.\n\n" +
+        [...verletzt.values()].map(({ r, seg }) => `  - ${r.name}\n    ${r.rat}\n    -> ${seg.slice(0, 160)}`).join("\n") +
+        "\n\n  Der Waechter ist deterministisch und nicht ueberredbar. Wenn das wirklich gewollt\n" +
+        "  ist, fuehrt der Mensch den Befehl selbst im Terminal aus.\n" +
+        ownerHandoff.handoffText({
+          what: [...verletzt.keys()].join("; "),
+          warning: "ACHTUNG: zerstoerend oder ausserhalb des Arbeitsbereichs, im Satz an den Owner ausdruecklich sagen.",
+          command: roh, dialect: dialekt, cwd: daten.cwd || hookContext.ruleRoot(), ownerOnly: true,
+        })
+    );
+  });
+}
 
-  block(
-    "danger-guard hat den Befehl NICHT ausgefuehrt.\n\n" +
-      [...verletzt.values()].map(({ r, seg }) => `  - ${r.name}\n    ${r.rat}\n    -> ${seg.slice(0, 160)}`).join("\n") +
-      "\n\n  Der Waechter ist deterministisch und nicht ueberredbar. Wenn das wirklich gewollt\n" +
-      "  ist, fuehrt der Mensch den Befehl selbst im Terminal aus.\n"
-  );
-});
+module.exports = { pruefe, kopf };

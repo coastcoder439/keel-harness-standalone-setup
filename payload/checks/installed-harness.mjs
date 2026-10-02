@@ -17,7 +17,7 @@ const check = (condition, message) => {
 };
 const read = (...parts) => readFileSync(join(root, ...parts), "utf8");
 const guards = [
-  "danger-guard.js", "dod-guard.js", "git-intent-guard.js", "mcp-write-guard.js", "onboarding-start.js",
+  "danger-guard.js", "dashboard-ensure.js", "dod-guard.js", "git-intent-guard.js", "mcp-write-guard.js", "onboarding-start.js",
   "package-context.js", "paket-gate.js", "pollution-warn.js", "project-context.js",
   "prompt-form.js", "repo-status.js", "session-roles.js", "sessionpost-guard.js",
   "shell-mutation-guard.js",
@@ -50,10 +50,15 @@ for (const required of [
   ["harness-core", "binding", "package-bootstrap.cjs"],
   ["harness-core", "binding", "package-binding.cjs"],
   ["harness-core", "execution", "package-bootstrap.mjs"],
+  // Ohne das Modul tut der SessionStart-Hook dashboard-ensure.js still nichts.
+  ["harness-core", "dashboard", "ensure-dashboard.mjs"],
   ["harness-core", "execution", "package-executor.mjs"],
   ["harness-core", "execution", "owner-ok.mjs"],
   ["harness-core", "execution", "execution-receipts.mjs"],
   ["harness-core", "git", "git-intent.mjs"],
+  // The guards load these at start and block every call without them (guard-parity E1, E9, E13).
+  ["harness-core", "guards", "command-model.cjs"], ["harness-core", "guards", "hook-context.cjs"],
+  ["harness-core", "guards", "owner-handoff.cjs"],
   ["templates", "OWNER.md"], ["templates", "GATES-ROOT.md"], ["templates", "GATES-LEAF.md"],
   ["checks", "onboarding-ready.mjs"], ["docs", "harness-instance.md"],
 ]) check(existsSync(join(root, ...required)), "missing " + required.join("/"));

@@ -10,10 +10,13 @@ import path from "node:path";
 import process from "node:process";
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { replaceFileSync } from "./atomic-file.mjs";
-import { resolveClaudeExecutable } from "./codex-plugin-bootstrap.mjs";
-import { CODEX_PIN, claudeWorkerModelArgs, resolvePackageExecutionModel } from "../process-models/index.mjs";
+import { resolveClaudeExecutable, resolveCodexCommand } from "./codex-plugin-bootstrap.mjs";
+import { CODEX_PIN, claudeWorkerModelArgs, declaredModelChoice, resolvePackageExecutionModel } from "../process-models/index.mjs";
+import { DORMANT_MS, newestRuntimeChange, setAsideScope, waveDeadlineAhead } from "./package-resolve.mjs";
+import { assertNotOrchestrator, callerSession, recordOrchestrator } from "./orchestrator-role.mjs";
+import { verifyOwnerStart } from "./owner-start.mjs";
 import {
   launchProviderRun,
   readProviderRun,
@@ -50,6 +53,7 @@ const packageOwnership = require("../binding/package-ownership.cjs");
 const repository = require("../binding/repository.cjs");
 const ownerContracts = require("../binding/owner-contract.cjs");
 const packageBootstrap = require("../binding/package-bootstrap.cjs");
+const runtimeScopes = require("../binding/runtime-scopes.cjs");
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 const PROVIDERS = new Set(["claude", "codex"]);
@@ -57,8 +61,17 @@ const COMMANDS = new Set([
   "start", "next", "dispatch", "return", "verify", "resume", "integrate", "status", "close",
   "abort", "abandon", "heartbeat", "liveness", "timeout", "retry", "reassign", "recover",
   "duty-assess", "duty-add", "duty-resolve", "duty-waive",
-  "recover-close", "publish", "review-manual",
+  "recover-close", "publish", "review-manual", "rebind", "cleanup-runtime", "restart", "reopen",
 ]);
+// Provider run states in which the worker is gone for good; reaching one of them
+// frees the leaf lease and binding (runtime-state-recovery R2).
+const RELEASING_STATES = new Set(["aborted", "timed-out", "vanished", "provider-failed", "provider-start-failed"]);
+const TERMINAL_RUN_STATES = new Set(["provider-start-failed", "provider-returned", "provider-failed", "aborted",
+  "timed-out", "vanished"]);
+// What package-cli activate writes into a fresh scope plus what this executor adds;
+// a rollback removes an activated scope only while it holds nothing else.
+const ACTIVATION_ENTRIES = new Set(["package.ref", "owner.ref.json", "session", "status.log", "hook-state.json",
+  "dispatch.json", "duties.json", "executor.json", "executor.lock", "executor", "bindings"]);
 const MAX_WAVE_MEMBERS = 8;
 
 function fail(code, message, exitCode = 2) {
@@ -133,6 +146,7 @@ function parseArgs(argv) {
     else if (key === "--max-turns") options.maxTurns = take(key);
     else if (key === "--claude-executable") options.claudeExecutable = take(key);
     else if (key === "--claude-prefix-arg") options.claudePrefixArgs.push(take(key));
+    else if (key === "--codex-executable") options.codexExecutable = take(key);
     else if (key === "--reason") options.reason = take(key);
     else if (key === "--new-session") options.newSessionId = take(key);
     else if (key === "--replacement-wave") options.replacementWave = take(key);
@@ -146,9 +160,15 @@ function parseArgs(argv) {
     else if (key === "--reverify") options.reverify = true;
     else if (key === "--receipt") options.receipt = take(key);
     else if (key === "--closure-receipt") options.closureReceipt = take(key);
+    else if (key === "--run") options.run = take(key);
+    else if (key === "--apply") options.apply = true;
     else fail("USAGE", "unknown option " + key);
   }
   if (!COMMANDS.has(options.command)) fail("USAGE", "command must be one of " + [...COMMANDS].join(", "));
+  if (options.run !== undefined && options.command !== "start" && options.command !== "next") {
+    fail("USAGE", "--run is only accepted by start and next");
+  }
+  if (options.apply && options.command !== "cleanup-runtime") fail("USAGE", "--apply is only accepted by cleanup-runtime");
   return options;
 }
 
@@ -316,8 +336,131 @@ function readState(context, create = false) {
   return value;
 }
 
-function saveState(context, state) {
-  atomicJson(statePath(context.repoRoot, context.scope), state);
+// executor-state-autonomy, decision 1: every change of executor.json goes through updateState. It takes
+// the scope lock, reads the CURRENT state again, applies the mutation to that fresh state, writes it
+// atomically and frees the lock. Measured 02.10.2026: two simultaneous returns read the same state and
+// wrote one after the other, so one verified member fell back to provider-returned. Long work (gate runs,
+// provider starts, child processes) never runs under the lock. The Unlazy withFileLock fails closed on a
+// crashed holder instead of taking it over, so it does not carry this meaning; this is the one lock of
+// executor.json.
+const STATE_LOCK_WAIT_MS = 120_000;
+const STATE_LOCK_STALE_MS = 120_000;
+const TRANSIENT_LOCK_ERRORS = new Set(["EPERM", "EACCES", "EBUSY"]);
+let stateLockHeld = false;
+
+function stateLockPath(context) {
+  return path.join(context.repoRoot, ".unlazy", context.scope, "executor.lock");
+}
+
+function sleepSync(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function processAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; }
+  catch (error) { return error.code === "EPERM"; }
+}
+
+function readLockHolder(file) {
+  try {
+    const info = fs.statSync(file);
+    let value = null;
+    try { value = JSON.parse(fs.readFileSync(file, "utf8")); } catch { value = null; }
+    return { value: value && typeof value === "object" ? value : null, mtimeMs: info.mtimeMs };
+  } catch (error) {
+    if (error.code === "ENOENT" || TRANSIENT_LOCK_ERRORS.has(error.code)) return null;
+    throw error;
+  }
+}
+
+// A lock is orphaned when its holder process is gone or it is older than STATE_LOCK_STALE_MS. A lock
+// still without content (its holder is writing it) is judged by its file time only.
+function orphanedLock(holder, now) {
+  const started = Date.parse(holder.value?.startedAt || "") || holder.mtimeMs;
+  if (now - started > STATE_LOCK_STALE_MS) return true;
+  return holder.value ? !processAlive(holder.value.pid) : false;
+}
+
+// The orphaned lock is moved aside by rename and checked: when a successor took the lock between the
+// judgement and the rename, its lock is put back and the takeover does not happen.
+function takeOverLock(file, holder) {
+  const aside = file + "." + process.pid + "." + crypto.randomBytes(6).toString("hex") + ".orphaned";
+  try { fs.renameSync(file, aside); } catch { return null; }
+  let moved = null;
+  try { moved = JSON.parse(fs.readFileSync(aside, "utf8")); } catch { moved = null; }
+  const same = holder.value ? moved?.token === holder.value.token : moved === null;
+  if (!same) {
+    try { fs.linkSync(aside, file); } catch { /* the lock name is taken again; that holder goes on */ }
+    fs.rmSync(aside, { force: true });
+    return null;
+  }
+  fs.rmSync(aside, { force: true });
+  return { pid: holder.value?.pid ?? null, startedAt: holder.value?.startedAt ?? null };
+}
+
+function acquireStateLock(context) {
+  if (stateLockHeld) fail("STATE_LOCK", "the executor state lock is not re-entrant");
+  const file = stateLockPath(context);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const token = crypto.randomBytes(16).toString("hex");
+  const deadline = Date.now() + STATE_LOCK_WAIT_MS;
+  const takenOver = [];
+  for (;;) {
+    let fd = null;
+    try { fd = fs.openSync(file, "wx"); }
+    catch (error) {
+      if (error.code !== "EEXIST" && !TRANSIENT_LOCK_ERRORS.has(error.code)) throw error;
+    }
+    if (fd !== null) {
+      try { fs.writeSync(fd, JSON.stringify({ pid: process.pid, startedAt: new Date().toISOString(), token })); }
+      finally { fs.closeSync(fd); }
+      stateLockHeld = true;
+      return { file, token, takenOver };
+    }
+    const holder = readLockHolder(file);
+    if (holder && orphanedLock(holder, Date.now())) {
+      const previous = takeOverLock(file, holder);
+      if (previous) { takenOver.push(previous); continue; }
+    }
+    if (Date.now() >= deadline) {
+      fail("STATE_LOCKED", "executor state of scope " + context.scope + " stayed locked for " +
+        STATE_LOCK_WAIT_MS / 1_000 + " s by pid " + (holder?.value?.pid ?? "unknown"), 1);
+    }
+    sleepSync(10 + Math.floor(Math.random() * 30));
+  }
+}
+
+function releaseStateLock(lock) {
+  stateLockHeld = false;
+  try {
+    const value = JSON.parse(fs.readFileSync(lock.file, "utf8"));
+    if (value?.token === lock.token) fs.rmSync(lock.file, { force: true });
+  } catch { /* already taken over as orphaned */ }
+}
+
+// mutate(freshState) applies one change to the state as it is NOW and must not wait. Returning false
+// means nothing changed and nothing is written. updateState returns the written state.
+export function updateState(context, mutate, { create = false } = {}) {
+  const lock = acquireStateLock(context);
+  try {
+    const state = readState(context, create);
+    for (const previous of lock.takenOver) {
+      transition(state, "state-lock-taken-over", context.scope, null, null, previous);
+    }
+    const result = mutate(state);
+    if (result && typeof result.then === "function") fail("STATE_LOCK", "a state mutation must not wait under the lock");
+    if (result !== false || lock.takenOver.length) atomicJson(statePath(context.repoRoot, context.scope), state);
+    return state;
+  } finally {
+    releaseStateLock(lock);
+  }
+}
+
+function sessionOf(state, sessionId) {
+  const entry = state.sessions[sessionId];
+  if (!entry) fail("SESSION_STATE", "unknown session " + sessionId, 1);
+  return entry;
 }
 
 function transition(state, type, subject, from, to, detail = {}) {
@@ -344,95 +487,201 @@ function setSessionState(state, entry, next, type, detail = {}) {
   return entry;
 }
 
+// A scope is dormant when its runtime has not changed for DORMANT_MS and has no wave deadline ahead.
+// This is the read-only half of setAsideScope (package-resolve.mjs): phase 1 of a start only decides,
+// phase 2 moves.
+function dormantScope(context, scope, now) {
+  if (scope === context.scope || scope.startsWith(".")) return false;
+  const directory = path.join(context.repoRoot, ".unlazy", scope);
+  let info;
+  try { info = fs.lstatSync(directory); } catch { return false; }
+  if (info.isSymbolicLink() || !info.isDirectory()) return false;
+  return now - newestRuntimeChange(directory) >= DORMANT_MS && !waveDeadlineAhead(directory, now);
+}
+
+// Overlaps split into the dormant scopes that may be set aside and the young conflicts that block.
+// Only an owns-overlap can be dormant; every other conflict, same-package included, is young.
+function splitOverlaps(context, overlaps, now = Date.now()) {
+  const dormant = [...new Set(overlaps.filter((item) => item.kind === "owns-overlap").map((item) => item.scope))]
+    .filter((scope) => dormantScope(context, scope, now));
+  const young = overlaps.filter((item) => item.kind !== "owns-overlap" || !dormant.includes(item.scope));
+  return { dormant, young };
+}
+
+// The refusal for a young overlap: the historic first line, one resolve route per blocking package
+// (overlapMessage), and for every overlapping scope without a holder the cleanup route. An orphaned
+// scope still blocks; it is never set aside here (runtime-state-recovery R3).
+function failOverlap(context, conflicts) {
+  let message = packageOwnership.overlapMessage(conflicts, { harnessRoot: context.harnessRoot, repoRoot: context.repoRoot });
+  let classified = { scopes: [] };
+  try { classified = runtimeScopes.classifyRuntime(context.repoRoot); } catch { /* the overlap itself still blocks */ }
+  const script = path.join(context.harnessRoot, "harness-core", "execution", "package-executor.mjs");
+  for (const scope of [...new Set(conflicts.map((item) => item.scope))]) {
+    const record = classified.scopes.find((item) => item.scope === scope && item.state === "orphaned");
+    if (!record) continue;
+    message += "\n[verwaist: " + record.reasons.join(", ") + "; aufräumen: node \"" + script + "\" cleanup-runtime --root \"" +
+      context.repoRoot + "\" --apply]";
+  }
+  fail("PACKAGE_CROSS_OWNERSHIP_OVERLAP", message, 1);
+}
+
 // Owner 30.09.2026: "dass der Paketstarter sich weigert, ein neues Paket ... zu starten. Wenn du das fixst,
 // dann muss ich hier auch nichts verschieben." A package activated weeks ago and never touched again still
 // held its OWNS and blocked every later package on the same files (measured: six scopes idle for three weeks).
 // A dormant scope is one whose runtime has not changed for DORMANT_DAYS and has no wave deadline ahead; only
 // such a scope that actually overlaps is set aside, unchanged, to .unlazy/.suspended/ and reported. Its
 // package bundle stays untouched and can be started again. A younger overlap keeps blocking.
-const DORMANT_DAYS = 7;
-const DORMANT_MS = DORMANT_DAYS * 24 * 60 * 60 * 1000;
-
-function newestRuntimeChange(directory) {
-  let newest = fs.lstatSync(directory).mtimeMs;
-  const pending = [directory];
-  let visited = 0;
-  while (pending.length) {
-    if (++visited > 10_000) return Date.now();
-    const current = pending.pop();
-    for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
-      const full = path.join(current, entry.name);
-      const info = fs.lstatSync(full);
-      // A link inside runtime state is unusual; treat the scope as live instead of following it.
-      if (info.isSymbolicLink()) return Date.now();
-      newest = Math.max(newest, info.mtimeMs);
-      if (info.isDirectory()) pending.push(full);
-    }
-  }
-  return newest;
-}
-
-function waveDeadlineAhead(directory, now) {
-  let dispatchState;
-  try { dispatchState = JSON.parse(fs.readFileSync(path.join(directory, "dispatch.json"), "utf8")); }
-  catch { return false; }
-  const deadlines = [];
-  const collect = (value) => {
-    if (!value || typeof value !== "object") return;
-    for (const [key, item] of Object.entries(value)) {
-      if (/deadline/iu.test(key) && typeof item === "string") deadlines.push(Date.parse(item));
-      else if (item && typeof item === "object") collect(item);
-    }
-  };
-  collect(dispatchState.waves);
-  return deadlines.some((deadline) => Number.isFinite(deadline) && deadline > now);
-}
-
-function suspendDormantOverlaps(context, overlaps, now = Date.now()) {
+function setAsideDormant(context, scopes, now = Date.now()) {
   const suspended = [];
-  const scopes = [...new Set(overlaps.filter((item) => item.kind === "owns-overlap").map((item) => item.scope))];
   for (const scope of scopes) {
-    if (scope === context.scope || scope.startsWith(".")) continue;
-    const directory = path.join(context.repoRoot, ".unlazy", scope);
-    let info;
-    try { info = fs.lstatSync(directory); } catch { continue; }
-    if (info.isSymbolicLink() || !info.isDirectory()) continue;
-    const lastChange = newestRuntimeChange(directory);
-    if (now - lastChange < DORMANT_MS || waveDeadlineAhead(directory, now)) continue;
-    const root = path.join(context.repoRoot, ".unlazy", ".suspended");
-    fs.mkdirSync(root, { recursive: true });
-    const destination = path.join(root, scope + "-" + new Date(now).toISOString().replace(/[:.]/gu, "-"));
-    fs.renameSync(directory, destination);
-    suspended.push({ scope, lastChange: new Date(lastChange).toISOString(),
-      movedTo: path.relative(context.repoRoot, destination).split(path.sep).join("/") });
+    const moved = setAsideScope(context.repoRoot, scope, now);
+    if (moved) suspended.push(moved);
   }
   return suspended;
 }
 
-function ensureActive(context) {
-  const args = ["activate", "--root", context.repoRoot, "--package", context.packageId, "--scope", context.scope, "--json"];
-  const activation = childOk(runNode(context.tools.packageCli, args, { cwd: context.repoRoot }), "package activation");
-  try {
-    const retired = JSON.parse(activation).retiredScopes;
-    if (Array.isArray(retired) && retired.length) context.retiredScopes = retired;
-  } catch { /* an older Unlazy prints no JSON report; activation itself already succeeded */ }
+// Audit 06.09.2026, B1: the schema proves disjoint OWNS inside one package only. Two packages
+// active in the same repository must not claim the same files, or every "bound leaf owns this
+// path" authorization would accept both. Measured by "[ownership] a second active package with
+// overlapping OWNS blocks activation until it is gone".
+function overlapCheck(context) {
+  const overlaps = packageOwnership.crossPackageOverlaps(context.repoRoot, context.packageId, context.scope);
+  if (!overlaps.length) return;
+  const { dormant, young } = splitOverlaps(context, overlaps);
+  if (young.length) failOverlap(context, young);
+  const suspended = setAsideDormant(context, dormant);
+  if (suspended.length) context.suspendedScopes = [...(context.suspendedScopes || []), ...suspended];
+  const remaining = packageOwnership.crossPackageOverlaps(context.repoRoot, context.packageId, context.scope);
+  if (remaining.length) failOverlap(context, remaining);
+}
+
+function packageRefMatches(context) {
+  let text;
+  try { text = fs.readFileSync(path.join(context.repoRoot, ".unlazy", context.scope, "package.ref"), "utf8"); }
+  catch { return false; }
+  return text.trim().toLowerCase() === ("docs/packages/" + context.packageId).toLowerCase();
+}
+
+function startCommand(context) {
+  return "node \"" + path.join(context.harnessRoot, "harness-core", "execution", "package-executor.mjs") + "\" start --root \"" +
+    context.repoRoot + "\" --package " + context.packageId + " --scope " + context.scope +
+    " --session <leaf session> --leaf <leaf>";
+}
+
+function assertPackageRef(context) {
+  if (packageRefMatches(context)) return;
+  fail("PACKAGE_NOT_ACTIVE", "package " + context.packageId + " is not active in scope " + context.scope +
+    "; only start and next activate it\nNEXT: " + startCommand(context) + " (or next instead of start --leaf for the next open leaf)", 1);
+}
+
+function doctor(context) {
   childOk(runNode(context.tools.packageCli, ["doctor", "--root", context.repoRoot, "--package", context.packageId],
     { cwd: context.repoRoot }), "package doctor");
-  // Audit 06.09.2026, B1: the schema proves disjoint OWNS inside one package only. Two packages
-  // active in the same repository must not claim the same files, or every "bound leaf owns this
-  // path" authorization would accept both. Measured by "[ownership] a second active package with
-  // overlapping OWNS blocks activation until it is gone".
-  let overlaps = packageOwnership.crossPackageOverlaps(context.repoRoot, context.packageId, context.scope);
-  if (overlaps.length) {
-    const suspended = suspendDormantOverlaps(context, overlaps);
-    if (suspended.length) {
-      context.suspendedScopes = suspended;
-      overlaps = packageOwnership.crossPackageOverlaps(context.repoRoot, context.packageId, context.scope);
-    }
+}
+
+// Every command except start/next works on an already active package: it never activates
+// (runtime-state-recovery R1), but it runs the same doctor and overlap checks as before.
+function assertActive(context) {
+  assertPackageRef(context);
+  doctor(context);
+  overlapCheck(context);
+}
+
+function hasHarnessConfig(root) {
+  try {
+    const info = fs.lstatSync(path.join(root, ".keel-harness.json"));
+    return info.isFile() && !info.isSymbolicLink();
+  } catch { return false; }
+}
+
+// The calling session orchestrates; it is kept in the orchestrator index so it can never be bound
+// as a leaf later (orchestrator-rules-enforcement R1). A Harness root without its configuration keeps
+// no index, exactly like createBinding keeps no session index there.
+function noteOrchestrator(context, sessionId, via) {
+  if (!sessionId || !hasHarnessConfig(context.harnessRoot)) return null;
+  return recordOrchestrator({ harnessRoot: context.harnessRoot, sessionId, via });
+}
+
+function gateCheckLeaf(context, action, leaf) {
+  return runNode(context.tools.gateCheck, [action, "--root", context.repoRoot, "--package", context.packageId,
+    "--scope", context.scope, "--leaf", leaf], { cwd: context.repoRoot });
+}
+
+function samePackage(left, right) {
+  return process.platform === "win32" ? String(left).toLowerCase() === String(right).toLowerCase() : left === right;
+}
+
+function leafLeases(context, leaf) {
+  return runtimeScopes.classifyRuntime(context.repoRoot).leases.filter((lease) =>
+    lease.scope !== null && samePackage(lease.scope, context.scope) && lease.packageId !== null &&
+    samePackage(lease.packageId, context.packageId) && lease.leaf === leaf);
+}
+
+// Leases of exactly this leaf without a living holder. Whether a lease has a holder is decided by
+// classifyRuntime alone; the pid inside a lease belongs to the short-lived gate-check call.
+function releaseOrphanedLeases(context, leaf) {
+  const released = [];
+  for (const lease of leafLeases(context, leaf)) {
+    if (lease.state !== "orphaned" || lease.reason !== "no-holder") continue;
+    childOk(gateCheckLeaf(context, "--release", leaf), "orphaned lease release");
+    released.push({ scope: lease.scope, packageId: lease.packageId, leaf: lease.leaf,
+      file: path.relative(context.repoRoot, lease.file).split(path.sep).join("/") });
   }
-  if (overlaps.length) {
-    fail("PACKAGE_CROSS_OWNERSHIP_OVERLAP", "another active package claims ownership this package needs: " +
-      overlaps.slice(0, 5).map(packageOwnership.describeConflict).join("; "), 1);
+  return released;
+}
+
+// The leaf lease exists afterwards: orphaned leases are released first, then the leaf is claimed
+// when no lease of exactly this package/scope/leaf is left. A refused claim changes nothing.
+function ensureLease(context, leaf) {
+  const released = releaseOrphanedLeases(context, leaf);
+  if (leafLeases(context, leaf).length) return { claimed: false, released };
+  const claim = gateCheckLeaf(context, "--claim", leaf);
+  if (claim.status !== 0) {
+    const output = String(claim.stdout || "") + String(claim.stderr || "");
+    if (/CLAIM REFUSED/u.test(output)) fail("SESSION_STATE", "leaf claim refused for " + leaf + ": " + output.trim().slice(0, 2_000), 1);
+    childOk(claim, "leaf claim");
+  }
+  return { claimed: true, released };
+}
+
+// Frees the lease and the binding of a session whose worker is gone, never while another session of
+// the same scope and leaf still works (runtimeScopes.WORKING_STATES is the one busy set).
+// The release itself runs outside the state lock; only its record goes through updateState.
+function releaseLeaf(context, sessionId, reason) {
+  const current = readState(context);
+  const entry = current.sessions[sessionId];
+  if (!entry || entry.leaseReleasedAt) return false;
+  const busy = Object.values(current.sessions).some((other) => other.sessionId !== sessionId && other.leaf === entry.leaf &&
+    runtimeScopes.WORKING_STATES.includes(other.state));
+  if (busy) return false;
+  childOk(gateCheckLeaf(context, "--release", entry.leaf), "leaf release");
+  packageBinding.removeBinding({ repoRoot: context.repoRoot, scope: context.scope, sessionId,
+    controlRoot: context.harnessRoot });
+  updateState(context, (state) => {
+    const target = state.sessions[sessionId];
+    if (!target || target.leaseReleasedAt) return false;
+    target.leaseReleasedAt = new Date().toISOString();
+    transition(state, "leaf-released", sessionId, target.state, target.state, { leaf: target.leaf, reason });
+    return true;
+  });
+  return true;
+}
+
+function runTerminal(context, entry) {
+  if (!entry.runId) return RELEASING_STATES.has(entry.state);
+  try { return TERMINAL_RUN_STATES.has(readProviderRun(context.repoRoot, context.scope, entry.runId).state); }
+  catch { return false; }
+}
+
+// After abort, abandon or timeout: every session of the wave whose run is terminal lets go.
+function releaseWave(context, waveId, reason) {
+  const state = readState(context);
+  const wave = state.waves[waveId];
+  if (!wave) return;
+  for (const sessionId of wave.sessions) {
+    const entry = state.sessions[sessionId];
+    if (!entry || ["verified", "reassigned", "reopened"].includes(entry.state) || !runTerminal(context, entry)) continue;
+    releaseLeaf(context, sessionId, reason);
   }
 }
 
@@ -483,12 +732,20 @@ export function leafOwns(ledgerText) {
 // Modellwahl je Prozess (new-harness-process-model-settings, Plan-Schritt 10): Anbieter und Modell der
 // Paket-Ausführung kommen aus harness-core/process-models (Einstellung, Voreinstellung Claude, oder
 // ausdrücklich im Aufruf, dann gegen die Regeln geprüft). Codex ist für Dashboard-Pakete gesperrt.
-function packageModel(context, options, owns, fallbackProvider) {
+// Eine MODEL-Zeile im Kopf des Leaf-Ledgers oder in GATES.md legt Modell und Stufe je Leaf oder Paket
+// fest (executor-model-effort R4); Vorrang: Aufruf, Leaf, Paket, Einstellung, Voreinstellung.
+function packageModel(context, options, ledgerText, fallbackProvider, leafFile = null) {
   const provider = options.provider !== undefined ? String(options.provider) : fallbackProvider;
   if (provider !== undefined && !PROVIDERS.has(provider)) fail("USAGE", "provider must be claude or codex");
+  const owns = leafOwns(ledgerText);
   let resolution;
   try {
-    resolution = resolvePackageExecutionModel({ harnessRoot: context.harnessRoot, env: process.env, owns,
+    const gatesPath = path.join(context.packageInfo.packageDir, "GATES.md");
+    const gatesText = fs.existsSync(gatesPath) ? fs.readFileSync(gatesPath, "utf8") : "";
+    const relative = (file) => path.relative(context.repoRoot, file).split(path.sep).join("/");
+    const declared = declaredModelChoice({ leafText: ledgerText, leafFile: leafFile ? relative(leafFile) : "leaf ledger",
+      gatesText, gatesFile: relative(gatesPath) });
+    resolution = resolvePackageExecutionModel({ harnessRoot: context.harnessRoot, env: process.env, owns, declared,
       call: { provider, model: options.model, effort: options.effort } });
   } catch (error) {
     if (error?.name === "ProcessModelError" || error?.name === "ProcessModelUnavailableError") {
@@ -502,8 +759,14 @@ function packageModel(context, options, owns, fallbackProvider) {
   return resolution;
 }
 
-function delegation(resolution, briefFile) {
-  const quoted = JSON.stringify(briefFile);
+// The exact provider call of a leaf, as the dispatch will start it (field name kept for the
+// Dashboard). Both providers run under the Harness root's guards (guard-parity E6/E8): Claude
+// with the root's PreToolUse hooks as its only settings, Codex through `codex exec` with the
+// same guards handed over as hooks -- no longer through /codex:rescue, which runs no Harness
+// hooks in a nested project repository (measured 10.09.2026 and 01.10.2026).
+export function delegation(resolution, briefFile) {
+  const prompt = `Read ${JSON.stringify(briefFile)} and execute exactly that bound leaf contract. Do not widen OWNS. ` +
+    "Return a concise result; the parent will reverify locally.";
   const modelChoice = { source: resolution.source, label: resolution.label, side: resolution.side, ...(resolution.reason ? { reason: resolution.reason } : {}) };
   if (resolution.provider === "codex") {
     const model = safeModel(resolution.model, CODEX_PIN.model);
@@ -513,25 +776,32 @@ function delegation(resolution, briefFile) {
       model,
       effort,
       modelChoice,
-      pluginCommand: `/codex:rescue --wait --fresh --model ${model} --effort ${effort} ` +
-        `Read ${quoted}, execute exactly that bound leaf contract, and return the Codex runtime result unchanged.`,
+      pluginCommand: `codex exec --json --dangerously-bypass-hook-trust -s workspace-write -m ${model} ` +
+        `-c model_reasoning_effort='${effort}' -c hooks.PreToolUse=<Harness guards> ${JSON.stringify(prompt)}`,
     };
   }
   const model = resolution.cliModel ? workerModel(resolution.cliModel) : null;
+  // Die gewählte Stufe erreicht den Aufruf (executor-model-effort R3); ohne gültige Stufe kein --effort.
+  const effort = resolution.effort && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(String(resolution.effort))
+    ? String(resolution.effort) : null;
   return {
     provider: "claude",
     model,
-    effort: null,
+    effort,
     modelChoice,
-    pluginCommand: `claude ${model ? `--model ${model} ` : ""}-p --output-format stream-json --verbose ` +
-      `${JSON.stringify(`Read ${briefFile} and execute exactly that bound leaf contract.`)}`,
+    pluginCommand: `claude ${model ? `--model ${model} ` : ""}${effort ? `--effort ${effort} ` : ""}-p --output-format stream-json --verbose ` +
+      `--permission-mode bypassPermissions --setting-sources "" --settings <Harness guards> ${JSON.stringify(prompt)}`,
   };
 }
 
+function briefPath(context, sessionId) {
+  return path.join(context.repoRoot, ".unlazy", context.scope, "executor", "briefs",
+    crypto.createHash("sha256").update(sessionId).digest("hex") + ".md");
+}
+
 function writeBrief(context, state, entry, ledger) {
-  const directory = path.join(context.repoRoot, ".unlazy", context.scope, "executor", "briefs");
-  fs.mkdirSync(directory, { recursive: true });
-  const file = path.join(directory, crypto.createHash("sha256").update(entry.sessionId).digest("hex") + ".md");
+  const file = briefPath(context, entry.sessionId);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
   const binding = packageBinding.findSessionBinding(context.harnessRoot, entry.sessionId, { controlRoot: context.harnessRoot });
   const value = [
     "# Bound Harness leaf",
@@ -575,11 +845,49 @@ function writeBrief(context, state, entry, ledger) {
   return { file, digest: digest(value), binding };
 }
 
+// Removes an activated scope during a rollback, but only while it holds nothing that activation and
+// this executor did not write; anything else stays and is named.
+function removeActivatedScope(context, leftInPlace) {
+  const directory = path.join(context.repoRoot, ".unlazy", context.scope);
+  let entries;
+  try { entries = fs.readdirSync(directory); } catch { return; }
+  const foreign = entries.filter((name) => !ACTIVATION_ENTRIES.has(name));
+  if (foreign.length) {
+    leftInPlace.push(path.relative(context.repoRoot, directory).split(path.sep).join("/") + " (holds " + foreign.join(", ") + ")");
+    return;
+  }
+  fs.rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 25 });
+}
+
+// The undo of a prepared session under the lock: a state file this start created and that holds
+// nothing else goes away; otherwise only this session leaves, recorded as an event.
+function rollbackPreparedSession(context, sessionId, existedBefore) {
+  const file = statePath(context.repoRoot, context.scope);
+  const lock = acquireStateLock(context);
+  try {
+    if (!fs.existsSync(file)) return;
+    const state = readState(context);
+    delete state.sessions[sessionId];
+    const own = state.events.every((event) => event.subject === sessionId || event.type === "owner-start-verified");
+    if (!existedBefore && own && !Object.keys(state.sessions).length && !Object.keys(state.waves).length) {
+      fs.rmSync(file, { force: true });
+      return;
+    }
+    transition(state, "session-rolled-back", sessionId, "prepared", null, {});
+    atomicJson(file, state);
+  } finally {
+    releaseStateLock(lock);
+  }
+}
+
+// Runtime-state-recovery R1: activation and leaf preparation are one step. Phase 1 decides everything
+// without writing under .unlazy or in the bundle; phase 2 writes with a rollback journal, so a refused
+// start leaves no activated scope, lease, binding, index entry or executor state behind.
 function prepare(context, options, explicitLeaf) {
-  ensureActive(context);
-  const state = readState(context, true);
+  // Phase 1: read and decide only.
   const sessionId = session(options.sessionId);
   const bootstrapSessionId = options.bootstrapSession ? session(options.bootstrapSession) : null;
+  assertNotOrchestrator({ harnessRoot: context.harnessRoot, sessionId, env: process.env, bootstrapSession: bootstrapSessionId });
   if (bootstrapSessionId) {
     const bootstrapRecord = packageBootstrap.find({ harnessRoot: context.harnessRoot, sessionId: bootstrapSessionId });
     if (!repository.samePath(bootstrapRecord.repoRoot, context.repoRoot) ||
@@ -587,20 +895,67 @@ function prepare(context, options, explicitLeaf) {
       fail("BOOTSTRAP_IDENTITY", "bootstrap session does not own this repository, package, and scope");
     }
   }
+  const stateExisted = fs.existsSync(statePath(context.repoRoot, context.scope));
+  const state = readState(context, true);
   if (state.sessions[sessionId]) {
     const existing = state.sessions[sessionId];
     if (existing.state !== "prepared") fail("SESSION_EXISTS", "session already exists in state " + existing.state);
-    return { state, entry: existing, idempotent: true };
+    return { state, entry: existing, idempotent: true, releasedLeases: [] };
   }
+  // Ein Paket startet erst mit einem Owner-Startsatz (orchestrator-rules-enforcement R3); geprueft wird
+  // nur der erste Start, spaetere Leaves desselben Pakets tragen state.ownerStart.
+  const ownerStart = stateExisted ? null : verifyOwnerStart({ harnessRoot: context.harnessRoot, repoRoot: context.repoRoot,
+    packageId: context.packageId, runPackageId: options.run ?? null });
   const leaf = leafForNext(context, state, explicitLeaf);
   const ledger = ledgerRecord(context.packageInfo, leaf);
-  const modelResolution = packageModel(context, options, leafOwns(ledger.text));
+  const modelResolution = packageModel(context, options, ledger.text, undefined, ledger.file);
   const provider = modelResolution.provider;
-  childOk(runNode(context.tools.gateCheck, ["--claim", "--root", context.repoRoot, "--package", context.packageId,
-    "--scope", context.scope, "--leaf", leaf], { cwd: context.repoRoot }), "leaf claim");
+  doctor(context);
+  const { dormant, young } = splitOverlaps(context,
+    packageOwnership.crossPackageOverlaps(context.repoRoot, context.packageId, context.scope));
+  if (young.length) failOverlap(context, young);
+  const occupied = packageBinding.sessionConflict({ repoRoot: context.repoRoot, scope: context.scope, sessionId, leaf,
+    controlRoot: context.harnessRoot });
+  if (occupied) fail("SESSION_OCCUPIED", occupied, 1);
+
+  // Phase 2: every step carries its undo.
+  const journal = [];
   try {
+    // (1) Leases of this leaf without a living holder are orphaned; releasing them needs no undo.
+    const releasedLeases = releaseOrphanedLeases(context, leaf);
+    // (2) Dormant overlaps are set aside, unchanged.
+    const now = Date.now();
+    const suspended = [];
+    for (const scope of dormant) {
+      const moved = setAsideScope(context.repoRoot, scope, now);
+      if (!moved) continue;
+      suspended.push(moved);
+      journal.push({ step: "set-aside " + scope, undo: () => fs.renameSync(path.join(context.repoRoot, ...moved.movedTo.split("/")),
+        path.join(context.repoRoot, ".unlazy", scope)) });
+    }
+    if (suspended.length) context.suspendedScopes = suspended;
+    const remaining = packageOwnership.crossPackageOverlaps(context.repoRoot, context.packageId, context.scope);
+    if (remaining.length) failOverlap(context, remaining);
+    // (3) Activation.
+    const activation = childOk(runNode(context.tools.packageCli, ["activate", "--root", context.repoRoot,
+      "--package", context.packageId, "--scope", context.scope, "--json"], { cwd: context.repoRoot }), "package activation");
+    let report = null;
+    try { report = JSON.parse(activation); } catch { /* an older Unlazy prints no JSON report */ }
+    if (Array.isArray(report?.retiredScopes) && report.retiredScopes.length) context.retiredScopes = report.retiredScopes;
+    if (report?.activated === true) {
+      journal.push({ step: "activation", undo: (leftInPlace) => removeActivatedScope(context, leftInPlace) });
+    }
+    // (4) Leaf claim.
+    childOk(gateCheckLeaf(context, "--claim", leaf), "leaf claim");
+    journal.push({ step: "leaf claim", undo: () => childOk(gateCheckLeaf(context, "--release", leaf), "leaf release") });
+    // (5) Binding.
+    const hadBinding = fs.existsSync(packageBinding.bindingPath(context.repoRoot, context.scope, sessionId));
     packageBinding.createBinding({ startPath: context.repoRoot, packageId: context.packageId,
       scope: context.scope, sessionId, leaf, controlRoot: context.harnessRoot });
+    if (!hadBinding) {
+      journal.push({ step: "binding", undo: () => packageBinding.removeBinding({ repoRoot: context.repoRoot,
+        scope: context.scope, sessionId, controlRoot: context.harnessRoot }) });
+    }
     const entry = {
       sessionId,
       leaf,
@@ -613,17 +968,46 @@ function prepare(context, options, explicitLeaf) {
       attempt: 1,
       attempts: [],
     };
+    // (6) Brief.
+    const briefFile = briefPath(context, sessionId);
+    const hadBrief = fs.existsSync(briefFile);
     const brief = writeBrief(context, state, entry, ledger);
+    if (!hadBrief) journal.push({ step: "brief", undo: () => fs.rmSync(briefFile, { force: true }) });
     Object.assign(entry, { briefFile: path.relative(context.repoRoot, brief.file).replaceAll("\\", "/"),
       briefDigest: brief.digest, owns: brief.binding.owns, delegation: delegation(modelResolution, brief.file) });
-    state.sessions[sessionId] = entry;
-    transition(state, "session-prepared", sessionId, null, "prepared", { leaf, provider, attempt: 1 });
-    saveState(context, state);
+    // (7) Executor state, the last state step, applied to the state as it is now.
+    const file = statePath(context.repoRoot, context.scope);
+    const existedBefore = fs.existsSync(file);
+    const written = updateState(context, (fresh) => {
+      if (fresh.sessions[sessionId] || fresh.history.sessions[sessionId]) {
+        fail("SESSION_EXISTS", "session " + sessionId + " was prepared concurrently", 1);
+      }
+      fresh.sessions[sessionId] = entry;
+      if (ownerStart && !fresh.ownerStart) {
+        fresh.ownerStart = { kind: ownerStart.kind, date: ownerStart.date, wording: ownerStart.wording,
+          runPackageId: ownerStart.runPackageId, lineDigest: ownerStart.lineDigest };
+        transition(fresh, "owner-start-verified", context.packageId, null, ownerStart.kind, fresh.ownerStart);
+      }
+      transition(fresh, "session-prepared", sessionId, null, "prepared", { leaf, provider, attempt: 1 });
+    }, { create: true });
+    Object.assign(state, written);
+    journal.push({ step: "executor state", undo: () => rollbackPreparedSession(context, sessionId, existedBefore) });
+    // (8) The calling session and the planning session orchestrate.
+    const caller = callerSession(process.env);
+    noteOrchestrator(context, caller, options.command === "next" ? "next" : "start");
+    noteOrchestrator(context, bootstrapSessionId, "bootstrap");
+    // (9) The planning binding ends.
     if (bootstrapSessionId) packageBootstrap.finish({ harnessRoot: context.harnessRoot, sessionId: bootstrapSessionId });
-    return { state, entry, idempotent: false };
+    return { state, entry, idempotent: false, releasedLeases };
   } catch (error) {
-    runNode(context.tools.gateCheck, ["--release", "--root", context.repoRoot, "--package", context.packageId,
-      "--scope", context.scope, "--leaf", leaf], { cwd: context.repoRoot });
+    const rolledBack = [];
+    const leftInPlace = [];
+    for (const item of journal.reverse()) {
+      try { item.undo(leftInPlace); rolledBack.push(item.step); }
+      catch (undoError) { leftInPlace.push(item.step + " (" + undoError.message + ")"); }
+    }
+    if (rolledBack.length) error.message += "; rolled back: " + rolledBack.join(", ");
+    if (leftInPlace.length) error.message += "; left in place: " + leftInPlace.join("; ");
     throw error;
   }
 }
@@ -646,29 +1030,69 @@ function providerSessionState(run) {
   return run.state;
 }
 
-async function synchronizeSession(context, state, entry) {
-  if (!entry.runId) return entry;
-  const run = await refreshProviderRun({ repoRoot: context.repoRoot, scope: context.scope, runId: entry.runId,
-    expected: { packageId: context.packageId, sessionId: entry.sessionId, leaf: entry.leaf, provider: entry.provider } });
-  const next = providerSessionState(run);
-  const detail = {
-    runId: run.runId,
-    handle: run.nativeHandle || entry.handle || null,
-    deadlineAt: run.deadlineAt,
-    lastHeartbeatAt: run.lastHeartbeatAt,
-    providerOutputDigest: run.providerOutputDigest || entry.providerOutputDigest || null,
-    providerOutputEvidence: false,
-    ...(run.failure ? { failure: run.failure } : {}),
-  };
-  if (entry.state !== next || entry.lastHeartbeatAt !== detail.lastHeartbeatAt || entry.handle !== detail.handle) {
-    setSessionState(state, entry, next, "provider-sync", detail);
-    saveState(context, state);
+// A stop the parent requested stays requested (decision 3): the measured 02.10.2026 run showed abandonWave
+// setting abort-requested and a later sync overwriting it with provider-returned. Sessions that left
+// the provider route (verified, reassigned, reopened) keep their state as well.
+const REQUESTED_STATES = new Set(["abort-requested", "timeout-requested"]);
+const SETTLED_STATES = new Set(["verified", "reassigned", "reopened", "transferred"]);
+
+// Reads the provider run outside the lock and applies its result to the fresh session: the run's handle,
+// end and output always land in the session's fields; the session state follows the run unless the
+// session is requested or settled. Returns the fresh session entry.
+async function synchronizeSession(context, sessionId) {
+  const known = sessionOf(readState(context), sessionId);
+  if (!known.runId) return known;
+  const run = await refreshProviderRun({ repoRoot: context.repoRoot, scope: context.scope, runId: known.runId,
+    expected: { packageId: context.packageId, sessionId, leaf: known.leaf, provider: known.provider } });
+  let released = null;
+  const state = updateState(context, (fresh) => {
+    const entry = fresh.sessions[sessionId];
+    if (!entry || entry.runId !== run.runId) return false;
+    const next = REQUESTED_STATES.has(entry.state) || SETTLED_STATES.has(entry.state) ? entry.state : providerSessionState(run);
+    const detail = {
+      runId: run.runId,
+      handle: run.nativeHandle || entry.handle || null,
+      deadlineAt: run.deadlineAt,
+      lastHeartbeatAt: run.lastHeartbeatAt,
+      providerRunState: run.state,
+      providerFinishedAt: run.finishedAt || null,
+      providerExitCode: run.exitCode ?? null,
+      providerOutputDigest: run.providerOutputDigest || entry.providerOutputDigest || null,
+      providerOutputEvidence: false,
+      ...(run.failure ? { failure: run.failure } : {}),
+    };
+    if (entry.state === next && entry.lastHeartbeatAt === detail.lastHeartbeatAt && entry.handle === detail.handle &&
+        entry.providerRunState === detail.providerRunState) return false;
+    const before = entry.state;
+    setSessionState(fresh, entry, next, "provider-sync", detail);
+    // Only the transition into a releasing state frees lease and binding, not every later status call; a
+    // requested stop whose run has ended lets go as well, because its worker is gone.
+    if ((before !== next && RELEASING_STATES.has(next)) || (REQUESTED_STATES.has(next) && RELEASING_STATES.has(run.state))) {
+      released = "provider run " + run.state;
+    }
+    return true;
+  });
+  if (released) releaseLeaf(context, sessionId, released);
+  return readState(context).sessions[sessionId] || state.sessions[sessionId];
+}
+
+// Own provider programs (--claude-executable, --claude-prefix-arg, --codex-executable) are
+// test fixtures only. Outside the test mode they would let this declared Harness tool start
+// any program without the guards and without a permission prompt (guard-parity E7). The test
+// mode is an environment variable an agent cannot set through a guarded shell, because the
+// shell guard refuses environment overrides in Bash and PowerShell alike.
+export function assertProviderOverrides(options, env = process.env) {
+  const overrides = [options.claudeExecutable && "--claude-executable", options.claudePrefixArgs.length && "--claude-prefix-arg",
+    options.codexExecutable && "--codex-executable"].filter(Boolean);
+  if (overrides.length && env.KEEL_EXECUTOR_TEST_MODE !== "1") {
+    fail("PROVIDER_OVERRIDE", overrides.join(", ") + " is only available to the executor's own tests (KEEL_EXECUTOR_TEST_MODE=1)", 1);
   }
-  return entry;
 }
 
 async function dispatch(context, options) {
-  ensureActive(context);
+  assertActive(context);
+  noteOrchestrator(context, callerSession(process.env), "dispatch");
+  assertProviderOverrides(options);
   const state = readState(context);
   const wave = id(options.wave, "wave");
   if (state.waves[wave]) fail("WAVE_EXISTS", "wave already recorded: " + wave);
@@ -676,92 +1100,166 @@ async function dispatch(context, options) {
   const leaves = entries.map((entry) => entry.leaf);
   if (new Set(leaves).size !== leaves.length) fail("WAVE_DUPLICATE_LEAF", "a wave may start each leaf only once");
   const base = ["--root", context.repoRoot, "--package", context.packageId, "--scope", context.scope, "--wave", wave];
+  const sessionIds = entries.map((entry) => entry.sessionId);
   const launched = [];
+  let opened = false;
   try {
     childOk(runNode(context.tools.dispatchCheck, ["open", ...base, ...leaves.flatMap((leaf) => ["--leaf", leaf])],
       { cwd: context.repoRoot }), "dispatch open");
-    state.waves[wave] = { state: "open", leaves, sessions: entries.map((entry) => entry.sessionId), openedAt: new Date().toISOString() };
-    transition(state, "wave-opened", wave, null, "open", { leaves, sessions: state.waves[wave].sessions });
-    saveState(context, state);
-    for (const entry of entries) {
-      setSessionState(state, entry, "starting", "provider-starting", { wave, startedAt: new Date().toISOString() });
-      saveState(context, state);
-      let run;
-      try {
-        run = await launchProviderRun({
-          repoRoot: context.repoRoot,
-          packageId: context.packageId,
-          scope: context.scope,
-          sessionId: entry.sessionId,
-          leaf: entry.leaf,
-          provider: entry.provider,
-          briefFile: path.resolve(context.repoRoot, entry.briefFile),
-          deadlineSeconds: options.deadlineSeconds || 900,
-          startTimeoutSeconds: options.startTimeoutSeconds || 30,
-          maxTurns: options.maxTurns || 32,
-          claudeExecutable: resolveClaudeExecutable(options.claudeExecutable),
-          claudePrefixArgs: [...options.claudePrefixArgs, ...claudeWorkerModelArgs(entry.delegation)],
-          attempt: entry.attempt || 1,
-        });
-      } catch (error) {
-        run = error.run || null;
-        const detail = {
-          wave,
-          runId: run?.runId || null,
-          handle: run?.nativeHandle || null,
-          failure: run?.failure || { code: error.code || "PROVIDER_START_FAILED", message: error.message },
-          failedAt: new Date().toISOString(),
-        };
-        setSessionState(state, entry, "provider-start-failed", "provider-start-failed", detail);
-        throw error;
+    updateState(context, (fresh) => {
+      if (fresh.waves[wave]) fail("WAVE_EXISTS", "wave already recorded: " + wave);
+      for (const sessionId of sessionIds) {
+        if (fresh.sessions[sessionId]?.state !== "prepared") fail("SESSION_STATE", sessionId + " is not prepared");
       }
+      fresh.waves[wave] = { state: "open", leaves, sessions: sessionIds, openedAt: new Date().toISOString() };
+      transition(fresh, "wave-opened", wave, null, "open", { leaves, sessions: sessionIds });
+    });
+    opened = true;
+    for (const entry of entries) {
+      const run = await launchMember(context, options, entry.sessionId, wave);
       launched.push(run);
-      setSessionState(state, entry, providerSessionState(run), "provider-started", {
-        wave,
-        runId: run.runId,
-        handle: run.nativeHandle,
-        deadlineAt: run.deadlineAt,
-        lastHeartbeatAt: run.lastHeartbeatAt,
-        nativeStartedAt: run.nativeStartedAt || new Date().toISOString(),
-        providerOutputEvidence: false,
-      });
       childOk(runNode(context.tools.dispatchCheck,
         ["start", ...base, "--leaf", entry.leaf, "--handle", run.nativeHandle], { cwd: context.repoRoot }), "dispatch start");
-      saveState(context, state);
     }
     childOk(runNode(context.tools.dispatchCheck, ["seal", ...base], { cwd: context.repoRoot }), "dispatch seal");
   } catch (error) {
+    const stopped = [];
     for (const run of launched) {
       try {
         await requestProviderStop({ repoRoot: context.repoRoot, scope: context.scope, runId: run.runId,
           action: "abort", reason: "another provider failed before dispatch sealing" });
-        const entry = state.sessions[run.sessionId];
-        if (entry && !["verified", "reassigned"].includes(entry.state)) {
-          setSessionState(state, entry, "abort-requested", "provider-abort-requested", {
-            runId: run.runId,
-            wave,
-            reason: "dispatch wave could not be sealed",
-          });
-        }
+        stopped.push(run);
       } catch { /* preserve the original start failure and durable run state */ }
     }
     runNode(context.tools.dispatchCheck, ["abandon", ...base, "--reason", "executor dispatch failed before wait"],
       { cwd: context.repoRoot });
-    if (state.waves[wave]) {
-      const before = state.waves[wave].state;
-      Object.assign(state.waves[wave], { state: "abandoned", abandonedAt: new Date().toISOString(),
-        reason: "executor dispatch failed before wait" });
-      transition(state, "wave-abandoned", wave, before, "abandoned", { reason: state.waves[wave].reason });
+    if (opened) {
+      updateState(context, (fresh) => {
+        for (const run of stopped) {
+          const entry = fresh.sessions[run.sessionId];
+          if (entry && !SETTLED_STATES.has(entry.state)) {
+            setSessionState(fresh, entry, "abort-requested", "provider-abort-requested", {
+              runId: run.runId, wave, reason: "dispatch wave could not be sealed" });
+          }
+        }
+        const record = fresh.waves[wave];
+        if (record && ["open", "sealed"].includes(record.state)) {
+          const before = record.state;
+          Object.assign(record, { state: "abandoned", abandonedAt: new Date().toISOString(),
+            reason: "executor dispatch failed before wait" });
+          transition(fresh, "wave-abandoned", wave, before, "abandoned", { reason: record.reason });
+        }
+      });
     }
-    saveState(context, state);
     throw error;
   }
-  const now = new Date().toISOString();
-  Object.assign(state.waves[wave], { state: "sealed", sealedAt: now });
-  transition(state, "wave-sealed", wave, "open", "sealed", { members: entries.length });
-  saveState(context, state);
-  return { wave, state: "sealed", members: entries.map((entry) => ({ sessionId: entry.sessionId,
-    leaf: entry.leaf, runId: entry.runId, handle: entry.handle, provider: entry.provider })) };
+  const sealed = updateState(context, (fresh) => {
+    Object.assign(fresh.waves[wave], { state: "sealed", sealedAt: new Date().toISOString() });
+    transition(fresh, "wave-sealed", wave, "open", "sealed", { members: entries.length });
+  });
+  return { wave, state: "sealed", members: sessionIds.map((sessionId) => {
+    const entry = sealed.sessions[sessionId];
+    return { sessionId, leaf: entry.leaf, runId: entry.runId, handle: entry.handle, provider: entry.provider };
+  }) };
+}
+
+// The Claude program a worker starts (decision 8). An explicitly named program that exists is used as it
+// is. Otherwise Windows takes the newest claude.exe the Claude app keeps under
+// %APPDATA%\Claude\claude-code\<version>\ or one folder deeper (measured 02.10.2026: the app moved it
+// from 2.1.284\claude.exe to 2.1.286\635c1867224a\claude.exe, and every start with the old path failed
+// with ENOENT); everywhere else, and when the app holds none, the claude program from PATH.
+export function claudeExecutableFor(requested, env = process.env, platform = process.platform) {
+  const isFile = (file) => { try { return fs.statSync(file).isFile(); } catch { return false; } };
+  if (requested && isFile(requested)) return requested;
+  if (platform === "win32" && env.APPDATA) {
+    const found = newestAppClaude(path.join(env.APPDATA, "Claude", "claude-code"), isFile);
+    if (found) return found;
+  }
+  return resolveClaudeExecutable(undefined, env, platform);
+}
+
+function versionParts(name) {
+  return /^\d+(?:\.\d+)*$/u.test(name) ? name.split(".").map((part) => Number(part)) : null;
+}
+
+function compareVersions(left, right) {
+  for (let index = 0; index < Math.max(left.length, right.length); index++) {
+    const difference = (left[index] || 0) - (right[index] || 0);
+    if (difference) return difference;
+  }
+  return 0;
+}
+
+function newestAppClaude(directory, isFile) {
+  let names;
+  try { names = fs.readdirSync(directory, { withFileTypes: true }); } catch { return null; }
+  const versions = names.filter((item) => item.isDirectory() && versionParts(item.name))
+    .sort((left, right) => compareVersions(versionParts(right.name), versionParts(left.name)));
+  for (const version of versions) {
+    const folder = path.join(directory, version.name);
+    const direct = path.join(folder, "claude.exe");
+    if (isFile(direct)) return direct;
+    let inner = [];
+    try { inner = fs.readdirSync(folder, { withFileTypes: true }).filter((item) => item.isDirectory()); } catch { inner = []; }
+    const nested = inner.map((item) => path.join(folder, item.name, "claude.exe")).filter(isFile)
+      .sort((left, right) => fs.statSync(right).mtimeMs - fs.statSync(left).mtimeMs);
+    if (nested.length) return nested[0];
+  }
+  return null;
+}
+
+// Starts the provider of one prepared session for a wave and records its handle. The provider start is
+// long work and runs outside the state lock; the state changes before and after it go through updateState.
+async function launchMember(context, options, sessionId, wave) {
+  const entry = sessionOf(updateState(context, (fresh) => {
+    const target = sessionOf(fresh, sessionId);
+    if (target.state !== "prepared") fail("SESSION_STATE", sessionId + " is not prepared", 1);
+    setSessionState(fresh, target, "starting", "provider-starting", { wave, startedAt: new Date().toISOString() });
+  }), sessionId);
+  let run;
+  try {
+    run = await launchProviderRun({
+      repoRoot: context.repoRoot,
+      packageId: context.packageId,
+      scope: context.scope,
+      sessionId,
+      leaf: entry.leaf,
+      provider: entry.provider,
+      briefFile: path.resolve(context.repoRoot, entry.briefFile),
+      deadlineSeconds: options.deadlineSeconds || 900,
+      startTimeoutSeconds: options.startTimeoutSeconds || 30,
+      maxTurns: options.maxTurns || 32,
+      claudeExecutable: claudeExecutableFor(options.claudeExecutable),
+      claudePrefixArgs: [...options.claudePrefixArgs, ...claudeWorkerModelArgs(entry.delegation)],
+      codexCommand: entry.provider === "codex" ? resolveCodexCommand(options.codexExecutable) : null,
+      harnessRoot: context.harnessRoot,
+      attempt: entry.attempt || 1,
+    });
+  } catch (error) {
+    const failed = error.run || null;
+    updateState(context, (fresh) => {
+      setSessionState(fresh, sessionOf(fresh, sessionId), "provider-start-failed", "provider-start-failed", {
+        wave,
+        runId: failed?.runId || null,
+        handle: failed?.nativeHandle || null,
+        failure: failed?.failure || { code: error.code || "PROVIDER_START_FAILED", message: error.message },
+        failedAt: new Date().toISOString(),
+      });
+    });
+    throw error;
+  }
+  updateState(context, (fresh) => {
+    setSessionState(fresh, sessionOf(fresh, sessionId), providerSessionState(run), "provider-started", {
+      wave,
+      runId: run.runId,
+      handle: run.nativeHandle,
+      deadlineAt: run.deadlineAt,
+      lastHeartbeatAt: run.lastHeartbeatAt,
+      nativeStartedAt: run.nativeStartedAt || new Date().toISOString(),
+      providerOutputEvidence: false,
+    });
+  });
+  return run;
 }
 
 function verifyLeaf(context, entry, options) {
@@ -773,20 +1271,37 @@ function verifyLeaf(context, entry, options) {
   return String(result.stdout || "");
 }
 
+// The dispatch wave as the dispatch itself reads it.
+async function dispatchWave(context, waveId) {
+  const module = await import(pathToFileURL(path.join(context.unlazyRoot, "scripts", "lib", "dispatch.mjs")).href);
+  return module.getDispatchWave(context.repoRoot, context.scope, waveId, context.packageId);
+}
+
 async function returnLeaf(context, options) {
-  ensureActive(context);
-  const state = readState(context);
+  assertActive(context);
   const sessionId = session(options.sessionId);
-  const entry = state.sessions[sessionId];
-  if (!entry) fail("SESSION_STATE", "unknown session");
-  await synchronizeSession(context, state, entry);
+  sessionOf(readState(context), sessionId);
+  const entry = await synchronizeSession(context, sessionId);
   if (entry.state !== "provider-returned") {
     fail("SESSION_STATE", "session provider has not returned successfully; current state is " + entry.state, 1);
   }
   const gateOutput = verifyLeaf(context, entry, options);
   const base = ["--root", context.repoRoot, "--package", context.packageId, "--scope", context.scope,
     "--wave", entry.wave, "--leaf", entry.leaf];
-  childOk(runNode(context.tools.dispatchCheck, ["return", ...base], { cwd: context.repoRoot }), "dispatch return");
+  // Decision 2: a return the dispatch already holds for exactly this leaf in exactly this wave is
+  // completed here instead of failing; every other dispatch refusal stays an error.
+  const recorded = runNode(context.tools.dispatchCheck, ["return", ...base], { cwd: context.repoRoot });
+  let alreadyRecorded = false;
+  let dispatchComplete = false;
+  if (recorded.status !== 0) {
+    let wave = null;
+    try { wave = await dispatchWave(context, entry.wave); } catch { wave = null; }
+    if (!wave?.returned?.[entry.leaf]) childOk(recorded, "dispatch return");
+    alreadyRecorded = true;
+    dispatchComplete = wave.state === "complete";
+  } else {
+    dispatchComplete = /^COMPLETE /mu.test(String(recorded.stdout || ""));
+  }
   childOk(runNode(context.tools.gateCheck, ["--release", "--root", context.repoRoot, "--package", context.packageId,
     "--scope", context.scope, "--leaf", entry.leaf], { cwd: context.repoRoot }), "leaf release");
   let resultDigest = null;
@@ -797,17 +1312,30 @@ async function returnLeaf(context, options) {
     }
     resultDigest = digest(fs.readFileSync(resultFile));
   }
-  setSessionState(state, entry, "verified", "leaf-returned", { returnedAt: new Date().toISOString(),
-    gateOutputDigest: digest(gateOutput), resultDigest, providerOutputEvidence: false, locallyReverified: true });
-  const waveSessions = state.waves[entry.wave].sessions.map((value) => state.sessions[value]);
-  if (waveSessions.every((value) => value.state === "verified")) {
-    state.waves[entry.wave].state = "complete";
-    state.waves[entry.wave].completedAt = new Date().toISOString();
-    transition(state, "wave-complete", entry.wave, "sealed", "complete", { sessions: state.waves[entry.wave].sessions });
-  }
-  saveState(context, state);
-  return { sessionId, leaf: entry.leaf, state: entry.state, wave: entry.wave, runId: entry.runId,
-    handle: entry.handle, providerOutputEvidence: false, locallyReverified: true };
+  const state = updateState(context, (fresh) => {
+    const target = sessionOf(fresh, sessionId);
+    if (target.state !== "provider-returned" || target.wave !== entry.wave) {
+      fail("SESSION_STATE", "session " + sessionId + " changed to " + target.state + " during its return", 1);
+    }
+    setSessionState(fresh, target, "verified", "leaf-returned", { returnedAt: new Date().toISOString(),
+      gateOutputDigest: digest(gateOutput), resultDigest, providerOutputEvidence: false, locallyReverified: true,
+      ...(alreadyRecorded ? { dispatchReturnAlreadyRecorded: true } : {}) });
+    const wave = fresh.waves[target.wave];
+    if (!wave || wave.state === "complete") return;
+    const members = wave.sessions.map((value) => fresh.sessions[value]);
+    const complete = alreadyRecorded ? dispatchComplete : members.every((value) => value?.state === "verified");
+    if (complete) {
+      const before = wave.state;
+      wave.state = "complete";
+      wave.completedAt = new Date().toISOString();
+      transition(fresh, "wave-complete", target.wave, before, "complete", { sessions: wave.sessions,
+        ...(alreadyRecorded ? { dispatchComplete: true } : {}) });
+    }
+  });
+  const result = state.sessions[sessionId];
+  return { sessionId, leaf: result.leaf, state: result.state, wave: result.wave, runId: result.runId,
+    handle: result.handle, providerOutputEvidence: false, locallyReverified: true,
+    ...(alreadyRecorded ? { dispatchReturnAlreadyRecorded: true } : {}) };
 }
 
 function transitionReason(options, fallback) {
@@ -816,82 +1344,94 @@ function transitionReason(options, fallback) {
   return value;
 }
 
-async function abandonWave(context, state, waveId, reason, timeoutSession = null) {
+// The terminal provider states a stop request does not overwrite.
+const STOPPED_STATES = new Set(["provider-start-failed", "provider-failed", "aborted", "timed-out", "vanished"]);
+
+async function abandonWave(context, waveId, reason, timeoutSession = null) {
+  const state = readState(context);
   const wave = state.waves[waveId];
   if (!wave || !["open", "sealed"].includes(wave.state)) {
     fail("WAVE_STATE", "wave must be open or sealed before abandon; current state is " + (wave?.state || "missing"));
   }
   for (const sessionId of wave.sessions) {
     const entry = state.sessions[sessionId];
-    if (!entry || ["verified", "reassigned"].includes(entry.state)) continue;
+    if (!entry || SETTLED_STATES.has(entry.state)) continue;
     const action = sessionId === timeoutSession ? "timeout" : "abort";
     if (entry.runId) {
       try {
         await requestProviderStop({ repoRoot: context.repoRoot, scope: context.scope, runId: entry.runId, action, reason });
       } catch (error) {
-        if (!["provider-start-failed", "provider-returned", "provider-failed", "aborted", "timed-out", "vanished"]
-          .includes(readProviderRun(context.repoRoot, context.scope, entry.runId).state)) throw error;
+        if (!TERMINAL_RUN_STATES.has(readProviderRun(context.repoRoot, context.scope, entry.runId).state)) throw error;
       }
-    }
-    const next = action === "timeout" ? "timeout-requested" : "abort-requested";
-    if (!["provider-start-failed", "provider-failed", "aborted", "timed-out", "vanished"].includes(entry.state)) {
-      setSessionState(state, entry, next, action + "-requested", { reason, requestedAt: new Date().toISOString() });
     }
   }
   const base = ["--root", context.repoRoot, "--package", context.packageId, "--scope", context.scope,
     "--wave", waveId, "--reason", reason];
   childOk(runNode(context.tools.dispatchCheck, ["abandon", ...base], { cwd: context.repoRoot }), "dispatch abandon");
-  const before = wave.state;
-  Object.assign(wave, { state: "abandoned", reason, abandonedAt: new Date().toISOString() });
-  transition(state, "wave-abandoned", waveId, before, "abandoned", { reason, timeoutSession });
-  saveState(context, state);
-  return wave;
+  const written = updateState(context, (fresh) => {
+    const record = fresh.waves[waveId];
+    if (!record || !["open", "sealed"].includes(record.state)) {
+      fail("WAVE_STATE", "wave " + waveId + " changed to " + (record?.state || "missing") + " during abandon", 1);
+    }
+    for (const sessionId of record.sessions) {
+      const entry = fresh.sessions[sessionId];
+      if (!entry || SETTLED_STATES.has(entry.state) || STOPPED_STATES.has(entry.state)) continue;
+      const action = sessionId === timeoutSession ? "timeout" : "abort";
+      setSessionState(fresh, entry, action + "-requested", action + "-requested", { reason, requestedAt: new Date().toISOString() });
+    }
+    const before = record.state;
+    Object.assign(record, { state: "abandoned", reason, abandonedAt: new Date().toISOString() });
+    transition(fresh, "wave-abandoned", waveId, before, "abandoned", { reason, timeoutSession });
+  });
+  return written.waves[waveId];
 }
 
 async function abortExecution(context, options) {
-  ensureActive(context);
+  assertActive(context);
   const state = readState(context);
   const sessionId = session(options.sessionId);
-  const entry = state.sessions[sessionId];
-  if (!entry) fail("SESSION_STATE", "unknown session");
+  const entry = sessionOf(state, sessionId);
   const reason = transitionReason(options, "Owner or parent aborted the bounded provider run");
   if (!entry.wave) {
-    if (entry.state !== "prepared") fail("SESSION_STATE", "unlaunched abort requires a prepared session");
-    setSessionState(state, entry, "aborted", "session-aborted", { reason, abortedAt: new Date().toISOString() });
-    saveState(context, state);
-    return publicEntry(entry);
+    updateState(context, (fresh) => {
+      const target = sessionOf(fresh, sessionId);
+      if (target.state !== "prepared" || target.wave) fail("SESSION_STATE", "unlaunched abort requires a prepared session");
+      setSessionState(fresh, target, "aborted", "session-aborted", { reason, abortedAt: new Date().toISOString() });
+    });
+    releaseLeaf(context, sessionId, reason);
+    return publicEntry(readState(context).sessions[sessionId]);
   }
-  await abandonWave(context, state, entry.wave, reason);
-  return { sessionId, wave: entry.wave, state: state.waves[entry.wave].state, reason };
+  const wave = await abandonWave(context, entry.wave, reason);
+  releaseWave(context, entry.wave, reason);
+  return { sessionId, wave: entry.wave, state: wave.state, reason };
 }
 
 async function abandonExecution(context, options) {
-  ensureActive(context);
-  const state = readState(context);
+  assertActive(context);
   const wave = id(options.wave, "wave");
   const reason = transitionReason(options, "parent abandoned the dispatch wave");
-  await abandonWave(context, state, wave, reason);
-  return { wave, state: state.waves[wave].state, reason };
+  const record = await abandonWave(context, wave, reason);
+  releaseWave(context, wave, reason);
+  return { wave, state: record.state, reason };
 }
 
 async function timeoutExecution(context, options) {
-  ensureActive(context);
+  assertActive(context);
   const state = readState(context);
   const sessionId = session(options.sessionId);
   const entry = state.sessions[sessionId];
   if (!entry || !entry.wave) fail("SESSION_STATE", "timeout requires a dispatched session");
   const reason = transitionReason(options, "provider heartbeat or deadline timed out");
-  await abandonWave(context, state, entry.wave, reason, sessionId);
+  await abandonWave(context, entry.wave, reason, sessionId);
+  releaseWave(context, entry.wave, reason);
   return { sessionId, wave: entry.wave, state: "timeout-requested", reason };
 }
 
 async function liveness(context, options) {
-  ensureActive(context);
-  const state = readState(context);
+  assertActive(context);
   const sessionId = session(options.sessionId);
-  const entry = state.sessions[sessionId];
-  if (!entry) fail("SESSION_STATE", "unknown session");
-  await synchronizeSession(context, state, entry);
+  sessionOf(readState(context), sessionId);
+  const entry = await synchronizeSession(context, sessionId);
   const run = entry.runId ? readProviderRun(context.repoRoot, context.scope, entry.runId) : null;
   return {
     sessionId,
@@ -899,6 +1439,7 @@ async function liveness(context, options) {
     state: entry.state,
     runId: entry.runId,
     handle: entry.handle,
+    providerRunState: run?.state || null,
     heartbeatAt: run?.lastHeartbeatAt || null,
     deadlineAt: run?.deadlineAt || null,
     deadlineExpired: run ? Date.now() >= Date.parse(run.deadlineAt) : false,
@@ -906,47 +1447,59 @@ async function liveness(context, options) {
   };
 }
 
-function retryExecution(context, options) {
-  ensureActive(context);
-  const state = readState(context);
-  const sessionId = session(options.sessionId);
-  const entry = state.sessions[sessionId];
-  const retryable = new Set(["provider-start-failed", "provider-failed", "aborted", "timed-out", "vanished",
-    "abort-requested", "timeout-requested"]);
-  if (!entry || !retryable.has(entry.state)) fail("SESSION_STATE", "session is not in a retryable terminal state");
+// retry holds the leaf again: lease ensured, binding and brief written anew, before the state changes.
+const RETRYABLE_STATES = new Set(["provider-start-failed", "provider-failed", "aborted", "timed-out", "vanished",
+  "abort-requested", "timeout-requested"]);
+
+function assertRetryable(state, entry) {
+  if (!entry || !RETRYABLE_STATES.has(entry.state)) fail("SESSION_STATE", "session is not in a retryable terminal state");
   if (entry.wave && state.waves[entry.wave] && state.waves[entry.wave].state !== "abandoned") {
     fail("WAVE_STATE", "retry requires the prior dispatch wave to be abandoned first");
   }
-  entry.attempts ||= [];
-  entry.attempts.push({ attempt: entry.attempt || 1, state: entry.state, wave: entry.wave || null,
-    runId: entry.runId || null, handle: entry.handle || null, failure: entry.failure || null,
-    archivedAt: new Date().toISOString() });
-  const before = entry.state;
-  Object.assign(entry, { state: "prepared", attempt: (entry.attempt || 1) + 1, wave: null, runId: null,
-    handle: null, failure: null, preparedAt: new Date().toISOString(), deadlineAt: null, lastHeartbeatAt: null });
-  transition(state, "session-retry-prepared", sessionId, before, "prepared", { attempt: entry.attempt });
-  saveState(context, state);
-  return publicEntry(entry);
 }
 
-function reassignExecution(context, options) {
-  ensureActive(context);
+function retryExecution(context, options) {
+  assertActive(context);
   const state = readState(context);
-  const sourceId = session(options.sessionId);
-  const targetId = session(options.newSessionId);
-  const source = state.sessions[sourceId];
-  if (!source) fail("SESSION_STATE", "unknown source session");
-  if (state.sessions[targetId]) fail("SESSION_EXISTS", "reassignment target session already exists");
-  if (source.wave && state.waves[source.wave] && state.waves[source.wave].state !== "abandoned") {
-    fail("WAVE_STATE", "reassignment requires the prior dispatch wave to be abandoned first");
+  const sessionId = session(options.sessionId);
+  const entry = state.sessions[sessionId];
+  assertRetryable(state, entry);
+  const ledger = ledgerRecord(context.packageInfo, entry.leaf);
+  ensureLease(context, entry.leaf);
+  packageBinding.createBinding({ startPath: context.repoRoot, packageId: context.packageId,
+    scope: context.scope, sessionId, leaf: entry.leaf, controlRoot: context.harnessRoot });
+  const brief = writeBrief(context, state, entry, ledger);
+  const written = updateState(context, (fresh) => {
+    const target = fresh.sessions[sessionId];
+    assertRetryable(fresh, target);
+    target.attempts ||= [];
+    target.attempts.push({ attempt: target.attempt || 1, state: target.state, wave: target.wave || null,
+      runId: target.runId || null, handle: target.handle || null, failure: target.failure || null,
+      archivedAt: new Date().toISOString() });
+    const before = target.state;
+    Object.assign(target, { state: "prepared", attempt: (target.attempt || 1) + 1, wave: null, runId: null,
+      handle: null, failure: null, preparedAt: new Date().toISOString(), deadlineAt: null, lastHeartbeatAt: null,
+      leaseReleasedAt: null, briefDigest: brief.digest, owns: brief.binding.owns });
+    transition(fresh, "session-retry-prepared", sessionId, before, "prepared", { attempt: target.attempt });
+  });
+  return publicEntry(written.sessions[sessionId]);
+}
+
+// A new session for the leaf of an old one, with lease, binding and a fresh brief from the current leaf
+// ledger (reassign, restart, reopen). The old binding is removed; the state is not touched here.
+function prepareSuccessor(context, state, source, targetId, options) {
+  assertNotOrchestrator({ harnessRoot: context.harnessRoot, sessionId: targetId, env: process.env });
+  if (state.sessions[targetId] || state.history.sessions[targetId]) {
+    fail("SESSION_EXISTS", "target session " + targetId + " is already known to this package", 1);
   }
-  if (!["provider-start-failed", "provider-failed", "aborted", "timed-out", "vanished", "abort-requested", "timeout-requested"]
-    .includes(source.state)) fail("SESSION_STATE", "source session is not reassignable");
   const ledger = ledgerRecord(context.packageInfo, source.leaf);
-  const modelResolution = packageModel(context, options, leafOwns(ledger.text), source.provider);
+  const modelResolution = packageModel(context, options, ledger.text, source.provider, ledger.file);
   const provider = modelResolution.provider;
+  ensureLease(context, source.leaf);
   packageBinding.createBinding({ startPath: context.repoRoot, packageId: context.packageId,
     scope: context.scope, sessionId: targetId, leaf: source.leaf, controlRoot: context.harnessRoot });
+  packageBinding.removeBinding({ repoRoot: context.repoRoot, scope: context.scope, sessionId: source.sessionId,
+    controlRoot: context.harnessRoot });
   const target = {
     sessionId: targetId,
     leaf: source.leaf,
@@ -962,18 +1515,164 @@ function reassignExecution(context, options) {
   const brief = writeBrief(context, state, target, ledger);
   Object.assign(target, { briefFile: path.relative(context.repoRoot, brief.file).replaceAll("\\", "/"),
     briefDigest: brief.digest, owns: brief.binding.owns, delegation: delegation(modelResolution, brief.file) });
-  setSessionState(state, source, "reassigned", "session-reassigned", { replacedBy: targetId, reassignedAt: new Date().toISOString() });
-  state.sessions[targetId] = target;
-  transition(state, "session-prepared", targetId, null, "prepared", { leaf: target.leaf, provider, reassignedFrom: sourceId });
-  saveState(context, state);
-  return { from: publicEntry(source), to: publicEntry(target), ownershipPreserved: true };
+  return target;
 }
 
-function recoverExecution(context, options) {
-  ensureActive(context);
+const REASSIGNABLE_STATES = new Set(["provider-start-failed", "provider-failed", "aborted", "timed-out", "vanished",
+  "abort-requested", "timeout-requested"]);
+
+function assertReassignable(state, source) {
+  if (!source) fail("SESSION_STATE", "unknown source session");
+  if (source.wave && state.waves[source.wave] && state.waves[source.wave].state !== "abandoned") {
+    fail("WAVE_STATE", "reassignment requires the prior dispatch wave to be abandoned first");
+  }
+  if (!REASSIGNABLE_STATES.has(source.state)) fail("SESSION_STATE", "source session is not reassignable");
+}
+
+function reassignExecution(context, options) {
+  assertActive(context);
+  noteOrchestrator(context, callerSession(process.env), "reassign");
   const state = readState(context);
-  const wave = id(options.wave, "wave");
-  const replacementWave = id(options.replacementWave, "replacement wave");
+  const sourceId = session(options.sessionId);
+  const targetId = session(options.newSessionId);
+  assertNotOrchestrator({ harnessRoot: context.harnessRoot, sessionId: targetId, env: process.env });
+  const source = state.sessions[sourceId];
+  if (!source) fail("SESSION_STATE", "unknown source session");
+  if (state.sessions[targetId]) fail("SESSION_EXISTS", "reassignment target session already exists");
+  assertReassignable(state, source);
+  const target = prepareSuccessor(context, state, source, targetId, options);
+  const written = updateState(context, (fresh) => {
+    const current = fresh.sessions[sourceId];
+    assertReassignable(fresh, current);
+    if (fresh.sessions[targetId]) fail("SESSION_EXISTS", "reassignment target session already exists");
+    setSessionState(fresh, current, "reassigned", "session-reassigned", { replacedBy: targetId, reassignedAt: new Date().toISOString() });
+    fresh.sessions[targetId] = target;
+    transition(fresh, "session-prepared", targetId, null, "prepared", { leaf: target.leaf, provider: target.provider,
+      reassignedFrom: sourceId });
+  });
+  return { from: publicEntry(written.sessions[sourceId]), to: publicEntry(written.sessions[targetId]), ownershipPreserved: true };
+}
+
+// Decision 4: restart one member. Allowed for a member of a sealed wave whose return failed, whose provider
+// ended or whose stop was requested, and for a provider-returned member of an abandoned wave.
+const RESTARTABLE_IN_SEALED = new Set(["provider-returned", "provider-failed", "provider-start-failed", "aborted",
+  "timed-out", "vanished", "abort-requested", "timeout-requested"]);
+
+function restartMode(state, entry) {
+  const wave = entry?.wave ? state.waves[entry.wave] : null;
+  if (!entry || !wave) fail("SESSION_STATE", "restart requires a dispatched session of a current wave", 1);
+  if (wave.state === "sealed" && RESTARTABLE_IN_SEALED.has(entry.state)) return "sealed";
+  if (wave.state === "abandoned" && entry.state === "provider-returned") return "abandoned";
+  fail("SESSION_STATE", "restart is not possible for " + entry.sessionId + " in state " + entry.state +
+    " of a " + wave.state + " wave", 1);
+}
+
+async function restartExecution(context, options) {
+  assertActive(context);
+  noteOrchestrator(context, callerSession(process.env), "restart");
+  assertProviderOverrides(options);
+  if (!options.newSessionId) fail("USAGE", "restart requires --new-session ID");
+  if (options.reason === undefined) fail("USAGE", "restart requires --reason TEXT");
+  const reason = transitionReason(options);
+  const sourceId = session(options.sessionId);
+  const targetId = session(options.newSessionId);
+  let state = readState(context);
+  const source = sessionOf(state, sourceId);
+  if (source.runId) {
+    try {
+      await requestProviderStop({ repoRoot: context.repoRoot, scope: context.scope, runId: source.runId,
+        action: "abort", reason: "restart: " + reason });
+    } catch (error) {
+      // A run that already ended is no error.
+      if (!TERMINAL_RUN_STATES.has(readProviderRun(context.repoRoot, context.scope, source.runId).state)) throw error;
+    }
+  }
+  state = readState(context);
+  const mode = restartMode(state, sessionOf(state, sourceId));
+  const target = prepareSuccessor(context, state, state.sessions[sourceId], targetId, options);
+  const waveId = source.wave;
+  updateState(context, (fresh) => {
+    const current = sessionOf(fresh, sourceId);
+    if (restartMode(fresh, current) !== mode) fail("SESSION_STATE", "session " + sourceId + " changed during restart", 1);
+    if (fresh.sessions[targetId] || fresh.history.sessions[targetId]) fail("SESSION_EXISTS", "target session already exists", 1);
+    replaceMember(fresh, current, target, "reassigned", "session-restarted", { reason, mode });
+  });
+  if (mode === "abandoned") return { from: sourceId, to: publicEntry(readState(context).sessions[targetId]), wave: waveId,
+    mode, reason, next: "dispatch --wave <new wave> --session " + targetId };
+  return { from: sourceId, ...(await startInWave(context, options, targetId, waveId, "restart")), mode, reason };
+}
+
+// Decision 5: rework a verified member in its wave.
+async function reopenExecution(context, options) {
+  assertActive(context);
+  noteOrchestrator(context, callerSession(process.env), "reopen");
+  assertProviderOverrides(options);
+  if (!options.newSessionId) fail("USAGE", "reopen requires --new-session ID");
+  if (options.reason === undefined) fail("USAGE", "reopen requires --reason TEXT");
+  const reason = transitionReason(options);
+  const sourceId = session(options.sessionId);
+  const targetId = session(options.newSessionId);
+  const state = readState(context);
+  const source = sessionOf(state, sourceId);
+  if (source.state !== "verified") fail("SESSION_STATE", "reopen requires a verified session; " + sourceId + " is " + source.state, 1);
+  const waveId = source.wave;
+  if (!waveId || !state.waves[waveId] || !["sealed", "complete"].includes(state.waves[waveId].state)) {
+    fail("WAVE_STATE", "reopen requires the session's wave to be sealed or complete", 1);
+  }
+  const target = prepareSuccessor(context, state, source, targetId, options);
+  childOk(runNode(context.tools.dispatchCheck, ["reopen", "--root", context.repoRoot, "--package", context.packageId,
+    "--scope", context.scope, "--wave", waveId, "--leaf", source.leaf, "--reason", reason], { cwd: context.repoRoot }),
+  "dispatch reopen");
+  updateState(context, (fresh) => {
+    const current = sessionOf(fresh, sourceId);
+    if (current.state !== "verified" || current.wave !== waveId) fail("SESSION_STATE", "session " + sourceId + " changed during reopen", 1);
+    if (fresh.sessions[targetId] || fresh.history.sessions[targetId]) fail("SESSION_EXISTS", "target session already exists", 1);
+    const wave = fresh.waves[waveId];
+    if (wave.state === "complete") {
+      wave.state = "sealed";
+      delete wave.completedAt;
+      transition(fresh, "wave-reopened", waveId, "complete", "sealed", { leaf: current.leaf, reason });
+    }
+    replaceMember(fresh, current, target, "reopened", "session-reopened", { reason });
+  });
+  return { from: sourceId, ...(await startInWave(context, options, targetId, waveId, "reopen")), reason };
+}
+
+// The old session leaves for history in its final state, the new one takes its place in the wave (a
+// sealed wave) or stays prepared for a new wave (an abandoned one).
+function replaceMember(state, current, target, finalState, type, detail) {
+  const waveId = current.wave;
+  const wave = state.waves[waveId];
+  setSessionState(state, current, finalState, type, { ...detail, replacedBy: target.sessionId,
+    [finalState + "At"]: new Date().toISOString() });
+  state.history.sessions[current.sessionId] = { ...current, archivedAt: new Date().toISOString() };
+  delete state.sessions[current.sessionId];
+  if (detail.mode !== "abandoned") {
+    wave.sessions = wave.sessions.map((value) => (value === current.sessionId ? target.sessionId : value));
+    wave.replacedSessions = [...(wave.replacedSessions || []), { from: current.sessionId, to: target.sessionId,
+      kind: finalState, at: new Date().toISOString() }];
+  }
+  state.sessions[target.sessionId] = target;
+  transition(state, "session-prepared", target.sessionId, null, "prepared", { leaf: target.leaf, provider: target.provider,
+    [finalState === "reopened" ? "reopenedFrom" : "restartedFrom"]: current.sessionId, wave: detail.mode === "abandoned" ? null : waveId });
+}
+
+// A prepared member of a sealed wave starts like a dispatch member; the dispatch takes its handle through
+// the restart action. A start that fails leaves the member provider-start-failed in its sealed wave, from
+// where restart can try again.
+async function startInWave(context, options, sessionId, waveId, why) {
+  const run = await launchMember(context, options, sessionId, waveId);
+  childOk(runNode(context.tools.dispatchCheck, ["restart", "--root", context.repoRoot, "--package", context.packageId,
+    "--scope", context.scope, "--wave", waveId, "--leaf", run.leaf || readState(context).sessions[sessionId].leaf,
+    "--handle", run.nativeHandle], { cwd: context.repoRoot }), "dispatch " + why);
+  const state = updateState(context, (fresh) => {
+    transition(fresh, "wave-member-started", waveId, fresh.waves[waveId].state, fresh.waves[waveId].state,
+      { sessionId, handle: run.nativeHandle, via: why });
+  });
+  return { wave: waveId, member: publicEntry(state.sessions[sessionId]) };
+}
+
+function assertReplacementCovers(state, wave, replacementWave) {
   const abandoned = state.waves[wave];
   const replacement = state.waves[replacementWave];
   if (!abandoned || abandoned.state !== "abandoned") fail("WAVE_STATE", "recover requires an abandoned source wave");
@@ -987,20 +1686,57 @@ function recoverExecution(context, options) {
       .find((entry) => entry?.leaf === leaf && entry.state === "verified");
     if (!verified) fail("RECOVERY_INCOMPLETE", "leaf " + leaf + " has no locally verified replacement", 1);
   }
-  childOk(runNode(context.tools.dispatchCheck, ["recover", "--root", context.repoRoot, "--package", context.packageId,
-    "--scope", context.scope, "--wave", wave, "--replacement-wave", replacementWave],
-  { cwd: context.repoRoot }), "dispatch recovery");
-  state.history.waves[wave] = { ...abandoned, state: "recovered", replacementWave, recoveredAt: new Date().toISOString() };
-  delete state.waves[wave];
-  for (const sessionId of abandoned.sessions) {
-    const entry = state.sessions[sessionId];
-    if (!entry || entry.state === "verified" || entry.wave === replacementWave) continue;
-    state.history.sessions[sessionId] = { ...entry, archivedAt: new Date().toISOString() };
-    delete state.sessions[sessionId];
+}
+
+// Decision 7: without --replacement-wave every leaf of the abandoned wave needs a verified session, in
+// the wave itself or in another complete wave. Returns leaf -> wave of that verified session.
+function verifiedCoverage(state, wave) {
+  const abandoned = state.waves[wave];
+  if (!abandoned || abandoned.state !== "abandoned") fail("WAVE_STATE", "recover requires an abandoned source wave");
+  const coverage = {};
+  const missing = [];
+  for (const leaf of abandoned.leaves) {
+    const verified = Object.values(state.sessions).find((entry) => entry.leaf === leaf && entry.state === "verified" &&
+      (entry.wave === wave || state.waves[entry.wave]?.state === "complete"));
+    if (verified) coverage[leaf] = verified.wave;
+    else missing.push(leaf);
   }
-  transition(state, "wave-recovered", wave, "abandoned", "recovered", { replacementWave });
-  saveState(context, state);
-  return { wave, state: "recovered", replacementWave, ownershipPreserved: true };
+  if (missing.length) {
+    fail("RECOVERY_INCOMPLETE", "wave " + wave + " cannot be recovered without a replacement wave: no verified session for " +
+      missing.join(", ") + " in it or in a complete wave", 1);
+  }
+  return coverage;
+}
+
+function recoverExecution(context, options) {
+  assertActive(context);
+  const state = readState(context);
+  const wave = id(options.wave, "wave");
+  const replacementWave = options.replacementWave === undefined ? null : id(options.replacementWave, "replacement wave");
+  if (replacementWave) assertReplacementCovers(state, wave, replacementWave);
+  else verifiedCoverage(state, wave);
+  childOk(runNode(context.tools.dispatchCheck, ["recover", "--root", context.repoRoot, "--package", context.packageId,
+    "--scope", context.scope, "--wave", wave, ...(replacementWave ? ["--replacement-wave", replacementWave] : [])],
+  { cwd: context.repoRoot }), "dispatch recovery");
+  let coverage = null;
+  updateState(context, (fresh) => {
+    if (replacementWave) assertReplacementCovers(fresh, wave, replacementWave);
+    else coverage = verifiedCoverage(fresh, wave);
+    const abandoned = fresh.waves[wave];
+    fresh.history.waves[wave] = { ...abandoned, state: "recovered", recoveredAt: new Date().toISOString(),
+      ...(replacementWave ? { replacementWave } : { recoveredBy: coverage }) };
+    delete fresh.waves[wave];
+    for (const sessionId of abandoned.sessions) {
+      const entry = fresh.sessions[sessionId];
+      if (!entry || entry.state === "verified" || (replacementWave && entry.wave === replacementWave)) continue;
+      fresh.history.sessions[sessionId] = { ...entry, archivedAt: new Date().toISOString() };
+      delete fresh.sessions[sessionId];
+    }
+    transition(fresh, "wave-recovered", wave, "abandoned", "recovered",
+      replacementWave ? { replacementWave } : { recoveredBy: coverage });
+  });
+  return { wave, state: "recovered", ...(replacementWave ? { replacementWave } : { recoveredBy: coverage }),
+    ownershipPreserved: true };
 }
 
 function parseIntentOutput(output) {
@@ -1062,7 +1798,7 @@ function packageCliJson(context, args, operation) {
 }
 
 function dutyTransition(context, options) {
-  ensureActive(context);
+  assertActive(context);
   const command = options.command;
   const args = [command];
   if (options.dutyId) args.push("--duty", id(options.dutyId, "duty"));
@@ -1077,7 +1813,7 @@ function dutyTransition(context, options) {
 // Owner-OK-Zeile wie beim Abschluss, nur mit der Aktion `waive-duty:<id>`; sie
 // steht nicht in PACKAGE.md, sondern im Beleg und im Pflichtstand.
 function waiveDuty(context, options) {
-  ensureActive(context);
+  assertActive(context);
   if (!options.ownerOk) fail("USAGE", "duty-waive requires --owner-ok TEXT");
   const before = readDuties(context);
   const duty = before.duties[id(options.dutyId, "duty")];
@@ -1202,12 +1938,13 @@ function assertReviewMoment(context, state, target) {
 }
 
 async function reviewManual(context, options) {
-  ensureActive(context);
+  assertActive(context);
   if (!options.sessionId) fail("USAGE", "review-manual requires --session ID of the orchestrating session");
   const sessionId = String(options.sessionId);
   if (!REVIEW_SESSION.test(sessionId)) fail("USAGE", "--session must match " + REVIEW_SESSION);
   const state = readState(context, true);
   assertReviewer(context, state, sessionId);
+  noteOrchestrator(context, sessionId, "review-manual");
   const target = reviewTarget(context, options.gate);
   const parseGates = await loadGateParser(context.repoRoot, context.unlazyRoot);
   const before = fs.readFileSync(target.file, "utf8");
@@ -1258,9 +1995,10 @@ async function reviewManual(context, options) {
   fs.writeFileSync(temporary, next, { encoding: "utf8", flag: "wx" });
   try { replaceFileSync(temporary, target.file); }
   finally { try { fs.unlinkSync(temporary); } catch { /* renamed or absent */ } }
-  transition(state, "manual-gate-reviewed", qualified, "unmet", "met",
-    { reviewer: sessionId, date, evidence: evidence.relative, evidenceSha256: evidence.sha256 });
-  saveState(context, state);
+  updateState(context, (fresh) => {
+    transition(fresh, "manual-gate-reviewed", qualified, "unmet", "met",
+      { reviewer: sessionId, date, evidence: evidence.relative, evidenceSha256: evidence.sha256 });
+  }, { create: true });
   return { packageId: context.packageId, scope: context.scope, gate: qualified, reviewed: true, idempotent: false,
     date, session: sessionId, evidence: evidence.relative, evidenceSha256: evidence.sha256, evidenceLine: value };
 }
@@ -1459,9 +2197,12 @@ async function assertCheckpointClean(context, checkpoint, repeated, witnessBefor
 }
 
 async function integrate(context, options) {
-  ensureActive(context);
+  assertActive(context);
+  noteOrchestrator(context, callerSession(process.env), "integrate");
   const state = readState(context);
-  if (!Object.keys(state.sessions).length || Object.values(state.sessions).some((entry) => entry.state !== "verified")) {
+  // Reassigned and reopened sessions were replaced and do not count (decision 7).
+  const counted = Object.values(state.sessions).filter((entry) => !["reassigned", "reopened"].includes(entry.state));
+  if (!counted.length || counted.some((entry) => entry.state !== "verified")) {
     fail("OPEN_EXECUTION", "every bound leaf session must return with local Evidence before integration", 1);
   }
   if (Object.values(state.waves).some((entry) => entry.state !== "complete")) {
@@ -1532,15 +2273,21 @@ async function integrate(context, options) {
 }
 
 async function status(context) {
-  ensureActive(context);
-  const state = readState(context, true);
-  for (const entry of Object.values(state.sessions)) {
-    if (entry.runId && !["verified", "reassigned"].includes(entry.state)) await synchronizeSession(context, state, entry);
+  // status of a package that was never started activates nothing (runtime-state-recovery R1).
+  if (!packageRefMatches(context)) {
+    const result = runNode(context.tools.packageCli, ["status", "--json", "--root", context.repoRoot,
+      "--package", context.packageId], { cwd: context.repoRoot });
+    return { active: false, executor: null, package: JSON.parse(childOk(result, "package status", [0, 1])) };
   }
+  assertActive(context);
+  for (const entry of Object.values(readState(context, true).sessions)) {
+    if (entry.runId && !SETTLED_STATES.has(entry.state)) await synchronizeSession(context, entry.sessionId);
+  }
+  const state = readState(context, true);
   const result = runNode(context.tools.packageCli, ["status", "--json", "--root", context.repoRoot,
     "--package", context.packageId], { cwd: context.repoRoot });
   const output = childOk(result, "package status", [0, 1]);
-  return { executor: state, package: JSON.parse(output) };
+  return { active: true, executor: state, package: JSON.parse(output) };
 }
 
 function assertCloseReady(context, state) {
@@ -1692,7 +2439,7 @@ function allGatesMet(context) {
 }
 
 function close(context, options) {
-  ensureActive(context);
+  assertActive(context);
   const state = readState(context);
   assertCloseReady(context, state);
   const duties = readDuties(context);
@@ -1841,6 +2588,171 @@ function publish(context, options) {
   return { ...published, ownerOk, publishReceipt: receipt.receipt };
 }
 
+// The stored binding of a session, read raw: validateBinding would refuse it exactly because the
+// contract changed, which is the case rebind exists for.
+function rawBinding(context, sessionId) {
+  const file = packageBinding.bindingPath(context.repoRoot, context.scope, sessionId);
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); }
+  catch { return null; }
+}
+
+function bindingFacts(value, fallbackOwns) {
+  return { packageDigest: value?.packageDigest ?? null, leafDigest: value?.leafDigest ?? null,
+    ownerDigest: value?.ownerDigest ?? null, headOid: value?.headOid ?? null, owns: value?.owns ?? fallbackOwns ?? [] };
+}
+
+// Renew: the prepared session keeps its id and gets a binding for the current contract. OWNS that
+// changed move the lease; a refused claim takes the old lease back byte for byte and changes nothing.
+function renewBinding(context, state, entry, reason, options) {
+  const ledger = ledgerRecord(context.packageInfo, entry.leaf);
+  const old = rawBinding(context, entry.sessionId);
+  const modelResolution = packageModel(context, options, ledger.text, entry.provider, ledger.file);
+  const before = bindingFacts(old, entry.owns);
+  const owns = packageBinding.leafOwnsFromText(ledger.text);
+  if (JSON.stringify(owns) !== JSON.stringify(before.owns)) {
+    const held = leafLeases(context, entry.leaf).map((lease) => ({ file: lease.file, bytes: fs.readFileSync(lease.file) }));
+    childOk(gateCheckLeaf(context, "--release", entry.leaf), "leaf release");
+    const claim = gateCheckLeaf(context, "--claim", entry.leaf);
+    if (claim.status !== 0) {
+      for (const lease of held) {
+        try { fs.writeFileSync(lease.file, lease.bytes, { flag: "wx" }); } catch { /* the claim prints what holds it */ }
+      }
+      fail("CLAIM_REFUSED", "the renewed OWNS of " + entry.leaf + " cannot be claimed; the old lease and binding stay: " +
+        (String(claim.stdout || "") + String(claim.stderr || "")).trim().slice(0, 2_000), 1);
+    }
+  }
+  packageBinding.createBinding({ startPath: context.repoRoot, packageId: context.packageId,
+    scope: context.scope, sessionId: entry.sessionId, leaf: entry.leaf, controlRoot: context.harnessRoot });
+  const brief = writeBrief(context, state, entry, ledger);
+  const after = bindingFacts(rawBinding(context, entry.sessionId));
+  const written = updateState(context, (fresh) => {
+    const target = sessionOf(fresh, entry.sessionId);
+    if (target.state !== "prepared") fail("SESSION_STATE", entry.sessionId + " changed to " + target.state + " during rebind", 1);
+    Object.assign(target, { provider: modelResolution.provider, briefDigest: brief.digest, owns: brief.binding.owns,
+      delegation: delegation(modelResolution, brief.file), updatedAt: new Date().toISOString() });
+    transition(fresh, "session-rebound", target.sessionId, target.state, target.state, { reason, before, after });
+  });
+  return { rebound: true, transferred: false, before, after, ...publicEntry(written.sessions[entry.sessionId]) };
+}
+
+// Transfer: a continued session takes over the prepared leaf under its new id. The lease stays and no
+// file of the OWNS is touched, so no work is lost.
+function transferBinding(context, state, entry, newSessionId, reason) {
+  assertNotOrchestrator({ harnessRoot: context.harnessRoot, sessionId: newSessionId, env: process.env });
+  if (state.sessions[newSessionId] || state.history.sessions[newSessionId]) {
+    fail("SESSION_EXISTS", "session " + newSessionId + " is already known to this package", 1);
+  }
+  const occupied = packageBinding.sessionConflict({ repoRoot: context.repoRoot, scope: context.scope,
+    sessionId: newSessionId, leaf: entry.leaf, controlRoot: context.harnessRoot });
+  if (occupied) fail("SESSION_OCCUPIED", occupied, 1);
+  const ledger = ledgerRecord(context.packageInfo, entry.leaf);
+  const old = rawBinding(context, entry.sessionId);
+  if (JSON.stringify(packageBinding.leafOwnsFromText(ledger.text)) !== JSON.stringify(old?.owns ?? entry.owns ?? [])) {
+    fail("SESSION_STATE", "the OWNS of " + entry.leaf + " changed since " + entry.sessionId + " was bound; renew first: " +
+      "rebind --session " + entry.sessionId + " --reason <text>, then transfer", 1);
+  }
+  packageBinding.createBinding({ startPath: context.repoRoot, packageId: context.packageId,
+    scope: context.scope, sessionId: newSessionId, leaf: entry.leaf, controlRoot: context.harnessRoot });
+  const target = { ...entry, sessionId: newSessionId, attempts: [...(entry.attempts || [])], transferredFrom: entry.sessionId,
+    updatedAt: new Date().toISOString() };
+  const brief = writeBrief(context, state, target, ledger);
+  const stored = entry.delegation || {};
+  const choice = stored.modelChoice || {};
+  target.delegation = delegation({ provider: stored.provider || entry.provider, model: stored.model, cliModel: stored.model,
+    effort: stored.effort, source: choice.source, label: choice.label, side: choice.side,
+    ...(choice.reason ? { reason: choice.reason } : {}) }, brief.file);
+  Object.assign(target, { briefFile: path.relative(context.repoRoot, brief.file).replaceAll("\\", "/"),
+    briefDigest: brief.digest, owns: brief.binding.owns });
+  packageBinding.removeBinding({ repoRoot: context.repoRoot, scope: context.scope, sessionId: entry.sessionId,
+    controlRoot: context.harnessRoot });
+  updateState(context, (fresh) => {
+    const current = sessionOf(fresh, entry.sessionId);
+    if (current.state !== "prepared") fail("SESSION_STATE", entry.sessionId + " changed to " + current.state + " during rebind", 1);
+    if (fresh.sessions[newSessionId] || fresh.history.sessions[newSessionId]) {
+      fail("SESSION_EXISTS", "session " + newSessionId + " is already known to this package", 1);
+    }
+    fresh.history.sessions[entry.sessionId] = { ...current, state: "transferred", transferredTo: newSessionId,
+      transferredAt: new Date().toISOString() };
+    delete fresh.sessions[entry.sessionId];
+    fresh.sessions[newSessionId] = target;
+    transition(fresh, "session-transferred", newSessionId, "prepared", "prepared",
+      { reason, from: entry.sessionId, to: newSessionId, leaf: entry.leaf });
+  });
+  return { rebound: false, transferred: true, from: entry.sessionId, ...publicEntry(target) };
+}
+
+// Runtime-state-recovery R4: a prepared leaf binding is renewed after a contract change or transferred
+// to a new session id. A started session goes through abort, then retry or reassign.
+function rebindExecution(context, options) {
+  if (options.reason === undefined) fail("USAGE", "rebind requires --reason TEXT");
+  const reason = transitionReason(options);
+  assertPackageRef(context);
+  const state = readState(context);
+  doctor(context);
+  overlapCheck(context);
+  let sourceId;
+  if (options.sessionId) sourceId = session(options.sessionId);
+  else if (options.leaf) {
+    if (!options.newSessionId) fail("USAGE", "rebind --leaf requires --new-session");
+    const leaf = id(options.leaf, "leaf");
+    const candidates = Object.values(state.sessions).filter((item) => item.leaf === leaf && item.state === "prepared");
+    if (candidates.length !== 1) {
+      fail("USAGE", "rebind --leaf needs exactly one prepared session of " + leaf + "; candidates: " +
+        (Object.values(state.sessions).filter((item) => item.leaf === leaf)
+          .map((item) => item.sessionId + "=" + item.state).join(", ") || "none"));
+    }
+    sourceId = candidates[0].sessionId;
+  } else fail("USAGE", "rebind requires --session ID or --leaf LEAF with --new-session ID");
+  const entry = state.sessions[sourceId];
+  if (!entry) fail("SESSION_STATE", "unknown session " + sourceId, 1);
+  if (entry.state !== "prepared") {
+    fail("SESSION_STATE", "rebind renews or transfers only a prepared session; " + sourceId + " is " + entry.state +
+      ": abort it, then retry or reassign", 1);
+  }
+  if (options.newSessionId) return transferBinding(context, state, entry, session(options.newSessionId), reason);
+  return renewBinding(context, state, entry, reason, options);
+}
+
+function isRepositoryRoot(dir) {
+  try {
+    const info = fs.lstatSync(path.join(dir, ".git"));
+    return info.isDirectory() || info.isFile();
+  } catch { return false; }
+}
+
+// Runtime-state-recovery R3: runtime remnants without a bundle or a living holder are retired on
+// purpose, never in passing. Without --apply this is a preview that changes nothing.
+function cleanupRuntimeCommand(options) {
+  if (!options.root) fail("USAGE", "cleanup-runtime requires --root DIR");
+  if (options.packageId || options.scope || options.sessions.length) {
+    fail("USAGE", "cleanup-runtime takes no --package, --scope or --session");
+  }
+  const dir = path.resolve(options.root);
+  if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) fail("USAGE", "--root must be a directory: " + dir);
+  const controlRoot = path.resolve(options.harnessRoot || dir);
+  const apply = options.apply === true;
+  const tools = apply && isRepositoryRoot(dir) ? scripts(locateUnlazy(dir, options.unlazyRoot)) : null;
+  const notReleasedLeases = [];
+  let invalidPlanningRecords = [];
+  const releaseLease = ({ file, scope, packageId, leaf }) => {
+    if (!tools) return;
+    const result = runNode(tools.gateCheck, ["--release", "--root", dir, "--package", packageId, "--scope", scope,
+      "--leaf", leaf], { cwd: dir });
+    if (result.status !== 0 || fs.existsSync(file)) {
+      notReleasedLeases.push({ file, scope, packageId, leaf, status: result.status,
+        output: (String(result.stderr || "") + String(result.stdout || "")).trim().slice(0, 2_000) });
+    }
+  };
+  const pruneRecords = ({ apply: write }) => {
+    if (!hasHarnessConfig(controlRoot)) return [];
+    const pruned = packageBootstrap.pruneOrphanedRecords({ harnessRoot: controlRoot, dryRun: !write });
+    invalidPlanningRecords = pruned.invalidRecords || [];
+    return pruned.prunedRecords;
+  };
+  const result = runtimeScopes.cleanupRuntime({ dir, controlRoot, apply, releaseLease, pruneRecords });
+  return { ...result, apply, notReleasedLeases, invalidPlanningRecords };
+}
+
 function publicEntry(entry) {
   return { sessionId: entry.sessionId, leaf: entry.leaf, provider: entry.provider, state: entry.state,
     wave: entry.wave, runId: entry.runId, handle: entry.handle, attempt: entry.attempt,
@@ -1851,14 +2763,21 @@ function publicEntry(entry) {
 const HELP = `usage: package-executor.mjs <command> --root DIR --harness-root DIR --package ID --scope ID [options]
 
 commands:
-  next/start --session ID [--leaf leaf-ID] [--provider codex|claude] [--bootstrap-session ID]
+  next/start --session ID [--leaf leaf-ID] [--provider codex|claude] [--model ID]
+             [--effort low|medium|high] [--run RUN-PACKAGE] [--bootstrap-session ID]
   dispatch --wave ID [--session ID ...] [--deadline-seconds S] [--start-timeout-seconds S]
   heartbeat|liveness --session ID
   abort|timeout --session ID --reason TEXT
   abandon --wave ID --reason TEXT
   retry --session ID
   reassign --session OLD --new-session NEW [--provider codex|claude]
+  rebind --session ID --reason TEXT
+  rebind --session OLD --new-session NEW --reason TEXT
+  rebind --leaf leaf-ID --new-session NEW --reason TEXT
   recover --wave ABANDONED --replacement-wave COMPLETE
+  recover --wave ABANDONED
+  restart --session OLD --new-session NEW --reason TEXT [--provider codex|claude] [--model ID]
+  reopen --session OLD --new-session NEW --reason TEXT [--provider codex|claude] [--model ID]
   return --session ID [--result-file PATH] [--timeout S]
   verify --session ID [--timeout S]
   resume --session ID
@@ -1872,9 +2791,64 @@ commands:
   close [--owner-ok TEXT] [--message TEXT] [--timeout S] [--reverify]
   recover-close --receipt CLOSE_RECEIPT [--message TEXT] [--timeout S]
   publish --closure-receipt PATH --owner-ok TEXT
+  cleanup-runtime --root DIR [--harness-root DIR] [--unlazy-root DIR] [--apply] [--json]
+
+start and next activate the package and prepare the leaf in one step: every check
+(session id, orchestrator, Owner start, model, doctor, overlap, occupied session)
+runs before anything is written, and a later failure rolls back activation, claim,
+binding, brief and executor state (the message names what was rolled back). The
+output reports retiredScopes, suspendedScopes and releasedLeases. Every other
+command needs an active package and refuses with PACKAGE_NOT_ACTIVE and the start
+command; status of a package that was never started activates nothing and
+reports active:false with executor:null.
+
+The calling session orchestrates and is never bound as a leaf: start, next,
+reassign and rebind refuse the calling session, the package planning session and
+every recorded orchestrator (ORCHESTRATOR_AS_LEAF); hand the build work to a new
+leaf session through dispatch. With packageContract.ownerStartRequired in
+.keel-harness.json the first start of a package needs the Owner start sentence in
+its "## Status" section,
+  Owner-Start: <YYYY-MM-DD> "<wording>"
+or --run RUN-PACKAGE whose "## Status" carries
+  Owner-Go: <YYYY-MM-DD> "<wording>"
+and names the package. A missing key means off.
+
+A leaf ledger or GATES.md may fix model and effort in its head, before the first
+gate:
+  MODEL: <provider> <model id> <effort>      (MODEL: codex runs the Codex pin)
+Precedence: call (--provider/--model/--effort), leaf, package, setting, default.
+The chosen effort reaches the Claude worker call as --effort before -p.
+
+abort, abandon and timeout free the leaf lease and binding of every session whose
+run is terminal, and so does a provider run that ends aborted, timed-out,
+vanished, provider-failed or provider-start-failed; retry and reassign claim and
+bind again. A lease without a living holder is released at the next claim of its
+leaf. rebind renews a prepared binding after a contract change (moving the lease
+when OWNS changed) or transfers it to a new session id without touching any file;
+a started session goes through abort, then retry or reassign. cleanup-runtime
+previews orphaned scopes, leases, stale session-index entries and planning
+records; --apply releases the leases, moves the scopes unchanged to
+.unlazy/.retired and never touches docs/packages.
+
+No run of the executor needs a hand edit under .unlazy. Every change of
+executor.json takes the scope lock .unlazy/<scope>/executor.lock, reads the
+current state again and writes atomically, so parallel calls keep each other's
+changes; a lock whose process is gone or that is older than 120 s is taken over
+and recorded. A sync never overwrites a requested stop (abort-requested,
+timeout-requested). A return the dispatch already holds for exactly that leaf
+and wave is completed instead of refused. restart replaces one member: in a
+sealed wave (return failed, provider ended, stop requested) the new session
+joins the same wave and starts at once; a provider-returned member of an
+abandoned wave gets a prepared session for a new dispatch. reopen reworks a
+verified member: it leaves as reopened, the wave is sealed again and the new
+session starts in it. recover without --replacement-wave resolves an abandoned
+wave whose every leaf has a verified session in it or in a complete wave.
+Without --claude-executable, or when that path is no file, Windows starts the
+newest claude.exe under %APPDATA%\\Claude\\claude-code\\<version>[\\<folder>]\\,
+otherwise the claude program from PATH; the run manifest names it.
 
 The one Owner record is the Owner-OK line, formed as
-  Owner-OK: <close|publish|waive-duty:ID> <YYYY-MM-DD> <commit-sha> "<wording>"
+  Owner-OK: <close|publish|waive-duty:ID|resolve:ID> <YYYY-MM-DD> <commit-sha> "<wording>"
 --owner-ok TEXT carries the words of the Owner from the chat. close writes that
 line into the "## Abschluss" section of PACKAGE.md and commits it with the
 closure; without the switch the line has to be there already (OWNER_OK_MISSING).
@@ -1914,7 +2888,19 @@ It needs an evidence file under evidence/ of the package, writes
 and records the event in the executor state. A leaf gate is reviewed after its
 worker returned (before return); root and node gates after every leaf gate is
 met; nothing after integration began. Gates with a CHECK stay gate-check's, and
-the ledger files stay closed to every session's own writes.`;
+the ledger files stay closed to every session's own writes.
+
+dispatch starts every worker under the guards of the Harness root:
+  Claude  claude -p --permission-mode bypassPermissions --setting-sources ""
+          --settings <the root's PreToolUse guards with fixed paths>
+  Codex   codex exec --json --dangerously-bypass-hook-trust -s workspace-write
+          -m <pin> -c model_reasoning_effort='<pin>' -c hooks.PreToolUse=<the same guards>
+Both run with KEEL_PACKAGE_SESSION (the leaf's package session) and
+KEEL_HARNESS_ROOT (the rule root). A root without its guards starts no worker
+(PROVIDER_GUARDS). --claude-executable, --claude-prefix-arg and
+--codex-executable replace the provider program and exist for the executor's
+own tests only: without KEEL_EXECUTOR_TEST_MODE=1 they are refused
+(PROVIDER_OVERRIDE).`;
 
 async function main() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
@@ -1922,6 +2908,10 @@ async function main() {
     return;
   }
   const options = parseArgs(process.argv.slice(2));
+  if (options.command === "cleanup-runtime") {
+    process.stdout.write(JSON.stringify(cleanupRuntimeCommand(options), null, 2) + "\n");
+    return;
+  }
   const context = contextFor(options);
   let result;
   if ((options.command === "start" || options.command === "next") && options.sessions.length !== 1) {
@@ -1936,6 +2926,7 @@ async function main() {
       originalGoal: prepared.state.originalGoal, originalGoalDigest: prepared.state.originalGoalDigest,
       ...(context.retiredScopes ? { retiredScopes: context.retiredScopes } : {}),
       ...(context.suspendedScopes ? { suspendedScopes: context.suspendedScopes } : {}),
+      releasedLeases: prepared.releasedLeases,
       ...publicEntry(prepared.entry) };
   } else if (options.command === "dispatch") result = await dispatch(context, options);
   else if (options.command === "return") result = await returnLeaf(context, options);
@@ -1946,11 +2937,10 @@ async function main() {
     result = { sessionId: entry.sessionId, leaf: entry.leaf, locallyReverified: true,
       outputDigest: digest(verifyLeaf(context, entry, options)) };
   } else if (options.command === "resume") {
+    const known = sessionOf(readState(context), session(options.sessionId));
+    packageBinding.findSessionBinding(context.harnessRoot, known.sessionId, { controlRoot: context.harnessRoot });
+    const entry = await synchronizeSession(context, known.sessionId);
     const state = readState(context);
-    const entry = state.sessions[session(options.sessionId)];
-    if (!entry) fail("SESSION_STATE", "unknown session");
-    packageBinding.findSessionBinding(context.harnessRoot, entry.sessionId, { controlRoot: context.harnessRoot });
-    await synchronizeSession(context, state, entry);
     result = { originalOwnerDigest: state.originalOwnerDigest,
       originalOwnerRequestDigest: state.originalOwnerRequestDigest,
       originalGoal: state.originalGoal, originalGoalDigest: state.originalGoalDigest, ...publicEntry(entry) };
@@ -1960,7 +2950,10 @@ async function main() {
   else if (options.command === "heartbeat" || options.command === "liveness") result = await liveness(context, options);
   else if (options.command === "retry") result = retryExecution(context, options);
   else if (options.command === "reassign") result = reassignExecution(context, options);
+  else if (options.command === "rebind") result = rebindExecution(context, options);
   else if (options.command === "recover") result = recoverExecution(context, options);
+  else if (options.command === "restart") result = await restartExecution(context, options);
+  else if (options.command === "reopen") result = await reopenExecution(context, options);
   else if (["duty-assess", "duty-add", "duty-resolve"].includes(options.command)) {
     result = dutyTransition(context, options);
   } else if (options.command === "duty-waive") result = waiveDuty(context, options);

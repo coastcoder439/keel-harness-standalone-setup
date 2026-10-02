@@ -7,12 +7,15 @@
 // docs/packages/keel-harness-reference-completeness-repair/evidence/owner-ok-rollback-2026-09-08.md).
 // Ihre Bindung ist der Commit: beim Verbrauch muss er dem aktuellen HEAD entsprechen,
 // sonst ist die Zeile veraltet. Fuer `close` lebt sie im Abschnitt `## Abschluss` der
-// PACKAGE.md und wird mit dem Schluss-Commit versioniert; fuer `publish` und
-// `waive-duty:<id>` wird dieselbe Form gebildet und im Beleg gespeichert.
+// PACKAGE.md und wird mit dem Schluss-Commit versioniert; fuer `publish`,
+// `waive-duty:<id>` und `resolve:<id>` wird dieselbe Form gebildet und im Beleg
+// gespeichert. Bei `resolve:<id>` ist <id> das Paket, das zusammengefuehrt,
+// aktualisiert oder stillgelegt wird.
 
 import crypto from "node:crypto";
 
-const ACTIONS = new Set(["close", "publish", "waive-duty"]);
+const ACTIONS = new Set(["close", "publish", "waive-duty", "resolve"]);
+const TARGET_ACTIONS = ["waive-duty", "resolve"];
 const DUTY_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 const CALENDAR_DATE = /^(\d{4})-(\d{2})-(\d{2})$/u;
 const COMMIT = /^[0-9a-f]{40}$/u;
@@ -20,7 +23,7 @@ const COMMIT = /^[0-9a-f]{40}$/u;
 // Die eine Form der Zeile. Bewusst exportiert, damit Pruefer und Tests dieselbe
 // Regex benutzen wie der Bau und nicht eine eigene, abweichende Kopie.
 export const OWNER_OK_LINE =
-  /^Owner-OK:\s+(close|publish|waive-duty:[A-Za-z0-9][A-Za-z0-9._-]{0,63})\s+(\d{4}-\d{2}-\d{2})\s+([0-9a-f]{40})\s+"([^"\r\n]{1,500})"\s*$/mu;
+  /^Owner-OK:\s+(close|publish|(?:waive-duty|resolve):[A-Za-z0-9][A-Za-z0-9._-]{0,63})\s+(\d{4}-\d{2}-\d{2})\s+([0-9a-f]{40})\s+"([^"\r\n]{1,500})"\s*$/mu;
 
 function ownerOkError(code, message, exitCode = 2) {
   const error = new Error(message);
@@ -35,17 +38,19 @@ function sha256(value) {
 
 function splitAction(value) {
   const text = String(value);
-  if (text.startsWith("waive-duty:")) return { action: "waive-duty", target: text.slice("waive-duty:".length) };
+  for (const action of TARGET_ACTIONS) {
+    if (text.startsWith(action + ":")) return { action, target: text.slice(action.length + 1) };
+  }
   return { action: text, target: null };
 }
 
 function joinAction(action, target) {
-  return action === "waive-duty" ? "waive-duty:" + target : action;
+  return TARGET_ACTIONS.includes(action) ? action + ":" + target : action;
 }
 
 // Ein echtes Kalenderdatum, nicht nur vier-zwei-zwei Ziffern: 2026-02-31 ist eine
 // Zahlenfolge, kein Tag, und Date.parse wuerde sie stillschweigend verschieben.
-function validCalendarDate(value) {
+export function validCalendarDate(value) {
   const match = CALENDAR_DATE.exec(String(value));
   if (!match) return false;
   const [, year, month, day] = match;
@@ -71,19 +76,28 @@ export function parseOwnerOkLines(text) {
   return records;
 }
 
-// Nur der Abschnitt `## Abschluss` traegt Freigaben. Ein Zitat der Zeile im Status,
-// in einem Codeblock der Doku oder in einem alten Eintrag ist keine Freigabe und
-// darf den Abschluss weder ausloesen noch blockieren. Fehlt der Abschnitt, gibt es
-// keine Freigabe.
-export function abschlussSection(packageText) {
+// Der Inhalt eines `## <heading>`-Abschnitts bis zur naechsten `## `-Ueberschrift,
+// CRLF und LF gleich, mit LF verbunden; fehlt der Abschnitt, ist das Ergebnis leer.
+// Die eine Abschnittssuche fuer `## Abschluss` (hier) und `## Status` (owner-start.mjs).
+export function packageSection(packageText, heading) {
+  const escaped = String(heading).replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  const pattern = new RegExp("^##\\s+" + escaped + "\\s*$", "u");
   const lines = String(packageText || "").split(/\r?\n/u);
-  const start = lines.findIndex((item) => /^##\s+Abschluss\s*$/u.test(item));
+  const start = lines.findIndex((item) => pattern.test(item));
   if (start === -1) return "";
   let end = lines.length;
   for (let index = start + 1; index < lines.length; index += 1) {
     if (/^##\s/u.test(lines[index])) { end = index; break; }
   }
   return lines.slice(start + 1, end).join("\n");
+}
+
+// Nur der Abschnitt `## Abschluss` traegt Freigaben. Ein Zitat der Zeile im Status,
+// in einem Codeblock der Doku oder in einem alten Eintrag ist keine Freigabe und
+// darf den Abschluss weder ausloesen noch blockieren. Fehlt der Abschnitt, gibt es
+// keine Freigabe.
+export function abschlussSection(packageText) {
+  return packageSection(packageText, "Abschluss");
 }
 
 // Sucht eine Freigabe in PACKAGE.md: nur im Abschnitt `## Abschluss`. Ein Text ohne
@@ -109,6 +123,8 @@ export function formatOwnerOkLine(options) {
   if (!ACTIONS.has(action)) throw ownerOkError("OWNER_OK_INVALID", "unsupported Owner-OK action " + action);
   if (action === "waive-duty") {
     if (!target || !DUTY_ID.test(target)) throw ownerOkError("OWNER_OK_INVALID", "waive-duty requires a duty identifier");
+  } else if (action === "resolve") {
+    if (!target || !DUTY_ID.test(target)) throw ownerOkError("OWNER_OK_INVALID", "resolve requires a package identifier");
   } else if (target !== null) {
     throw ownerOkError("OWNER_OK_INVALID", action + " takes no Owner-OK target");
   }

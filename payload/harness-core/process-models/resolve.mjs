@@ -2,7 +2,7 @@
 // (Plan-Schritt 7, Gate M4). Vertrag: design/process-models.md Punkte 6, 7 und 10.
 //
 // Jeder Prozess fragt bei jedem Aufruf neu. Ergebnis: { processId, provider, model, cliModel,
-// effort?, context?, thinking?, side, source: setting|default|auto|call|fallback, reason?,
+// effort?, context?, thinking?, side, source: setting|default|auto|call|leaf|package|fallback, reason?,
 // fallback? }. Ist das gewählte Modell nicht verfügbar, greift die Rückfallregel des Prozesses:
 // „stop“ wirft ProcessModelUnavailableError mit Grund und Zeit, „rules“ liefert source
 // „fallback“ mit to „Regeln“. Nie wird still ein anderes Modell genommen.
@@ -21,25 +21,57 @@ function choiceLabel(choice) {
   return choice ? modelLabel(choice.provider, choice.model) : null;
 }
 
+/** Festlegung je Leaf oder Paket (MODEL-Zeile) als Wahl; null ohne Festlegung. */
+function declaredChoice(declared) {
+  if (!declared || typeof declared !== "object" || !declared.provider) return null;
+  return { kind: "model", provider: declared.provider, model: typeof declared.model === "string" ? declared.model : "",
+    ...(declared.effort ? { effort: declared.effort } : {}), declaredSource: declared.source === "package" ? "package" : "leaf" };
+}
+
+/** Wahl aus Aufruf-Feldern über einer Grundlage (Vererbung von Stufe und Kontext, design Schritt 4). */
+function callChoice(call, levels, provider) {
+  const base = levels[0] || null;
+  // Gleicher Anbieter: die Grundlage; anderer Anbieter: die nächste Ebene darunter, deren Anbieter passt.
+  const inherit = base && base.provider === provider ? base : levels.find((level) => level.provider === provider) || null;
+  const model = call.model ?? (inherit ? inherit.model : "");
+  const sameModel = Boolean(inherit) && (call.model === undefined || call.model === null || call.model === inherit.model);
+  const effort = call.effort || (sameModel ? inherit.effort : undefined);
+  return { kind: "model", provider, model,
+    ...(effort ? { effort } : {}),
+    ...(sameModel && inherit.context !== undefined ? { context: inherit.context } : {}) };
+}
+
 /**
- * Welche Wahl gilt (ohne Verfügbarkeit): ausdrücklich im Aufruf, gespeichert, automatisch oder
- * Voreinstellung. `call` = { provider?, model?, effort? } (nur Paket-Ausführung);
- * `owns` = OWNS-Pfade des Leafs (Codex-Sperre).
+ * Welche Wahl gilt (ohne Verfügbarkeit): ausdrücklich im Aufruf, festgelegt je Leaf oder Paket,
+ * gespeichert, automatisch oder Voreinstellung. `call` = { provider?, model?, effort? } (nur
+ * Paket-Ausführung); `declared` = Festlegung aus declaredModelChoice (nur Paket-Ausführung);
+ * `owns` = OWNS-Pfade des Leafs (Codex-Sperre, gilt auch für Festlegungen).
+ * Rangfolge: Aufruf-Felder > Leaf-MODEL > GATES.md-MODEL > Einstellung > Voreinstellung.
  */
-export function selectProcessModel({ processId, store, env = {}, legacy = null, owns, call }) {
+export function selectProcessModel({ processId, store, env = {}, legacy = null, owns, call, declared }) {
   const definition = processDefinition(processId);
   if (!definition) throw new ProcessModelError(404, "process_model_unknown", `Unbekannter Prozess „${String(processId).slice(0, 60)}“.`);
   if (!definition.choosable) throw new ProcessModelError(400, "process_model_not_choosable", `${definition.label} wird unter Einstellungen → Stimme gewählt.`);
   const stored = store?.choices?.[processId] || null;
   const fallbackDefault = defaultChoice(processId, { env, legacy });
+  const fixed = processId === "package-execution" ? declaredChoice(declared) : null;
+  if (fixed) {
+    const rule = processRuleReason(processId, fixed.provider, { owns });
+    if (rule) throw new ProcessModelError(403, "process_model_not_allowed", rule, { processId });
+  }
+  const levels = [fixed, stored?.kind === "model" ? stored : null, fallbackDefault].filter(Boolean);
   if (call && (call.provider || call.model || call.effort)) {
-    const base = stored?.kind === "model" ? stored : fallbackDefault;
-    const provider = call.provider || base?.provider;
+    const provider = call.provider || levels[0]?.provider;
     if (!provider) throw new ProcessModelError(400, "process_model_choice_invalid", `${definition.label}: im Aufruf fehlt der Anbieter.`);
     const rule = processRuleReason(processId, provider, { owns });
     if (rule) throw new ProcessModelError(403, "process_model_not_allowed", rule, { processId });
-    const choice = validateChoice(processId, { kind: "model", provider, model: call.model ?? (base?.provider === provider ? base.model : ""), ...(call.effort ? { effort: call.effort } : {}) }, { owns });
+    const choice = validateChoice(processId, callChoice(call, levels, provider), { owns });
     return { processId, definition, choice, source: "call", reason: "im Aufruf festgelegt" };
+  }
+  if (fixed) {
+    const { declaredSource, ...choice } = fixed;
+    return { processId, definition, choice: validateChoice(processId, choice, { owns }), source: declaredSource,
+      reason: declaredSource === "package" ? "im Paket festgelegt" : "im Leaf festgelegt" };
   }
   if (stored?.kind === "auto") {
     return { processId, definition, choice: fallbackDefault, source: "auto", autoRequested: true,

@@ -136,6 +136,8 @@ export function resolveClaudeExecutable(requested, env = process.env, platform =
 // way the Claude shim is resolved, without introducing shell parsing.
 export function resolveCodexCommand(requested, env = process.env, platform = process.platform) {
   const plain = (command) => ({ command, prefixArgs: [] });
+  // A JavaScript entry runs through Node, exactly as npm's shim runs bin/codex.js.
+  if (requested && /\.(?:c|m)?js$/iu.test(requested)) return { command: process.execPath, prefixArgs: [requested] };
   if (requested && requested !== "codex") return plain(requested);
   if (platform !== "win32") return plain("codex");
   const configured = regularFile(String(env.CODEX_EXECUTABLE || ""));

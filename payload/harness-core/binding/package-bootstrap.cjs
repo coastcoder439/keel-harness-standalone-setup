@@ -3,20 +3,32 @@
 // Narrow pre-activation state. It permits one session to author only the
 // versioned OWNER/PACKAGE/GATES bundle in one exact Git repository. Once the
 // package is active this capability stops, even if its runtime record remains.
+// plan files a written bundle as planned (bundle, no package.ref, no record)
+// so one session can write several packages in a row; begin and plan report
+// OWNS overlaps with active packages, prune orphaned records, and a planning
+// binding moves to a new session id only through an explicit --takeover.
 
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 const repository = require("./repository.cjs");
+const unlazyRuntime = require("./unlazy-runtime.cjs");
+const bundleFiles = require("./bundle-files.cjs");
+const ownership = require("./package-ownership.cjs");
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 const realpath = fs.realpathSync.native || fs.realpathSync;
 
-function fail(message) {
+function fail(message, code = "HARNESS_BOOTSTRAP", extra = {}) {
   const error = new Error(message);
-  error.code = "HARNESS_BOOTSTRAP";
+  error.code = code;
+  Object.assign(error, extra);
   throw error;
 }
+
+const ACTIVE_NEXT = "die Leaf-Bindung des aktiven Pakets benutzen";
+const RECORD_FILE = /^[0-9a-f]{64}\.json$/u;
 
 function id(value, label) {
   const text = String(value || "");
@@ -84,13 +96,19 @@ function scaffoldContents(packageId, date) {
   ]);
 }
 
-function untouchedScaffold(target, packageId) {
-  if (!fs.existsSync(target) || !fs.lstatSync(target).isDirectory() || fs.lstatSync(target).isSymbolicLink()) return false;
+// scaffold: exactly the four scaffold files (no links, nothing else) and
+// PACKAGE.md, GATES.md and gates/leaf-work.md byte-equal to the templates at
+// the Captured date of OWNER.md. ownerEdited: OWNER.md differs from its template.
+function scaffoldStatus(target, packageId) {
+  const status = { scaffold: false, ownerEdited: false };
+  if (!fs.existsSync(target) || !fs.lstatSync(target).isDirectory() || fs.lstatSync(target).isSymbolicLink()) return status;
   const owner = path.join(target, "OWNER.md");
-  if (!fs.existsSync(owner)) return false;
+  if (!fs.existsSync(owner) || !fs.lstatSync(owner).isFile()) return status;
   const date = fs.readFileSync(owner, "utf8").match(/^Captured:\s*(\d{4}-\d{2}-\d{2})\s*$/mu)?.[1];
-  if (!date) return false;
+  if (!date) return { scaffold: false, ownerEdited: true };
   const expected = scaffoldContents(packageId, date);
+  const same = (relative) => fs.readFileSync(path.join(target, relative)).equals(Buffer.from(expected.get(relative), "utf8"));
+  status.ownerEdited = !same("OWNER.md");
   const actual = [];
   let safe = true;
   const walk = (directory) => {
@@ -103,8 +121,14 @@ function untouchedScaffold(target, packageId) {
     }
   };
   walk(target);
-  if (!safe || JSON.stringify(actual.sort()) !== JSON.stringify([...expected.keys()].sort())) return false;
-  return [...expected].every(([relative, content]) => fs.readFileSync(path.join(target, relative), "utf8") === content);
+  if (!safe || JSON.stringify(actual.sort()) !== JSON.stringify([...expected.keys()].sort())) return status;
+  status.scaffold = ["PACKAGE.md", "GATES.md", "gates/leaf-work.md"].every(same);
+  return status;
+}
+
+function untouchedScaffold(target, packageId) {
+  const status = scaffoldStatus(target, packageId);
+  return status.scaffold && !status.ownerEdited;
 }
 
 function writeScaffold(repoRoot, packageId, date) {
@@ -132,15 +156,193 @@ function templateRootFile() {
   return fs.readFileSync(file, "utf8");
 }
 
+// The Unlazy runtime of the addressed repository, checked before any scaffold
+// or record exists. Two runtimes without --unlazy-root are refused with the
+// shared message that names both paths and the switch.
+function bootstrapRuntime(repoRoot, explicit) {
+  try {
+    return unlazyRuntime.locateUnlazy(repoRoot, explicit || undefined);
+  } catch (error) {
+    const count = Number(String(error.message).match(/found (\d+)/u)?.[1] || 0);
+    if (!explicit && count > 1) {
+      fail(error.message + ". every later package-executor and git-intent call for this package needs the same --unlazy-root");
+    }
+    fail(error.message);
+  }
+}
+
+function sameId(left, right) {
+  return String(left).toLowerCase() === String(right).toLowerCase();
+}
+
+// Active means: one scope of activeScopes names docs/packages/<packageId> in its package.ref.
+function packageActive(repoRoot, packageId) {
+  return ownership.activeScopes(repoRoot).scopes.some((item) => sameId(item.packageId, packageId));
+}
+
+function ownsArgument(values) {
+  const list = (Array.isArray(values) ? values : values === undefined || values === null ? [] : [values])
+    .flatMap((value) => String(value).split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  return list.map((value) => {
+    const normalized = ownership.normalizeOwnsGlob(value);
+    if (normalized.error) fail("--owns is invalid: " + normalized.error);
+    return { leaf: "--owns", pattern: normalized.value };
+  });
+}
+
+function writtenClaims(repoRoot, packageId) {
+  return ownership.packageOwnership(repoRoot, packageId).claims
+    .filter((claim) => !claim.pattern.includes("<"))
+    .map((claim) => ({ leaf: claim.leaf, pattern: claim.pattern }));
+}
+
+// Report only: every claim against every active scope of another package; the
+// same package id in an active scope is reported without pattern comparison.
+function overlapsFor(repoRoot, packageId, claims) {
+  const overlaps = [];
+  for (const other of ownership.activeScopes(repoRoot).scopes) {
+    if (sameId(other.packageId, packageId)) {
+      const conflict = { kind: "same-package", packageId: other.packageId, scope: other.scope,
+        leaf: null, pattern: null, otherLeaf: null, otherPattern: null };
+      overlaps.push({ ...conflict, text: ownership.describeConflict(conflict) });
+      continue;
+    }
+    const theirs = ownership.packageOwnership(repoRoot, other.packageId).claims;
+    for (const mine of claims) {
+      for (const claim of theirs) {
+        if (!ownership.globsOverlap(mine.pattern, claim.pattern)) continue;
+        const conflict = { kind: "owns-overlap", packageId: other.packageId, scope: other.scope,
+          leaf: mine.leaf, pattern: mine.pattern, otherLeaf: claim.leaf, otherPattern: claim.pattern };
+        overlaps.push({ ...conflict, text: ownership.describeConflict(conflict) });
+      }
+    }
+  }
+  return overlaps;
+}
+
+function removeQuietly(file) {
+  try { fs.unlinkSync(file); }
+  catch (error) { if (error.code !== "ENOENT") throw error; }
+}
+
+// Every record file under <harnessRoot>/.unlazy/.bootstrap/. Unreadable files are
+// reported, never deleted; a record that vanished meanwhile is no error.
+function readRecords(harnessRoot) {
+  const directory = path.join(harnessRoot, ".unlazy", ".bootstrap");
+  const records = [];
+  const invalidRecords = [];
+  let names = [];
+  try { names = fs.readdirSync(directory); }
+  catch (error) { if (error.code === "ENOENT") return { records, invalidRecords }; throw error; }
+  for (const name of names.sort()) {
+    if (!RECORD_FILE.test(name)) continue;
+    const file = path.join(directory, name);
+    try {
+      const info = fs.lstatSync(file);
+      if (!info.isFile() || info.isSymbolicLink() || (typeof info.nlink === "number" && info.nlink !== 1)) {
+        invalidRecords.push({ file, reason: "not a single-link regular file" });
+        continue;
+      }
+      const value = JSON.parse(fs.readFileSync(file, "utf8"));
+      if (!value || value.schemaVersion !== 1 || typeof value.sessionId !== "string" ||
+          !IDENTIFIER.test(String(value.packageId)) || typeof value.repoRoot !== "string") {
+        invalidRecords.push({ file, reason: "record identity is invalid" });
+        continue;
+      }
+      records.push({ file, value });
+    } catch (error) {
+      if (error.code === "ENOENT") continue;
+      invalidRecords.push({ file, reason: error instanceof SyntaxError ? "record is not valid JSON" : error.message });
+    }
+  }
+  return { records, invalidRecords };
+}
+
+function orphanReason(value) {
+  let snapshot;
+  try { snapshot = repository.repositorySnapshot(value.repoRoot); }
+  catch { return { reason: "repository-missing" }; }
+  if (!repository.samePath(snapshot.gitDir, value.gitDir)) return { reason: "repository-changed" };
+  const bundle = path.join(snapshot.repoRoot, "docs", "packages", value.packageId);
+  let info = null;
+  try { info = fs.lstatSync(bundle); } catch { /* missing */ }
+  if (!info || !info.isDirectory() || info.isSymbolicLink()) return { reason: "bundle-missing" };
+  if (packageActive(snapshot.repoRoot, value.packageId)) return { reason: "package-active" };
+  return { reason: null, repoRoot: snapshot.repoRoot };
+}
+
+function recordTime(value) {
+  const time = Date.parse(value.takenOverAt || value.createdAt || "");
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function pruneOrphanedRecords(options = {}) {
+  const harnessRoot = harnessControlRoot(options.harnessRoot);
+  const { records, invalidRecords } = readRecords(harnessRoot);
+  const prunedRecords = [];
+  const doomed = [];
+  const living = [];
+  for (const record of records) {
+    const state = orphanReason(record.value);
+    if (state.reason) doomed.push({ record, reason: state.reason });
+    else living.push({ ...record, repoRoot: state.repoRoot });
+  }
+  const groups = [];
+  for (const record of living) {
+    const group = groups.find((items) => repository.samePath(items[0].repoRoot, record.repoRoot) &&
+      sameId(items[0].value.packageId, record.value.packageId));
+    if (group) group.push(record); else groups.push([record]);
+  }
+  for (const group of groups) {
+    if (group.length < 2) continue;
+    group.sort((left, right) => recordTime(right.value) - recordTime(left.value));
+    for (const record of group.slice(1)) doomed.push({ record, reason: "superseded" });
+  }
+  for (const { record, reason } of doomed) {
+    if (!options.dryRun) removeQuietly(record.file);
+    prunedRecords.push({ sessionId: record.value.sessionId, packageId: record.value.packageId, reason });
+  }
+  return { prunedRecords, invalidRecords };
+}
+
+function quote(value) {
+  return "\"" + String(value).replaceAll("\"", "\\\"") + "\"";
+}
+
+function takeoverCommand(options, harnessRoot, repoRoot, packageId, scope, sessionId) {
+  const parts = ["node", quote(path.join(__dirname, "..", "execution", "package-bootstrap.mjs")), "begin",
+    "--harness-root", quote(harnessRoot), "--root", quote(repoRoot), "--package", packageId,
+    "--scope", scope, "--session", quote(sessionId)];
+  if (options.unlazyRoot) parts.push("--unlazy-root", quote(options.unlazyRoot));
+  for (const claim of ownsArgument(options.owns)) parts.push("--owns", quote(claim.pattern));
+  parts.push("--takeover");
+  if (options.json) parts.push("--json");
+  return parts.join(" ");
+}
+
 function begin(options) {
   const harnessRoot = harnessControlRoot(options.harnessRoot);
   const snapshot = repository.repositorySnapshot(options.root);
+  const unlazyRoot = bootstrapRuntime(snapshot.repoRoot, options.unlazyRoot);
   if (!repository.samePath(harnessRoot, snapshot.repoRoot) && !repository.isPathInside(harnessRoot, snapshot.repoRoot)) {
     fail("repository is outside the Harness root");
   }
   const packageId = id(options.packageId, "packageId");
   const scope = id(options.scope || packageId, "scope");
   const sessionId = validSession(options.sessionId);
+  const ownsClaims = ownsArgument(options.owns);
+  if (options.takeover && packageActive(snapshot.repoRoot, packageId)) {
+    fail("package " + packageId + " is active; a planning binding cannot be taken over", "PACKAGE_ACTIVE",
+      { next: ACTIVE_NEXT });
+  }
+  const { prunedRecords, invalidRecords } = pruneOrphanedRecords({ harnessRoot });
+  const report = (value) => {
+    const ownsChecked = [...ownsClaims, ...writtenClaims(snapshot.repoRoot, packageId)];
+    return { ...value, overlaps: overlapsFor(snapshot.repoRoot, packageId, ownsChecked), ownsChecked,
+      prunedRecords, invalidRecords };
+  };
   const file = recordPath(harnessRoot, sessionId);
   const existing = regularJson(file);
   if (existing) {
@@ -148,11 +350,24 @@ function begin(options) {
         existing.scope !== scope || !repository.samePath(existing.repoRoot, snapshot.repoRoot)) {
       fail("session already owns another package bootstrap");
     }
-    return { ...existing, record: file, idempotent: true };
+    return report({ ...existing, record: file, idempotent: true });
+  }
+  const holders = readRecords(harnessRoot).records.filter((item) => item.value.sessionId !== sessionId &&
+    sameId(item.value.packageId, packageId) && repository.samePath(item.value.repoRoot, snapshot.repoRoot))
+    .sort((left, right) => recordTime(right.value) - recordTime(left.value));
+  if (holders.length && !options.takeover) {
+    const holder = holders[0].value;
+    fail("package " + packageId + " is held by session " + holder.sessionId + " since " + holder.createdAt +
+      "; take it over with: " + takeoverCommand(options, harnessRoot, snapshot.repoRoot, packageId, scope, sessionId),
+    "BOOTSTRAP_TAKEOVER_REQUIRED", { holder: holder.sessionId, holderCreatedAt: holder.createdAt });
   }
   const packageDir = path.join(snapshot.repoRoot, "docs", "packages", packageId);
   const createdAt = new Date().toISOString();
-  if (fs.existsSync(packageDir)) {
+  if (holders.length) {
+    if (!fs.existsSync(packageDir) || !fs.lstatSync(packageDir).isDirectory() || fs.lstatSync(packageDir).isSymbolicLink()) {
+      fail("package bootstrap directory is missing or unsafe");
+    }
+  } else if (fs.existsSync(packageDir)) {
     if (!untouchedScaffold(packageDir, packageId)) {
       fail("package target exists without this session record and is not an untouched recoverable scaffold");
     }
@@ -160,8 +375,14 @@ function begin(options) {
   const value = { schemaVersion: 1, harnessRoot, repoRoot: snapshot.repoRoot, gitDir: snapshot.gitDir,
     packageId, scope, sessionId, packagePath: "docs/packages/" + packageId,
     createdAt };
+  if (options.unlazyRoot) value.unlazyRoot = unlazyRoot;
+  if (holders.length) {
+    value.takenOverFrom = holders[0].value.sessionId;
+    value.takenOverAt = createdAt;
+  }
   atomicJson(file, value);
-  return { ...value, record: file, packageDir, idempotent: false };
+  for (const holder of holders) removeQuietly(holder.file);
+  return report({ ...value, record: file, packageDir, idempotent: false });
 }
 
 function find(options) {
@@ -183,6 +404,41 @@ function find(options) {
   return { ...value, repoRoot: snapshot.repoRoot, packageDir: expected, record: file };
 }
 
+function doctorDiagnostics(result) {
+  if (result.error) return [String(result.error.message)];
+  let report = null;
+  try { report = JSON.parse(String(result.stdout || "")); } catch { /* not JSON */ }
+  const diagnostics = (report?.packages || []).flatMap((item) => (item.diagnostics || [])
+    .map((diagnostic) => diagnostic.code + ": " + diagnostic.message));
+  if (result.status !== 0 && !diagnostics.length) {
+    diagnostics.push(String(result.stderr || result.stdout || "package-cli doctor exited " + result.status).trim());
+  }
+  return diagnostics;
+}
+
+// Files a written bundle as planned: bundle present, no package.ref, no record.
+// Nothing is prepared under .unlazy/<scope>; starting stays a separate step.
+function plan(options) {
+  const record = find(options);
+  if (packageActive(record.repoRoot, record.packageId)) {
+    fail("package " + record.packageId + " is active", "PACKAGE_ACTIVE", { next: ACTIVE_NEXT });
+  }
+  const { prunedRecords, invalidRecords } = pruneOrphanedRecords({ harnessRoot: record.harnessRoot });
+  const unlazy = bootstrapRuntime(record.repoRoot, options.unlazyRoot);
+  const result = spawnSync(process.execPath, [path.join(unlazy, "scripts", "package-cli.mjs"), "doctor",
+    "--root", record.repoRoot, "--package", record.packageId, "--json"],
+  { windowsHide: true, timeout: 60000, encoding: "utf8" });
+  const diagnostics = doctorDiagnostics(result);
+  if (result.status !== 0 || result.error || diagnostics.length) {
+    fail("package " + record.packageId + " is not ready to be filed as planned", "PLAN_DOCTOR",
+      { exitCode: 1, diagnostics });
+  }
+  const overlaps = overlapsFor(record.repoRoot, record.packageId, writtenClaims(record.repoRoot, record.packageId));
+  removeQuietly(record.record);
+  return { packageId: record.packageId, scope: record.scope, repoRoot: record.repoRoot, state: "planned",
+    activated: false, preparedLeaf: null, overlaps, prunedRecords, invalidRecords };
+}
+
 function active(record) {
   const ref = path.join(record.repoRoot, ".unlazy", record.scope, "package.ref");
   return fs.existsSync(ref) && fs.readFileSync(ref, "utf8") === record.packagePath + "\n";
@@ -195,7 +451,7 @@ function authorizeWrite(record, targetPath) {
     return { allowed: false, code: "OUTSIDE_BOOTSTRAP_PACKAGE", next: "write only the exact package contract bundle" };
   }
   const relative = path.relative(record.packageDir, target).replaceAll("\\", "/");
-  const allowed = /^(?:OWNER\.md|PACKAGE\.md|GATES\.md|gates\/[A-Za-z0-9][A-Za-z0-9._-]*\.md)$/u.test(relative);
+  const allowed = bundleFiles.bundleFilePattern(record.packageId).test(record.packagePath + "/" + relative);
   if (!allowed) return { allowed: false, code: "BOOTSTRAP_FILE", next: "bootstrap permits OWNER.md, PACKAGE.md, GATES.md and immediate gates/*.md only" };
   let parent = path.dirname(target);
   while (repository.isPathInside(record.packageDir, parent)) {
@@ -215,4 +471,4 @@ function finish(options) {
   return { packageId: record.packageId, scope: record.scope, sessionId: record.sessionId, finished: true };
 }
 
-module.exports = { authorizeWrite, begin, find, finish, recordPath };
+module.exports = { authorizeWrite, begin, find, finish, plan, pruneOrphanedRecords, recordPath, scaffoldStatus };
