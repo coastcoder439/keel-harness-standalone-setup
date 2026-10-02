@@ -6,9 +6,39 @@
 // it enumerates every source/destination path in the patch and sends each one
 // through the existing write policy and exact package-leaf OWNS decision.
 
+const fs = require("node:fs");
 const path = require("node:path");
-const writeGuard = require("../.claude/write-guard.js");
-const packageGate = require("../.claude/paket-gate.js");
+
+const GUARD_TARGET = ".codex/apply-patch-guard.cjs";
+
+// Inline deny transport (identical in every PreToolUse guard; guard-parity E5): a missing
+// sibling module must never turn a denial into an allow. Under the Codex hook runner a
+// JSON deny with exit 0 survives Windows PowerShell, which maps a native exit 2 to 1.
+function block(message) {
+  const reason = String(message).trim() || GUARD_TARGET + ": tool denied";
+  if (process.env.KEEL_HARNESS_ROOT && process.env.KEEL_HOOK_TARGET === GUARD_TARGET) {
+    fs.writeSync(1, JSON.stringify({ hookSpecificOutput: {
+      hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason,
+    } }) + "\n");
+    process.exit(0);
+  }
+  fs.writeSync(2, reason + "\n");
+  process.exit(2);
+}
+
+let writeGuard;
+let packageGate;
+let hookContext;
+let ownerHandoff;
+try {
+  writeGuard = require("../.claude/write-guard.js");
+  packageGate = require("../.claude/paket-gate.js");
+  hookContext = require("../harness-core/guards/hook-context.cjs");
+  ownerHandoff = require("../harness-core/guards/owner-handoff.cjs");
+} catch (error) {
+  if (require.main === module) block("codex-apply-patch-guard: dependency load failed; patch blocked: " + error.message);
+  throw error;
+}
 
 function parsePatch(command) {
   if (typeof command !== "string") throw new Error("apply_patch tool_input.command must be a string");
@@ -47,6 +77,55 @@ function parsePatch(command) {
   return [...entries.values()].map((entry) => ({ ...entry, content: entry.added.join("\n") }));
 }
 
+// The patch as file operations for the Owner template (guard-parity E9): an added file is
+// written, a deleted one removed, and every hunk of an updated file replaces its old lines
+// (context and removed) by its new lines (context and added) exactly once. A move, or a
+// hunk with no old line to anchor it, has no exact form, so the whole patch gets none.
+function patchOperations(command, base) {
+  const lines = String(command).replaceAll("\r\n", "\n").split("\n");
+  const operations = [];
+  let current = null;
+  let hunk = null;
+  const closeHunk = () => {
+    if (!hunk) return;
+    if (!hunk.old.length) { operations.push(null); hunk = null; return; }
+    operations.push({ kind: "edit", file: current.file, oldText: hunk.old.join("\n"), newText: hunk.new.join("\n") });
+    hunk = null;
+  };
+  const closeFile = () => {
+    closeHunk();
+    if (current && current.kind === "write") {
+      operations.push({ kind: "write", file: current.file, content: current.added.length ? current.added.join("\n") + "\n" : "" });
+    }
+    current = null;
+  };
+  for (const line of lines.slice(1)) {
+    const header = line.match(/^\*\*\* (Add|Update|Delete) File: (.+)$/u);
+    if (header || line === "*** End Patch") {
+      closeFile();
+      if (!header) break;
+      const file = path.resolve(base, header[2].trim());
+      if (header[1] === "Delete") operations.push({ kind: "delete", file });
+      else current = { kind: header[1] === "Add" ? "write" : "update", file, added: [] };
+      continue;
+    }
+    if (!current) continue;
+    if (/^\*\*\* Move to: /u.test(line)) return [];
+    if (current.kind === "write") {
+      if (line.startsWith("+")) current.added.push(line.slice(1));
+      continue;
+    }
+    if (line.startsWith("@@")) { closeHunk(); hunk = { old: [], new: [] }; continue; }
+    if (line === "*** End of File") continue;
+    if (!hunk) hunk = { old: [], new: [] };
+    if (line.startsWith("-")) hunk.old.push(line.slice(1));
+    else if (line.startsWith("+")) hunk.new.push(line.slice(1));
+    else { const text = line.startsWith(" ") ? line.slice(1) : line; hunk.old.push(text); hunk.new.push(text); }
+  }
+  closeFile();
+  return operations.every(Boolean) ? operations : [];
+}
+
 function inspect(payload, projectRoot, dependencies = {}) {
   if (String(payload?.tool_name || "") !== "apply_patch") {
     return { allowed: false, code: "NOT_APPLY_PATCH", detail: "canonical Codex tool_name must be apply_patch" };
@@ -57,8 +136,11 @@ function inspect(payload, projectRoot, dependencies = {}) {
 
   const deps = dependencies.writeDeps || writeGuard.echteDeps(projectRoot);
   const inspected = [];
+  // Codex writes relative patch paths from its session directory, which is the leaf's own
+  // repository for a package worker, not the Harness root (guard-parity E8).
+  const base = payload?.cwd ? path.resolve(String(payload.cwd)) : projectRoot;
   for (const entry of entries) {
-    const absolute = path.resolve(projectRoot, entry.filePath);
+    const absolute = path.resolve(base, entry.filePath);
     const writeReason = writeGuard.pruefen({ file_path: absolute, content: entry.content }, deps);
     if (writeReason) return { allowed: false, code: "WRITE_POLICY", detail: writeReason, target: absolute };
     const packageDecision = (dependencies.packageDecide || packageGate.decide)({
@@ -88,25 +170,33 @@ function main() {
     let payload;
     try { payload = JSON.parse(input || "{}"); }
     catch {
-      process.stderr.write("codex-apply-patch-guard: invalid hook JSON\n");
-      return process.exit(2);
+      return block("codex-apply-patch-guard: invalid hook JSON");
     }
-    const root = process.env.KEEL_HARNESS_ROOT || process.env.CLAUDE_PROJECT_DIR;
-    if (!root) {
-      process.stderr.write("codex-apply-patch-guard: Harness root is missing\n");
-      return process.exit(2);
+    const root = hookContext.ruleRoot();
+    let decision;
+    try { decision = inspect(payload, root); }
+    catch (error) { return block("codex-apply-patch-guard: policy evaluation failed; patch blocked: " + error.message); }
+    if (decision.allowed) return process.exit(0);
+    let template;
+    try {
+      // The write policy decides per W rule; outside OWNS is agent work, so it names the
+      // package route and carries no command.
+      if (decision.code === "WRITE_POLICY") {
+        const base = payload?.cwd ? path.resolve(String(payload.cwd)) : root;
+        template = writeGuard.vorlage(decision.detail, patchOperations(payload?.tool_input?.command, base), writeGuard.echteDeps(root));
+      } else {
+        template = ownerHandoff.handoffText({ what: "Codex-Patch ausserhalb des gebundenen Paket-Leaf (" + decision.code + ")",
+          route: (decision.next || packageGate.exactNextStep(root)) + "; Leaf-Bindung ueber package-executor next/start" });
+      }
+    } catch (error) {
+      template = "\n(Owner-Vorlage nicht erzeugbar: " + error.message + ")";
     }
-    const decision = inspect(payload, root);
-    if (!decision.allowed) {
-      process.stderr.write("codex-apply-patch-guard: " + decision.code + ": " + decision.detail +
-        (decision.target ? "\nTARGET: " + decision.target : "") +
-        (decision.next ? "\nNEXT: " + decision.next : "") + "\n");
-      return process.exit(2);
-    }
-    process.exit(0);
+    return block("codex-apply-patch-guard: " + decision.code + ": " + decision.detail +
+      (decision.target ? "\nTARGET: " + decision.target : "") +
+      (decision.next ? "\nNEXT: " + decision.next : "") + "\n" + template);
   });
 }
 
 if (require.main === module) main();
-module.exports = { inspect, parsePatch };
+module.exports = { inspect, parsePatch, patchOperations };
 

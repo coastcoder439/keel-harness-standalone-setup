@@ -28,12 +28,28 @@ mit `package-cli doctor`.
 
 ## Neues Paket
 
-1. Originalauftrag des Owners woertlich in eine Datei schreiben (nie umformulieren).
-2. `package-standard.mjs create --root <REPO> --package <ID> --owner-request-file <DATEI>
+Derselbe eine Weg wie `/package-create`, in denselben fuenf Schritten:
+
+1. Anlegen: `package-standard.mjs create --root <REPO> --package <ID> --session <PLANER_SESSION>
    --problem "…" --intent "…" --goal "…" --scope-in "…" --scope-out "…" --context "…"
-   --step "…" [--step "…"] [--planned-start JJJJ-MM-TT --planned-end JJJJ-MM-TT]`.
-3. Fehlt ein Feld, meldet das Werkzeug es unter `missing` und legt nichts an. Danach
-   Requirements, Abnahme und Gates im Bundle schaerfen (wie in `/package-create`).
+   --step "…" [--step "…"] --requirement "…" --requirement "…" [--requirement "…"]
+   [--leaf leaf-<id>=<glob>[,<glob>] ...] [--planned-start JJJJ-MM-TT --planned-end JJJJ-MM-TT]
+   [--owner-request-file <DATEI> | --owner-request "…"] [--harness-root <HARNESS_ROOT>] [--takeover]`.
+   Der Originalauftrag des Owners steht woertlich in `OWNER.md` oder kommt ueber
+   `--owner-request-file` (nie umformulieren). Der Aufruf oeffnet die Planungsbindung der
+   eigenen Sitzung ueber `package-bootstrap begin`; jedes Leaf braucht eine Anforderung,
+   die Wurzel eine weitere. Fehlt ein Feld, meldet das Werkzeug es unter `missing` und
+   legt nichts an; Ueberschneidungen mit aktiven Paketen stehen unter `overlaps`.
+2. Unter der Bindung verfeinern: Requirements, Abnahme, Depth Tree, Leaf-Ledger mit
+   disjunkten OWNS, Gates mit CHECK, CWD und EXPECT oder manuell, optional eine Zeile
+   `MODEL: <provider> <model id> <effort>` (Codex: `MODEL: codex`). Erlaubt sind nur
+   `OWNER.md`, `PACKAGE.md`, `GATES.md` und unmittelbare `gates/*.md`.
+3. `package-cli.mjs doctor --root <REPO> --package <ID>`.
+4. `package-bootstrap.mjs plan --harness-root <HARNESS_ROOT> --session <PLANER_SESSION> --json`
+   legt das Paket als geplant ab und beendet die Bindung; danach das Buendel sichern mit
+   `git-intent.mjs checkpoint --root <REPO> --package <ID> --message "<TEXT>"`.
+5. Gestartet wird nur auf das Startsignal des Owners (Zeile `Owner-Start:` im Status oder
+   `--run` mit der `Owner-Go:`-Zeile eines Lauf-Pakets), mit `package-executor.mjs start`.
 
 ## Bestehendes Projekt uebernehmen
 
@@ -51,3 +67,10 @@ mit `package-cli doctor`.
 
 Nie gleichzeitig eine flache Datei `docs/packages/<id>.md` und ein Bundle gleichen Namens
 stehen lassen; die flache Quelle nach dem Import archivieren (nicht loeschen).
+
+## Repo vorbereiten
+
+`package-standard.mjs prepare --root <REPO>` zeigt als Vorschau, ob Git `.unlazy/` in der
+`.gitignore` des Repos ignoriert; mit `--apply` traegt es die Zeile ein (legt die Datei an,
+schreibt eine UTF-16-Datei als UTF-8, behaelt die Zeilenenden). Rueckgaengig:
+`package-standard.mjs undo --root <REPO> --prepare`, solange sich seitdem nichts geaendert hat.

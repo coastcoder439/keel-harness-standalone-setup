@@ -3,6 +3,7 @@
 import { randomBytes } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
   renameSync,
@@ -21,6 +22,13 @@ import {
 import { inspectPackageBundle, publicPackageStatus, PACKAGE_SCHEMA_VERSION } from "./lib/package-schema.mjs";
 import { activatePackage, closePackage, transitionFollowUpDuty } from "./lib/package-lifecycle.mjs";
 import { measureRepositoryPackages } from "./lib/package-measure.mjs";
+import {
+  addRoadmapMilestone,
+  assignRoadmapPackage,
+  PROJECT_ROADMAP_PATH,
+  readProjectRoadmap,
+  roadmapHint,
+} from "./lib/project-roadmap.mjs";
 
 const {
   assertNoLinkedComponent,
@@ -52,6 +60,9 @@ commands:
   duty-waive --package ID --scope ID --duty ID --owner-ok TEXT
   close --package ID --scope ID [--reuse-integration SHA]
                             reverify and atomically close package
+  roadmap                   show the optional project roadmap docs/roadmap.json
+  roadmap-add --title TEXT [--due YYYY-MM-DD] [--package ID]   add a milestone
+  roadmap-assign --package ID --milestone ID|none   link a package or unlink it
 
 targeting:
   --root DIR                exact repository root (default: nearest root from cwd)
@@ -75,6 +86,7 @@ const VALUE_OPTIONS = new Set([
   "--timeout", "--jobs", "--shell",
   "--duty", "--owner", "--trigger", "--due-state", "--gate", "--owner-ok", "--reuse-integration",
   "--owner-request", "--owner-request-file", "--owner-source",
+  "--title", "--due", "--milestone",
 ]);
 const FLAG_OPTIONS = new Set(["--all", "--json", "--help", "-h"]);
 
@@ -283,6 +295,46 @@ function collisionDiagnostics(root, packageId) {
     : [];
 }
 
+// Roadmap commands take only their own options; no scope, no activation.
+const ROADMAP_OPTIONS = {
+  "roadmap": ["root", "json"],
+  "roadmap-add": ["root", "json", "title", "due", "package"],
+  "roadmap-assign": ["root", "json", "package", "milestone"],
+};
+
+function assertRoadmapOptions(command, options) {
+  const allowed = ROADMAP_OPTIONS[command];
+  const extra = Object.keys(options).filter((key) => !allowed.includes(key));
+  if (extra.length) throw new Error(command + " does not accept " + extra.map((key) => "--" + key).join(", "));
+}
+
+function roadmapLines(roadmap) {
+  const lines = [];
+  if (!roadmap.present) {
+    lines.push("no roadmap: " + PROJECT_ROADMAP_PATH + " is absent", roadmapHint());
+  } else {
+    if (!roadmap.milestones.length && !roadmap.diagnostics.length) lines.push("(no milestones)");
+    for (const milestone of roadmap.milestones) {
+      lines.push(milestone.id + " " + milestone.title + " (" + (milestone.due ? "due " + milestone.due : "no due date") +
+        "): " + (milestone.packages.length ? milestone.packages.join(", ") : "(no packages)"));
+    }
+  }
+  for (const diagnostic of roadmap.diagnostics) lines.push("  " + diagnostic.code + ": " + diagnostic.message);
+  return lines.join("\n");
+}
+
+// The offer at create only checks existence; it never reads, parses or
+// writes the roadmap, so create cannot fail because of it.
+function roadmapOffer(root) {
+  let present = true;
+  try { lstatSync(join(root, "docs", "roadmap.json")); }
+  catch (error) { if (error.code === "ENOENT" || error.code === "ENOTDIR") present = false; }
+  let firstBundle = false;
+  try { firstBundle = listPackageBundles(root, { assertRoot: false }).length === 0; }
+  catch { firstBundle = false; }
+  return { present, offered: firstBundle && !present };
+}
+
 let parsed;
 try { parsed = parseArgs(process.argv.slice(2)); }
 catch (error) { fail(error.message, { json: process.argv.includes("--json") }); }
@@ -304,11 +356,18 @@ if (!parsed) {
       if (command === "create") {
         if (!options.package) throw new Error("create requires --package ID");
         if (options.all || options.scope) throw new Error("create does not accept --all or --scope");
+        const offer = roadmapOffer(root);
         createBundle(root, options.package, repoKey, ownerRequestOption(options));
         const status = packageStatus(root, options);
         const pendingOwner = status.diagnostics.some((item) => item.code === "OWNER_REQUEST");
-        print(options.json ? publicPackageStatus(status) : "created docs/packages/" + status.packageId +
-          (pendingOwner ? "; OWNER.md is a skeleton: capture the original Owner request before activation" : ""), options.json);
+        const hint = offer.offered ? roadmapHint() : null;
+        if (options.json) {
+          print({ ...publicPackageStatus(status), projectRoadmap: { present: offer.present, offered: offer.offered, hint } }, true);
+        } else {
+          print("created docs/packages/" + status.packageId +
+            (pendingOwner ? "; OWNER.md is a skeleton: capture the original Owner request before activation" : "") +
+            (hint ? "\n" + hint : ""), false);
+        }
       } else if (command === "activate") {
         if (!options.package || !options.scope) throw new Error("activate requires --package ID and --scope ID");
         if (options.all || options.timeout || options.jobs || options.shell) {
@@ -413,6 +472,40 @@ if (!parsed) {
           console.log((result.recovered ? "recovered closed " : "closed ") +
             result.repoKey + "::" + result.packageId + "; released " + result.releasedLeases + " lease(s)");
         }
+      } else if (command === "roadmap") {
+        assertRoadmapOptions(command, options);
+        const roadmap = readProjectRoadmap(root);
+        if (options.json) print(roadmap, true);
+        else console.log(roadmapLines(roadmap));
+        if (roadmap.diagnostics.some((item) => item.code === "ROADMAP_INVALID")) process.exitCode = 2;
+      } else if (command === "roadmap-add") {
+        assertRoadmapOptions(command, options);
+        if (options.title === undefined) throw new Error("roadmap-add requires --title TEXT");
+        const result = addRoadmapMilestone(root, {
+          title: options.title,
+          due: options.due === undefined ? null : options.due,
+          packageId: options.package === undefined ? null : options.package,
+          expectedRevision: readProjectRoadmap(root).revision,
+        });
+        if (options.json) print(result, true);
+        else {
+          const milestone = result.milestone;
+          console.log("added milestone " + milestone.id + " " + milestone.title +
+            (milestone.packages.length ? " with package " + milestone.packages.join(", ") : ""));
+        }
+      } else if (command === "roadmap-assign") {
+        assertRoadmapOptions(command, options);
+        if (!options.package || !options.milestone) throw new Error("roadmap-assign requires --package ID and --milestone ID|none");
+        const milestoneId = options.milestone === "none" ? null : options.milestone;
+        const result = assignRoadmapPackage(root, {
+          packageId: options.package,
+          milestoneId,
+          expectedRevision: readProjectRoadmap(root).revision,
+        });
+        if (options.json) print(result, true);
+        else console.log(milestoneId === null
+          ? "unlinked " + options.package + " from the roadmap"
+          : "linked " + options.package + " to milestone " + milestoneId);
       } else {
         throw new Error("unknown command " + JSON.stringify(command));
       }

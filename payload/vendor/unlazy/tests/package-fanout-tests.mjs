@@ -256,6 +256,81 @@ test("lost package.ref recovery releases only the exact package lease and preser
   ]);
 });
 
+test("a package lease whose scope no longer binds its package is released at the next claim", async () => {
+  const orphanLine = /RELEASED ORPHAN alpha\/alpha-scope\/leaf-shared \(scope no longer binds the package\)/;
+
+  // Case 1: the scope directory of alpha is gone.
+  const gone = repo("orphan-scope-gone");
+  bundle(gone, "alpha", { leafOwn: "src/shared/**" });
+  bundle(gone, "beta", { leafOwn: "src/shared/file.js" });
+  activate(gone, "alpha", "alpha-scope");
+  activate(gone, "beta", "beta-scope");
+  assert.equal(claim(gone, "alpha", "alpha-scope").status, 0);
+  assert.equal(claim(gone, "beta", "beta-scope").status, 3, "alpha still binds its scope, so beta conflicts");
+  rmSync(join(gone, ".unlazy", "alpha-scope"), { recursive: true, force: true });
+  const claimed = claim(gone, "beta", "beta-scope");
+  assert.equal(claimed.status, 0, claimed.stderr + claimed.stdout);
+  assert.match(claimed.stdout, orphanLine);
+  assert(claimed.stdout.indexOf("RELEASED ORPHAN") < claimed.stdout.indexOf("CLAIMED"), claimed.stdout);
+  assert.deepEqual(readLeases(gone).map((lease) => `${lease.packageId}:${lease.scope}:${lease.leaf}`),
+    ["beta:beta-scope:leaf-shared"]);
+
+  // Case 2: package.ref of alpha's scope names another package. Legacy and
+  // invalid lease files stay; the invalid one (globs **) refuses the claim, and
+  // the release line still precedes the CONFLICT lines.
+  const renamed = repo("orphan-ref-renamed");
+  bundle(renamed, "alpha", { leafOwn: "src/shared/**" });
+  bundle(renamed, "beta", { leafOwn: "src/shared/file.js" });
+  bundle(renamed, "gamma", { leafOwn: "src/gamma/**" });
+  activate(renamed, "alpha", "alpha-scope");
+  activate(renamed, "beta", "beta-scope");
+  assert.equal(claim(renamed, "alpha", "alpha-scope").status, 0);
+  const legacy = await claimLeases(renamed, { scope: "legacy-scope", leaf: "leaf-legacy", globs: ["src/legacy/**"] });
+  assert.equal(legacy.ok, true);
+  assert.deepEqual(legacy.releasedOrphans, []);
+  writeFileSync(join(renamed, ".unlazy", "alpha-scope", "package.ref"), "docs/packages/gamma\n", "utf8");
+  const invalidLease = join(renamed, ".unlazy", "locks", "zz-invalid.lease");
+  writeFileSync(invalidLease, "not a lease\n", "utf8");
+  const refused = claim(renamed, "beta", "beta-scope");
+  assert.equal(refused.status, 3, refused.stderr + refused.stdout);
+  assert.match(refused.stdout, orphanLine);
+  assert(refused.stdout.indexOf("RELEASED ORPHAN") < refused.stdout.indexOf("CONFLICT"), refused.stdout);
+  const remaining = readLeases(renamed).map((lease) => lease.invalid ? "invalid" : `${lease.packageId || "legacy"}:${lease.scope}`).sort();
+  assert.deepEqual(remaining, ["invalid", "legacy:legacy-scope"]);
+  rmSync(invalidLease);
+
+  // A legacy claim never releases package leases, even an orphaned one.
+  assert.equal(claim(renamed, "beta", "beta-scope").status, 0);
+  writeFileSync(join(renamed, ".unlazy", "beta-scope", "package.ref"), "docs/packages/gamma\n", "utf8");
+  const legacyAgain = await claimLeases(renamed, { scope: "legacy-scope", leaf: "leaf-other", globs: ["src/other/**"] });
+  assert.equal(legacyAgain.ok, true);
+  assert.deepEqual(legacyAgain.releasedOrphans, []);
+  assert(readLeases(renamed).some((lease) => lease.packageId === "beta"), "legacy claim must keep the beta lease");
+
+  // Case 3: package.ref differs from the lease only in letter case. Only
+  // Windows ignores case, so the lease stays held there and is released elsewhere.
+  const cased = repo("orphan-ref-case");
+  bundle(cased, "alpha", { leafOwn: "src/shared/**" });
+  bundle(cased, "beta", { leafOwn: "src/shared/file.js" });
+  activate(cased, "alpha", "alpha-scope");
+  activate(cased, "beta", "beta-scope");
+  assert.equal(claim(cased, "alpha", "alpha-scope").status, 0);
+  writeFileSync(join(cased, ".unlazy", "alpha-scope", "package.ref"), "docs/packages/ALPHA\n", "utf8");
+  const direct = await claimLeases(cased, {
+    scope: "beta-scope", packageId: "beta", leaf: "leaf-shared",
+    ledger: "docs/packages/beta/gates/leaf-shared.md", globs: ["src/shared/file.js"],
+  });
+  if (process.platform === "win32") {
+    assert.equal(direct.ok, false);
+    assert.deepEqual(direct.releasedOrphans, []);
+    assert.match(direct.conflicts[0].with, /^alpha\/alpha-scope\/leaf-shared$/);
+  } else {
+    assert.equal(direct.ok, true);
+    assert.deepEqual(direct.releasedOrphans.map((item) => `${item.packageId}/${item.scope}/${item.leaf}`),
+      ["alpha/alpha-scope/leaf-shared"]);
+  }
+});
+
 test("dispatch persists scope/package identity through every transition and PackageStatus aggregates it", () => {
   const root = repo("dispatch-identity");
   bundle(root, "alpha");

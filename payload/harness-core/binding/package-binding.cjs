@@ -12,6 +12,10 @@ const ownerContracts = require("./owner-contract.cjs");
 const IDENTIFIER_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 const BINDING_DIRECTORY = "bindings";
 const SESSION_INDEX_DIRECTORY = ".session-index";
+// Error texts name the allowed way back; the executor implements rebind.
+const RENEW_HINT = "; renew: package-executor.mjs rebind --session <id> --reason <text>";
+const TRANSFER_HINT = "; a continued session transfers its leaf binding: " +
+  "package-executor.mjs rebind --session <ALT> --new-session <NEU> --reason <text>";
 
 function bindingError(message) {
   const error = new Error(message);
@@ -186,13 +190,9 @@ function createBinding(options) {
     controlRoot: harnessRoot,
   };
   const localBinding = bindingPath(snapshot.repoRoot, scope, sessionId);
-  if (harnessRoot) {
-    const existing = sessionIndexRecord(harnessRoot, sessionId);
-    if (existing && (!repository.samePath(existing.repoRoot, snapshot.repoRoot) ||
-        existing.value.scope !== scope || existing.value.leaf !== leafRecord.leaf)) {
-      bindingError("session is already indexed to another repository, scope, or leaf");
-    }
-  }
+  const conflict = sessionConflict({ repoRoot: snapshot.repoRoot, scope, sessionId, leaf: leafRecord.leaf,
+    controlRoot: options.controlRoot });
+  if (conflict) bindingError(conflict);
   atomicWrite(localBinding, value);
   if (harnessRoot) {
     atomicWrite(sessionIndexPath(harnessRoot, sessionId), {
@@ -206,6 +206,72 @@ function createBinding(options) {
     });
   }
   return value;
+}
+
+function leafName(leaf) {
+  return String(leaf || "").replace(/^gates\//u, "").replace(/\.md$/u, "");
+}
+
+function sameScope(left, right) {
+  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+// The one session-occupancy check of createBinding. Returns null or the error
+// text. An index entry whose binding file no longer exists is stale, not a
+// conflict; the same repository, scope and leaf is never a conflict, because
+// git-intent renews bindings after checkpoint and revert-checkpoint that way.
+function sessionConflict(options) {
+  const repoRoot = options.repoRoot;
+  const scope = validateIdentifier(options.scope, "scope");
+  const key = sessionKey(options.sessionId);
+  const sessionId = String(options.sessionId).trim();
+  const leaf = leafName(options.leaf);
+  const harnessRoot = controlRoot(repoRoot, options.controlRoot);
+  if (harnessRoot) {
+    const existing = sessionIndexRecord(harnessRoot, sessionId);
+    if (existing && fs.existsSync(existing.bindingFile) && (!repository.samePath(existing.repoRoot, repoRoot) ||
+        existing.value.scope !== scope || existing.value.leaf !== leaf)) {
+      return "session is already indexed to another repository, scope, or leaf: " +
+        existing.value.scope + "/" + existing.value.leaf;
+    }
+  }
+  const runtime = path.join(repoRoot, ".unlazy");
+  if (!fs.existsSync(runtime)) return null;
+  for (const entry of fs.readdirSync(runtime, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.name === "locks" || entry.name.startsWith(".") || sameScope(entry.name, scope)) continue;
+    if (fs.existsSync(path.join(runtime, entry.name, BINDING_DIRECTORY, key))) {
+      return "session already holds a Harness binding in scope " + entry.name + " of this repository";
+    }
+  }
+  return null;
+}
+
+// Removes the session's binding in one scope. The session index file goes only
+// when it points at exactly this binding (same repository, same binding path).
+function removeBinding(options) {
+  const repoRoot = options.repoRoot;
+  const file = bindingPath(repoRoot, options.scope, options.sessionId);
+  const sessionId = String(options.sessionId).trim();
+  const bindingRelative = path.relative(repoRoot, file).replaceAll("\\", "/");
+  const harnessRoot = controlRoot(repoRoot, options.controlRoot);
+  let removedIndex = false;
+  if (harnessRoot) {
+    let existing = null;
+    try { existing = sessionIndexRecord(harnessRoot, sessionId); } catch { existing = null; }
+    const sameBinding = existing && (process.platform === "win32"
+      ? existing.value.bindingRelative.toLowerCase() === bindingRelative.toLowerCase()
+      : existing.value.bindingRelative === bindingRelative);
+    if (sameBinding && repository.samePath(existing.repoRoot, repoRoot)) {
+      fs.unlinkSync(existing.file);
+      removedIndex = true;
+    }
+  }
+  let removedBinding = false;
+  if (fs.existsSync(file)) {
+    fs.unlinkSync(file);
+    removedBinding = true;
+  }
+  return { removedBinding, removedIndex };
 }
 
 function parseBinding(file) {
@@ -222,18 +288,18 @@ function validateBinding(value, options = {}) {
   const snapshot = repository.repositorySnapshot(value.repoRoot, options);
   if (!repository.samePath(snapshot.repoRoot, value.repoRoot)) bindingError("binding repository changed");
   if (!repository.samePath(snapshot.gitDir, value.gitDir)) bindingError("binding Git directory changed");
-  if (snapshot.headOid !== value.headOid) bindingError("binding is stale because HEAD changed");
+  if (snapshot.headOid !== value.headOid) bindingError("binding is stale because HEAD changed" + RENEW_HINT);
   if (activePackage(snapshot.repoRoot, value.scope).toLowerCase() !== value.packageId.toLowerCase()) {
     bindingError("binding package.ref changed");
   }
   const packageRecord = bundle(snapshot.repoRoot, value.packageId);
-  if (sha256(packageRecord.packageText) !== value.packageDigest) bindingError("binding is stale because PACKAGE.md changed");
+  if (sha256(packageRecord.packageText) !== value.packageDigest) bindingError("binding is stale because PACKAGE.md changed" + RENEW_HINT);
   if (packageRecord.owner.digest !== (value.ownerDigest || null) ||
       packageRecord.owner.requestDigest !== (value.ownerRequestDigest || null)) {
-    bindingError("binding is stale because OWNER.md changed");
+    bindingError("binding is stale because OWNER.md changed" + RENEW_HINT);
   }
   const leafRecord = leafLedger(packageRecord.packageDir, value.leaf);
-  if (sha256(leafRecord.text) !== value.leafDigest) bindingError("binding is stale because the leaf contract changed");
+  if (sha256(leafRecord.text) !== value.leafDigest) bindingError("binding is stale because the leaf contract changed" + RENEW_HINT);
   if (JSON.stringify(leafRecord.owns) !== JSON.stringify(value.owns)) bindingError("binding OWNS changed");
   return { ...value, repoRoot: snapshot.repoRoot };
 }
@@ -261,7 +327,8 @@ function findSessionBinding(startPath, sessionId, options = {}) {
   if (requestedControl) {
     const harnessRoot = controlRoot(repoRoot, requestedControl);
     const indexed = sessionIndexRecord(harnessRoot, sessionId);
-    if (indexed) {
+    // An index entry without its binding file is stale and counts as none.
+    if (indexed && fs.existsSync(indexed.bindingFile)) {
       const value = parseBinding(indexed.bindingFile);
       if (value.sessionId !== sessionId || value.scope !== indexed.value.scope || value.leaf !== indexed.value.leaf ||
           value.packageId !== indexed.value.packageId || !repository.samePath(value.repoRoot, indexed.repoRoot)) {
@@ -270,7 +337,7 @@ function findSessionBinding(startPath, sessionId, options = {}) {
       return validateBinding(value, options);
     }
   }
-  bindingError("session must have exactly one Harness binding; found 0");
+  bindingError("session must have exactly one Harness binding; found 0" + TRANSFER_HINT);
 }
 
 function globRegex(pattern, platform = process.platform) {
@@ -313,6 +380,8 @@ module.exports = {
   globRegex,
   leafLedger,
   leafOwnsFromText,
+  removeBinding,
+  sessionConflict,
   sessionIndexPath,
   validateBinding,
 };

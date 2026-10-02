@@ -20,77 +20,19 @@ const packageBinding = require("../binding/package-binding.cjs");
 const ownerContract = require("../binding/owner-contract.cjs");
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 
-// ONE resolver for the Unlazy tree, shared by the gate parser below and by the
-// gate RUNNER in package-executor.mjs (it imports locateUnlazy from here). Two
-// resolvers meant an explicit --unlazy-root could hand the tolerance decision to
-// a different parser than the one that executed the gates; the shared candidate
-// list and the shared boundary below remove that second answer.
-// The boundary is a realpath containment test, not a string prefix: an explicit
-// root is accepted only when its own scripts/ files really live under the
-// addressed repository's vendor/unlazy or under the Harness tree that ships
-// next to this file. Proven by "the gate parser resolves from the Unlazy tree
-// the caller runs, lazily and inside the bound trees" in test/git-intent.test.js,
-// which drives both shipped layouts.
-const harnessTree = path.resolve(here, "..", "..");
-
-function unlazyBases(repoRoot) {
-  const root = repoRoot ? path.resolve(repoRoot) : null;
-  const bases = [path.join(harnessTree, "vendor", "unlazy")];
-  if (root) bases.push(path.join(root, "vendor", "unlazy"));
-  // The source layout keeps the Harness tree as a SUBDIRECTORY of the repository
-  // that vendors Unlazy at its own root, so the directory ABOVE the Harness tree
-  // is a base there. The standalone layout ships harness-core/ and vendor/ as
-  // siblings AT the repository root, where that same directory sits outside the
-  // repository -- so it is a base only while the Harness tree is not itself the
-  // addressed repository root. Measured 02.09.2026 in the standalone-shaped
-  // fixture of the test above: without this condition locateUnlazy accepted a
-  // vendor/unlazy copy one level above the repository.
-  if (!root || !repository.samePath(harnessTree, root)) {
-    bases.push(path.join(path.dirname(harnessTree), "vendor", "unlazy"));
-  }
-  return [...new Set(bases)];
-}
-
-function insideAnyBase(bases, candidate) {
-  for (const base of bases) {
-    let resolvedBase = path.resolve(base);
-    try { resolvedBase = fs.realpathSync(resolvedBase); } catch { /* absent base cannot contain anything */ }
-    const relative = path.relative(resolvedBase, candidate);
-    if (relative !== "" && !relative.startsWith("..") && !path.isAbsolute(relative)) return true;
-  }
-  return false;
-}
-
-// The single existence probe for an Unlazy tree: the parser this module needs
-// and the two runner entry points package-executor.mjs spawns.
-const UNLAZY_MARKERS = [
-  ["scripts", "lib", "gates.mjs"],
-  ["scripts", "package-cli.mjs"],
-  ["scripts", "gate-check.mjs"],
-];
+// ONE resolver for the Unlazy tree lives in harness-core/binding/unlazy-runtime.cjs
+// and is re-exported here under the same names: the gate parser below, the gate
+// RUNNER in package-executor.mjs (it imports locateUnlazy from here) and the
+// CommonJS package bootstrap all see exactly the same candidates and boundary.
+const unlazyRuntime = require("../binding/unlazy-runtime.cjs");
+const bundleFiles = require("../binding/bundle-files.cjs");
 
 export function unlazyRootCandidates(repoRoot, explicit) {
-  // An explicit root is the ONLY candidate: silently falling back to another
-  // vendored tree would let a different parser decide the tolerance than the one
-  // that executed the gates, which is the whole reason this is bound at all.
-  return explicit ? [path.resolve(explicit)] : unlazyBases(repoRoot);
+  return unlazyRuntime.unlazyRootCandidates(repoRoot, explicit);
 }
 
 export function locateUnlazy(repoRoot, explicit) {
-  const bases = unlazyBases(repoRoot);
-  const found = [...new Set(unlazyRootCandidates(repoRoot, explicit)
-    .filter((root) => UNLAZY_MARKERS.every((marker) => fs.existsSync(path.join(root, ...marker))))
-    .map((root) => fs.realpathSync(root)))];
-  // Without an explicit root, two differing vendored trees are an ambiguity to
-  // refuse rather than to resolve by candidate order.
-  if (found.length !== 1) {
-    fail("GATE_PARSER", "expected exactly one canonical Unlazy runtime; found " + found.length);
-  }
-  const resolved = found[0];
-  if (!insideAnyBase(bases, fs.realpathSync(path.join(resolved, ...UNLAZY_MARKERS[0])))) {
-    fail("GATE_PARSER", "Unlazy runtime is outside the repository vendor tree and the Harness tree: " + resolved);
-  }
-  return resolved;
+  return unlazyRuntime.locateUnlazy(repoRoot, explicit);
 }
 
 // The close writeback tolerance below reads ledgers with the SAME parser
@@ -163,14 +105,19 @@ function gitBytes(repoRoot, args, options = {}) {
 }
 
 function parseArgs(argv) {
-  const values = { paths: [], writebackReceipts: [] };
+  const values = { paths: [], writebackReceipts: [], packageIds: [] };
   const args = [...argv];
   values.intent = args.shift() || "";
   while (args.length) {
     const option = args.shift();
     if (option === "--root") values.root = args.shift();
     else if (option === "--session") values.sessionId = args.shift();
-    else if (option === "--package") values.packageId = args.shift();
+    else if (option === "--package") {
+      // Every --package is collected; packageId stays the first value so every
+      // intent except the checkpoint bundle mode reads exactly what it read before.
+      values.packageIds.push(args.shift());
+      if (values.packageIds.length === 1) values.packageId = values.packageIds[0];
+    }
     else if (option === "--scope") values.scope = args.shift();
     else if (option === "--message") values.message = args.shift();
     else if (option === "--expected-result-file") values.expectedResultFile = args.shift();
@@ -492,7 +439,8 @@ function waveInProgressFor(binding) {
   for (const [waveId, wave] of Object.entries(waves)) {
     if (!wave || typeof wave !== "object") continue;
     if (wave.state !== "open" && wave.state !== "sealed") continue;
-    if (!Array.isArray(wave.leaves) || !wave.leaves.includes(binding.leaf)) continue;
+    // A null leaf (the bundle checkpoint) is held by every open or sealed wave of the scope.
+    if (binding.leaf !== null && (!Array.isArray(wave.leaves) || !wave.leaves.includes(binding.leaf))) continue;
     return { waveId, state: wave.state };
   }
   return null;
@@ -506,6 +454,14 @@ function assertLeafOutsideWave(binding) {
 }
 
 function checkpoint(options) {
+  const packageIds = requestedPackageIds(options);
+  if (packageIds.length && (options.sessionId || (options.paths && options.paths.length))) {
+    fail("USAGE", "checkpoint takes either --session <sessionId> --path <ownedPath> (leaf checkpoint) or --root <repo> --package <packageId> (bundle checkpoint), never both");
+  }
+  if (!options.sessionId && !packageIds.length) {
+    fail("USAGE", "checkpoint requires --session <sessionId> --path <ownedPath> (leaf checkpoint) or --root <repo> --package <packageId> (bundle checkpoint of a written, not started package)");
+  }
+  if (!options.sessionId) return bundleCheckpoint(options, packageIds);
   const binding = exactBinding(options);
   assertLeafOutsideWave(binding);
   const paths = authorizedPaths(binding, options.paths);
@@ -551,6 +507,145 @@ function checkpoint(options) {
   const receiptPath = writeReceipt(refreshed, { operation: "checkpoint", headBefore: before,
     head: after, commit: after, message, paths: committedPaths });
   return { operation: "checkpoint", commit: after, paths: committedPaths, receipt: receiptPath };
+}
+
+function requestedPackageIds(options) {
+  if (Array.isArray(options.packageIds) && options.packageIds.length) return options.packageIds;
+  return options.packageId ? [options.packageId] : [];
+}
+
+// Owner 01.10.2026: "Ein geschriebenes, noch nicht gestartetes Paket laesst sich
+// ueber die Git-Schnittstelle des Harness sichern." Before this mode the leaf
+// checkpoint above saved only leaf OWNS of a bound session and the package
+// directory reached Git only through the closure checkpoint, so a freshly
+// written package had no route at all. This mode saves exactly the bundle files
+// (bundle-files.cjs) of packages no scope has started, never design/, evidence/
+// or anything else, and needs no session: only sessions paket-gate admits could
+// write those files in the first place. Proven by "the checkpoint bundle mode
+// saves exactly the bundle files of a written, not started package" in
+// test/git-intent.test.js.
+function assertBundleDirectory(repoRoot, relative) {
+  let info;
+  try { info = fs.lstatSync(path.join(repoRoot, ...relative.split("/"))); }
+  catch { fail("BUNDLE_PACKAGE", "package bundle directory is missing: " + relative); }
+  if (info.isSymbolicLink() || !info.isDirectory()) fail("BUNDLE_PACKAGE", "package bundle directory must be a real directory: " + relative);
+}
+
+function bundleFilePresent(repoRoot, relative, required) {
+  let info;
+  try { info = fs.lstatSync(path.join(repoRoot, ...relative.split("/"))); }
+  catch {
+    if (required) fail("BUNDLE_PACKAGE", "package bundle file is missing: " + relative);
+    return false;
+  }
+  if (info.isSymbolicLink() || !info.isFile()) fail("BUNDLE_PACKAGE", "package bundle file must be a regular file: " + relative);
+  return true;
+}
+
+function runtimeScopes(repoRoot) {
+  let entries = [];
+  try { entries = fs.readdirSync(path.join(repoRoot, ".unlazy"), { withFileTypes: true }); } catch { return []; }
+  return entries.filter((entry) => entry.isDirectory() && entry.name !== "locks" && !entry.name.startsWith("."))
+    .map((entry) => entry.name).sort((left, right) => left.localeCompare(right, "en"));
+}
+
+function assertPackageNotStarted(repoRoot, packageId) {
+  for (const scope of runtimeScopes(repoRoot)) {
+    let text;
+    try { text = fs.readFileSync(path.join(repoRoot, ".unlazy", scope, "package.ref"), "utf8"); } catch { continue; }
+    if (text === "docs/packages/" + packageId + "\n") {
+      fail("PACKAGE_STARTED", "package " + packageId + " is already started in scope " + scope +
+        "; use the leaf checkpoint (--session) or package-executor integrate", 1);
+    }
+  }
+}
+
+function assertNoWaveInProgress(repoRoot) {
+  for (const scope of runtimeScopes(repoRoot)) {
+    const wave = waveInProgressFor({ repoRoot, scope, leaf: null });
+    if (!wave) continue;
+    fail("WAVE_IN_PROGRESS", "checkpoint refused: scope " + scope + " has wave " + wave.waveId + " (" + wave.state +
+      "); nothing is committed mid-wave -- the parent integrates every verified disjoint path once", 1);
+  }
+}
+
+// Bundle files present in the working tree plus tracked bundle files of HEAD, so a
+// deleted ledger is saved as a deletion. With an unborn HEAD only the tree counts.
+function bundlePaths(repoRoot, packageId, headOid) {
+  const prefix = "docs/packages/" + packageId + "/";
+  const pattern = bundleFiles.bundleFilePattern(packageId);
+  const paths = new Set();
+  for (const name of ["OWNER.md", "PACKAGE.md", "GATES.md"]) {
+    bundleFilePresent(repoRoot, prefix + name, true);
+    paths.add(prefix + name);
+  }
+  const gatesDir = path.join(repoRoot, "docs", "packages", packageId, "gates");
+  let gatesPresent = false;
+  try { fs.lstatSync(gatesDir); gatesPresent = true; } catch { /* a package may ship no leaf ledgers */ }
+  if (gatesPresent) {
+    assertBundleDirectory(repoRoot, prefix + "gates");
+    for (const entry of fs.readdirSync(gatesDir)) {
+      const relative = prefix + "gates/" + entry;
+      if (pattern.test(relative) && bundleFilePresent(repoRoot, relative, false)) paths.add(relative);
+    }
+  }
+  if (headOid) {
+    const tracked = parseZeroList(commandResult(git(repoRoot,
+      ["ls-tree", "-r", "--name-only", "-z", "HEAD", "--", prefix]), "bundle-tracked"));
+    for (const relative of tracked) if (pattern.test(relative)) paths.add(relative);
+  }
+  return [...paths];
+}
+
+function bundleCheckpoint(options, requested) {
+  const packages = requested.map((value) => identifier(value, "package"));
+  if (new Set(packages).size !== packages.length) fail("USAGE", "each --package may be named only once");
+  const message = String(options.message || "").trim();
+  if (!message || message.length > 200 || /[\r\n\0]/u.test(message)) fail("USAGE", "--message must be one line of 1..200 characters");
+  const snapshot = repository.repositorySnapshot(options.root || process.cwd());
+  const repoRoot = snapshot.repoRoot;
+  const headBefore = snapshot.headOid || null;
+
+  const collected = new Set();
+  for (const packageId of packages) {
+    assertBundleDirectory(repoRoot, "docs/packages/" + packageId);
+    for (const relative of bundlePaths(repoRoot, packageId, headBefore)) collected.add(relative);
+  }
+  const paths = [...collected].sort((left, right) => left.localeCompare(right, "en"));
+  for (const packageId of packages) assertPackageNotStarted(repoRoot, packageId);
+  assertNoWaveInProgress(repoRoot);
+
+  const staged = commandResult(git(repoRoot, ["diff", "--cached", "--name-only", "-z"]), "preflight");
+  if (staged.length) {
+    fail("SHARED_INDEX_DIRTY", "checkpoint refused: Git index already contains staged paths; the owning session must run the unstage intent, or run the recover-index intent (package/scope authorized) when that session is gone");
+  }
+  const changed = commandResult(git(repoRoot, ["status", "--porcelain=v1", "-z", "--", ...paths]), "preflight");
+  if (!changed.length) fail("NOTHING_TO_CHECKPOINT", "none of the package bundle files changed", 1);
+
+  commandResult(git(repoRoot, ["add", "--", ...paths]), "stage");
+  const committedPaths = parseZeroList(commandResult(git(repoRoot,
+    ["diff", "--cached", "--name-only", "-z", "--", ...paths]), "checkpoint-paths"))
+    .sort((left, right) => left.localeCompare(right, "en"));
+  if (!committedPaths.length) {
+    git(repoRoot, ["reset", "--", ...paths]);
+    fail("NOTHING_TO_CHECKPOINT", "package bundle files produced no staged change", 1);
+  }
+  const outside = committedPaths.filter((relative) => !collected.has(relative));
+  if (outside.length) {
+    git(repoRoot, ["reset", "--", ...paths]);
+    fail("BUNDLE_SCOPE", "staged paths are outside the package bundle files: " + outside.join(", "));
+  }
+
+  const committed = git(repoRoot, ["commit", "-m", message, "--", ...paths], { timeoutMs: 120_000 });
+  if (committed.status !== 0) {
+    git(repoRoot, ["reset", "--", ...paths]);
+    commandResult(committed, "commit");
+  }
+  const head = commandResult(git(repoRoot, ["rev-parse", "--verify", "HEAD"]), "head").trim();
+  if (!head || head === headBefore) fail("GIT_COMMIT_FAILED", "checkpoint did not advance HEAD");
+  const receipt = writeGlobalReceipt(repoRoot, { operation: "bundle-checkpoint", packages,
+    paths: committedPaths, headBefore, head, commit: head, message });
+  return { operation: "bundle-checkpoint", packages, commit: head, paths: committedPaths, receipt };
 }
 
 function changedPathKind(binding, relative) {
@@ -1643,7 +1738,7 @@ export const CANONICAL_INTENTS = Object.freeze([
   { name: "inspect", mutates: false,
     syntax: "inspect --session <sessionId> [--path <ownedPath>]" },
   { name: "checkpoint", mutates: true,
-    syntax: "checkpoint --session <sessionId> --message <message> --path <ownedPath>" },
+    syntax: "checkpoint (--session <sessionId> --path <ownedPath> | --root <repo> --package <packageId>) --message <message>" },
   { name: "unstage", mutates: true,
     syntax: "unstage --session <sessionId> --path <ownedPath>" },
   { name: "recover-index", mutates: true,
@@ -1678,6 +1773,9 @@ export function canonicalHelp() {
 }
 
 export async function runIntent(options) {
+  if (options.intent !== "checkpoint" && Array.isArray(options.packageIds) && options.packageIds.length > 1) {
+    fail("USAGE", "only the checkpoint bundle mode accepts more than one --package");
+  }
   if (options.intent === "inspect") return inspect(options);
   if (options.intent === "checkpoint") return checkpoint(options);
   if (options.intent === "unstage") return unstage(options);

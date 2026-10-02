@@ -596,6 +596,11 @@ export function applyLegacyMigration(options) {
     writeFileSync(join(temporary, "PACKAGE.md"), report.packageText, { encoding: "utf8", flag: "wx" });
     writeFileSync(join(temporary, "GATES.md"), report.gatesText, { encoding: "utf8", flag: "wx" });
     writeFileSync(join(temporary, "gates", ".gitkeep"), "", { encoding: "utf8", flag: "wx" });
+    // Optional Owner contract, written before the first validation so a
+    // repository that requires OWNER.md can migrate at all.
+    if (typeof options.ownerText === "string") {
+      writeFileSync(join(temporary, "OWNER.md"), options.ownerText, { encoding: "utf8", flag: "wx" });
+    }
     verifyPrepared(root, packageId, temporary, report);
     journal.stage = "prepared";
     writeJournal(paths.journal, journal);

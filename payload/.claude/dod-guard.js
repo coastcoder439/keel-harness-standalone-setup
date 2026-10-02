@@ -17,12 +17,8 @@
 // Selbsttest: node dod-guard.js --selbsttest
 
 const fs = require("fs");
-
-// MSYS/Git-Bash schreibt Laufwerke als /c/... (Muster: danger-guard, belegt 22.08.2026).
-function msysPfad(p) {
-  if (process.platform !== "win32" || !p) return p;
-  return String(p).replace(/^\/([A-Za-z])(?=\/|$)/, "$1:");
-}
+// MSYS/Git-Bash schreibt Laufwerke als /c/...; die eine Umschrift aller Waechter.
+const { msysPath: msysPfad } = require("../harness-core/guards/hook-context.cjs");
 
 const ARBEITS_TOOLS = new Set(["Write", "Edit", "NotebookEdit"]);
 // Commit-Erkennung SHELL-UNABHAENGIG [Fix 27.08.2026, Audit-Befund]: die alte Fassung

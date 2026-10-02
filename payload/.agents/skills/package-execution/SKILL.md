@@ -1,11 +1,11 @@
 ---
 name: package-execution
-description: Fuehrt ein Unlazy-Arbeitspaket ueber exakte Leaf-Bindungen, Claude oder das offizielle Codex-Plugin und lokale Reverify aus.
+description: Fuehrt ein Unlazy-Arbeitspaket ueber exakte Leaf-Bindungen, Claude- oder Codex-Arbeitsagenten unter den Harness-Waechtern und lokale Reverify aus.
 ---
 
 # Package execution
 
-Neue Pakete beginnen mit `harness-core/execution/package-bootstrap.mjs begin`: exakt ein Repo, Paket, Scope und Planer-Session; erlaubt sind nur `OWNER.md`, `PACKAGE.md`, `GATES.md` und unmittelbare `gates/*.md`. Nach erfolgreichem Unlazy-Doctor beendet der erste `package-executor start --bootstrap-session <PLANER_SESSION>` diese enge Planungsbindung.
+Neue Pakete entstehen über `.claude/skills/package-standard/package-standard.mjs create`, das die Planungsbindung über `package-bootstrap begin` öffnet: exakt ein Repo, Paket, Scope und Planer-Session; erlaubt sind nur `OWNER.md`, `PACKAGE.md`, `GATES.md` und unmittelbare `gates/*.md`. Nach erfolgreichem Unlazy-Doctor legt `harness-core/execution/package-bootstrap.mjs plan --harness-root <HARNESS_ROOT> --session <PLANER_SESSION> --json` das Paket als geplant ab und beendet die Bindung; das Bündel sichert `harness-core/git/git-intent.mjs checkpoint --root <REPO> --package <ID> --message "<TEXT>"`. Gestartet wird erst auf den Owner-Startsatz (Zeile `Owner-Start: YYYY-MM-DD "<Owner-Wortlaut>"` im `## Status` des Pakets oder `--run <LAUF_PAKET>`, dessen `## Status` eine `Owner-Go:`-Zeile trägt und das Paket nennt), mit `start` ohne `--bootstrap-session`.
 
 Nutze anschließend ausschließlich `harness-core/execution/package-executor.mjs`. Jeder
 Aufruf hat den gemeinsamen Präfix
@@ -15,19 +15,51 @@ Jeder Aufruf nennt `--harness-root <HARNESS_ROOT>` und `--root <ECHTES_GIT_REPO>
 
 - `OWNER.md` ist der unveränderliche Originalauftrag. Das davon abgeleitete Goal und der Plan dürfen ihn nicht ersetzen.
 - Vor Arbeit stehen Depth Tree, disjunkte `OWNS`, Claim und Session-Bindung.
-- `start --session <SESSION> --leaf <LEAF> --provider claude|codex --json` bindet
-  ein Leaf; `dispatch --wave <WAVE> --session <SESSION> [--session <SESSION> ...]
+- `start --session <SESSION> --leaf <LEAF> [--provider codex|claude] [--model <ID>]
+  [--effort low|medium|high] [--run <LAUF_PAKET>] --json` bindet ein Leaf; ohne
+  Anbieter gelten die `MODEL`-Zeile oder die Einstellung Paket-Ausführung; `dispatch --wave <WAVE> --session <SESSION> [--session <SESSION> ...]
   --deadline-seconds <S> --json` startet die begrenzte native Welle. Der Executor
   gewinnt Run-ID und Handle ausschließlich aus dem Provider-Lauf; nie `--member`
   oder einen erfundenen Handle angeben.
-- Codex läuft ausschließlich Claude -> offizielles Projekt-Plugin
-  `codex@openai-codex` -> `/codex:rescue --wait --fresh --model gpt-5.6-sol
-  --effort max`. Claude- und Codex-Ausgabe bleibt Nicht-Evidence.
+- Jeder Arbeitsagent läuft unter den Wächtern der Harness-Wurzel: Claude als
+  `claude -p` mit genau diesen PreToolUse-Wächtern als einziger Einstellung, Codex
+  als `codex exec --dangerously-bypass-hook-trust` mit denselben Wächtern als Hooks,
+  `gpt-5.6-sol` und `max`. Beide sehen ihre Paketsitzung in `KEEL_PACKAGE_SESSION`.
+  `delegation.pluginCommand` nennt den exakten Aufruf, `dispatch` führt ihn aus.
+  Claude- und Codex-Ausgabe bleibt Nicht-Evidence.
+- Modell und Stufe je Leaf oder Paket: `MODEL: claude <modell> <stufe>` im Kopf eines
+  Leaf-Ledgers vor dem ersten Gate oder in `GATES.md` (Codex nur `MODEL: codex`, sein
+  fester Pin). Vorrang: Aufruf (`--provider`/`--model`/`--effort`) vor Leaf vor Paket vor
+  Einstellung vor Voreinstellung. Die Stufe steht als `--effort` in
+  `delegation.pluginCommand`. Dashboard-Pakete laufen nie auf Codex (`PROVIDER_LOCKED`).
 - Zustand und Recovery sind explizit: `heartbeat|liveness --session <SESSION>`,
   `abort|timeout --session <SESSION> --reason "<TEXT>"`, `abandon --wave <WAVE>
   --reason "<TEXT>"`, `retry --session <SESSION>`, `reassign --session <ALT>
   --new-session <NEU> [--provider claude|codex]` und `recover --wave <ABGEBROCHEN>
   --replacement-wave <VOLLSTÄNDIG>`.
+- Neue Sitzungskennung oder geänderter Leaf-Vertrag: `rebind --session <SESSION>
+  --reason "<TEXT>"` erneuert eine vorbereitete Bindung nach einer Vertragsänderung;
+  `rebind --session <ALT> --new-session <NEU> --reason "<TEXT>"` oder `rebind --leaf
+  leaf-<ID> --new-session <NEU> --reason "<TEXT>"` überträgt sie, ohne eine Datei
+  anzufassen. Eine gestartete Sitzung geht über `abort`, danach `retry` oder `reassign`.
+- Verwaiste Laufzeit-Reste: `cleanup-runtime --root <DIR> [--harness-root <DIR>]
+  [--unlazy-root <DIR>] [--apply] [--json]`, ohne `--package`, `--scope` und
+  `--session`; ohne `--apply` nur Vorschau, mit `--apply` werden Leases frei und Scopes
+  unverändert nach `.unlazy/.retired` verschoben, `docs/packages` bleibt unberührt.
+- Bestehende Pakete: überholte oder doppelte Pakete prüft und löst
+  `harness-core/execution/package-resolve.mjs resolve --harness-root <HARNESS_ROOT> --root <REPO>
+  --package <QUELLE> [--merge-into <ZIEL> | --update <ZIEL> [--step <N> ...] | --withdraw
+  --reason "<TEXT>"] [--apply --owner-ok "<WORTLAUT>"] [--unlazy-root <DIR>] [--json]`
+  (zusammenführen, das bestehende aktualisieren oder mit Begründung stilllegen). Ohne
+  `--apply` ist jeder Aufruf eine Vorschau, die nichts schreibt; zurück mit
+  `package-resolve.mjs resolve-undo --harness-root <HARNESS_ROOT> --root <REPO> --receipt <BELEG>`.
+  Kein Owner-Wortlaut geht dabei verloren. Ein aktiviertes Paket aktualisiert
+  `harness-core/execution/package-amend.mjs` (`begin --harness-root <HARNESS_ROOT> --root <REPO>
+  --package <ID> --scope <ID> --session <SESSION>`, danach `finish --harness-root
+  <HARNESS_ROOT> --session <SESSION>`, zurück mit `undo --harness-root <HARNESS_ROOT> --root
+  <REPO> --receipt <BELEG>`) für Status, Plan und Leaves; `OWNER.md` bleibt unverändert.
+  Blockiert ein aktives Paket beim Start ein neues, nennt die Überschneidungsmeldung das
+  blockierende Paket und je eine `NEXT`-Zeile mit der `package-resolve.mjs`-Vorschau.
 - Ein Rücklauf benutzt `return --session <SESSION> --json`; `resume --session
   <SESSION> --json` liest ausschließlich den dauerhaft gebundenen Lauf.
 - Provider-Ausgabe ist nie Evidence. Nur lokale Gate-Reverify darf ein Leaf zurückgeben; `integrate --approve-checks` prüft zuerst Node und Root bottom-up, leitet daraus die Planhaken ab und erzeugt danach genau einen gemeinsamen Checkpoint. Ein erneuter `integrate` führt dieselbe Reverify erneut aus und liefert denselben Checkpoint statt eines zweiten -- er ist idempotent, aber nicht billig. `close` reverifiziert erneut.

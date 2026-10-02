@@ -13,6 +13,7 @@ Migrates exactly one docs/packages/<id>.md into one repository-owned bundle.
 Dry-run is the default. Apply requires an unambiguous semantic mapping, an
 ignored .unlazy/ runtime, an unchanged source and unchanged Git index bytes.
 Resume and rollback are explicit crash-recovery actions.
+Keel Harness: use .claude/skills/package-standard/package-standard.mjs import --kind flat (preview, apply, undo).
 
 exit codes: 0 success; 1 semantic migration blocker; 2 usage/schema;
             3 lock, index, ownership, or concurrent-change conflict.`;

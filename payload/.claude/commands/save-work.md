@@ -14,13 +14,17 @@ description: Sichert genau den verifizierten Stand des gebundenen Arbeitspakets 
 4. Nur wenn fuer einen gebundenen, nicht parallelen Sonderfall ein einzelner Checkpoint
    ausdruecklich vorgesehen ist, verwende `git-intent.mjs checkpoint` mit den exakten
    `--path`-Werten. Versuche nie einen alternativen rohen Git-Befehl.
-5. Eine Veroeffentlichung beginnt erst nach dem Package-Close. Der Owner sagt sein OK im
+5. Ein geschriebenes, noch nicht gestartetes Paket sichert genau ein Befehl:
+   `node <HARNESS_ROOT>/harness-core/git/git-intent.mjs checkpoint --root <REPO> --package <ID> --message "<TEXT>"`.
+   Er sichert nur OWNER.md, PACKAGE.md, GATES.md und gates/*.md; ein gestartetes Paket
+   sichern der Leaf-Checkpoint oder integrate.
+6. Eine Veroeffentlichung beginnt erst nach dem Package-Close. Der Owner sagt sein OK im
    Chat; danach laeuft genau ein Befehl:
    `package-executor.mjs publish --harness-root <HARNESS_ROOT> --root <REPO> --package <ID> --scope <SCOPE> --closure-receipt <CLOSURE_RECEIPT> --owner-ok "<WORTLAUT>" --json`.
    Er plant den Push, zeigt Repo, Branch, HEAD und Remote und legt die Owner-OK-Zeile im
    Publish-Beleg ab. Ohne `--owner-ok` bricht er ab; direkter `git-intent publish` ist
    kein Bedienweg.
-6. Berichte Receipt, Commit und lokalen Reverify-Stand. Ein Commit oder Provider-Erfolg
+7. Berichte Receipt, Commit und lokalen Reverify-Stand. Ein Commit oder Provider-Erfolg
    ersetzt weder Evidence noch Fulfillment des unveraenderlichen Owner-Auftrags.
 
 Rohes `git add`, `git commit`, `git push`, `git restore`, `git checkout`, `git reset`

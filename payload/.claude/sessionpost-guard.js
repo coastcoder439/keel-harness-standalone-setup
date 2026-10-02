@@ -24,6 +24,33 @@
 // AUFRUF    PreToolUse, matcher: mcp__ccd_session_mgmt__send_message
 // RUECKGABE 0 = durch · 2 = blockiert (mit Begruendung auf stderr)
 
+const fs = require("node:fs");
+
+const GUARD_TARGET = ".claude/sessionpost-guard.js";
+
+// Inline deny transport (identical in every PreToolUse guard; guard-parity E5): a missing
+// sibling module must never turn a denial into an allow. Under the Codex hook runner a
+// JSON deny with exit 0 survives Windows PowerShell, which maps a native exit 2 to 1.
+function block(message) {
+  const reason = String(message).trim() || GUARD_TARGET + ": tool denied";
+  if (process.env.KEEL_HARNESS_ROOT && process.env.KEEL_HOOK_TARGET === GUARD_TARGET) {
+    fs.writeSync(1, JSON.stringify({ hookSpecificOutput: {
+      hookEventName: "PreToolUse", permissionDecision: "deny", permissionDecisionReason: reason,
+    } }) + "\n");
+    process.exit(0);
+  }
+  fs.writeSync(2, reason + "\n");
+  process.exit(2);
+}
+
+let ownerHandoff;
+try {
+  ownerHandoff = require("../harness-core/guards/owner-handoff.cjs");
+} catch (error) {
+  if (require.main === module) block("sessionpost-guard: dependency load failed; tool blocked: " + error.message);
+  throw error;
+}
+
 const HART = 900;   // darueber wird immer geblockt
 const WEICH = 600;  // darueber nur mit Strukturbefund
 
@@ -76,7 +103,7 @@ function vorwarnen() {
 
 function main(roh) {
   let d;
-  try { d = JSON.parse(roh || "{}"); } catch { process.exit(0); }
+  try { d = JSON.parse(roh || "{}"); } catch { return block("sessionpost-guard: invalid hook input; tool blocked"); }
   const werkzeug = String(d.tool_name || "");
   if (/list_sessions/.test(werkzeug)) vorwarnen();
   if (!/send_message/.test(werkzeug)) process.exit(0);
@@ -89,7 +116,7 @@ function main(roh) {
   // Fall 26.08.2026 (Meldung zu pollution-warn.js riss eine laufende Owner-Aufgabe
   // auseinander). Ersatz ohne Verlust: Datei-Ablage + Anzeige beim Sitzungsstart
   // (session-roles.js, Funktion notizen()).
-  console.error(
+  block(
     "sessionpost-guard: Nachrichten ZWISCHEN Sitzungen sind abgestellt " +
     "[Owner-Entscheid 27.08.2026].\n" +
     "Lege den Befund stattdessen ab -- die Zielsitzung sieht ihn bei ihrem naechsten Start:\n" +
@@ -98,9 +125,14 @@ function main(roh) {
     "      <Fakt> — <was sich fuer DICH aendert>.\n" +
     "      Beleg: <datei:zeile | commit | befehl>\n" +
     "      Zu tun: <eine Sache>\n" +
-    "Ablauf steht in .claude/commands/tell-session.md."
+    "Ablauf steht in .claude/commands/tell-session.md.\n" +
+    // Senden ist eine Owner-Entscheidung, keine Luecke: kein Befehl, sondern der Weg, den der
+    // Owner selbst hat (guard-parity E9).
+    ownerHandoff.handoffText({ what: "Nachricht an eine andere Sitzung",
+      route: "Notiz per /tell-session",
+      ownerAction: "Senden zwischen Sitzungen hat der Owner am 27.08.2026 abgestellt; braucht die andere Sitzung " +
+        "den Befund sofort, tippt der Owner ihn dort selbst ein." })
   );
-  process.exit(2);
 }
 
 // Ab hier: die alte Laengen-/Struktur-Pruefung. Sie bleibt als Mass fuer die

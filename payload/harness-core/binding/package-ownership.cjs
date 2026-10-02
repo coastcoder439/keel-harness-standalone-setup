@@ -129,4 +129,28 @@ function describeConflict(conflict) {
     " overlaps " + conflict.leaf + " OWNS " + conflict.pattern;
 }
 
-module.exports = { activeScopes, crossPackageOverlaps, describeConflict, globsOverlap, normalizeOwnsGlob, packageOwnership };
+// The refusal text for an activation blocked by another active package. The first line is the
+// executor's historic message byte for byte; each distinct blocking package with an OWNS overlap
+// then gets one NEXT line with the resolve preview that offers to merge, update or withdraw it,
+// because a refusal without a way out left the caller stuck (Owner 01.10.2026: "Blockiert ein
+// aktives Paket ein neues, nennt die Meldung das blockierende Paket und diesen Befehl.").
+function overlapMessage(conflicts, options = {}) {
+  const list = Array.isArray(conflicts) ? conflicts : [];
+  const harnessRoot = path.resolve(options.harnessRoot || path.resolve(__dirname, "..", ".."));
+  const repoRoot = path.resolve(options.repoRoot || process.cwd());
+  const script = path.join(harnessRoot, "harness-core", "execution", "package-resolve.mjs");
+  const lines = ["another active package claims ownership this package needs: " +
+    list.slice(0, 5).map(describeConflict).join("; ")];
+  const blocking = [];
+  for (const conflict of list) {
+    if (conflict.kind !== "owns-overlap" || blocking.includes(conflict.packageId)) continue;
+    blocking.push(conflict.packageId);
+  }
+  for (const packageId of blocking) {
+    lines.push("NEXT: node \"" + script + "\" resolve --harness-root \"" + harnessRoot + "\" --root \"" + repoRoot +
+      "\" --package " + packageId + " --json (Vorschau: zusammenführen, aktualisieren oder stilllegen)");
+  }
+  return lines.join("\n");
+}
+
+module.exports = { activeScopes, crossPackageOverlaps, describeConflict, globsOverlap, normalizeOwnsGlob, overlapMessage, packageOwnership };

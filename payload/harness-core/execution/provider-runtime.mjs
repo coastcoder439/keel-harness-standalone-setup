@@ -1,8 +1,19 @@
 #!/usr/bin/env node
 
-// Durable adapter between package dispatch state and Claude Code's native
-// stream-json protocol. The adapter never accepts caller-supplied provider
-// handles: a handle is recorded only after Claude emits session_id itself.
+// Durable adapter between package dispatch state and the native provider
+// protocols: Claude Code stream-json and Codex exec --json. The adapter never
+// accepts caller-supplied provider handles: a handle is recorded only after
+// Claude emits session_id or Codex emits thread_id itself.
+//
+// Every worker runs under the guards of the Harness root (package guard-parity,
+// decisions E6/E8): a Claude worker gets the root's PreToolUse hooks through
+// --settings with fixed paths (measured 01.10.2026: a nested project repo has no
+// project hooks of its own, and a --settings hook denies even under
+// bypassPermissions); a Codex worker gets the same guards through
+// -c hooks.PreToolUse and --dangerously-bypass-hook-trust (measured 01.10.2026 on
+// Codex 0.153.4: the hook fires for PowerShell commands and its JSON deny holds).
+// Both see their package session as KEEL_PACKAGE_SESSION and the rule root as
+// KEEL_HARNESS_ROOT.
 
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -137,6 +148,50 @@ function terminalFailure(run) {
 
 const delay = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+// The Harness root's PreToolUse guards with fixed paths, for a worker whose working
+// directory is a project repository without hooks of its own. Only the guards travel:
+// SessionStart, UserPromptSubmit and Stop hooks serve the Owner's session, and a Stop
+// hook that waits for open gates would hold a worker until its turn limit (E6).
+export function workerGuardHooks(harnessRoot) {
+  const file = path.join(harnessRoot, ".claude", "settings.json");
+  const groups = readJson(file, "Harness settings")?.hooks?.PreToolUse;
+  if (!Array.isArray(groups) || !groups.length) {
+    throw runtimeError("PROVIDER_GUARDS", "the Harness root has no PreToolUse guards: " + file);
+  }
+  const root = harnessRoot.split(path.sep).join("/");
+  return groups.map((group) => ({ ...group, hooks: (group.hooks || []).map((hook) => ({
+    ...hook, command: String(hook.command || "").replaceAll("$CLAUDE_PROJECT_DIR", root),
+  })) }));
+}
+
+function tomlLiteral(value) {
+  const text = String(value);
+  if (/['\r\n]/u.test(text)) throw runtimeError("PROVIDER_GUARDS", "a Codex hook value cannot be written as a TOML literal: " + text);
+  return "'" + text + "'";
+}
+
+// The same guards for Codex as the value of `-c hooks.PreToolUse=...`: every group of the
+// root's .codex/hooks.json, each hook as `node "<root>/.codex/hook-runner.cjs" <target>`.
+// The runner names the target for the guard's Codex deny format (E8).
+export function codexGuardHooks(harnessRoot) {
+  const file = path.join(harnessRoot, ".codex", "hooks.json");
+  const groups = readJson(file, "Harness Codex hooks")?.hooks?.PreToolUse;
+  if (!Array.isArray(groups) || !groups.length) {
+    throw runtimeError("PROVIDER_GUARDS", "the Harness root has no Codex PreToolUse guards: " + file);
+  }
+  const runner = path.join(harnessRoot, ".codex", "hook-runner.cjs").split(path.sep).join("/");
+  const entries = groups.map((group) => {
+    const hooks = (group.hooks || []).map((hook) => {
+      const target = String(hook.command || "").match(/"(\.(?:claude|codex)\/[A-Za-z0-9._-]+)"\s*$/u)?.[1];
+      if (!target) throw runtimeError("PROVIDER_GUARDS", "a Codex hook names no guard target: " + hook.command);
+      return "{type=" + tomlLiteral("command") + ",command=" + tomlLiteral("node \"" + runner + "\" " + target) +
+        ",timeout=" + boundedInteger(hook.timeout ?? 10, "hook timeout", 1, 600) + "}";
+    });
+    return "{matcher=" + tomlLiteral(group.matcher) + ",hooks=[" + hooks.join(",") + "]}";
+  });
+  return "[" + entries.join(",") + "]";
+}
+
 export async function launchProviderRun(options) {
   const repoRoot = fs.realpathSync(path.resolve(options.repoRoot));
   const scope = identifier(options.scope, "scope");
@@ -155,10 +210,25 @@ export async function launchProviderRun(options) {
   const maxTurns = boundedInteger(options.maxTurns ?? 32, "maxTurns", 1, 128);
   const executable = safeLine(options.claudeExecutable || "claude", "Claude executable", 2_000);
   const prefixArgs = Array.isArray(options.claudePrefixArgs) ? options.claudePrefixArgs.map((item) => safeLine(item, "Claude prefix argument", 2_000)) : [];
+  if (!options.harnessRoot) throw runtimeError("PROVIDER_RUNTIME_INPUT", "harnessRoot is required: every worker runs under the Harness guards");
+  const harnessRoot = fs.realpathSync(path.resolve(options.harnessRoot));
+  let codexCommand = null;
+  if (provider === "codex") {
+    const requested = options.codexCommand || { command: "codex", prefixArgs: [] };
+    codexCommand = { command: safeLine(requested.command, "Codex executable", 2_000),
+      prefixArgs: (requested.prefixArgs || []).map((item) => safeLine(item, "Codex prefix argument", 2_000)) };
+  }
+  // Fail before any process starts when the guards cannot be handed to the worker.
+  const guards = provider === "codex" ? codexGuardHooks(harnessRoot) : workerGuardHooks(harnessRoot);
   const runId = crypto.randomUUID();
   const directory = runDirectory(repoRoot, scope, runId);
   fs.mkdirSync(path.dirname(directory), { recursive: true });
   fs.mkdirSync(directory, { recursive: false });
+  let settingsFile = null;
+  if (provider === "claude") {
+    settingsFile = path.join(directory, "worker-settings.json");
+    atomicJson(settingsFile, { hooks: { PreToolUse: guards } });
+  }
   const createdAt = new Date().toISOString();
   const deadlineAt = new Date(Date.now() + deadlineSeconds * 1_000).toISOString();
   const manifest = {
@@ -178,6 +248,10 @@ export async function launchProviderRun(options) {
     model: provider === "codex" ? CODEX_MODEL : null,
     effort: provider === "codex" ? CODEX_EFFORT : null,
     permissionMode: "bypassPermissions",
+    harnessRoot,
+    settingsFile,
+    codexCommand,
+    codexHooks: provider === "codex" ? guards : null,
   };
   atomicJson(manifestPath(repoRoot, scope, runId), manifest);
   atomicJson(providerRunPath(repoRoot, scope, runId), {
@@ -326,12 +400,60 @@ function appendBounded(file, bytes) {
 
 function routePrompt(manifest) {
   const brief = JSON.stringify(manifest.briefFile);
-  if (manifest.provider === "codex") {
-    return `/codex:rescue --wait --fresh --model ${manifest.model} --effort ${manifest.effort} ` +
-      `Read ${brief}, execute exactly that bound leaf contract, and return the Codex runtime result unchanged.`;
-  }
   return `Read ${brief} and execute exactly that bound leaf contract. Do not widen OWNS. ` +
     "Return a concise result; the parent will reverify locally.";
+}
+
+// The exact provider process of a run: Claude print mode with the root's guards as its only
+// settings, or Codex exec with the same guards handed over as hooks (E6/E8).
+export function providerProcess(manifest) {
+  // A run manifest without its guards never starts: an unguarded worker is the gap this
+  // runtime closes (E6/E8).
+  if (!manifest.harnessRoot) throw runtimeError("PROVIDER_GUARDS", "run manifest names no Harness root");
+  if (manifest.provider === "codex") {
+    if (!manifest.codexHooks || !manifest.codexCommand) throw runtimeError("PROVIDER_GUARDS", "run manifest carries no Codex guards");
+    return {
+      command: manifest.codexCommand.command,
+      args: [
+        ...manifest.codexCommand.prefixArgs,
+        "exec",
+        "--json",
+        "--dangerously-bypass-hook-trust",
+        "-s", "workspace-write",
+        "-C", manifest.repoRoot,
+        "-m", manifest.model,
+        "-c", "model_reasoning_effort=" + tomlLiteral(manifest.effort),
+        "-c", "hooks.PreToolUse=" + manifest.codexHooks,
+        routePrompt(manifest),
+      ],
+    };
+  }
+  if (!manifest.settingsFile) throw runtimeError("PROVIDER_GUARDS", "run manifest carries no guard settings");
+  return {
+    command: manifest.executable,
+    args: [
+      ...manifest.prefixArgs,
+      "-p",
+      "--output-format", "stream-json",
+      "--verbose",
+      "--max-turns", String(manifest.maxTurns),
+      // A print-mode worker has no operator who could answer a permission prompt; the
+      // guards decide instead, and a guard denial holds even under bypassPermissions.
+      "--permission-mode", manifest.permissionMode,
+      "--setting-sources", "",
+      "--settings", manifest.settingsFile,
+      routePrompt(manifest),
+    ],
+  };
+}
+
+export function providerEnvironment(manifest, base = process.env) {
+  const env = { ...base, UNLAZY_PACKAGE: manifest.packageId, UNLAZY_SCOPE: manifest.scope,
+    KEEL_PACKAGE_SESSION: manifest.sessionId, KEEL_HARNESS_ROOT: manifest.harnessRoot };
+  // A worker is no Codex hook runner: an inherited target would switch its guards to the
+  // runner's deny format and dialect.
+  delete env.KEEL_HOOK_TARGET;
+  return env;
 }
 
 async function workerMain(manifestFile) {
@@ -381,7 +503,12 @@ async function workerMain(manifestFile) {
     if (event.type === "result" && (event.is_error === true || String(event.subtype || "").startsWith("error"))) {
       resultErrored = true;
     }
-    const nativeHandle = typeof event.session_id === "string" ? event.session_id.trim() : "";
+    // Codex reports a failed turn as turn.failed; its "error" events are often warnings
+    // (measured 01.10.2026: "Skill descriptions were shortened ...") and fail nothing.
+    if (event.type === "turn.failed") resultErrored = true;
+    const nativeValue = typeof event.session_id === "string" ? event.session_id
+      : event.type === "thread.started" && typeof event.thread_id === "string" ? event.thread_id : "";
+    const nativeHandle = nativeValue.trim();
     if (!nativeHandle) return;
     safeLine(nativeHandle, "native handle", 256);
     update((run) => ({ ...run, state: run.state === "starting" || run.state === "queued" ? "running" : run.state,
@@ -390,24 +517,13 @@ async function workerMain(manifestFile) {
   };
 
   try {
-    child = spawn(manifest.executable, [
-      ...manifest.prefixArgs,
-      "-p",
-      "--output-format", "stream-json",
-      "--verbose",
-      "--max-turns", String(manifest.maxTurns),
-      // A print-mode worker has no interactive operator who could answer a
-      // permission prompt. Package binding, OWNS and mutation policy remain
-      // enforced by the project hooks; provider output still is not evidence.
-      "--permission-mode", manifest.permissionMode,
-      routePrompt(manifest),
-    ], {
+    const provider = providerProcess(manifest);
+    child = spawn(provider.command, provider.args, {
       cwd: manifest.repoRoot,
       detached: process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
       windowsHide: true,
-      env: { ...process.env, UNLAZY_PACKAGE: manifest.packageId, UNLAZY_SCOPE: manifest.scope,
-        KEEL_PACKAGE_SESSION: manifest.sessionId },
+      env: providerEnvironment(manifest),
     });
     update((run) => ({ ...run, providerPid: child.pid, lastHeartbeatAt: new Date().toISOString() }));
   } catch (error) {
@@ -444,7 +560,7 @@ async function workerMain(manifestFile) {
     else if (stopAction === "timeout") state = "timed-out";
     else if (!current.nativeHandle) {
       state = "provider-start-failed";
-      failure = { code: "NO_NATIVE_HANDLE", message: "Claude emitted no native session_id" };
+      failure = { code: "NO_NATIVE_HANDLE", message: "the provider emitted no native session handle" };
     } else if (code !== 0 || resultErrored) {
       state = "provider-failed";
       failure = { code: "PROVIDER_EXIT", message: "provider exited " + code + (signal ? " via " + signal : "") };

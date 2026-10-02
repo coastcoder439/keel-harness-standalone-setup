@@ -1,64 +1,94 @@
 #!/usr/bin/env node
-// Skill package-standard: creates work packages in the Keel package standard and
-// imports existing projects (flat package file, Fachboards P file, TODO list)
-// with preview, apply and undo. Zero dependencies; builds on
-// `package-cli create` (Owner contract skeleton, schema check) and validates
-// every result with `package-cli doctor`.
+// Skill package-standard: the one package tool. It creates complete work
+// packages in the Keel package standard (Owner contract, requirements ->
+// contract -> gate, fields, plan, depth tree, leaves with OWNS) inside the
+// planning binding, converts flat packages in place, imports existing projects
+// (flat package file, Fachboards P file, TODO list) with preview, apply and undo,
+// and prepares a repository for packages (.unlazy/ ignored by Git). Zero
+// dependencies; builds on `package-cli create`, the Unlazy migration library and
+// the Harness planning bootstrap, and validates every result with `package-cli doctor`.
 
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   existsSync,
   lstatSync,
   mkdirSync,
   readFileSync,
   readdirSync,
+  renameSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { basename, dirname, join, relative, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const HELP = `usage: package-standard.mjs <command> --root REPO [options]
 
 commands:
-  create --package ID --problem T --intent T --goal T --scope-in T --scope-out T
-         --context T --step T [--step T ...] [--planned-start D --planned-end D]
+  create --package ID --session ID --problem T --intent T --goal T --scope-in T
+         --scope-out T --context T --step T [--step T ...]
+         --requirement T --requirement T [--requirement T ...]
+         [--leaf leaf-<id>=<glob>[,<glob>] ...] [--planned-start D --planned-end D]
          [--owner-request-file FILE | --owner-request T] [--owner-source T]
-      new bundle in the standard format (via package-cli create), then doctor
+         [--harness-root DIR] [--takeover]
+      complete bundle in the standard format inside the planning binding of
+      --session: OWNER.md (R<k> -> C<k>), PACKAGE.md (fields, plan, Abnahme,
+      depth tree), GATES.md (root gate for the last requirement) and one ledger
+      per --leaf (default leaf-work=docs/packages/<ID>/evidence/**); every leaf
+      needs one requirement and the root one more. An untouched planning
+      scaffold is taken over; an OWNER.md already written into it is kept and
+      replaces the request switches. The binding stays open (file it later with
+      package-bootstrap.mjs plan). Then doctor.
   import --source FILE [--source FILE ...] --kind flat|pfile|todo
          (--package ID | --into ID) [--preview | --apply]
-         [field options as for create] [--owner-request-file FILE]
+         [field options as for create] [--owner-request-file FILE | --owner-request T]
+         [--owner-source T]
          [--done P13,P14]   P files checked against commits as done (pfile only)
       --preview (default) prints the mapping as JSON and writes nothing;
       --apply writes a new bundle (--package) or appends the sources as plan
-      steps to an existing bundle (--into) and keeps an undo journal
-  undo --package ID
-      reverts the last apply for this package if nothing changed since
+      steps to an existing bundle (--into) and keeps an undo journal.
+      A single --source docs/packages/<id>.md of REPO (with --package <id> or
+      without --package) is converted in place into docs/packages/<id>/; the
+      old file is archived as design/imported-<id>.md. In a repository with
+      .keel-harness.json the Owner request is required for this conversion.
+  prepare [--apply]
+      makes Git ignore .unlazy/ in REPO's .gitignore (creates it, rewrites a
+      UTF-16 file as UTF-8, keeps line endings); without --apply a preview
+  undo (--package ID | --prepare)
+      reverts the last apply for this package (new bundle, --into, in-place
+      conversion) or the last prepare if nothing changed since
 
 options:
-  --unlazy DIR   vendored Unlazy root (default: found above this skill or in REPO)
-  --json         print JSON only
+  --unlazy DIR        vendored Unlazy root (default: found above this skill or in REPO)
+  --harness-root DIR  Harness root with .keel-harness.json (default: the installation
+                      root of this tool)
+  --json              print JSON only
 
-exit codes: 0 ok; 1 preview/apply found missing fields or doctor diagnostics;
+exit codes: 0 ok; 1 preview/apply found missing fields, blockers or doctor diagnostics;
             2 usage or safety refusal.`;
 
 const VALUE = new Set([
   "--root", "--package", "--into", "--source", "--kind", "--problem", "--intent", "--goal",
   "--scope-in", "--scope-out", "--context", "--step", "--planned-start", "--planned-end",
   "--owner-request-file", "--owner-request", "--owner-source", "--unlazy", "--done",
+  "--harness-root", "--session", "--requirement", "--leaf",
 ]);
-const REPEATABLE = new Set(["--source", "--step"]);
-const FLAGS = new Set(["--preview", "--apply", "--json", "--help", "-h"]);
+const REPEATABLE = new Set(["--source", "--step", "--requirement", "--leaf"]);
+const FLAGS = new Set(["--preview", "--apply", "--json", "--help", "-h", "--takeover", "--prepare"]);
 const PACKAGE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
+const LEAF_ID_RE = /^leaf-[A-Za-z0-9][A-Za-z0-9._-]*$/u;
 const JOURNAL_DIR = [".unlazy", "package-standard", "undo"];
+const PREPARE_JOURNAL = ".prepare";
+const TOOL_DIR = dirname(fileURLToPath(import.meta.url));
 
 class UsageError extends Error {}
 
 function parseArgs(argv) {
   const positional = [];
-  const options = { source: [], step: [] };
+  const options = { source: [], step: [], requirement: [], leaf: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (FLAGS.has(arg)) { options[arg.replace(/^-+/u, "")] = true; continue; }
@@ -382,21 +412,203 @@ function print(value, json) {
 
 // --- Commands -------------------------------------------------------------------
 
+// --- create: one complete bundle inside the planning binding --------------------
+
+// The Harness planning bootstrap, if this installation ships it. Loaded only
+// through createRequire, so the tool still runs (without a binding) in a plain
+// Unlazy repository.
+function bootstrapModule() {
+  const file = join(TOOL_DIR, "..", "..", "..", "harness-core", "binding", "package-bootstrap.cjs");
+  if (!existsSync(file)) return null;
+  return createRequire(import.meta.url)("../../../harness-core/binding/package-bootstrap.cjs");
+}
+
+function harnessRootOf(options) {
+  const candidate = options["harness-root"] ? resolve(options["harness-root"]) : resolve(TOOL_DIR, "..", "..", "..");
+  if (!existsSync(join(candidate, ".keel-harness.json"))) {
+    throw new UsageError("no .keel-harness.json in " + (options["harness-root"] ? "--harness-root" : "the installation root of this tool") +
+      "; pass --harness-root DIR");
+  }
+  return candidate;
+}
+
+function oneLineValue(value, label) {
+  if (/[\r\n]/u.test(value)) throw new UsageError(label + " must be one line");
+  return oneLine(value);
+}
+
+function leavesFrom(options, packageId) {
+  const values = options.leaf.length ? options.leaf : ["leaf-work=docs/packages/" + packageId + "/evidence/**"];
+  const leaves = [];
+  for (const value of values) {
+    const at = value.indexOf("=");
+    const id = at === -1 ? "" : value.slice(0, at).trim();
+    if (!LEAF_ID_RE.test(id)) throw new UsageError("--leaf needs leaf-<id>=<glob>[,<glob>] with <id> of letters, digits, '.', '_' or '-': " + value);
+    if (leaves.some((leaf) => leaf.id.toLowerCase() === id.toLowerCase())) throw new UsageError("duplicate --leaf " + id);
+    const owns = value.slice(at + 1).split(",").map((item) => item.trim()).filter(Boolean);
+    if (!owns.length || /[\r\n]/u.test(value)) throw new UsageError("--leaf " + id + " needs at least one glob");
+    leaves.push({ id, owns });
+  }
+  return leaves;
+}
+
+// C1..C(n-1) in contiguous blocks over the leaves in --leaf order, the front
+// leaves one more on a remainder; C<n> belongs to the root gate GATES.md:G1.
+function distribute(requirements, leaves) {
+  const share = requirements.length - 1;
+  const base = Math.floor(share / leaves.length);
+  const rest = share % leaves.length;
+  let next = 0;
+  return leaves.map((leaf, index) => {
+    const count = base + (index < rest ? 1 : 0);
+    const items = [];
+    for (let offset = 0; offset < count; offset += 1) {
+      next += 1;
+      items.push({ k: next, text: requirements[next - 1] });
+    }
+    return { ...leaf, items };
+  });
+}
+
+function ownerContract(packageId, source, request, requirementLines) {
+  return "# Owner contract: " + packageId + "\n\nSchema: 1\nSource: " + source + "\nCaptured: " + today() +
+    "\n\n## Original request\n\n" + request + (request.endsWith("\n") ? "" : "\n") +
+    "\n## Requirements\n\n" + requirementLines.join("\n") + "\n";
+}
+
+function ownerRequest(options) {
+  if (options["owner-request-file"]) return readFileSync(resolve(options["owner-request-file"]), "utf8");
+  if (options["owner-request"] !== undefined) return options["owner-request"];
+  return null;
+}
+
+function bundleTexts(packageId, options, fields, steps, requirements, leaves) {
+  const n = requirements.length;
+  const assigned = distribute(requirements, leaves);
+  const owner = ownerContract(packageId, options["owner-source"] ? oneLine(options["owner-source"]) : "package-standard.mjs create",
+    ownerRequest(options) ?? "", requirements.map((text, index) => "- R" + (index + 1) + " -> C" + (index + 1) + ": " + text));
+  const abnahme = [
+    ...assigned.flatMap((leaf) => leaf.items.map((item) => "- C" + item.k + " -> gates/" + leaf.id + ".md:L" + item.k + ": " + item.text)),
+    "- C" + n + " -> GATES.md:G1: " + requirements[n - 1],
+  ];
+  const tree = [
+    "- ROOT GATES.md <- none: " + fields.goal,
+    ...assigned.map((leaf) => "- LEAF gates/" + leaf.id + ".md <- GATES.md: " + leaf.items[0].text),
+  ];
+  const packageText = "# Work package: " + packageId + "\n\n" + fieldBlock(fields) + "\n\n" +
+    "## Plan\n\n" + planBlock(steps) + "\n\n" +
+    "## Status\n\n" + today() + " - Angelegt mit package-standard.mjs create; nicht gestartet.\n\n" +
+    "## Abnahme\n\n" + abnahme.join("\n") + "\n\n" +
+    "## Abschluss\n\n" +
+    "Coverage: " + n + "/" + n + " Owner-Anforderungen gemappt; 0/" + n + " erfüllt.\n" +
+    "Fulfillment: nicht erfuellt - Paket angelegt, nicht gestartet.\n" +
+    "Geprueft gegen: package-cli doctor.\n" +
+    "Offen: Plan-Schritte 1 bis " + steps.length + ".\n\n" +
+    "## Anhang\n\n### Depth Tree\n\n" + tree.join("\n") + "\n";
+  const gatesText = "# Gates: " + packageId + "\n\n- [ ] G1: " + requirements[n - 1] + "\n  EVIDENCE: pending\n";
+  const ledgers = {};
+  for (const leaf of assigned) {
+    ledgers[leaf.id] = "# Leaf: " + leaf.id + "\n\nOWNS: " + leaf.owns.join(", ") + "\n\nScope: " +
+      leaf.items.map((item) => item.text).join(" ") + "\n\n" +
+      leaf.items.map((item) => "- [ ] L" + item.k + ": " + item.text + "\n  Manuell: " + item.text +
+        "; Beleg evidence/" + leaf.id + ".md\n  EVIDENCE: pending").join("\n\n") + "\n";
+  }
+  return { owner, packageText, gatesText, ledgers };
+}
+
+// Writes the complete bundle through package-cli create (atomic directory and
+// schema check), then replaces its draft files with the generated ones.
+function writeCompleteBundle(unlazy, root, packageId, options, texts, keptOwner) {
+  const directory = join(root, "docs", "packages", packageId);
+  if (existsSync(directory)) throw new UsageError("package already exists: docs/packages/" + packageId);
+  const args = ["create", "--package", packageId, "--json"];
+  if (options["owner-request-file"]) args.push("--owner-request-file", resolve(options["owner-request-file"]));
+  else if (options["owner-request"] !== undefined) args.push("--owner-request", options["owner-request"]);
+  if (options["owner-source"]) args.push("--owner-source", oneLine(options["owner-source"]));
+  const created = packageCli(unlazy, root, args);
+  let parsed = null;
+  try { parsed = JSON.parse(created.stdout); } catch { /* reported below */ }
+  if (created.status !== 0 || !parsed || typeof parsed !== "object") {
+    rmSync(directory, { recursive: true, force: true });
+    throw new UsageError("package-cli create failed: " + (created.stderr || created.stdout).trim());
+  }
+  try {
+    writeFileSync(join(directory, "OWNER.md"), keptOwner ?? texts.owner, "utf8");
+    writeFileSync(join(directory, "PACKAGE.md"), texts.packageText, "utf8");
+    writeFileSync(join(directory, "GATES.md"), texts.gatesText, "utf8");
+    mkdirSync(join(directory, "gates"), { recursive: true });
+    for (const [leaf, text] of Object.entries(texts.ledgers)) {
+      writeFileSync(join(directory, "gates", leaf + ".md"), text, { encoding: "utf8", flag: "wx" });
+    }
+    rmSync(join(directory, "gates", ".gitkeep"), { force: true });
+  } catch (error) {
+    rmSync(directory, { recursive: true, force: true });
+    throw error;
+  }
+  return directory;
+}
+
 function commandCreate(options) {
   const root = repositoryRoot(options);
   const packageId = assertPackageId(options.package, "--package");
+  if (options["owner-request-file"] && options["owner-request"] !== undefined) {
+    throw new UsageError("use either --owner-request-file or --owner-request, not both");
+  }
+  const requirements = options.requirement.map((value) => oneLineValue(value, "--requirement"));
+  if (requirements.some((value) => !value)) throw new UsageError("--requirement must not be empty");
+  const leaves = leavesFrom(options, packageId);
+  const bootstrap = bootstrapModule();
+  const harnessRoot = bootstrap ? harnessRootOf(options) : null;
   const unlazy = findUnlazy(options, root);
+  const directory = join(root, "docs", "packages", packageId);
+  const scaffold = bootstrap ? bootstrap.scaffoldStatus(directory, packageId) : { scaffold: false, ownerEdited: false };
+  const keptOwnerScaffold = scaffold.scaffold && scaffold.ownerEdited;
   const { fields, missing } = fieldsFrom(options);
   if (!options.step.length) missing.push("Plan (--step)");
+  if (ownerRequest(options) === null && !keptOwnerScaffold) missing.push("Originalauftrag (--owner-request-file oder --owner-request)");
+  if (bootstrap && !String(options.session || "").trim()) missing.push("Sitzung (--session)");
+  if (requirements.length < leaves.length + 1) {
+    missing.push("Anforderungen: mindestens " + (leaves.length + 1) + " (je Leaf eine, dazu die Wurzel)");
+  }
   if (missing.length) {
     print({ ok: false, packageId, missing }, true);
     return 1;
   }
   const steps = options.step.map((text) => ({ text, done: false }));
-  createBundle(unlazy, root, packageId, options, fields, steps,
-    today() + " - Angelegt mit dem Skill package-standard (Standardformat).");
+  const texts = bundleTexts(packageId, options, fields, steps, requirements, leaves);
+  let binding = null;
+  let overlaps = [];
+  if (!bootstrap) {
+    writeCompleteBundle(unlazy, root, packageId, options, texts, null);
+  } else {
+    let begun;
+    try {
+      begun = bootstrap.begin({
+        harnessRoot, root, packageId, scope: packageId, sessionId: options.session,
+        owns: leaves.flatMap((leaf) => leaf.owns), takeover: Boolean(options.takeover),
+        unlazyRoot: options.unlazy ? resolve(options.unlazy) : undefined,
+      });
+    } catch (error) {
+      throw new UsageError(error.message);
+    }
+    binding = { sessionId: begun.sessionId, scope: begun.scope };
+    overlaps = begun.overlaps || [];
+    const now = bootstrap.scaffoldStatus(directory, packageId);
+    if (!now.scaffold) throw new UsageError("package already exists: docs/packages/" + packageId);
+    const keptOwner = now.ownerEdited ? readFileSync(join(directory, "OWNER.md")) : null;
+    const parked = join(root, "docs", "packages", "." + packageId + ".scaffold-" + randomBytes(8).toString("hex"));
+    renameSync(directory, parked);
+    try {
+      writeCompleteBundle(unlazy, root, packageId, options, texts, keptOwner);
+    } catch (error) {
+      rmSync(directory, { recursive: true, force: true });
+      renameSync(parked, directory);
+      throw error;
+    }
+    rmSync(parked, { recursive: true, force: true });
+  }
   const result = doctor(unlazy, root, packageId);
-  print({ ok: result.ok, packageId, bundle: "docs/packages/" + packageId, diagnostics: result.diagnostics }, options.json);
+  print({ ok: result.ok, packageId, bundle: "docs/packages/" + packageId, diagnostics: result.diagnostics, binding, overlaps }, options.json);
   return result.ok ? 0 : 1;
 }
 
@@ -445,7 +657,91 @@ function previewOf(plan) {
   };
 }
 
-function commandImport(options) {
+// --- import --kind flat in place: docs/packages/<id>.md -> docs/packages/<id>/ ----
+
+function samePath(left, right) {
+  if (process.platform === "win32") return resolve(left).toLowerCase() === resolve(right).toLowerCase();
+  return resolve(left) === resolve(right);
+}
+
+// The package id of an in-place conversion, or null for every other import.
+function inPlaceId(options, root) {
+  if (options.kind !== "flat" || options.into || options.source.length !== 1) return null;
+  const source = resolve(options.source[0]);
+  if (!source.toLowerCase().endsWith(".md")) return null;
+  const id = basename(source).slice(0, -3);
+  if (!PACKAGE_ID_RE.test(id) || !samePath(source, join(root, "docs", "packages", id + ".md"))) return null;
+  if (options.package !== undefined && options.package !== id) return null;
+  return id;
+}
+
+async function migrationLibrary(unlazy) {
+  return import(pathToFileURL(join(unlazy, "scripts", "lib", "package-migration.mjs")).href);
+}
+
+function migrationOwnerText(packageId, options, request, contract) {
+  return ownerContract(packageId, options["owner-source"] ? oneLine(options["owner-source"]) : "package-standard.mjs import",
+    request, contract.map((item, index) => "- R" + (index + 1) + " -> " + item.contractId + ": " + item.criterion));
+}
+
+async function commandMigrate(options, root, packageId) {
+  if (options["owner-request-file"] && options["owner-request"] !== undefined) {
+    throw new UsageError("use either --owner-request-file or --owner-request, not both");
+  }
+  const unlazy = findUnlazy(options, root);
+  const library = await migrationLibrary(unlazy);
+  const request = ownerRequest(options);
+  let report;
+  try { report = library.dryRunLegacyMigration({ root, packageId }); }
+  catch (error) {
+    if (error.exitCode === 1) { print({ ok: false, applied: false, error: error.message }, true); return 1; }
+    throw new UsageError(error.message);
+  }
+  const missing = existsSync(join(root, ".keel-harness.json")) && request === null ? ["Originalauftrag (OWNER.md)"] : [];
+  const preview = {
+    mode: "migrate", source: report.source, target: report.target, plan: report.semantic.plan,
+    contract: report.semantic.contract, blockers: report.blockers, warnings: report.warnings, missing,
+  };
+  const blocked = report.blockers.length > 0 || missing.length > 0;
+  if (!options.apply || blocked) {
+    print({ ok: !blocked, applied: false, preview }, true);
+    return blocked ? 1 : 0;
+  }
+  assertRuntimeIgnored(root);
+  const journalFile = journalPath(root, packageId);
+  if (existsSync(journalFile)) throw new UsageError("an undo journal for " + packageId + " exists; run undo or remove it first");
+  const sourceFile = join(root, "docs", "packages", packageId + ".md");
+  const bytes = readFileSync(sourceFile);
+  const journal = {
+    schema: 1, mode: "migrate", packageId, appliedAt: new Date().toISOString(),
+    source: "docs/packages/" + packageId + ".md", sourceBase64: bytes.toString("base64"), sourceSha256: sha256(bytes),
+  };
+  writeJournal(root, packageId, journal);
+  const directory = join(root, "docs", "packages", packageId);
+  try {
+    library.applyLegacyMigration({ root, packageId,
+      ...(request === null ? {} : { ownerText: migrationOwnerText(packageId, options, request, report.semantic.contract) }) });
+  } catch (error) {
+    if (!existsSync(directory)) rmSync(journalFile, { force: true });
+    if (error.exitCode === 1) { print({ ok: false, applied: false, preview, error: error.message }, true); return 1; }
+    throw new UsageError(error.message);
+  }
+  mkdirSync(join(directory, "design"), { recursive: true });
+  writeFileSync(join(directory, "design", "imported-" + packageId + ".md"), bytes, { flag: "wx" });
+  journal.files = bundleFiles(directory).map((file) => ({ path: relative(root, file).split("\\").join("/"), sha256: sha256(readFileSync(file)) }));
+  writeJournal(root, packageId, journal);
+  const result = doctor(unlazy, root, packageId);
+  print({ ok: result.ok, applied: true, preview, diagnostics: result.diagnostics,
+    undo: "package-standard.mjs undo --root <REPO> --package " + packageId }, true);
+  return result.ok ? 0 : 1;
+}
+
+async function commandImport(options) {
+  if (options.kind === "flat") {
+    const root = repositoryRoot(options);
+    const id = inPlaceId(options, root);
+    if (id) return commandMigrate(options, root, id);
+  }
   const plan = importPlan(options);
   const preview = previewOf(plan);
   if (!options.apply) {
@@ -498,22 +794,119 @@ function commandImport(options) {
   return result.ok ? 0 : 1;
 }
 
+// --- prepare: .unlazy/ ignored by Git ----------------------------------------------
+
+const UNLAZY_LINE_RE = /^\/?\.unlazy\/$/u;
+
+function gitIgnoresRuntime(root) {
+  return spawnSync("git", ["-C", root, "check-ignore", "-q", ".unlazy/probe"], { windowsHide: true }).status === 0;
+}
+
+function decodeIgnoreFile(bytes) {
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) return { encoding: "utf-16le", text: bytes.subarray(2).toString("utf16le") };
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    const swapped = Buffer.from(bytes.subarray(2));
+    swapped.swap16();
+    return { encoding: "utf-16be", text: swapped.toString("utf16le") };
+  }
+  return { encoding: "utf-8", text: bytes.toString("utf8") };
+}
+
+function measureIgnore(root) {
+  const file = join(root, ".gitignore");
+  if (!existsSync(file)) return { file, before: null, state: { gitignore: "missing", encoding: null, eol: null, line: false, ignored: gitIgnoresRuntime(root) } };
+  const before = readFileSync(file);
+  const { encoding, text } = decodeIgnoreFile(before);
+  const line = text.replace(/^\uFEFF/u, "").split(/\r?\n/u).some((item) => UNLAZY_LINE_RE.test(item.trim()));
+  return { file, before, text, state: { gitignore: "present", encoding, eol: text.includes("\r\n") ? "CRLF" : "LF", line, ignored: gitIgnoresRuntime(root) } };
+}
+
+function commandPrepare(options) {
+  const root = repositoryRoot(options);
+  const measured = measureIgnore(root);
+  const { state } = measured;
+  const actions = [];
+  let after = null;
+  if (state.gitignore === "missing") {
+    actions.push("create .gitignore with .unlazy/");
+    after = ".unlazy/\n";
+  } else {
+    let text = measured.text;
+    if (state.encoding !== "utf-8") actions.push("rewrite .gitignore from " + state.encoding.toUpperCase() + " as UTF-8 without BOM");
+    if (!state.line) {
+      const eol = state.eol === "CRLF" ? "\r\n" : "\n";
+      if (text.length && !text.endsWith("\n")) text += eol;
+      text += ".unlazy/" + eol;
+      actions.push("append .unlazy/ to .gitignore");
+    }
+    if (actions.length) after = text;
+  }
+  if (!options.apply) {
+    const ok = actions.length > 0 || state.ignored;
+    print({ ok, applied: false, state, actions }, true);
+    return ok ? 0 : 1;
+  }
+  if (!actions.length) {
+    print({ ok: state.ignored, applied: false, state, actions }, true);
+    return state.ignored ? 0 : 1;
+  }
+  const journalFile = journalPath(root, PREPARE_JOURNAL);
+  if (existsSync(journalFile)) throw new UsageError("a prepare undo journal exists; run undo --prepare or remove it first");
+  writeFileSync(measured.file, after, "utf8");
+  const ignored = gitIgnoresRuntime(root);
+  if (!ignored) {
+    if (measured.before === null) rmSync(measured.file, { force: true });
+    else writeFileSync(measured.file, measured.before);
+    print({ ok: false, applied: false, state, actions, error: "git check-ignore still does not ignore .unlazy/; .gitignore restored" }, true);
+    return 1;
+  }
+  writeJournal(root, PREPARE_JOURNAL, {
+    schema: 1, mode: "prepare", appliedAt: new Date().toISOString(), file: ".gitignore",
+    before: measured.before === null ? "absent" : measured.before.toString("base64"),
+    afterSha256: sha256(readFileSync(measured.file)),
+  });
+  print({ ok: true, applied: true, state: { ...state, ignored }, actions,
+    undo: "package-standard.mjs undo --root <REPO> --prepare" }, true);
+  return 0;
+}
+
+function currentFiles(root, directory) {
+  return existsSync(directory)
+    ? bundleFiles(directory).map((entry) => ({ path: relative(root, entry).split("\\").join("/"), sha256: sha256(readFileSync(entry)) }))
+    : [];
+}
+
 function commandUndo(options) {
   const root = repositoryRoot(options);
-  const packageId = assertPackageId(options.package, "--package");
+  if (Boolean(options.package) === Boolean(options.prepare)) throw new UsageError("undo needs exactly one of --package ID or --prepare");
+  const packageId = options.prepare ? PREPARE_JOURNAL : assertPackageId(options.package, "--package");
   const file = journalPath(root, packageId);
-  if (!existsSync(file)) throw new UsageError("no undo journal for " + packageId);
+  if (!existsSync(file)) throw new UsageError(options.prepare ? "no prepare undo journal" : "no undo journal for " + packageId);
   const journal = JSON.parse(readFileSync(file, "utf8"));
-  if (journal.mode === "new") {
+  if (Boolean(options.prepare) !== (journal.mode === "prepare")) throw new UsageError("undo journal mode does not match the request");
+  if (journal.mode === "new" || journal.mode === "migrate") {
     const directory = join(root, "docs", "packages", packageId);
-    const current = existsSync(directory)
-      ? bundleFiles(directory).map((entry) => ({ path: relative(root, entry).split("\\").join("/"), sha256: sha256(readFileSync(entry)) }))
-      : [];
-    if (JSON.stringify(current) !== JSON.stringify(journal.files)) {
+    if (JSON.stringify(currentFiles(root, directory)) !== JSON.stringify(journal.files)) {
       throw new UsageError("docs/packages/" + packageId + " changed after the import; undo refuses to remove edited work");
     }
     if (lstatSync(directory).isSymbolicLink()) throw new UsageError("bundle directory is a link");
+    let restored = null;
+    if (journal.mode === "migrate") {
+      if (existsSync(join(root, ...journal.source.split("/")))) {
+        throw new UsageError(journal.source + " exists again; undo refuses to overwrite it");
+      }
+      restored = Buffer.from(journal.sourceBase64, "base64");
+      if (sha256(restored) !== journal.sourceSha256) throw new UsageError("undo journal source bytes do not match their sha256");
+    }
     rmSync(directory, { recursive: true, force: true });
+    if (restored) writeFileSync(join(root, ...journal.source.split("/")), restored, { flag: "wx" });
+  } else if (journal.mode === "prepare") {
+    const target = join(root, ".gitignore");
+    if (!existsSync(target) || sha256(readFileSync(target)) !== journal.afterSha256) {
+      throw new UsageError(".gitignore changed after prepare; undo refuses to overwrite edited work");
+    }
+    if (journal.before === "absent") rmSync(target, { force: true });
+    else writeFileSync(target, Buffer.from(journal.before, "base64"));
   } else if (journal.mode === "into") {
     const target = join(root, ...journal.file.split("/"));
     if (sha256(readFileSync(target)) !== journal.afterSha256) {
@@ -522,11 +915,11 @@ function commandUndo(options) {
     writeFileSync(target, journal.before, "utf8");
   } else throw new UsageError("unknown undo journal mode");
   rmSync(file, { force: true });
-  print({ ok: true, undone: journal.mode, packageId }, options.json);
+  print({ ok: true, undone: journal.mode, ...(journal.mode === "prepare" ? {} : { packageId }) }, options.json);
   return 0;
 }
 
-function main() {
+async function main() {
   let parsed;
   try { parsed = parseArgs(process.argv.slice(2)); }
   catch (error) { process.stderr.write("package-standard: " + error.message + "\n"); return 2; }
@@ -535,7 +928,8 @@ function main() {
   if (extra.length) { process.stderr.write("package-standard: unexpected argument " + extra[0] + "\n"); return 2; }
   try {
     if (command === "create") return commandCreate(options);
-    if (command === "import") return commandImport(options);
+    if (command === "import") return await commandImport(options);
+    if (command === "prepare") return commandPrepare(options);
     if (command === "undo") return commandUndo(options);
     throw new UsageError("unknown command " + command);
   } catch (error) {
@@ -544,4 +938,4 @@ function main() {
   }
 }
 
-process.exitCode = main();
+process.exitCode = await main();

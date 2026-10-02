@@ -379,6 +379,10 @@ if (action === "--claim" || action === "--release") {
     console.error("gate-check: cannot claim leases: " + error.message);
     process.exit(2);
   }
+  for (const orphan of result.releasedOrphans || []) {
+    console.log("RELEASED ORPHAN " + orphan.packageId + "/" + orphan.scope + "/" + orphan.leaf +
+      " (scope no longer binds the package)");
+  }
   if (!result.ok) {
     if (result.error) failUsage(result.error);
     for (const conflict of result.conflicts) {

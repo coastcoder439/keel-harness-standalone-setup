@@ -70,6 +70,18 @@ function handle(payload, root) {
   return { allowed: false, code: "DOD_FORMAT_MISSING", detail: MESSAGE };
 }
 
+// Under the Codex hook runner a Stop block is the JSON decision with exit 0: Windows
+// PowerShell maps a native exit 2 to 1, which Codex treats as a failed hook and ignores
+// (guard-parity E5). A PostToolUse call only records facts and never blocks.
+function block(reason) {
+  if (process.env.KEEL_HARNESS_ROOT && process.env.KEEL_HOOK_TARGET === ".codex/dod-guard.cjs") {
+    fs.writeSync(1, JSON.stringify({ decision: "block", reason }) + "\n");
+    process.exit(0);
+  }
+  fs.writeSync(2, reason + "\n");
+  process.exit(2);
+}
+
 function main() {
   let input = "";
   process.stdin.setEncoding("utf8");
@@ -78,19 +90,12 @@ function main() {
     let payload;
     try { payload = JSON.parse(input || "{}"); }
     catch {
-      process.stderr.write("codex-dod-guard: invalid hook JSON\n");
-      return process.exit(2);
+      return block("codex-dod-guard: invalid hook JSON");
     }
     const root = process.env.KEEL_HARNESS_ROOT || process.env.CLAUDE_PROJECT_DIR;
-    if (!root) {
-      process.stderr.write("codex-dod-guard: Harness root is missing\n");
-      return process.exit(2);
-    }
+    if (!root) return block("codex-dod-guard: Harness root is missing");
     const decision = handle(payload, root);
-    if (!decision.allowed) {
-      process.stderr.write("codex-dod-guard: " + decision.detail + "\n");
-      return process.exit(2);
-    }
+    if (!decision.allowed) return block("codex-dod-guard: " + decision.detail);
     process.exit(0);
   });
 }
