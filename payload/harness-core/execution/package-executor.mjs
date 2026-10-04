@@ -1035,20 +1035,51 @@ function providerSessionState(run) {
 // the provider route (verified, reassigned, reopened) keep their state as well.
 const REQUESTED_STATES = new Set(["abort-requested", "timeout-requested"]);
 const SETTLED_STATES = new Set(["verified", "reassigned", "reopened", "transferred"]);
+const CLOSED_STOP_STATES = new Set(["aborted", "timed-out"]);
+
+// A requested stop ends in aborted (timed-out) once its worker is gone and its wave is abandoned: the
+// worker of an abandoned wave has nothing left to do, and a session that stays on abort-requested keeps the
+// scope busy for package-amend (measured 02.10.2026: AMEND_BUSY after "abandon", no command closed it).
+// A requested session whose provider still lives stays requested.
+function closedStopState(state, entry, providerEnded, needAbandoned = true) {
+  if (!REQUESTED_STATES.has(entry.state) || !providerEnded) return null;
+  if (needAbandoned && state.waves[entry.wave]?.state !== "abandoned") return null;
+  return entry.state === "timeout-requested" ? "timed-out" : "aborted";
+}
+
+// Applies the closing to the session of a fresh state; false means nothing was closed.
+function closeRequestedStop(state, sessionId, providerEnded, closedBy, extra = {}, needAbandoned = true) {
+  const entry = state.sessions[sessionId];
+  const next = entry && closedStopState(state, entry, providerEnded, needAbandoned);
+  if (!next) return false;
+  setSessionState(state, entry, next, "stop-closed", { closedBy, closedAt: new Date().toISOString(), ...extra });
+  return true;
+}
 
 // Reads the provider run outside the lock and applies its result to the fresh session: the run's handle,
 // end and output always land in the session's fields; the session state follows the run unless the
 // session is requested or settled. Returns the fresh session entry.
 async function synchronizeSession(context, sessionId) {
   const known = sessionOf(readState(context), sessionId);
-  if (!known.runId) return known;
+  if (!known.runId) {
+    // A requested stop of an abandoned wave that never had a run has no worker to wait for.
+    if (known.wave && REQUESTED_STATES.has(known.state)) {
+      let closed = false;
+      updateState(context, (fresh) => { closed = closeRequestedStop(fresh, sessionId, true, "sync"); return closed; });
+      if (closed) releaseLeaf(context, sessionId, "requested stop closed: the session has no provider run");
+    }
+    return readState(context).sessions[sessionId] || known;
+  }
   const run = await refreshProviderRun({ repoRoot: context.repoRoot, scope: context.scope, runId: known.runId,
     expected: { packageId: context.packageId, sessionId, leaf: known.leaf, provider: known.provider } });
   let released = null;
   const state = updateState(context, (fresh) => {
     const entry = fresh.sessions[sessionId];
     if (!entry || entry.runId !== run.runId) return false;
-    const next = REQUESTED_STATES.has(entry.state) || SETTLED_STATES.has(entry.state) ? entry.state : providerSessionState(run);
+    const closedState = closedStopState(fresh, entry, TERMINAL_RUN_STATES.has(run.state));
+    // A closed stop (aborted, timed-out) stays closed: a later sync only refreshes the run fields.
+    const next = closedState || (REQUESTED_STATES.has(entry.state) || SETTLED_STATES.has(entry.state) ||
+      CLOSED_STOP_STATES.has(entry.state) ? entry.state : providerSessionState(run));
     const detail = {
       runId: run.runId,
       handle: run.nativeHandle || entry.handle || null,
@@ -1064,7 +1095,8 @@ async function synchronizeSession(context, sessionId) {
     if (entry.state === next && entry.lastHeartbeatAt === detail.lastHeartbeatAt && entry.handle === detail.handle &&
         entry.providerRunState === detail.providerRunState) return false;
     const before = entry.state;
-    setSessionState(fresh, entry, next, "provider-sync", detail);
+    setSessionState(fresh, entry, next, closedState ? "stop-closed" : "provider-sync",
+      closedState ? { ...detail, closedBy: "sync", closedAt: new Date().toISOString() } : detail);
     // Only the transition into a releasing state frees lease and binding, not every later status call; a
     // requested stop whose run has ended lets go as well, because its worker is gone.
     if ((before !== next && RELEASING_STATES.has(next)) || (REQUESTED_STATES.has(next) && RELEASING_STATES.has(run.state))) {
@@ -1401,9 +1433,53 @@ async function abortExecution(context, options) {
     releaseLeaf(context, sessionId, reason);
     return publicEntry(readState(context).sessions[sessionId]);
   }
+  if (REQUESTED_STATES.has(entry.state)) {
+    const closed = await closeRequestedSession(context, entry, reason);
+    if (closed) return closed;
+  } else if (["aborted", "timed-out"].includes(entry.state) &&
+      !["open", "sealed"].includes(state.waves[entry.wave]?.state)) {
+    return { ...publicEntry(entry), reason }; // already closed, e.g. by a sync: abort stays idempotent
+  }
   const wave = await abandonWave(context, entry.wave, reason);
   releaseWave(context, entry.wave, reason);
   return { sessionId, wave: entry.wave, state: wave.state, reason };
+}
+
+// abort of a session that already waits on a requested stop closes it instead of abandoning its wave
+// again: its provider is gone, or its wave is already abandoned (then a provider that still runs is
+// stopped for good first). Returns null when the wave is not abandoned and the provider still runs;
+// the caller then takes the ordinary abandon route.
+async function closeRequestedSession(context, entry, reason) {
+  const { sessionId } = entry;
+  const waveAbandoned = readState(context).waves[entry.wave]?.state === "abandoned";
+  const identity = { repoRoot: context.repoRoot, scope: context.scope, runId: entry.runId,
+    expected: { packageId: context.packageId, sessionId, leaf: entry.leaf, provider: entry.provider } };
+  let run = null;
+  if (entry.runId) {
+    try { run = await refreshProviderRun(identity); } catch { run = null; }
+  }
+  let ended = !run || TERMINAL_RUN_STATES.has(run.state);
+  if (!ended && !waveAbandoned) return null;
+  if (!ended) {
+    const action = entry.state === "timeout-requested" ? "timeout" : "abort";
+    if (!["abort-requested", "timeout-requested"].includes(run.state)) {
+      try { await requestProviderStop({ ...identity, action, reason }); } catch { /* it ended meanwhile */ }
+    }
+    run = await refreshProviderRun({ ...identity, stopGraceMs: 0 });
+    ended = TERMINAL_RUN_STATES.has(run.state);
+    if (!ended) fail("SESSION_STATE", "the provider of " + sessionId + " still runs (" + run.state + ") and did not stop", 1);
+  }
+  updateState(context, (fresh) => {
+    const entryNow = fresh.sessions[sessionId];
+    if (entryNow && entryNow.runId === entry.runId && run) {
+      Object.assign(entryNow, { providerRunState: run.state, providerFinishedAt: run.finishedAt || null,
+        providerExitCode: run.exitCode ?? null });
+    }
+    closeRequestedStop(fresh, sessionId, true, "abort", { reason }, false);
+  });
+  releaseLeaf(context, sessionId, reason);
+  const closed = sessionOf(readState(context), sessionId);
+  return { ...publicEntry(closed), reason };
 }
 
 async function abandonExecution(context, options) {
@@ -2281,7 +2357,9 @@ async function status(context) {
   }
   assertActive(context);
   for (const entry of Object.values(readState(context, true).sessions)) {
-    if (entry.runId && !SETTLED_STATES.has(entry.state)) await synchronizeSession(context, entry.sessionId);
+    if ((entry.runId || REQUESTED_STATES.has(entry.state)) && !SETTLED_STATES.has(entry.state)) {
+      await synchronizeSession(context, entry.sessionId);
+    }
   }
   const state = readState(context, true);
   const result = runNode(context.tools.packageCli, ["status", "--json", "--root", context.repoRoot,
@@ -2846,6 +2924,7 @@ wave whose every leaf has a verified session in it or in a complete wave.
 Without --claude-executable, or when that path is no file, Windows starts the
 newest claude.exe under %APPDATA%\\Claude\\claude-code\\<version>[\\<folder>]\\,
 otherwise the claude program from PATH; the run manifest names it.
+A session on abort-requested/timeout-requested is closed (aborted/timed-out) by abort --session ID --reason TEXT or by status once its provider ended.
 
 The one Owner record is the Owner-OK line, formed as
   Owner-OK: <close|publish|waive-duty:ID|resolve:ID> <YYYY-MM-DD> <commit-sha> "<wording>"

@@ -3,14 +3,14 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.3.16",
+    "version": "1.3.17",
     "updateSource": {
       "repository": "https://github.com/coastcoder439/keel-harness-standalone-setup",
       "branch": "main"
     }
   },
   "payload": {
-    "treeSha256": "b8b50d43d78d40ff715d7400b3808fab2c9e6214863ec6ae1fc61cf159470bb5"
+    "treeSha256": "12f08b8a7086eeb2fd3caababa4975065cc5a66bb71c332b02e8bc4e6cded60d"
   },
   "provenance": {
     "unlazy": {
@@ -902,19 +902,19 @@
       "mode": "copy",
       "generated": true,
       "sourceBytes": 334,
-      "sourceSha256": "d7239eb4ae8e993251e5b21d96477f56305743a3f5c4eaee35281451df5168eb",
+      "sourceSha256": "7add136026e84ee0cfc7502eae58a15deb1011cef6e0019d30b93b38a00a3205",
       "bytes": 334,
-      "sha256": "d7239eb4ae8e993251e5b21d96477f56305743a3f5c4eaee35281451df5168eb"
+      "sha256": "7add136026e84ee0cfc7502eae58a15deb1011cef6e0019d30b93b38a00a3205"
     },
     {
       "source": "generated/dashboard/runtime.keel.gz",
       "target": "dashboard/runtime.keel.gz",
       "mode": "copy",
       "generated": true,
-      "sourceBytes": 16787960,
-      "sourceSha256": "073f531e68d6e25b7ac70354896137dddaafd5f14024d030ef930dd4abc2edf2",
-      "bytes": 16787960,
-      "sha256": "073f531e68d6e25b7ac70354896137dddaafd5f14024d030ef930dd4abc2edf2"
+      "sourceBytes": 16788735,
+      "sourceSha256": "10844c9cf3a8fb70a9c52f69fa6d88f232297dac9f18698befbd6c479747c090",
+      "bytes": 16788735,
+      "sha256": "10844c9cf3a8fb70a9c52f69fa6d88f232297dac9f18698befbd6c479747c090"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-serve.mjs",
@@ -1291,10 +1291,10 @@
       "target": "harness-core/execution/package-executor.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 165955,
-      "sourceSha256": "7d46625bbd275be6f93364a2d4b4f152495b2fc20de3def33cf02f119dbfd6c8",
-      "bytes": 165955,
-      "sha256": "7d46625bbd275be6f93364a2d4b4f152495b2fc20de3def33cf02f119dbfd6c8"
+      "sourceBytes": 170645,
+      "sourceSha256": "a48e3c9d5104c3c1e05914f9c0023e396d128f4d66f44d37bbd40d7a2e4b8134",
+      "bytes": 170645,
+      "sha256": "a48e3c9d5104c3c1e05914f9c0023e396d128f4d66f44d37bbd40d7a2e4b8134"
     },
     {
       "source": "test-harness/harness-core/execution/package-resolve.mjs",
@@ -1524,7 +1524,7 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 572,
-      "sha256": "7a15b951feef96fe737712fc74aa067097eec9bd894e4b50e9d29019cebd031e"
+      "sha256": "7c6e8eee82c011469549772a017265a2d07d79d9f406eac5c438a2add2a4d758"
     },
     {
       "source": "test-harness/roles/accountability.md",
