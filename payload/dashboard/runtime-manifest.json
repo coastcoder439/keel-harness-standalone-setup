@@ -1,9 +1,9 @@
 {
   "schema": "keel-dashboard-runtime-manifest.v1",
   "archive": "runtime.keel.gz",
-  "archiveBytes": 16773490,
-  "archiveSha256": "cd1537b61fc4a93f2bb5f9dbb5454897872e5758e9ef46a9288795ba6ce8212b",
-  "fileCount": 2207,
-  "unpackedBytes": 49511735,
-  "treeSha256": "b348a7ecde6d06023dda5af9825001e6021a3ca53ed3822ef031f544d8fa22eb"
+  "archiveBytes": 17765834,
+  "archiveSha256": "645747045b6a73504d1e6e45bb21c18aa7f653452ae22b60c0fd0aa2c171dc3c",
+  "fileCount": 2221,
+  "unpackedBytes": 52010256,
+  "treeSha256": "147558968da1b291c954bac7850b0512c8882270ea6b735b21b1fc7ff3d1b2ea"
 }
