@@ -863,6 +863,10 @@ function writeBrief(context, state, entry, ledger) {
     "## Execution rules",
     "",
     "- Write only inside the exact OWNS patterns above; hooks verify the session binding.",
+    `- Create and change files only with the provider's write tool (${entry.provider === "codex" ? "apply_patch" : "Write/Edit"}), ` +
+      "never by shell redirection (`>`, `>>`, `tee`, `Set-Content`, `Out-File`) and never with `node -e`.",
+    "- Run tests as `node --test <files>` without any switch.",
+    "- If the guard denies a call, do not work around it: name the command and the denial code in your return; the orchestrator re-verifies locally.",
     "- Use the finite Git intent interface; do not search for alternate mutating Git commands.",
     "- Do not mark gates or package plan items complete yourself.",
     "- Return facts and the native provider handle. The parent locally reverifies the gate.",
@@ -2431,8 +2435,19 @@ async function integrateReady(context, options) {
   return { ...checkpoint, partial: true, leaves, skipped, rootGatesChecked: false, locallyReverified: true };
 }
 
+// A given integrate message is judged BEFORE any re-verification (measured 05.10.2026: a missing message was
+// only refused by git-intent after about 15 minutes of gates). One line of 1..200 characters, like git-intent.
+function integrateMessage(options) {
+  const given = String(options.message || "").trim();
+  if (given && (/[\r\n]/u.test(given) || given.length > 200)) {
+    fail("USAGE", "--message must be one line of 1..200 characters");
+  }
+  return given;
+}
+
 async function integrate(context, options) {
   if (options.readyOnly) return integrateReady(context, options);
+  const givenMessage = integrateMessage(options);
   assertActive(context);
   noteOrchestrator(context, callerSession(process.env), "integrate");
   const state = readState(context);
@@ -2484,7 +2499,8 @@ async function integrate(context, options) {
   const witnessAfter = bundleFileDigests(context);
   if (acceptedResult) acceptedResultConstraint(context, state, options);
   const planCompleted = completePlanFromEvidence(context);
-  const message = String(options.message || "").trim();
+  const message = givenMessage
+    || ("integrate(" + context.packageId + "): " + counted.length + " leaves").slice(0, 200);
   const integrationArgs = ["integration-checkpoint", "--root", context.repoRoot,
     "--package", context.packageId, "--scope", context.scope, "--message", message];
   if (acceptedResult) integrationArgs.push("--expected-result-file", acceptedResult.file,
@@ -3019,7 +3035,7 @@ commands:
   return --session ID [--result-file PATH] [--timeout S]
   verify --session ID [--timeout S]
   resume --session ID
-  integrate --message TEXT [--approve-checks] [--timeout S] [--ready-only]
+  integrate [--message TEXT] [--approve-checks] [--timeout S] [--ready-only]
   status
   duty-assess --gate LEDGER:GATE
   duty-add --duty ID --owner TEXT --trigger TEXT --due-state open|due --gate LEDGER:GATE

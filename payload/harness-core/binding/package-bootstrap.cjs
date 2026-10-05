@@ -56,11 +56,31 @@ function recordPath(harnessRoot, sessionId) {
   return path.join(harnessRoot, ".unlazy", ".bootstrap", key);
 }
 
+const RENAME_RETRY_CODES = new Set(["EPERM", "EBUSY", "EACCES"]);
+const RENAME_RETRY_WAITS = Object.freeze([50, 100, 200, 400, 800]);
+
+function sleepSync(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+// A short-lived handle of another process (virus scanner, indexer, file watcher)
+// makes a Windows rename fail with EPERM/EBUSY/EACCES. Retry up to 6 attempts,
+// then rethrow the original error; other codes and platforms fail at once.
+function renameWithRetry(from, to, { rename = fs.renameSync, sleep = sleepSync, platform = process.platform } = {}) {
+  for (let attempt = 0; ; attempt += 1) {
+    try { return rename(from, to); }
+    catch (error) {
+      if (platform !== "win32" || !RENAME_RETRY_CODES.has(error && error.code) || attempt >= RENAME_RETRY_WAITS.length) throw error;
+      sleep(RENAME_RETRY_WAITS[attempt]);
+    }
+  }
+}
+
 function atomicJson(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temporary = file + "." + process.pid + "." + crypto.randomBytes(8).toString("hex") + ".tmp";
   fs.writeFileSync(temporary, JSON.stringify(value, null, 2) + "\n", { encoding: "utf8", flag: "wx" });
-  try { fs.renameSync(temporary, file); }
+  try { renameWithRetry(temporary, file); }
   finally { try { fs.unlinkSync(temporary); } catch { /* renamed or absent */ } }
 }
 
@@ -142,7 +162,7 @@ function writeScaffold(repoRoot, packageId, date) {
     for (const [relative, content] of scaffoldContents(packageId, date)) {
       fs.writeFileSync(path.join(temporary, relative), content, { encoding: "utf8", flag: "wx" });
     }
-    fs.renameSync(temporary, target);
+    renameWithRetry(temporary, target);
   } catch (error) {
     try { fs.rmSync(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 30 }); } catch { /* preserve primary error */ }
     throw error;
@@ -471,4 +491,4 @@ function finish(options) {
   return { packageId: record.packageId, scope: record.scope, sessionId: record.sessionId, finished: true };
 }
 
-module.exports = { authorizeWrite, begin, find, finish, plan, pruneOrphanedRecords, recordPath, scaffoldStatus };
+module.exports = { authorizeWrite, begin, find, finish, plan, pruneOrphanedRecords, recordPath, renameWithRetry, scaffoldStatus };
