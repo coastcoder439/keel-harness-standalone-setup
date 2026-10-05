@@ -4,7 +4,7 @@
 
 import {
   closeSync, constants as fsConstants, existsSync, fstatSync, lstatSync,
-  mkdirSync, openSync, readFileSync, realpathSync, statSync, unlinkSync,
+  mkdirSync, openSync, readdirSync, readFileSync, realpathSync, statSync, unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { spawn } from "node:child_process";
@@ -423,6 +423,7 @@ function resolveShell(raw) {
 const shell = opt.status ? "(not used: status mode)" : resolveShell(opt.shell);
 const shellId = opt.status ? "unused" : process.platform + ":" + basename(shell).toLowerCase();
 const pathValue = String(process.env.PATH || "");
+const normalizedPath = normalizePathValue(pathValue);
 const pathHash = sha256(pathValue).slice(0, 12);
 const pathCount = pathValue ? pathValue.split(delimiter).length : 0;
 const pathEvidence = pathHash + "/" + pathCount + " entries";
@@ -435,6 +436,36 @@ function resolvedGateCwd(gate, file) {
   const base = opt.cwd ? defaultCwd : (target.mode === "explicit" ? dirname(resolve(file)) : root);
   const candidate = gate.cwd ? resolve(base, gate.cwd) : base;
   try { return realpathSync(candidate); } catch { return candidate; }
+}
+
+// Approvals must hold no matter which shell granted them. Git Bash prepends its
+// own runtime directories to PATH, so the signature uses a normalized PATH
+// without that runtime; every other entry still invalidates an approval.
+function normalizePathValue(value) {
+  const windows = process.platform === "win32";
+  const profile = windows ? normalizePathEntry(process.env.USERPROFILE || homedir()) : "";
+  const gitBashBin = profile ? profile + "\\bin" : null;
+  const seen = new Set();
+  const entries = [];
+  for (const raw of String(value || "").split(delimiter)) {
+    const entry = normalizePathEntry(raw);
+    if (!entry || seen.has(entry)) continue;
+    seen.add(entry);
+    if (windows) {
+      const probe = entry + "\\";
+      if (probe.includes("\\git\\usr\\") || probe.includes("\\git\\mingw64\\") ||
+          probe.includes("\\vendor_perl\\") || probe.includes("\\core_perl\\") || entry === gitBashBin) continue;
+    }
+    entries.push(entry);
+  }
+  return entries.join(delimiter);
+}
+
+function normalizePathEntry(raw) {
+  let entry = String(raw).trim();
+  if (process.platform === "win32") entry = entry.replaceAll("/", "\\").toLowerCase();
+  while (entry.length > 1 && /[\\/]$/.test(entry) && !/^[a-z]:\\$/.test(entry)) entry = entry.slice(0, -1);
+  return entry;
 }
 
 function oracle(file, gate) {
@@ -451,7 +482,7 @@ function oracle(file, gate) {
     regexStartupTimeoutMs: REGEX_STARTUP_TIMEOUT_MS,
     maxRegexWorkers: MAX_REGEX_WORKERS,
     platform: process.platform,
-    path: pathValue,
+    path: normalizedPath,
   };
 }
 
@@ -583,7 +614,7 @@ function approvalExists(file, gate) {
   let text;
   try { text = readApprovalFile(path); }
   catch (error) {
-    if (error.code === "ENOENT") return false;
+    if (error.code === "ENOENT") return legacyApprovalExists(store, file, gate);
     throw error;
   }
   let value;
@@ -591,6 +622,29 @@ function approvalExists(file, gate) {
   catch { return false; }
   assertApprovalDirUnchanged(store);
   return value && value.file === resolve(file) && value.gate === gate.id && value.signature === signature(file, gate);
+}
+
+// Records written before PATH normalization are filed under a signature of the
+// raw PATH. They stay valid when their normalized PATH equals the current one.
+function legacyApprovalExists(store, file, gate) {
+  let names;
+  try { names = readdirSync(store.path); }
+  catch { return false; }
+  const wanted = signature(file, gate);
+  for (const name of names) {
+    if (!/^[0-9a-f]{64}\.json$/.test(name)) continue;
+    let value;
+    try { value = JSON.parse(readApprovalFile(join(store.path, name))); }
+    catch { continue; }
+    if (!value || value.file !== resolve(file) || value.gate !== gate.id) continue;
+    const old = value.oracle;
+    if (!old || typeof old !== "object" || typeof old.path !== "string") continue;
+    if (value.signature !== sha256(JSON.stringify(old))) continue;
+    if (sha256(JSON.stringify({ ...old, path: normalizePathValue(old.path) })) !== wanted) continue;
+    assertApprovalDirUnchanged(store);
+    return true;
+  }
+  return false;
 }
 
 async function recordApproval(file, gate) {
@@ -839,7 +893,8 @@ for (const ledger of ledgers) {
   for (const gate of ledger.doc.gates) {
     if (ledger.doc.abandoned.has(gate.id) || !gate.check) continue;
     const state = gateState(gate, ledger.doc.abandoned);
-    if (opt.status || (!opt.reverify && state === "met")) continue;
+    const approveOnly = !opt.reverify && state === "met" && opt.approve;
+    if (opt.status || (!opt.reverify && state === "met" && !approveOnly)) continue;
     const cwd = resolvedGateCwd(gate, ledger.file);
     try {
       if (!statSync(cwd).isDirectory()) failUsage("gate " + qualified(ledger.file, gate.id) + " CWD is not a directory: " + cwd);
@@ -850,7 +905,7 @@ for (const ledger of ledgers) {
     if (target.mode === "package" && !pathIsInside(root, cwd)) {
       failUsage("gate " + qualified(ledger.file, gate.id) + " CWD escapes repository: " + cwd);
     }
-    pending.push({ file: ledger.file, gate, cwd, wasMet: state === "met", signature: signature(ledger.file, gate) });
+    pending.push({ file: ledger.file, gate, cwd, wasMet: state === "met", approveOnly, signature: signature(ledger.file, gate) });
   }
 }
 
@@ -866,6 +921,7 @@ for (const task of pending) {
     notRun.push(task);
     continue;
   }
+  if (task.approveOnly && approved) continue;
   if (!approved) {
     printOracle(task.file, task.gate, "APPROVAL REQUIRED");
     if (!opt.approve) {
@@ -883,6 +939,7 @@ for (const task of pending) {
       continue;
     }
   }
+  if (task.approveOnly) continue;
   runnable.push(task);
 }
 
