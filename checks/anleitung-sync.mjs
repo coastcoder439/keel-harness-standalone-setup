@@ -21,12 +21,16 @@
 // fehlt, Stand dieser Auslieferung). Sie kommen aus manifest.json und
 // payload-provenance.json und werden nicht von Hand geschrieben.
 //
-// AUFRUF    node checks/anleitung-sync.mjs [--nachziehen]
+// AUFRUF    node checks/anleitung-sync.mjs [--nachziehen] [--anleitung <datei>]
 //           --nachziehen  schreibt die erzeugten Bloecke neu und gleicht die
-//                         gebundenen Zahlen an; danach ohne Schalter gegenpruefen.
+//                         gebundenen Zahlen an -- auch managed=, gemessen im
+//                         Installer-Trockenlauf; danach ohne Schalter gegenpruefen.
+//           --anleitung   nur diese Datei statt PAKET-ANLEITUNG.md/README.md (Test).
 // RUECKGABE 0 = deckungsgleich · 1 = Abweichung · 2 = nicht pruefbar
 
-import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import process from "node:process";
@@ -36,6 +40,14 @@ assertNodeVersion("checks/anleitung-sync.mjs");
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const nachziehen = process.argv.includes("--nachziehen");
+// --anleitung <datei>: nur diese Datei als Menschen-Anleitung pruefen bzw. nachziehen
+// (README.md bleibt unberuehrt). Der Test arbeitet so auf einer Kopie.
+const anleitungIndex = process.argv.indexOf("--anleitung");
+const anleitungOverride = anleitungIndex >= 0 ? process.argv[anleitungIndex + 1] : null;
+if (anleitungIndex >= 0 && !anleitungOverride) {
+  process.stderr.write("anleitung-sync: --anleitung braucht einen Dateipfad.\n");
+  process.exit(2);
+}
 
 for (const pflicht of ["manifest.json", "payload-provenance.json", "payload", "install.mjs"]) {
   if (!existsSync(join(repoRoot, pflicht))) {
@@ -157,6 +169,35 @@ const BLOECKE = new Map([
 // Gebundene Zahlen
 // ---------------------------------------------------------------------------
 
+// managed= entsteht erst im Trockenlauf des Installers. Gemessen wird genau wie
+// in checks/fresh-clone.mjs: frisches Git-Ziel in os.tmpdir(), `--target <ziel>
+// --dry-run`, Zahl aus `managed=(\d+)`. Das Ziel wird danach entfernt; die
+// Messung laeuft hoechstens einmal je Prozess (die Kontrollprobe misst mehrfach).
+let managedGemessen = null;
+function gemessenManaged() {
+  if (managedGemessen !== null) return managedGemessen;
+  const ziel = mkdtempSync(join(tmpdir(), "keel-anleitung-managed-"));
+  try {
+    const init = spawnSync("git", ["init", "--quiet", ziel], { encoding: "utf8", windowsHide: true, timeout: 60_000 });
+    if (init.status !== 0) throw new Error("git init im Messziel schlug fehl: " + (init.stderr || init.stdout || init.error));
+    const lauf = spawnSync(process.execPath, [join(repoRoot, "install.mjs"), "--target", ziel, "--dry-run"], {
+      cwd: ziel, encoding: "utf8", windowsHide: true, timeout: 5 * 60_000, killSignal: "SIGKILL",
+    });
+    if (lauf.status !== 0) throw new Error("Trockenlauf endete nicht mit 0: " + (lauf.stderr || lauf.stdout || lauf.error));
+    const zahl = /managed=(\d+)/u.exec(String(lauf.stdout))?.[1];
+    if (!zahl) throw new Error("Trockenlauf meldet kein managed=<n>: " + lauf.stdout);
+    managedGemessen = zahl;
+    return zahl;
+  } catch (fehler) {
+    // process.exit umgeht `finally` -- das Messziel muss vorher weg.
+    rmSync(ziel, { recursive: true, force: true });
+    process.stderr.write("anleitung-sync: managed= nicht messbar -- " + (fehler instanceof Error ? fehler.message : fehler) + "\n");
+    process.exit(2);
+  } finally {
+    rmSync(ziel, { recursive: true, force: true });
+  }
+}
+
 // Jede Bindung ist ein Muster mit GENAU EINER Fanggruppe und dem Sollwert aus
 // einer gemessenen Quelle. Kein Sollwert steht zweimal in diesem Repo.
 const ZAHLEN = [
@@ -174,6 +215,12 @@ const ZAHLEN = [
     muster: /payload=(\d+)/gu,
     soll: () => String(manifest.fileCount),
     quelle: "manifest.json -> fileCount",
+  },
+  {
+    name: "managed",
+    muster: /managed=(\d+)/gu,
+    soll: () => gemessenManaged(),
+    quelle: "Installer-Trockenlauf (wie checks/fresh-clone.mjs)",
   },
   {
     name: "node-untergrenze",
@@ -335,17 +382,6 @@ function messen(name, text, mitBloecken) {
     } else notizen.push(bindung.name + ": " + treffer.length + "x " + soll + " (" + bindung.quelle + ")");
   }
 
-  // managed= wird NICHT hier gebunden: die Zahl entsteht erst beim Trockenlauf
-  // des Installers. checks/fresh-clone.mjs misst sie und vergleicht sie mit
-  // dieser Anleitung. Hier wird nur verlangt, dass alle Stellen dieselbe Zahl
-  // nennen -- zwei verschiedene waeren schon ohne Messung falsch.
-  const managed = [...new Set([...text.matchAll(/managed=(\d+)/gu)].map((treffer) => treffer[1]))];
-  if (managed.length > 1) {
-    fehler.push(name + ": managed= steht mit verschiedenen Werten im Dokument (" + managed.join(", ") + ")");
-  } else if (managed.length === 1) {
-    notizen.push("managed=" + managed[0] + " (einheitlich; Sollwert misst checks/fresh-clone.mjs)");
-  }
-
   for (const eintrag of AUSGABE) {
     const imText = text.includes(eintrag.marke);
     if (eintrag.pflicht && mitBloecken && !imText) {
@@ -445,13 +481,15 @@ function textNachziehen(text) {
 // Lauf
 // ---------------------------------------------------------------------------
 
-const DOKUMENTE = [
-  { datei: "PAKET-ANLEITUNG.md", bloecke: true },
-  { datei: "README.md", bloecke: false },
-];
+const DOKUMENTE = anleitungOverride
+  ? [{ datei: resolve(anleitungOverride), bloecke: true }]
+  : [
+    { datei: "PAKET-ANLEITUNG.md", bloecke: true },
+    { datei: "README.md", bloecke: false },
+  ];
 
 for (const dokument of DOKUMENTE) {
-  if (!existsSync(join(repoRoot, dokument.datei))) {
+  if (!existsSync(resolve(repoRoot, dokument.datei))) {
     process.stderr.write("anleitung-sync: " + dokument.datei + " fehlt.\n");
     process.exit(2);
   }
@@ -460,7 +498,7 @@ for (const dokument of DOKUMENTE) {
 if (nachziehen) {
   let summe = 0;
   for (const dokument of DOKUMENTE) {
-    const pfad = join(repoRoot, dokument.datei);
+    const pfad = resolve(repoRoot, dokument.datei);
     const roh = readFileSync(pfad, "utf8");
     const { text, geaendert } = textNachziehen(roh);
     if (geaendert) {
@@ -479,7 +517,7 @@ let alleNotizen = 0;
 const texte = new Map();
 
 for (const dokument of DOKUMENTE) {
-  const text = readFileSync(join(repoRoot, dokument.datei), "utf8");
+  const text = readFileSync(resolve(repoRoot, dokument.datei), "utf8");
   texte.set(dokument.datei, text);
   const { fehler, notizen } = messen(dokument.datei, text, dokument.bloecke);
   alleFehler.push(...fehler);
@@ -495,7 +533,7 @@ else alleNotizen += 1;
 // irgendeinem Grund immer "gleich" sagt, ist ein leerer Fehlerbericht von einem
 // echt sauberen Stand nicht zu unterscheiden. Deshalb wird derselbe Weg einmal
 // mit absichtlich verfaelschtem Text gegangen; er MUSS mehr Fehler finden.
-const probeText = texte.get("PAKET-ANLEITUNG.md");
+const probeText = texte.get(DOKUMENTE[0].datei);
 if (!/payload=\d+/u.test(probeText)) {
   process.stderr.write("FEHLER: Kontrollprobe nicht moeglich -- die Anleitung nennt kein `payload=<n>`.\n");
   process.exit(2);
