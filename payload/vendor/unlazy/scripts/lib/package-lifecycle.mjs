@@ -53,6 +53,26 @@ const RUNTIME_FILES = Object.freeze([
   "duties.json",
 ]);
 
+const RENAME_RETRY_CODES = new Set(["EPERM", "EBUSY", "EACCES"]);
+const RENAME_RETRY_WAITS = Object.freeze([50, 100, 200, 400, 800]);
+
+function sleepSync(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+// A short-lived handle of another process (virus scanner, indexer, file watcher)
+// makes a Windows rename fail with EPERM/EBUSY/EACCES. Retry up to 6 attempts,
+// then rethrow the original error; other codes and platforms fail at once.
+export function renameWithRetry(from, to, { rename = renameSync, sleep = sleepSync, platform = process.platform } = {}) {
+  for (let attempt = 0; ; attempt += 1) {
+    try { return rename(from, to); }
+    catch (error) {
+      if (platform !== "win32" || !RENAME_RETRY_CODES.has(error && error.code) || attempt >= RENAME_RETRY_WAITS.length) throw error;
+      sleep(RENAME_RETRY_WAITS[attempt]);
+    }
+  }
+}
+
 const slash = (value) => value.replaceAll("\\", "/");
 const digestBytes = (value) => "sha256:" + createHash("sha256").update(value).digest("hex");
 
@@ -536,7 +556,7 @@ function retireOrphanedScopes(repoRoot, invalidRecords, now) {
     mkdirSync(retiredRoot, { recursive: true, mode: 0o700 });
     assertNoLinkedComponent(repoRoot, retiredRoot);
     const destination = join(retiredRoot, record.scope + "-" + now.replace(/[:.]/gu, "-"));
-    renameSync(scopeDirectory, destination);
+    renameWithRetry(scopeDirectory, destination);
     retired.push({ scope: record.scope, packageId, movedTo: relative(repoRoot, destination).split("\\").join("/") });
   }
   return retired;
@@ -613,7 +633,7 @@ export async function activatePackage(options) {
       if (Number.isNaN(Date.parse(now))) throw lifecycleError("now must be an ISO timestamp");
       writeInitialRuntime(temporary, packageId, scope, sessionId, now, initialStatus.owner);
       reach(options, "activate-before-publish");
-      renameSync(temporary, targetDirectory);
+      renameWithRetry(temporary, targetDirectory);
       reach(options, "activate-after-publish");
     } catch (error) {
       if (error.code !== "UNLAZY_SIMULATED_CRASH") {

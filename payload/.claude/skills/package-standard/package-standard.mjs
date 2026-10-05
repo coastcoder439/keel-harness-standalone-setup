@@ -16,6 +16,7 @@ import {
   readFileSync,
   readdirSync,
   renameSync,
+  rmdirSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -62,7 +63,8 @@ commands:
       conversion) or the last prepare if nothing changed since
 
 options:
-  --unlazy DIR        vendored Unlazy root (default: found above this skill or in REPO)
+  --unlazy-root DIR   vendored Unlazy root (default: found above this skill or in REPO);
+                      required when the workbench has two Unlazy runtimes (alias: --unlazy)
   --harness-root DIR  Harness root with .keel-harness.json (default: the installation
                       root of this tool)
   --json              print JSON only
@@ -73,14 +75,18 @@ exit codes: 0 ok; 1 preview/apply found missing fields, blockers or doctor diagn
 const VALUE = new Set([
   "--root", "--package", "--into", "--source", "--kind", "--problem", "--intent", "--goal",
   "--scope-in", "--scope-out", "--context", "--step", "--planned-start", "--planned-end",
-  "--owner-request-file", "--owner-request", "--owner-source", "--unlazy", "--done",
+  "--owner-request-file", "--owner-request", "--owner-source", "--unlazy", "--unlazy-root", "--done",
   "--harness-root", "--session", "--requirement", "--leaf",
 ]);
 const REPEATABLE = new Set(["--source", "--step", "--requirement", "--leaf"]);
 const FLAGS = new Set(["--preview", "--apply", "--json", "--help", "-h", "--takeover", "--prepare"]);
 const PACKAGE_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 const LEAF_ID_RE = /^leaf-[A-Za-z0-9][A-Za-z0-9._-]*$/u;
-const JOURNAL_DIR = [".unlazy", "package-standard", "undo"];
+// The dot prefix keeps the journal out of the Unlazy scope listing, which reads
+// every other folder under .unlazy/ as a package scope. Journals written by
+// earlier versions sit under LEGACY_JOURNAL_DIR and are moved on the next call.
+const JOURNAL_DIR = [".unlazy", ".package-standard", "undo"];
+const LEGACY_JOURNAL_DIR = [".unlazy", "package-standard", "undo"];
 const PREPARE_JOURNAL = ".prepare";
 const TOOL_DIR = dirname(fileURLToPath(import.meta.url));
 
@@ -116,9 +122,21 @@ const today = () => {
   return now.getFullYear() + "-" + pad(now.getMonth() + 1) + "-" + pad(now.getDate());
 };
 
+// --unlazy-root DIR, or its older spelling --unlazy DIR; null when neither is given.
+function explicitUnlazy(options) {
+  const root = options["unlazy-root"];
+  const alias = options.unlazy;
+  if (root !== undefined && alias !== undefined && resolve(root) !== resolve(alias)) {
+    throw new UsageError("--unlazy-root and --unlazy name different directories; use --unlazy-root only");
+  }
+  const value = root ?? alias;
+  return value === undefined ? null : resolve(value);
+}
+
 function findUnlazy(options, root) {
   const candidates = [];
-  if (options.unlazy) candidates.push(resolve(options.unlazy));
+  const explicit = explicitUnlazy(options);
+  if (explicit) candidates.push(explicit);
   let current = dirname(fileURLToPath(import.meta.url));
   for (;;) {
     candidates.push(join(current, "vendor", "unlazy"));
@@ -128,7 +146,7 @@ function findUnlazy(options, root) {
   }
   candidates.push(join(root, "vendor", "unlazy"));
   const found = candidates.find((candidate) => existsSync(join(candidate, "scripts", "package-cli.mjs")));
-  if (!found) throw new UsageError("vendored Unlazy (vendor/unlazy/scripts/package-cli.mjs) not found; pass --unlazy DIR");
+  if (!found) throw new UsageError("vendored Unlazy (vendor/unlazy/scripts/package-cli.mjs) not found; pass --unlazy-root DIR");
   return found;
 }
 
@@ -363,6 +381,36 @@ function journalPath(root, packageId) {
   return join(root, ...JOURNAL_DIR, packageId + ".json");
 }
 
+// Where an existing journal is read from: the current place, else the one of
+// earlier versions.
+function existingJournalPath(root, packageId) {
+  const file = journalPath(root, packageId);
+  if (existsSync(file)) return file;
+  const legacy = join(root, ...LEGACY_JOURNAL_DIR, packageId + ".json");
+  return existsSync(legacy) ? legacy : file;
+}
+
+// Moves journals of earlier versions out of .unlazy/package-standard/, which the
+// Unlazy scope listing reads as a package scope and which then blocks every
+// activation. An old file whose name is taken in the new place stays where it is.
+function releaseLegacyJournals(root) {
+  const legacyDir = join(root, ...LEGACY_JOURNAL_DIR);
+  if (!existsSync(legacyDir)) return;
+  try {
+    for (const name of readdirSync(legacyDir)) {
+      const target = join(root, ...JOURNAL_DIR, name);
+      if (existsSync(target)) continue;
+      mkdirSync(dirname(target), { recursive: true });
+      renameSync(join(legacyDir, name), target);
+    }
+    if (!readdirSync(legacyDir).length) {
+      rmdirSync(legacyDir);
+      const toolDir = dirname(legacyDir);
+      if (!readdirSync(toolDir).length) rmdirSync(toolDir);
+    }
+  } catch { /* the legacy lookup in existingJournalPath still finds what could not move */ }
+}
+
 function writeJournal(root, packageId, value) {
   const file = journalPath(root, packageId);
   mkdirSync(dirname(file), { recursive: true });
@@ -371,7 +419,7 @@ function writeJournal(root, packageId, value) {
 }
 
 function assertRuntimeIgnored(root) {
-  const check = spawnSync("git", ["-C", root, "check-ignore", "-q", ".unlazy/package-standard/undo/x.json"], { windowsHide: true });
+  const check = spawnSync("git", ["-C", root, "check-ignore", "-q", ".unlazy/.package-standard/undo/x.json"], { windowsHide: true });
   if (check.status !== 0) throw new UsageError(".unlazy/ must be ignored by Git before apply keeps its undo journal there");
 }
 
@@ -586,7 +634,7 @@ function commandCreate(options) {
       begun = bootstrap.begin({
         harnessRoot, root, packageId, scope: packageId, sessionId: options.session,
         owns: leaves.flatMap((leaf) => leaf.owns), takeover: Boolean(options.takeover),
-        unlazyRoot: options.unlazy ? resolve(options.unlazy) : undefined,
+        unlazyRoot: explicitUnlazy(options) ?? undefined,
       });
     } catch (error) {
       throw new UsageError(error.message);
@@ -708,7 +756,7 @@ async function commandMigrate(options, root, packageId) {
     return blocked ? 1 : 0;
   }
   assertRuntimeIgnored(root);
-  const journalFile = journalPath(root, packageId);
+  const journalFile = existingJournalPath(root, packageId);
   if (existsSync(journalFile)) throw new UsageError("an undo journal for " + packageId + " exists; run undo or remove it first");
   const sourceFile = join(root, "docs", "packages", packageId + ".md");
   const bytes = readFileSync(sourceFile);
@@ -754,7 +802,7 @@ async function commandImport(options) {
   }
   const unlazy = findUnlazy(options, plan.root);
   assertRuntimeIgnored(plan.root);
-  const journalFile = journalPath(plan.root, plan.packageId);
+  const journalFile = existingJournalPath(plan.root, plan.packageId);
   if (existsSync(journalFile)) throw new UsageError("an undo journal for " + plan.packageId + " exists; run undo or remove it first");
   const statusLine = today() + " - Importiert mit dem Skill package-standard aus " +
     plan.sources.map((source) => "`" + source.label + "`").join(", ") + " (Art " + options.kind + ").";
@@ -850,7 +898,7 @@ function commandPrepare(options) {
     print({ ok: state.ignored, applied: false, state, actions }, true);
     return state.ignored ? 0 : 1;
   }
-  const journalFile = journalPath(root, PREPARE_JOURNAL);
+  const journalFile = existingJournalPath(root, PREPARE_JOURNAL);
   if (existsSync(journalFile)) throw new UsageError("a prepare undo journal exists; run undo --prepare or remove it first");
   writeFileSync(measured.file, after, "utf8");
   const ignored = gitIgnoresRuntime(root);
@@ -880,7 +928,7 @@ function commandUndo(options) {
   const root = repositoryRoot(options);
   if (Boolean(options.package) === Boolean(options.prepare)) throw new UsageError("undo needs exactly one of --package ID or --prepare");
   const packageId = options.prepare ? PREPARE_JOURNAL : assertPackageId(options.package, "--package");
-  const file = journalPath(root, packageId);
+  const file = existingJournalPath(root, packageId);
   if (!existsSync(file)) throw new UsageError(options.prepare ? "no prepare undo journal" : "no undo journal for " + packageId);
   const journal = JSON.parse(readFileSync(file, "utf8"));
   if (Boolean(options.prepare) !== (journal.mode === "prepare")) throw new UsageError("undo journal mode does not match the request");
@@ -927,6 +975,7 @@ async function main() {
   if (options.help || options.h || !command) { process.stdout.write(HELP + "\n"); return command ? 0 : 2; }
   if (extra.length) { process.stderr.write("package-standard: unexpected argument " + extra[0] + "\n"); return 2; }
   try {
+    if (options.root && existsSync(join(resolve(options.root), ".git"))) releaseLegacyJournals(resolve(options.root));
     if (command === "create") return commandCreate(options);
     if (command === "import") return await commandImport(options);
     if (command === "prepare") return commandPrepare(options);

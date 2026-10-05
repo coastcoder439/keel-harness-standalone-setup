@@ -3,14 +3,14 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.3.18",
+    "version": "1.3.19",
     "updateSource": {
       "repository": "https://github.com/coastcoder439/keel-harness-standalone-setup",
       "branch": "main"
     }
   },
   "payload": {
-    "treeSha256": "73bcd047667ba6e6a435512b2a013240159d0e648e5cf77ecc9e82a1ff701b33"
+    "treeSha256": "d4b9ff874fe4e074ee8dcaf4056948805dcf26394b0a1cf1e8fa3e523095a073"
   },
   "provenance": {
     "unlazy": {
@@ -21,15 +21,15 @@
       "commitObjectVerified": true,
       "treeObjectVerified": true,
       "upstreamFileCount": 37,
-      "vendoredFileCount": 68,
+      "vendoredFileCount": 69,
       "reconciliation": {
         "unchanged": 7,
         "adapted": 30,
-        "added": 31,
+        "added": 32,
         "removed": 0,
-        "sha256": "463ed4fa91af70fc4f4a5441a33a304ada00e3c242bcfaa4ec3b1f9e618c3da4"
+        "sha256": "9a3c680a34932b09895cc12f0ebd694bea6594f6b65139418b498103c86c4058"
       },
-      "vendoredTreeSha256": "807e4e4e028db698ad98a071858e81cd4ff993a78e90f1c505676299e00abcf3",
+      "vendoredTreeSha256": "7610bcbcd96690a67f8f39fa65363d1896dd68c0d7d493b1a87f9b09e877f2ee",
       "adaptation": "The exact upstream base is pinned by revision; the delivered adapted tree is pinned separately by its deterministic tree digest."
     },
     "understandAnything": {
@@ -54,7 +54,7 @@
     },
     "deprecations": []
   },
-  "fileCount": 610,
+  "fileCount": 611,
   "files": [
     {
       "source": "test-harness/.agents/skills/completeness/SKILL.md",
@@ -571,10 +571,10 @@
       "target": ".claude/shell-mutation-guard.js",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 62063,
-      "sourceSha256": "78b161e3c88f66515ce294fb63c5d84fde1f7e3ab0e1e48754e7c54de9f49f0f",
-      "bytes": 62063,
-      "sha256": "78b161e3c88f66515ce294fb63c5d84fde1f7e3ab0e1e48754e7c54de9f49f0f"
+      "sourceBytes": 62188,
+      "sourceSha256": "7f5761b5d389fb077a3d76b7960f8c04a04ff1d04280d5ecdde1a7383014a36b",
+      "bytes": 62188,
+      "sha256": "7f5761b5d389fb077a3d76b7960f8c04a04ff1d04280d5ecdde1a7383014a36b"
     },
     {
       "source": "test-harness/.claude/skills/completeness/SKILL.md",
@@ -631,10 +631,10 @@
       "target": ".claude/skills/package-standard/package-standard.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 46623,
-      "sourceSha256": "1dec78fd3ef865df31587588497f49d6233925133f02f55732b4e7aece06c21f",
-      "bytes": 46623,
-      "sha256": "1dec78fd3ef865df31587588497f49d6233925133f02f55732b4e7aece06c21f"
+      "sourceBytes": 48956,
+      "sourceSha256": "ecbff67e6f88aa5d691252988830c2669cda49c37dc0e0729cb8d1fd0558da7e",
+      "bytes": 48956,
+      "sha256": "ecbff67e6f88aa5d691252988830c2669cda49c37dc0e0729cb8d1fd0558da7e"
     },
     {
       "source": "test-harness/.claude/skills/package-standard/SKILL.md",
@@ -902,19 +902,19 @@
       "mode": "copy",
       "generated": true,
       "sourceBytes": 334,
-      "sourceSha256": "7add136026e84ee0cfc7502eae58a15deb1011cef6e0019d30b93b38a00a3205",
+      "sourceSha256": "1d13416a0565d87070593ec078d926083571b0c3268dcd921e70f71960716632",
       "bytes": 334,
-      "sha256": "7add136026e84ee0cfc7502eae58a15deb1011cef6e0019d30b93b38a00a3205"
+      "sha256": "1d13416a0565d87070593ec078d926083571b0c3268dcd921e70f71960716632"
     },
     {
       "source": "generated/dashboard/runtime.keel.gz",
       "target": "dashboard/runtime.keel.gz",
       "mode": "copy",
       "generated": true,
-      "sourceBytes": 16788735,
-      "sourceSha256": "10844c9cf3a8fb70a9c52f69fa6d88f232297dac9f18698befbd6c479747c090",
-      "bytes": 16788735,
-      "sha256": "10844c9cf3a8fb70a9c52f69fa6d88f232297dac9f18698befbd6c479747c090"
+      "sourceBytes": 16773490,
+      "sourceSha256": "cd1537b61fc4a93f2bb5f9dbb5454897872e5758e9ef46a9288795ba6ce8212b",
+      "bytes": 16773490,
+      "sha256": "cd1537b61fc4a93f2bb5f9dbb5454897872e5758e9ef46a9288795ba6ce8212b"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-serve.mjs",
@@ -1141,10 +1141,10 @@
       "target": "harness-core/binding/package-bootstrap.cjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 22438,
-      "sourceSha256": "5615a5c10d6985df1b0e5ab7edbe072b48d1f518191c2f37ef2d79ccce66fad6",
-      "bytes": 22438,
-      "sha256": "5615a5c10d6985df1b0e5ab7edbe072b48d1f518191c2f37ef2d79ccce66fad6"
+      "sourceBytes": 23353,
+      "sourceSha256": "a8bf429f7ab0c6db1e262933447e55c02f460407c83ac5ea96fb7551c60bd467",
+      "bytes": 23353,
+      "sha256": "a8bf429f7ab0c6db1e262933447e55c02f460407c83ac5ea96fb7551c60bd467"
     },
     {
       "source": "test-harness/harness-core/binding/package-ownership.cjs",
@@ -1291,10 +1291,10 @@
       "target": "harness-core/execution/package-executor.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 181098,
-      "sourceSha256": "77ea88cb186bf7f43c195ad17de15c1c156b4a1fa2abf54de103d3bf74dfb9c0",
-      "bytes": 181098,
-      "sha256": "77ea88cb186bf7f43c195ad17de15c1c156b4a1fa2abf54de103d3bf74dfb9c0"
+      "sourceBytes": 182147,
+      "sourceSha256": "536404781e1e168e772c9ce5131c79a62eda01cd9a6da865ae34d16ff0652178",
+      "bytes": 182147,
+      "sha256": "536404781e1e168e772c9ce5131c79a62eda01cd9a6da865ae34d16ff0652178"
     },
     {
       "source": "test-harness/harness-core/execution/package-resolve.mjs",
@@ -1311,10 +1311,10 @@
       "target": "harness-core/execution/provider-runtime.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 27723,
-      "sourceSha256": "b43cd0188f7660c3a644647fd5894c719950f7d5ece1b5ef0673fa758aed13d1",
-      "bytes": 27723,
-      "sha256": "b43cd0188f7660c3a644647fd5894c719950f7d5ece1b5ef0673fa758aed13d1"
+      "sourceBytes": 28290,
+      "sourceSha256": "2f59b7d47bb620f8b4ef5eff42ae4cbb2ffaa984fc0a562bf693be681cb7814d",
+      "bytes": 28290,
+      "sha256": "2f59b7d47bb620f8b4ef5eff42ae4cbb2ffaa984fc0a562bf693be681cb7814d"
     },
     {
       "source": "test-harness/harness-core/git/git-intent.mjs",
@@ -1524,7 +1524,7 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 572,
-      "sha256": "5cc86971d52607bc1c57f96f2b92ae71d0931ae3dbe966cf8201886a7cfe87c0"
+      "sha256": "8cf8367d90ff6e52733690954692ef061285b6392ba295b73f15fe1cc149411e"
     },
     {
       "source": "test-harness/roles/accountability.md",
@@ -5601,10 +5601,10 @@
       "target": "vendor/unlazy/scripts/lib/package-lifecycle.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 45624,
-      "sourceSha256": "d0c43f12df84a1008e822507e8782d55fdbbec75726a4767f00df0b6a46ecb77",
-      "bytes": 45624,
-      "sha256": "d0c43f12df84a1008e822507e8782d55fdbbec75726a4767f00df0b6a46ecb77"
+      "sourceBytes": 46532,
+      "sourceSha256": "d618e2b966e6f4dccfec9e77abd82c445bd311fcc35e534d92f38b4d0ed3c5c6",
+      "bytes": 46532,
+      "sha256": "d618e2b966e6f4dccfec9e77abd82c445bd311fcc35e534d92f38b4d0ed3c5c6"
     },
     {
       "source": "vendor/unlazy/scripts/lib/package-measure.mjs",
@@ -5801,10 +5801,10 @@
       "target": "vendor/unlazy/tests/full-suite.mjs",
       "mode": "copy",
       "generated": false,
-      "sourceBytes": 3750,
-      "sourceSha256": "4f46bac0d6452fbf100bf07e7a6e4a7b718e9636318505d06f6df2aae9f3efc7",
-      "bytes": 3750,
-      "sha256": "4f46bac0d6452fbf100bf07e7a6e4a7b718e9636318505d06f6df2aae9f3efc7"
+      "sourceBytes": 3778,
+      "sourceSha256": "7854a01a2a4b27d3ff15896cb53b5b3e7d81992986a78b6725e5ebc2f66e8852",
+      "bytes": 3778,
+      "sha256": "7854a01a2a4b27d3ff15896cb53b5b3e7d81992986a78b6725e5ebc2f66e8852"
     },
     {
       "source": "vendor/unlazy/tests/gate-approval-path-tests.mjs",
@@ -5965,6 +5965,16 @@
       "sourceSha256": "e684a41562b6adce835e0a2ad48cc343e8b0219255c9dd51682fcccd67e1ee80",
       "bytes": 20304,
       "sha256": "e684a41562b6adce835e0a2ad48cc343e8b0219255c9dd51682fcccd67e1ee80"
+    },
+    {
+      "source": "vendor/unlazy/tests/rename-retry-tests.mjs",
+      "target": "vendor/unlazy/tests/rename-retry-tests.mjs",
+      "mode": "copy",
+      "generated": false,
+      "sourceBytes": 2772,
+      "sourceSha256": "f8d8c6239c805c0dd8133efdd92a7bce537397f696a4482e982afda75f5e936d",
+      "bytes": 2772,
+      "sha256": "f8d8c6239c805c0dd8133efdd92a7bce537397f696a4482e982afda75f5e936d"
     },
     {
       "source": "vendor/unlazy/tests/run-tests.mjs",

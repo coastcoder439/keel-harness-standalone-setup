@@ -463,6 +463,7 @@ async function workerMain(manifestFile) {
   const stderrFile = path.join(path.dirname(stateFile), "provider.stderr.log");
   let stopAction = null;
   let resultErrored = false;
+  let resultSubtype = "";
   let stdoutBuffer = "";
   let finalized = false;
   let child = null;
@@ -500,12 +501,18 @@ async function workerMain(manifestFile) {
 
   const recordEvent = (event) => {
     if (!event || typeof event !== "object") return;
-    if (event.type === "result" && (event.is_error === true || String(event.subtype || "").startsWith("error"))) {
-      resultErrored = true;
+    // Claude: the last result event of a session decides (measured 05.10.2026: error_max_turns
+    // followed by success in the same session, exit 0).
+    if (event.type === "result") {
+      const subtype = String(event.subtype || "");
+      resultErrored = event.is_error === true || subtype.startsWith("error");
+      resultSubtype = resultErrored ? (subtype || "error") : "";
     }
     // Codex reports a failed turn as turn.failed; its "error" events are often warnings
-    // (measured 01.10.2026: "Skill descriptions were shortened ...") and fail nothing.
-    if (event.type === "turn.failed") resultErrored = true;
+    // (measured 01.10.2026: "Skill descriptions were shortened ...") and fail nothing. A later
+    // turn.completed of the same session takes the failure back.
+    if (event.type === "turn.failed") { resultErrored = true; resultSubtype = "turn.failed"; }
+    if (event.type === "turn.completed") { resultErrored = false; resultSubtype = ""; }
     const nativeValue = typeof event.session_id === "string" ? event.session_id
       : event.type === "thread.started" && typeof event.thread_id === "string" ? event.thread_id : "";
     const nativeHandle = nativeValue.trim();
@@ -563,7 +570,10 @@ async function workerMain(manifestFile) {
       failure = { code: "NO_NATIVE_HANDLE", message: "the provider emitted no native session handle" };
     } else if (code !== 0 || resultErrored) {
       state = "provider-failed";
-      failure = { code: "PROVIDER_EXIT", message: "provider exited " + code + (signal ? " via " + signal : "") };
+      const message = code === 0 && resultErrored
+        ? "provider result " + resultSubtype
+        : "provider exited " + code + (signal ? " via " + signal : "");
+      failure = { code: "PROVIDER_EXIT", message };
     } else state = "provider-returned";
     const stdout = fs.existsSync(stdoutFile) ? fs.readFileSync(stdoutFile) : Buffer.alloc(0);
     const stderr = fs.existsSync(stderrFile) ? fs.readFileSync(stderrFile) : Buffer.alloc(0);

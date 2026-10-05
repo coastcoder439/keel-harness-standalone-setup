@@ -23,6 +23,7 @@ export const UNLAZY_SUITES = Object.freeze([
   "gate-approval-path-tests.mjs",
   "package-hook-tests.mjs",
   "package-lifecycle-tests.mjs",
+  "rename-retry-tests.mjs",
   "package-contract-tests.mjs",
   "package-migrate-tests.mjs",
   "package-standard-tests.mjs",
