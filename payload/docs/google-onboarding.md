@@ -200,6 +200,30 @@ Ableitung in `accountabilityDataDirectoryForHarnessRoot` in
 **LIVE**, und im Arbeitsraum tauchen echte Aufgaben, Termine und Betreffzeilen des
 verbundenen Kontos auf.
 
+**Ein zweites (oder weiteres) Konto verbinden.** Mehrere Google-Konten lassen sich gleichzeitig
+verbinden (Paket new-harness-google-accounts, Owner 08.09.2026: „unser Kalender, unsere
+Einstellungen muessen zwischen verschiedenen Google Accounts waehlbar sein"). Beide Konten
+teilen sich dasselbe OAuth-Projekt und denselben Client aus Schritt 2-7 -- fuer das zweite Konto
+sind diese Schritte nicht zu wiederholen, nur der Login selbst:
+
+1. **Einstellungen -> Google-Konten -> „Weiteres Konto verbinden"**: derselbe Anmeldeweg wie
+   oben (Schritt 8.2-8.4), diesmal mit dem zweiten Google-Konto angemeldet. `select_account` im
+   Autorisierungsaufruf zeigt dabei immer die Kontoauswahl, statt stillschweigend das zuletzt
+   angemeldete Konto zu uebernehmen.
+2. Beide Konten stehen danach gleichzeitig in der Konten-Liste der Einstellungen, jedes mit
+   eigenem Trennen-Knopf (mit Rueckgaengig innerhalb von 30 Sekunden).
+3. Sobald zwei oder mehr Konten verbunden sind, zeigt der Kopf von Kalender, Mail und
+   Postfach-Organisation ein Auswahlmenue fuer das Konto dieser Ansicht; die Wahl bleibt je
+   Datenquelle (Kalender, Aufgaben, Mail) getrennt erhalten, bis sie geaendert wird. Ohne eigene
+   Wahl liest eine Datenquelle das zuerst verbundene Konto.
+4. Die Zugangsdaten liegen weiterhin ausschliesslich im Datenverzeichnis der Installation, nie
+   im Repository: je Konto ein eigenes Token unter `google-accounts/<e-mail>.json`, dazu die
+   gewaehlte Kontowahl in `google-accounts.json`. Das Einzel-Token von vor diesem Paket
+   (`google-token.json`) wird beim ersten Lesen automatisch als erstes Konto uebernommen.
+5. Fehlt die Zugangsdatei (Client-ID/-Secret), meldet das Dashboard das ausdruecklich mit dem
+   erwarteten Ablageort -- es gibt keinen stillen Rueckfall auf eine fremde Zugangsdatei (etwa
+   `~/.gam/client_secrets.json`), auch wenn eine solche Datei existiert.
+
 Das Dashboard fordert beim Verbinden genau diesen Scope-Satz an (aus `GOOGLE_SCOPES` in
 `dashboard/lib/accountability/google-auth.ts`):
 
