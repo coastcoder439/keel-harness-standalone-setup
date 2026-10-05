@@ -78,6 +78,34 @@ und Codex selbst regeln“).
 | POLICY_INVALID | jeden Befehl, solange .claude/mutation-policy.json ungültig ist | Gefahr G4: ohne gültige Politik ist keine Freigabe entscheidbar | Owner-Handlung O3 |
 | PACKAGE_TOOL_UNBOUND | (geplant) schreibende Aufrufe von package-standard.mjs für ein anderes als das gebundene Bündel | Gefahr G1: schreibende Aufrufe von package-standard.mjs nur für das gebundene Bündel | create mit --session gleich der eigenen Sitzung öffnet die Bindung selbst; mit bestehender Bindung müssen --root und --package zu ihr passen |
 | PACKAGE_TOOL_OVERRIDE | (geplant) package-standard.mjs mit --unlazy | Gefahr G2: --unlazy wählt nicht deklarierten Code | Aufruf ohne --unlazy |
+| FOREIGN_PROCESS | Stop-Process -Id und taskkill /PID auf einen Prozess, dessen Befehlszeile keinen Pfad der Installations- oder einer Produkt-Wurzel enthält, oder der nicht läuft | Gefahr G3: das Beenden eines fremden Prozesses wirkt außerhalb des Arbeitsbereichs | nur Prozesse beenden, die Dateien dieser Installation oder ihrer Produkt-Wurzeln ausführen; jeden anderen Prozess unter Offen melden |
+| INSTALLER_ARGUMENTS | der Installer des Setup-Repos mit anderem Unterbefehl als install, status oder doctor, anderen Schaltern als --target, --upgrade und --json, oder mit einem --target, das nicht die Installationswurzel ist | Gefahr G3: der Installer würde eine fremde Installation überschreiben | node <Setup-Repo>/install.mjs install, status oder doctor mit --target gleich der Installationswurzel |
+
+Im Produktbaum erlaubte Arbeit (Paket harness-gaps-2026-10-04, Anforderung R1). Unter einer
+Owner-Produkt-Wurzel (productRoots) und für Agenten wie Orchestrator gelten zusätzlich:
+
+- **Entscheidung 1, Werkzeuge der Produkt-Wurzel:** `node <Wurzel>/dashboard/node_modules/next/dist/bin/next build|dev|start`
+  (nur mit --port und --hostname, kein Projektverzeichnis), `node <Wurzel>/dashboard/node_modules/typescript/bin/tsc`
+  mit beliebigen Argumenten (auch -p), `node <Wurzel>/dashboard/scripts/test.mjs` ohne Argumente, `node --test` mit
+  Dateien direkt in `<Wurzel>/dashboard/.test-build/test/` und `<Wurzel>/test/`, sowie `node <Wurzel>/../vendor/unlazy/tests/*.mjs`
+  und `node --test` mit Dateien direkt in `<Wurzel>/../vendor/unlazy/tests/`, wenn `<Wurzel>/../vendor/unlazy` existiert.
+  Dieselben Werkzeuge in einem fremden Baum bleiben UNDECLARED_NODE_SCRIPT bzw. UNDECLARED_TEST.
+- **Entscheidung 2, Arbeitsverzeichnis:** ein `Set-Location <Pfad>` oder `cd <Pfad>` als erster Befehl derselben Zeile
+  mit wörtlichem Pfad auf ein vorhandenes Verzeichnis bestimmt, wogegen die folgenden Befehle relative Pfade auflösen;
+  berechnete, gesuchte oder fehlende Pfade und ein späteres cd ändern nichts.
+- **Entscheidung 3, lesende Abfragen:** immer erlaubt sind `Get-Process`, `Get-NetTCPConnection`, `Get-CimInstance` und
+  `Get-WmiObject` nur für Win32_Process und Win32_OperatingSystem (Schalter -ClassName, -Class, -Filter, -Property,
+  -ErrorAction), `Get-Date` samt Methodenaufrufen auf dem Ergebnis (`(Get-Date).AddMinutes(28)`), `Test-Path`, `Get-Item`
+  und `Get-ChildItem`; jede andere Klasse und jeder andere .NET-Aufruf bleibt gesperrt.
+- **Entscheidung 4, eigene Prozesse:** `Stop-Process -Id <Zahl>` (auch mit -Force) und `taskkill /PID <Zahl> [/T] [/F]`
+  (in Git Bash auch `//PID`) beenden einen Prozess, dessen über Win32_Process gelesene Befehlszeile einen Pfad innerhalb
+  der Installationswurzel oder einer Produkt-Wurzel enthält; sonst FOREIGN_PROCESS. Name-basiertes Beenden
+  (Stop-Process -Name, taskkill /IM) bleibt UNDECLARED_EXECUTABLE.
+- **Entscheidung 5, Installer:** `node <Verzeichnis>/install.mjs install|status|doctor --target <Installationswurzel> [--upgrade] [--json]`,
+  wenn `<Verzeichnis>/manifest.json` und `<Verzeichnis>/lib/distribution-lifecycle.mjs` existieren; ein anderes --target
+  ist INSTALLER_ARGUMENTS. Der Wächter nennt keinen Workspace-, Projekt- oder Nutzernamen.
+- **Entscheidung 6, unverändert gesperrt:** rohes Git schreibend (git-intent-guard), Shell-Umleitungen, `node -e`,
+  Inline-Interpreter, Löschen außerhalb des OWNS, npm und Netzwerk-Cmdlets wie Invoke-WebRequest.
 
 ## .claude/danger-guard.js
 

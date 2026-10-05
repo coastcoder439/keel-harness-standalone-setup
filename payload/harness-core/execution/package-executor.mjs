@@ -121,6 +121,7 @@ function parseArgs(argv) {
     const key = args.shift();
     if (key === "--json") options.json = true;
     else if (key === "--approve-checks") options.approveChecks = true;
+    else if (key === "--ready-only") options.readyOnly = true;
     else if (key === "--root") options.root = take(key);
     else if (key === "--harness-root") options.harnessRoot = take(key);
     else if (key === "--unlazy-root") options.unlazyRoot = take(key);
@@ -156,6 +157,7 @@ function parseArgs(argv) {
     else if (key === "--due-state") options.dueState = take(key);
     else if (key === "--gate") options.gate = take(key);
     else if (key === "--evidence") options.evidence = take(key);
+    else if (key === "--evidence-file") options.evidenceFile = take(key);
     else if (key === "--owner-ok") options.ownerOk = ownerWording(take(key));
     else if (key === "--reverify") options.reverify = true;
     else if (key === "--receipt") options.receipt = take(key);
@@ -169,6 +171,7 @@ function parseArgs(argv) {
     fail("USAGE", "--run is only accepted by start and next");
   }
   if (options.apply && options.command !== "cleanup-runtime") fail("USAGE", "--apply is only accepted by cleanup-runtime");
+  if (options.readyOnly && options.command !== "integrate") fail("USAGE", "--ready-only is only accepted by integrate");
   return options;
 }
 
@@ -384,19 +387,44 @@ function orphanedLock(holder, now) {
 
 // The orphaned lock is moved aside by rename and checked: when a successor took the lock between the
 // judgement and the rename, its lock is put back and the takeover does not happen.
+// Only one process judges and moves a lock at a time (measured 04.10.2026: two waiters moved a successor's
+// lock aside, one put it back after its holder had already released, and that stale copy was taken over a
+// second time). The takeover guard is a second lock file created exclusively; whoever does not get it goes
+// on waiting, and whoever gets it judges the lock again before moving it. A guard left by a crashed process
+// is removed once it is older than the takeover itself can last.
+const TAKEOVER_GUARD_STALE_MS = 10_000;
+
 function takeOverLock(file, holder) {
-  const aside = file + "." + process.pid + "." + crypto.randomBytes(6).toString("hex") + ".orphaned";
-  try { fs.renameSync(file, aside); } catch { return null; }
-  let moved = null;
-  try { moved = JSON.parse(fs.readFileSync(aside, "utf8")); } catch { moved = null; }
-  const same = holder.value ? moved?.token === holder.value.token : moved === null;
-  if (!same) {
-    try { fs.linkSync(aside, file); } catch { /* the lock name is taken again; that holder goes on */ }
-    fs.rmSync(aside, { force: true });
+  const guard = file + ".takeover";
+  let fd = null;
+  try { fd = fs.openSync(guard, "wx"); }
+  catch (error) {
+    if (error.code !== "EEXIST" && !TRANSIENT_LOCK_ERRORS.has(error.code)) throw error;
+    try {
+      if (Date.now() - fs.statSync(guard).mtimeMs > TAKEOVER_GUARD_STALE_MS) fs.rmSync(guard, { force: true });
+    } catch { /* the guard went away */ }
     return null;
   }
-  fs.rmSync(aside, { force: true });
-  return { pid: holder.value?.pid ?? null, startedAt: holder.value?.startedAt ?? null };
+  fs.closeSync(fd);
+  try {
+    const current = readLockHolder(file);
+    if (!current || (current.value?.token ?? null) !== (holder.value?.token ?? null) ||
+        !orphanedLock(current, Date.now())) return null;
+    const aside = file + "." + process.pid + "." + crypto.randomBytes(6).toString("hex") + ".orphaned";
+    try { fs.renameSync(file, aside); } catch { return null; }
+    let moved = null;
+    try { moved = JSON.parse(fs.readFileSync(aside, "utf8")); } catch { moved = null; }
+    const same = holder.value ? moved?.token === holder.value.token : moved === null;
+    if (!same) {
+      try { fs.linkSync(aside, file); } catch { /* the lock name is taken again; that holder goes on */ }
+      fs.rmSync(aside, { force: true });
+      return null;
+    }
+    fs.rmSync(aside, { force: true });
+    return { pid: holder.value?.pid ?? null, startedAt: holder.value?.startedAt ?? null };
+  } finally {
+    fs.rmSync(guard, { force: true });
+  }
 }
 
 function acquireStateLock(context) {
@@ -1692,8 +1720,23 @@ async function reopenExecution(context, options) {
   const source = sessionOf(state, sourceId);
   if (source.state !== "verified") fail("SESSION_STATE", "reopen requires a verified session; " + sourceId + " is " + source.state, 1);
   const waveId = source.wave;
+  // recover moves its wave to history as "recovered"; the verified member stays behind with that wave id.
+  // Such a member is reworked like a member of an abandoned wave: the successor waits prepared for a new wave.
+  if (waveId && !state.waves[waveId] && state.history.waves[waveId]?.state === "recovered") {
+    const successor = prepareSuccessor(context, state, source, targetId, options);
+    updateState(context, (fresh) => {
+      const current = sessionOf(fresh, sourceId);
+      if (current.state !== "verified" || current.wave !== waveId || fresh.waves[waveId]) {
+        fail("SESSION_STATE", "session " + sourceId + " changed during reopen", 1);
+      }
+      if (fresh.sessions[targetId] || fresh.history.sessions[targetId]) fail("SESSION_EXISTS", "target session already exists", 1);
+      replaceMember(fresh, current, successor, "reopened", "session-reopened", { reason, mode: "recovered" });
+    });
+    return { from: sourceId, to: publicEntry(readState(context).sessions[targetId]), mode: "recovered", reason,
+      next: "dispatch --wave <new wave> --session " + targetId };
+  }
   if (!waveId || !state.waves[waveId] || !["sealed", "complete"].includes(state.waves[waveId].state)) {
-    fail("WAVE_STATE", "reopen requires the session's wave to be sealed or complete", 1);
+    fail("WAVE_STATE", "reopen requires the session's wave to be sealed, complete or recovered", 1);
   }
   const target = prepareSuccessor(context, state, source, targetId, options);
   childOk(runNode(context.tools.dispatchCheck, ["reopen", "--root", context.repoRoot, "--package", context.packageId,
@@ -1719,18 +1762,19 @@ async function reopenExecution(context, options) {
 function replaceMember(state, current, target, finalState, type, detail) {
   const waveId = current.wave;
   const wave = state.waves[waveId];
+  const waveless = detail.mode === "abandoned" || detail.mode === "recovered";
   setSessionState(state, current, finalState, type, { ...detail, replacedBy: target.sessionId,
     [finalState + "At"]: new Date().toISOString() });
   state.history.sessions[current.sessionId] = { ...current, archivedAt: new Date().toISOString() };
   delete state.sessions[current.sessionId];
-  if (detail.mode !== "abandoned") {
+  if (!waveless) {
     wave.sessions = wave.sessions.map((value) => (value === current.sessionId ? target.sessionId : value));
     wave.replacedSessions = [...(wave.replacedSessions || []), { from: current.sessionId, to: target.sessionId,
       kind: finalState, at: new Date().toISOString() }];
   }
   state.sessions[target.sessionId] = target;
   transition(state, "session-prepared", target.sessionId, null, "prepared", { leaf: target.leaf, provider: target.provider,
-    [finalState === "reopened" ? "reopenedFrom" : "restartedFrom"]: current.sessionId, wave: detail.mode === "abandoned" ? null : waveId });
+    [finalState === "reopened" ? "reopenedFrom" : "restartedFrom"]: current.sessionId, wave: waveless ? null : waveId });
 }
 
 // A prepared member of a sealed wave starts like a dispatch member; the dispatch takes its handle through
@@ -1942,7 +1986,7 @@ function reviewTarget(context, value) {
 // ist eine einzelne regulaere, nicht leere Datei und wird mit seiner Pruefsumme gebunden.
 function reviewEvidence(context, value) {
   const raw = String(value || "").replaceAll("\\", "/");
-  if (!raw) fail("USAGE", "review-manual requires --evidence evidence/<file>");
+  if (!raw) fail("USAGE", "review-manual requires --evidence evidence/<file> or --evidence-file <absolute path outside the repository>");
   const packagePrefix = "docs/packages/" + context.packageId + "/";
   const inside = raw.startsWith(packagePrefix) ? raw.slice(packagePrefix.length) : raw;
   const absolute = path.resolve(context.packageInfo.packageDir, ...inside.split("/"));
@@ -1966,6 +2010,36 @@ function reviewEvidence(context, value) {
   const relative = path.relative(context.packageInfo.packageDir, absolute).replaceAll("\\", "/");
   if (/[;\0-\x1f]/u.test(relative)) fail("REVIEW_EVIDENCE", "evidence path must not contain ';' or control characters", 1);
   return { relative, sha256: crypto.createHash("sha256").update(bytes).digest("hex") };
+}
+
+// --evidence-file: the orchestrator may not write under evidence/ of the package (paket-gate), so the executor
+// copies the Owner's file itself. The source is an absolute path outside the repository; the copy is named after
+// the gate and bound by its checksum like any other evidence. Nothing is written here: the copy happens only
+// after the review is accepted (see writeStagedEvidence).
+function stageOwnerEvidence(context, gateId, value) {
+  const raw = String(value || "");
+  if (!path.isAbsolute(raw)) fail("REVIEW_EVIDENCE", "--evidence-file must be an absolute path: " + raw, 1);
+  const source = path.resolve(raw);
+  if (repository.isPathInside(context.repoRoot, source)) {
+    fail("REVIEW_EVIDENCE", "--evidence-file must lie outside the repository; use --evidence for a file under evidence/", 1);
+  }
+  if (!fs.existsSync(source)) fail("REVIEW_EVIDENCE", "evidence file does not exist: " + raw, 1);
+  const info = fs.lstatSync(source);
+  if (!info.isFile() || info.isSymbolicLink()) fail("REVIEW_EVIDENCE", "evidence must be a regular file: " + raw, 1);
+  const bytes = fs.readFileSync(source);
+  if (!bytes.length) fail("REVIEW_EVIDENCE", "evidence file is empty: " + raw, 1);
+  const relative = "evidence/" + gateId.toLowerCase() + "-owner-ok.md";
+  return { relative, sha256: crypto.createHash("sha256").update(bytes).digest("hex"), bytes,
+    file: path.join(context.packageInfo.packageDir, ...relative.split("/")) };
+}
+
+function writeStagedEvidence(evidence) {
+  if (!evidence.bytes) return;
+  fs.mkdirSync(path.dirname(evidence.file), { recursive: true });
+  const temporary = evidence.file + "." + process.pid + "." + crypto.randomBytes(8).toString("hex") + ".tmp";
+  fs.writeFileSync(temporary, evidence.bytes, { flag: "wx" });
+  try { replaceFileSync(temporary, evidence.file); }
+  finally { try { fs.unlinkSync(temporary); } catch { /* renamed or absent */ } }
 }
 
 // Nur der Orchestrator: kein Prozess eines gestarteten Leaf-Arbeiters (provider-runtime setzt
@@ -2034,7 +2108,11 @@ async function reviewManual(context, options) {
       "from its own result", 1);
   }
   assertReviewMoment(context, state, target);
-  const evidence = reviewEvidence(context, options.evidence);
+  if (options.evidence !== undefined && options.evidenceFile !== undefined) {
+    fail("USAGE", "review-manual takes either --evidence or --evidence-file, never both");
+  }
+  const evidence = options.evidenceFile !== undefined ? stageOwnerEvidence(context, gate.id, options.evidenceFile)
+    : reviewEvidence(context, options.evidence);
   const qualified = target.relative + ":" + gate.id;
   const bound = "file=" + evidence.relative + "; sha256=" + evidence.sha256;
   const met = gate.checked && gate.evidence && !/^pending$/iu.test(gate.evidence);
@@ -2067,6 +2145,7 @@ async function reviewManual(context, options) {
   if (fs.readFileSync(target.file, "utf8") !== before) {
     fail("LEDGER_CHANGED", target.relative + " changed during the review; repeat review-manual", 1);
   }
+  writeStagedEvidence(evidence);
   const temporary = target.file + "." + process.pid + "." + crypto.randomBytes(8).toString("hex") + ".tmp";
   fs.writeFileSync(temporary, next, { encoding: "utf8", flag: "wx" });
   try { replaceFileSync(temporary, target.file); }
@@ -2272,7 +2351,88 @@ async function assertCheckpointClean(context, checkpoint, repeated, witnessBefor
   }
 }
 
+// integrate --ready-only (harness-gaps-2026-10-04, decision 3): a finished fix could only be saved through
+// integrate, which wants every session verified and every wave complete -- impossible in a 34-leaf package with
+// abandoned waves. This saves exactly the verified sessions: their OWNS plus the package bundle, after the gates
+// of those leaves alone were re-run. Open, aborted or abandoned sessions and waves are ignored, the root and node
+// gates are neither run nor ticked, and nothing of this lands in state.integration, so a later plain integrate
+// stays what it was. git-intent's integration-checkpoint reads executor.json of the scope it is given and
+// refuses unless that state is fully verified; it is handed a filtered copy of the verified part under a
+// short-lived scope next to the real one and does all the Git work itself (clean index, exact path set, exact
+// tree). The copy and its scope are removed afterwards; the receipt moves into the real scope.
+const PARTIAL_SCOPE_STALE_MS = 10 * 60_000;
+
+function partialScopeName(scope) {
+  return "partial-" + crypto.createHash("sha256").update(scope).digest("hex").slice(0, 12);
+}
+
+function openPartialScope(context, name) {
+  const directory = path.join(context.repoRoot, ".unlazy", name);
+  try { fs.mkdirSync(directory); }
+  catch (error) {
+    if (error.code !== "EEXIST") throw error;
+    let age = 0;
+    try { age = Date.now() - fs.statSync(directory).mtimeMs; } catch { /* gone again; created below */ }
+    if (age < PARTIAL_SCOPE_STALE_MS) {
+      fail("PARTIAL_IN_PROGRESS", "another integrate --ready-only is saving this scope; repeat it when that call ended", 1);
+    }
+    fs.rmSync(directory, { recursive: true, force: true });
+    fs.mkdirSync(directory);
+  }
+  return directory;
+}
+
+async function integrateReady(context, options) {
+  assertActive(context);
+  noteOrchestrator(context, callerSession(process.env), "integrate");
+  if (options.resultFile || options.expectedResultDigest) {
+    fail("USAGE", "integrate --ready-only takes no accepted result; save the finished leaves first, then integrate the package");
+  }
+  const state = readState(context);
+  const ready = Object.values(state.sessions).filter((entry) => entry.state === "verified");
+  const skipped = Object.values(state.sessions).filter((entry) => entry.state !== "verified")
+    .map((entry) => ({ sessionId: entry.sessionId, leaf: entry.leaf, state: entry.state }));
+  if (!ready.length) fail("NOTHING_READY", "no leaf session is locally verified yet; nothing to save with --ready-only", 1);
+  const leaves = [...new Set(ready.map((entry) => entry.leaf))].sort((left, right) => left.localeCompare(right, "en"));
+  const timeout = String(options.timeout || "120");
+  const gateModes = options.approveChecks ? ["--reverify", "--approve"] : ["--reverify"];
+  for (const leaf of leaves) {
+    childOk(runNode(context.tools.gateCheck, [...gateModes, "--timeout", timeout, "--root", context.repoRoot,
+      "--package", context.packageId, "--scope", context.scope, "--leaf", leaf], { cwd: context.repoRoot,
+      timeoutMs: reverifyWallMs(context.packageInfo, timeout, { leaf }) }), "re-verification of leaf " + leaf);
+  }
+  const name = partialScopeName(context.scope);
+  const directory = openPartialScope(context, name);
+  let checkpoint;
+  try {
+    fs.writeFileSync(path.join(directory, "package.ref"), "docs/packages/" + context.packageId + "\n", "utf8");
+    const { integration, partialIntegrations, ...rest } = state;
+    atomicJson(path.join(directory, "executor.json"), { ...rest, scope: name,
+      sessions: Object.fromEntries(ready.map((entry) => [entry.sessionId, entry])), waves: {} });
+    const wording = String(options.message || "").trim() || "leaves " + leaves.join(", ");
+    const message = ("partial: " + wording).slice(0, 200);
+    checkpoint = parseIntentOutput(childOk(runNode(context.tools.gitIntent, ["integration-checkpoint", "--root",
+      context.repoRoot, "--package", context.packageId, "--scope", name, "--message", message],
+    { cwd: context.repoRoot, timeoutMs: 180_000 }), "partial integration checkpoint"));
+    const receipts = path.join(context.repoRoot, ".unlazy", context.scope, "git", "receipts");
+    fs.mkdirSync(receipts, { recursive: true });
+    const moved = path.join(receipts, path.basename(checkpoint.receipt));
+    fs.renameSync(path.join(context.repoRoot, ...String(checkpoint.receipt).split("/")), moved);
+    checkpoint.receipt = path.relative(context.repoRoot, moved).replaceAll("\\", "/");
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+  updateState(context, (fresh) => {
+    fresh.partialIntegrations = [...(fresh.partialIntegrations || []), { partial: true, commit: checkpoint.commit,
+      paths: checkpoint.paths, leaves, sessions: ready.map((entry) => entry.sessionId), receipt: checkpoint.receipt,
+      at: new Date().toISOString() }];
+    transition(fresh, "integration-partial", context.scope, null, null, { commit: checkpoint.commit, leaves });
+  });
+  return { ...checkpoint, partial: true, leaves, skipped, rootGatesChecked: false, locallyReverified: true };
+}
+
 async function integrate(context, options) {
+  if (options.readyOnly) return integrateReady(context, options);
   assertActive(context);
   noteOrchestrator(context, callerSession(process.env), "integrate");
   const state = readState(context);
@@ -2859,13 +3019,13 @@ commands:
   return --session ID [--result-file PATH] [--timeout S]
   verify --session ID [--timeout S]
   resume --session ID
-  integrate --message TEXT [--approve-checks] [--timeout S]
+  integrate --message TEXT [--approve-checks] [--timeout S] [--ready-only]
   status
   duty-assess --gate LEDGER:GATE
   duty-add --duty ID --owner TEXT --trigger TEXT --due-state open|due --gate LEDGER:GATE
   duty-resolve --duty ID [--gate LEDGER:GATE]
   duty-waive --duty ID --owner-ok TEXT
-  review-manual --gate LEDGER:GATE --evidence evidence/FILE --session ID
+  review-manual --gate LEDGER:GATE (--evidence evidence/FILE | --evidence-file ABSOLUTE_PATH) --session ID
   close [--owner-ok TEXT] [--message TEXT] [--timeout S] [--reverify]
   recover-close --receipt CLOSE_RECEIPT [--message TEXT] [--timeout S]
   publish --closure-receipt PATH --owner-ok TEXT
@@ -2952,6 +3112,10 @@ accepted only after local gate re-verification. First execution of pending
 integration oracles requires the explicit integrate --approve-checks switch.
 integrate is idempotent: a repeat call runs the same bottom-up re-verification
 again and returns the same checkpoint receipt instead of a second checkpoint.
+integrate --ready-only saves only the verified sessions (their OWNS plus the package
+bundle) after re-running the gates of those leaves; open, aborted or abandoned
+sessions and waves are ignored, root and node gates are not run or ticked, and the
+commit message starts with "partial:". A later plain integrate is unaffected.
 recover-close continues an interrupted closure checkpoint and re-verifies
 bottom-up like close before writing it; once that commit exists it returns
 unchanged and without re-verifying (locallyReverified: false). A red recovery

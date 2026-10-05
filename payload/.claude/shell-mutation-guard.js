@@ -10,6 +10,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 
 const GUARD_TARGET = ".claude/shell-mutation-guard.js";
 
@@ -76,6 +77,9 @@ const READ_ONLY_COMMANDS = new Set([
   // testing, path parts, counting, the date and leaving a loop. awk, export, set, source and
   // xargs stay out: they run code or change the shell.
   "read", "[[", "basename", "dirname", "seq", "date", "break", "continue", "get-command", "gcm",
+  // Process and port queries that only read (harness-gaps R1): Get-CimInstance and Get-WmiObject
+  // are judged by classifyCim, Stop-Process and taskkill by classifyProcessStop.
+  "get-process", "get-nettcpconnection",
 ]);
 
 const WRITE_COMMANDS = new Set([
@@ -430,11 +434,113 @@ function declared(raw, context, set) {
 // written since the last release has to run before it can be released, and work on the
 // product needs no confirmation by the Owner's own decision. Outside product roots the finite
 // list holds.
+// harness-gaps R1: node --test also runs the compiled Dashboard tests (dashboard/.test-build/test)
+// and, where the setup repository's vendored package tests sit beside the product tree, those
+// (../vendor/unlazy/tests). Files lie directly in the folder; nesting stays closed.
 function productTest(raw, context) {
-  if (!raw || typeof raw !== "string" || raw.includes("\0") || !raw.endsWith(".test.js")) return false;
+  if (!raw || typeof raw !== "string" || raw.includes("\0")) return false;
   const candidate = path.resolve(context.cwd || context.projectRoot, raw);
+  const inDirectory = (directory) => normalized(path.dirname(candidate)) === normalized(directory) && safeRegular(candidate);
   return productRootsFor(context).some((root) =>
-    normalized(path.dirname(candidate)) === normalized(path.join(root, "test")) && safeRegular(candidate));
+    (candidate.endsWith(".test.js") && inDirectory(path.join(root, "test"))) ||
+    (/\.(?:c|m)?js$/u.test(candidate) && (inDirectory(path.join(root, "dashboard", ".test-build", "test")) ||
+      (vendoredUnlazy(root) && inDirectory(path.join(vendoredUnlazy(root), "tests"))))));
+}
+
+// <root>/../vendor/unlazy, only where it exists as a real directory.
+function vendoredUnlazy(root) {
+  const directory = path.join(path.dirname(root), "vendor", "unlazy");
+  try {
+    const info = fs.lstatSync(directory);
+    return !info.isSymbolicLink() && info.isDirectory() ? directory : null;
+  } catch { return null; }
+}
+
+// One file by exact path, relative paths against the working directory of the command.
+function sameFile(raw, context, expected) {
+  if (!raw || typeof raw !== "string" || raw.includes("\0")) return false;
+  return normalized(path.resolve(context.cwd || context.projectRoot, raw)) === normalized(expected) && safeRegular(expected);
+}
+
+const NEXT_COMMANDS = new Set(["build", "dev", "start"]);
+const NEXT_VALUE_FLAGS = new Set(["-p", "--port", "-H", "--hostname"]);
+
+// next build|dev|start with no positional directory (a project directory would run its
+// next.config): only the port and host flags carry a value.
+function nextArguments(rest) {
+  if (!rest.length || !NEXT_COMMANDS.has(rest[0])) return false;
+  for (let index = 1; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (NEXT_VALUE_FLAGS.has(arg)) {
+      if (!/^[A-Za-z0-9.:_-]+$/u.test(rest[index + 1] || "")) return false;
+      index += 1;
+    } else if (!/^-[A-Za-z0-9-]+(?:=[A-Za-z0-9.:_-]+)?$/u.test(arg)) return false;
+  }
+  return true;
+}
+
+// The Owner product root's own build and test tools (harness-gaps R1, decision 1): under a
+// productRoots entry the Dashboard's Next.js and TypeScript, its test runner and the vendored
+// package tests run. Returns null for a script that is none of them.
+function productToolKind(script, context) {
+  if (!script || typeof script !== "string" || script.startsWith("-")) return null;
+  const roots = productRootsFor(context);
+  const at = (...parts) => roots.some((root) => sameFile(script, context, path.join(root, ...parts)));
+  if (at("dashboard", "node_modules", "next", "dist", "bin", "next")) return "next";
+  if (at("dashboard", "node_modules", "typescript", "bin", "tsc")) return "tsc";
+  if (at("dashboard", "scripts", "test.mjs")) return "dashboard-test";
+  const candidate = path.resolve(context.cwd || context.projectRoot, script);
+  if (/\.mjs$/u.test(candidate) && roots.some((root) => {
+    const vendor = vendoredUnlazy(root);
+    return vendor && normalized(path.dirname(candidate)) === normalized(path.join(vendor, "tests")) && safeRegular(candidate);
+  })) return "vendor-test";
+  return null;
+}
+
+function classifyProductTool(script, rest, context) {
+  const kind = productToolKind(script, context);
+  if (kind === "next") {
+    return nextArguments(rest) ? { allowed: true, code: "PRODUCT_BUILD_TOOL" }
+      : denial("UNDECLARED_NODE_SCRIPT", "next runs as build, dev or start with at most --port and --hostname",
+        "Run: node dashboard/node_modules/next/dist/bin/next build.");
+  }
+  if (kind === "tsc") return { allowed: true, code: "PRODUCT_BUILD_TOOL" };
+  if (kind === "dashboard-test") {
+    return rest.length ? denial("UNDECLARED_NODE_SCRIPT", "the Dashboard test runner takes no arguments", "Run: node dashboard/scripts/test.mjs.")
+      : { allowed: true, code: "PRODUCT_TEST_RUNNER" };
+  }
+  return kind ? { allowed: true, code: "PRODUCT_TEST_RUNNER" } : null;
+}
+
+// The setup repository's installer against the installation itself (decision 5):
+// node <dir>/install.mjs install|status|doctor --target <installation root> [--upgrade] [--json].
+// <dir> is the setup repository when it carries its manifest and its lifecycle library.
+function classifyInstaller(script, rest, context) {
+  if (!script || path.basename(script).toLowerCase() !== "install.mjs") return null;
+  const file = path.resolve(context.cwd || context.projectRoot, script);
+  const directory = path.dirname(file);
+  if (!safeRegular(file) || !safeRegular(path.join(directory, "manifest.json")) ||
+      !safeRegular(path.join(directory, "lib", "distribution-lifecycle.mjs"))) return null;
+  const wrong = (detail) => denial("INSTALLER_ARGUMENTS", detail,
+    "Run: node install.mjs install|status|doctor --target \"" + context.projectRoot + "\" [--upgrade] [--json].");
+  if (!["install", "status", "doctor"].includes(rest[0])) return wrong("the installer runs as install, status or doctor");
+  let target = null;
+  const seen = new Set();
+  for (let index = 1; index < rest.length; index += 1) {
+    const arg = rest[index];
+    if (["--upgrade", "--json"].includes(arg) && !seen.has(arg)) { seen.add(arg); continue; }
+    const inline = /^--target=(.+)$/su.exec(arg);
+    if ((arg === "--target" || inline) && target === null) {
+      target = inline ? inline[1].replace(/^(["'])(.*)\1$/su, "$2") : rest[index + 1];
+      if (!inline) index += 1;
+      continue;
+    }
+    return wrong("the installer accepts only --target, --upgrade and --json");
+  }
+  if (!target || normalized(path.resolve(context.cwd || context.projectRoot, hookContext.msysPath(target))) !== normalized(context.projectRoot)) {
+    return wrong("--target must be the installation root of this session");
+  }
+  return { allowed: true, code: "INSTALLER_OWN_TARGET" };
 }
 
 function denial(code, detail, next) {
@@ -452,10 +558,15 @@ function verifierRoute(projectRoot) {
 function classifyNode(words, start, context) {
   const args = words.slice(start + 1);
   if (args.length === 1 && ["-v", "--version", "-h", "--help"].includes(args[0])) return { allowed: true, code: "NODE_INFORMATION" };
-  if (!args.length || args.some((arg) => ["-e", "--eval", "-p", "--print", "--input-type"].includes(arg))) {
+  // A product build tool takes its own arguments (tsc -p, next start -p): for it only the words up
+  // to the script are Node options, and those may be the harmless warning flags alone.
+  let headIndex = 0;
+  while (headIndex < args.length && ["--no-warnings", "--trace-warnings", "--enable-source-maps"].includes(args[headIndex])) headIndex += 1;
+  const scanned = productToolKind(args[headIndex], context) ? args.slice(0, headIndex + 1) : args;
+  if (!args.length || scanned.some((arg) => ["-e", "--eval", "-p", "--print", "--input-type"].includes(arg))) {
     return denial("INLINE_INTERPRETER", "inline Node execution is not statically decidable", editRoute());
   }
-  if (args.some((arg) => /^--(?:require|import|loader|experimental-loader)(?:=|$)/u.test(arg) || arg === "-r")) {
+  if (scanned.some((arg) => /^--(?:require|import|loader|experimental-loader)(?:=|$)/u.test(arg) || arg === "-r")) {
     return denial("NODE_PRELOAD", "Node preload hooks can execute undeclared code", verifierRoute(context.projectRoot));
   }
   if (args[0] === "--check" || args[0] === "-c") {
@@ -506,6 +617,11 @@ function classifyNode(words, start, context) {
     return { allowed: true, code: "READ_ONLY_TOOL", path: readTool };
   }
   if (declared(script, context, new Set(PACKAGE_TOOL_PATHS))) return classifyPackageTool(args.slice(scriptIndex + 1), context);
+  const rest = args.slice(scriptIndex + 1);
+  const productTool = classifyProductTool(script, rest, context);
+  if (productTool) return productTool;
+  const installer = classifyInstaller(script, rest, context);
+  if (installer) return installer;
   return denial("UNDECLARED_NODE_SCRIPT", "repository Node scripts execute with write capability unless explicitly reviewed", verifierRoute(context.projectRoot));
 }
 
@@ -590,6 +706,80 @@ function classifyCmd(words, start, context) {
   return denial("SHELL_WRAPPER", "cmd /c and /k can hide repository writes", editRoute());
 }
 
+// Get-CimInstance and Get-WmiObject read only the process and operating-system classes
+// (harness-gaps R1, decision 3). Every other class, namespace or parameter stays undeclared.
+const CIM_CLASSES = new Set(["win32_process", "win32_operatingsystem"]);
+const CIM_VALUE_PARAMETERS = new Set(["-classname", "-class", "-filter", "-property", "-erroraction", "-ea"]);
+
+function classifyCim(name, words) {
+  let className = null;
+  for (let index = 1; index < words.length; index += 1) {
+    const word = String(words[index]);
+    const lower = word.toLowerCase();
+    if (lower.startsWith("-")) {
+      if (!CIM_VALUE_PARAMETERS.has(lower) || words[index + 1] === undefined) return null;
+      if ((lower === "-classname" || lower === "-class") && className !== null) return null;
+      if (lower === "-classname" || lower === "-class") className = String(words[index + 1]);
+      index += 1;
+    } else if (className === null) className = word;
+    else return null;
+  }
+  return className !== null && CIM_CLASSES.has(className.toLowerCase()) ? { allowed: true, code: "READ_ONLY_PROCESS_QUERY" } : null;
+}
+
+// The command line of one process, read through Win32_Process (ps elsewhere). null when the
+// process is gone or unreadable.
+function processCommandLine(pid) {
+  try {
+    const result = process.platform === "win32"
+      ? spawnSync(commandModel.powershellExecutable() || "powershell.exe", ["-NoProfile", "-NonInteractive", "-Command",
+        "(Get-CimInstance Win32_Process -Filter 'ProcessId=" + pid + "').CommandLine"],
+      { encoding: "utf8", windowsHide: true, timeout: 15_000 })
+      : spawnSync("ps", ["-o", "args=", "-p", String(pid)], { encoding: "utf8", timeout: 8_000 });
+    const line = result.status === 0 ? String(result.stdout || "").trim() : "";
+    return line || null;
+  } catch { return null; }
+}
+
+// Stop-Process -Id and taskkill /PID end a process whose command line holds a path inside the
+// installation root or a product root; every other process is FOREIGN_PROCESS (decision 4).
+// Name-based ending (Stop-Process -Name, taskkill /IM) is no declared form.
+function classifyProcessStop(name, words, context) {
+  const args = words.slice(1).map(String);
+  let pid = null;
+  const note = (value) => {
+    if (pid !== null || !/^[1-9][0-9]{0,9}$/u.test(String(value))) return false;
+    pid = String(value);
+    return true;
+  };
+  let valid = true;
+  for (let index = 0; index < args.length && valid; index += 1) {
+    const lower = args[index].toLowerCase();
+    if (name === "stop-process") {
+      if (lower === "-id") valid = note(args[(index += 1)]);
+      else if (lower === "-force" || lower === "-passthru") continue;
+      else if (lower === "-erroraction" || lower === "-ea") valid = /^[A-Za-z]+$/u.test(args[(index += 1)] || "");
+      else valid = false;
+    } else if (lower === "/pid" || lower === "//pid") valid = note(args[(index += 1)]);
+    else if (["/t", "//t", "/f", "//f"].includes(lower)) continue;
+    else valid = false;
+  }
+  if (!valid || pid === null) {
+    return denial("UNDECLARED_EXECUTABLE", name + " ends a process only by its numeric id (-Id <pid> or /PID <pid>)", verifierRoute(context.projectRoot));
+  }
+  const line = processCommandLine(pid);
+  if (line) {
+    const text = line.replaceAll("\\", "/");
+    const haystack = process.platform === "win32" ? text.toLowerCase() : text;
+    const roots = [context.projectRoot, ...productRootsFor(context)];
+    if (roots.some((root) => [normalized(root), normalized(hookContext.canonicalPath(root))].some((form) => haystack.includes(form + "/")))) {
+      return { allowed: true, code: "OWN_PROCESS_STOP" };
+    }
+  }
+  return denial("FOREIGN_PROCESS", "process " + pid + (line ? " runs no path inside the installation or a product root" : " is not running or its command line is unreadable"),
+    "End only processes that run files of this installation or its product roots; report any other process under Offen.");
+}
+
 // Deleting, moving and creating directories on literal paths inside the bound leaf OWNS
 // (guard-scope E16: the same as Codex apply_patch). Returns null to keep DIRECT_SHELL_WRITE.
 // Two checks beyond owned-shell-write.cjs: a command that changes directory anywhere gets no
@@ -597,7 +787,7 @@ function classifyCmd(words, start, context) {
 // and every path operand passes the write-guard rules W1, W4 and W5 as apply_patch does.
 function ownedWrite(name, words, context) {
   const decision = ownedShellWrite.decideOwnedWrite({ name, words, staticArguments: context.staticArguments,
-    dialect: context.dialect || "bash", cwd: context.cwd, projectRoot: context.projectRoot, sessionId: context.sessionId });
+    dialect: context.dialect || "bash", cwd: context.startCwd || context.cwd, projectRoot: context.projectRoot, sessionId: context.sessionId });
   if (!decision) return null;
   if (!decision.allowed) return denial("DIRECT_SHELL_WRITE", decision.detail, editRoute());
   if (context.changesDirectory) {
@@ -606,13 +796,26 @@ function ownedWrite(name, words, context) {
   const deps = writeGuard.echteDeps(context.projectRoot);
   for (const word of words.slice(1)) {
     if (String(word).startsWith("-")) continue;
-    const reason = writeGuard.pruefen({ file_path: path.resolve(context.cwd, hookContext.msysPath(String(word))), content: "" }, deps);
+    const reason = writeGuard.pruefen({ file_path: path.resolve(context.startCwd || context.cwd, hookContext.msysPath(String(word))), content: "" }, deps);
     if (reason) return denial("DIRECT_SHELL_WRITE", reason, editRoute());
   }
   return { allowed: true, code: "OWNED_SHELL_WRITE", paths: decision.paths };
 }
 
 const DIRECTORY_CHANGES = new Set(["cd", "chdir", "pushd", "popd", "set-location", "sl", "push-location", "pop-location"]);
+
+// The directory a command line starts in (harness-gaps R1, decision 2): a first command
+// `Set-Location <path>` or `cd <path>` with one literal path to an existing directory. The
+// commands after it resolve their relative paths against it, as the shell does. null for every
+// other first command, a computed or pattern path, and a path that is no directory.
+function leadingDirectory(words, cwd) {
+  const name = path.basename(String(words[0] || "")).toLowerCase();
+  if (!["cd", "chdir", "set-location", "sl"].includes(name)) return null;
+  const args = words.slice(1).map(String).filter((word) => !["-path", "-literalpath"].includes(word.toLowerCase()));
+  if (args.length !== 1 || !args[0] || args[0].startsWith("-") || args[0].startsWith("~") || /[$`*?\0]/u.test(args[0])) return null;
+  const target = path.resolve(cwd, hookContext.msysPath(args[0]));
+  try { return fs.statSync(target).isDirectory() ? target : null; } catch { return null; }
+}
 
 // One invocation, as [name, ...arguments] from either shell (guard-parity E1). A Bash
 // segment that starts with an assignment, &, (, env or command never reaches the name
@@ -671,6 +874,12 @@ function classifyWords(words, context) {
   if (["npm", "npm.cmd", "npx", "npx.cmd", "pnpm", "pnpm.cmd", "yarn", "yarn.cmd"].includes(name)) {
     return denial("PACKAGE_SCRIPT_RUNNER", name + " is an indirect executable-script surface", verifierRoute(context.projectRoot));
   }
+  if (name === "get-ciminstance" || name === "get-wmiobject") {
+    const query = classifyCim(name, words);
+    if (query) return query;
+    return denial("UNDECLARED_EXECUTABLE", name + " reads only the classes Win32_Process and Win32_OperatingSystem", verifierRoute(context.projectRoot));
+  }
+  if (name === "stop-process" || name === "taskkill") return classifyProcessStop(name, words, context);
   if (WRITE_COMMANDS.has(name)) {
     const owned = ownedWrite(name, words, context);
     if (owned) return owned;
@@ -725,8 +934,16 @@ function classifySegment(segment, context) {
   return classifyWords(withoutFreeRedirections(kind), context);
 }
 
+// A method call on the result of Get-Date, `(Get-Date).AddMinutes(28)`: the result is a DateTime,
+// whose Add*, Subtract and To* methods compute a new value and write nothing. The text must start
+// with the parenthesised Get-Date command (no nested parentheses); inner calls are judged on
+// their own as members.
+const GET_DATE_RESULT = /^\(\s*get-date(?:\s[^()]*)?\)\s*\./iu;
+const DATE_METHODS = /^(?:add[a-z]*|subtract|to[a-z]+|compareto|equals|gethashcode|isdaylightsavingtime|gettype)$/u;
+
 function memberAllowed(member) {
   const name = member.member.toLowerCase();
+  if (!member.static && GET_DATE_RESULT.test(member.text) && DATE_METHODS.test(name)) return true;
   if (!member.static) return READ_ONLY_INSTANCE_MEMBERS.has(name);
   const members = READ_ONLY_STATIC_MEMBERS.get(member.type.toLowerCase());
   return Boolean(members && members.has(name));
@@ -755,13 +972,15 @@ function inspectPowerShell(command, context) {
   }
   policyFor(context);
   const changesDirectory = model.invocations.some((invocation) => DIRECTORY_CHANGES.has(String(invocation.name || "")));
-  for (const invocation of model.invocations) {
+  let cwd = context.cwd;
+  for (const [index, invocation] of model.invocations.entries()) {
     if (invocation.dynamicName) {
       return denial("DYNAMIC_WRAPPER", "a command whose name is computed at run time is a second command-dispatch surface", "Run the declared command directly without a wrapper.");
     }
-    const decision = classifyWords(invocation.words, { ...context, dialect: "powershell",
+    const decision = classifyWords(invocation.words, { ...context, cwd, startCwd: context.cwd, dialect: "powershell",
       staticArguments: invocation.staticArguments, changesDirectory });
     if (!decision.allowed) return decision;
+    if (index === 0 && invocation.staticArguments) cwd = leadingDirectory(invocation.words, cwd) || cwd;
   }
   return { allowed: true, code: "FINITE_POLICY_ALLOW" };
 }
@@ -779,7 +998,7 @@ function inspect(command, context = {}) {
 // PowerShell line into a bash -c payload judged here.
 function inspectBash(command, context) {
   const { projectRoot, cwd, sessionId } = context;
-  const policyContext = { projectRoot, cwd, sessionId };
+  const policyContext = { projectRoot, cwd, startCwd: cwd, sessionId };
   // The finite executable policy holds whether or not a package is bound (audit H6):
   // rm/Set-Content/undeclared Node scripts/redirection stay blocked with no active
   // package. Mutating Git stays owned by git-intent-guard; harmless Git reads, read-only
@@ -800,9 +1019,13 @@ function inspectBash(command, context) {
     const words = commandModel.tokens(segment);
     return DIRECTORY_CHANGES.has(commandModel.executableName(words[commandModel.commandStart(words)]));
   });
-  for (const segment of commandSegments) {
+  for (const [index, segment] of commandSegments.entries()) {
     const decision = classifySegment(segment, policyContext);
     if (!decision.allowed) return decision;
+    if (index === 0) {
+      const words = commandModel.tokens(segment);
+      if (commandModel.commandStart(words) === 0) policyContext.cwd = leadingDirectory(words, policyContext.cwd) || policyContext.cwd;
+    }
   }
   return { allowed: true, code: "FINITE_POLICY_ALLOW" };
 }

@@ -309,7 +309,7 @@ woraus die Payload in deinen Händen entstanden ist.
 | Quell-Commit | `f92410c5c693f677c1aa6e27d16890aab4bca247` |
 | Standalone frisch gebaut | ja |
 | Ungesicherte Dateien der Quelle beim Bau | Arbeitsbaum 0, `test-harness/standalone` 0 |
-| Erzeugt am | 2026-10-04T23:48:56.191Z |
+| Erzeugt am | 2026-10-05T01:22:19.014Z |
 <!-- /ERZEUGT:stand-der-auslieferung -->
 
 ---
