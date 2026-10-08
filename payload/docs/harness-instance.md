@@ -1,9 +1,10 @@
 # Harness instance profile
 
-Fill every `[AUSFUELLEN]` value with an Owner-confirmed answer inside the
-preinstalled `harness-onboarding` package. This file is the single project-owned
-truth for installation-specific values; do not copy them into AGENTS.md or a
-second status document.
+Fill every `[AUSFUELLEN]` value with an Owner-confirmed answer during onboarding
+(`/onboarding`): the session asks you each open value and writes only this file; no
+work package is needed. This file is the single project-owned truth for
+installation-specific values; do not copy them into AGENTS.md or a second status
+document.
 
 - Purpose: [AUSFUELLEN]
 - Owner role: [AUSFUELLEN]

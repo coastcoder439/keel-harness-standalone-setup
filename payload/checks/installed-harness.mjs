@@ -18,16 +18,16 @@ const check = (condition, message) => {
 const read = (...parts) => readFileSync(join(root, ...parts), "utf8");
 const guards = [
   "danger-guard.js", "dashboard-ensure.js", "dod-guard.js", "git-intent-guard.js", "mcp-write-guard.js", "onboarding-start.js",
-  "package-context.js", "paket-gate.js", "pollution-warn.js", "project-context.js",
+  "package-context.js", "paket-gate.js", "pollution-warn.js", "pretool-guards.js", "project-context.js",
   "prompt-form.js", "repo-status.js", "session-roles.js", "sessionpost-guard.js",
   "shell-mutation-guard.js",
   "statusline.js", "uncommitted-warn.js", "unlazy-stop.js", "write-guard.js",
 ].sort();
 const selfTests = ["package-context.js", "danger-guard.js", "git-intent-guard.js", "mcp-write-guard.js",
   "write-guard.js", "dod-guard.js", "paket-gate.js", "prompt-form.js",
-  "uncommitted-warn.js", "unlazy-stop.js", "shell-mutation-guard.js"];
+  "uncommitted-warn.js", "unlazy-stop.js", "shell-mutation-guard.js", "pretool-guards.js"];
 
-check(read("AGENTS.md") === read("CLAUDE.md"), "AGENTS.md and CLAUDE.md differ");
+check(/^(?:#[^\n]*\n+)?@AGENTS\.md\s*$/u.test(read("CLAUDE.md").replace(/\r\n/gu, "\n")), "CLAUDE.md is not only the @AGENTS.md import (D3)");
 const actualGuards = readdirSync(join(root, ".claude"), { withFileTypes: true })
   .filter((entry) => entry.isFile() && entry.name.endsWith(".js")).map((entry) => entry.name).sort();
 check(JSON.stringify(actualGuards) === JSON.stringify(guards), "active guard inventory differs");
@@ -40,7 +40,8 @@ check(existsSync(policyFile) && lstatSync(policyFile).isFile() && !lstatSync(pol
 try {
   const policy = JSON.parse(read(".claude", "mutation-policy.json"));
   check(policy.schemaVersion === 1 && Array.isArray(policy.verifierPaths) && Array.isArray(policy.testPaths) &&
-    policy.mcpWriteTools && Array.isArray(policy.mcpWriteTools.allow), "Owner mutation policy has an invalid shape");
+    policy.mcpWriteTools && Array.isArray(policy.mcpWriteTools.allow) &&
+    (policy.publishProjects === undefined || Array.isArray(policy.publishProjects)), "Owner mutation policy has an invalid shape");
 } catch (error) {
   check(false, "Owner mutation policy is not valid JSON: " + error.message);
 }
@@ -58,7 +59,13 @@ for (const required of [
   ["harness-core", "git", "git-intent.mjs"],
   // The guards load these at start and block every call without them (guard-parity E1, E9, E13).
   ["harness-core", "guards", "command-model.cjs"], ["harness-core", "guards", "hook-context.cjs"],
-  ["harness-core", "guards", "owner-handoff.cjs"],
+  ["harness-core", "guards", "owner-handoff.cjs"], ["harness-core", "guards", "publish-projects.cjs"],
+  // Every denial names its entry of the command index (guard-routes.cjs); the SessionStart hook and the agents' briefs
+  // build the index itself (command-index.mjs, brief-sections.mjs; package P6, D17).
+  ["harness-core", "guards", "guard-routes.cjs"], ["harness-core", "guards", "command-index.mjs"],
+  // Both Stop hooks (dod-guard, unlazy-stop) and the Codex DoD adapter ask it whether an answer claims finished work.
+  ["harness-core", "guards", "done-claim.cjs"],
+  ["harness-core", "execution", "executor-commands.mjs"], ["harness-core", "execution", "brief-sections.mjs"],
   ["templates", "OWNER.md"], ["templates", "GATES-ROOT.md"], ["templates", "GATES-LEAF.md"],
   ["checks", "onboarding-ready.mjs"], ["docs", "harness-instance.md"],
 ]) check(existsSync(join(root, ...required)), "missing " + required.join("/"));
@@ -96,11 +103,16 @@ check(read(".agents", "skills", "package-execution", "SKILL.md") ===
 
 const packageEntries = readdirSync(join(root, "docs", "packages")).sort();
 const sourcePackages = JSON.stringify(packageEntries) === JSON.stringify(["TEMPLATE.md"]);
-const installedPackages = JSON.stringify(packageEntries) === JSON.stringify(["TEMPLATE.md", "harness-onboarding"]);
-check(sourcePackages || installedPackages, "payload contains copied live work packages or lacks the one installer-owned onboarding package");
-if (installedPackages) for (const file of ["OWNER.md", "PACKAGE.md", "GATES.md", "gates/leaf-instance.md"]) {
+// The installer creates no onboarding package any more (Karte Arbeitsweise, 07.10.2026): a fresh installation holds only the
+// template. An installation upgraded from an earlier installer may still carry the retired package harness-onboarding as
+// project history; if it is there it must be whole.
+const earlierInstallation = JSON.stringify(packageEntries) === JSON.stringify(["TEMPLATE.md", "harness-onboarding"]);
+check(sourcePackages || earlierInstallation, "payload contains copied live work packages");
+// Installation or source tree? The installer's receipt says it (the onboarding package used to; a fresh installation has none now).
+const installedLayout = existsSync(join(root, ".keel-harness", "state.json")) || earlierInstallation;
+if (earlierInstallation) for (const file of ["OWNER.md", "PACKAGE.md", "GATES.md", "gates/leaf-instance.md"]) {
   check(existsSync(join(root, "docs", "packages", "harness-onboarding", ...file.split("/"))),
-    "incomplete installer-owned onboarding package: " + file);
+    "incomplete onboarding package of an earlier installation: " + file);
 }
 const inventoryLines = read("docs", "active-harness-inventory.md").split(/\r?\n/u);
 const inventoryHeader = inventoryLines.findIndex((line) => /^\|\s*Capability\s*\|/u.test(line) && line.includes("Acceptance command"));
@@ -140,12 +152,12 @@ for (const match of completenessContract.matchAll(/`(?:node )?((?:checks|dashboa
 // The same check runs in the source tree (matrix phase "installed source contract"), where the
 // source reference and its marker HARNESS_REFERENCE_OK are the truth; only an installation must
 // carry the installed marker.
-const expectedMarker = installedPackages ? "KEEL_HARNESS_OK" : "HARNESS_REFERENCE_OK";
+const expectedMarker = installedLayout ? "KEEL_HARNESS_OK" : "HARNESS_REFERENCE_OK";
 check(completenessContract.includes("`" + expectedMarker + "`"), "completeness contract does not name the success marker of this layout: " + expectedMarker);
-if (installedPackages) {
+if (installedLayout) {
   check(!/`HARNESS_REFERENCE_OK` nur aus/u.test(completenessContract), "completeness contract still presents the source-tree marker as the installed one");
 }
-if (installedPackages) {
+if (installedLayout) {
   const dashboardFiles = readdirSync(join(root, "dashboard")).sort();
   check(JSON.stringify(dashboardFiles) === JSON.stringify([
     "runtime-archive.mjs", "runtime-check.mjs", "runtime-manifest.json", "runtime.keel.gz", "serve.mjs",

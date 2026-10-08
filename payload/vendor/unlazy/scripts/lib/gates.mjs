@@ -45,8 +45,8 @@ function replaceAtomic(temp, target) {
 }
 
 const GATE_RE = /^- \[( |x|X)\] (.*)$/;
-const ATTR_RE = /^(\s+)(CHECK|EXPECT|EVIDENCE|CWD):\s?(.*)$/;
-const UNINDENTED_ATTR_RE = /^(CHECK|EXPECT|EVIDENCE|CWD):\s?(.*)$/;
+const ATTR_RE = /^(\s+)(CHECK|EXPECT|EVIDENCE|CWD|CACHE):\s?(.*)$/;
+const UNINDENTED_ATTR_RE = /^(CHECK|EXPECT|EVIDENCE|CWD|CACHE):\s?(.*)$/;
 const ABANDON_RE = /^ABANDON:\s*(\S*)\s*(.*)$/;
 const INDENTED_ABANDON_RE = /^\s+ABANDON:/;
 const OWNS_RE = /^OWNS:\s*(.*)$/;
@@ -124,6 +124,7 @@ export function parseGates(text, options = {}) {
         evidence: null,
         evidenceLine: -1,
         cwd: null,
+        cache: null,
       };
       gates.push(current);
       attrs.set(current, new Set());
@@ -212,6 +213,10 @@ export function parseGates(text, options = {}) {
   if (fence) errors.push("unclosed fenced block");
 
   for (const gate of gates) {
+    // CACHE: no keeps the result of this gate out of the proof store (see lib/proof-store.mjs).
+    if (gate.cache !== null && gate.cache.toLowerCase() !== "no") {
+      errors.push("gate " + gate.id + ': CACHE accepts only "no", got ' + JSON.stringify(gate.cache));
+    }
     const hasCheck = gate.check !== null && gate.check !== "";
     const hasExpect = gate.expect !== null && gate.expect !== "";
     if (hasCheck !== hasExpect) {

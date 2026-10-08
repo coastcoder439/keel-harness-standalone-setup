@@ -23,6 +23,9 @@ const tests = [];
 const filter = process.argv[2] || "";
 const deferredCleanup = new Set();
 const test = (name, fn) => tests.push({ name, fn });
+// A CHECK has no time limit; it is stopped only when hung. These two variables
+// make a hang show up within about a second instead of the 30 minute default.
+const HANG_ENV = { KEEL_SILENCE_MS: "1000", KEEL_SILENCE_SAMPLE_MS: "200" };
 
 function sandbox() {
   // macOS and custom TMPDIR values can expose lexical aliases (for example
@@ -147,8 +150,12 @@ test("approval: token binds the full oracle and changing CWD invalidates it", as
     const tokens = readdirSync(s.approvals).filter((name) => name.endsWith(".json"));
     assert(tokens.length === 1, "expected one approval token");
     const token = JSON.parse(readFileSync(join(s.approvals, tokens[0]), "utf8"));
-    for (const key of ["check", "expect", "cwd", "shell", "timeoutMs", "maxOutputBytes", "regexTimeoutMs", "platform", "path"]) {
+    for (const key of ["check", "expect", "cwd", "shell", "regexTimeoutMs", "platform", "path"]) {
       assert(Object.prototype.hasOwnProperty.call(token.oracle, key), "approval oracle missing " + key);
+    }
+    // A CHECK has no time or output limit, so neither is part of the key (B11, B17).
+    for (const key of ["timeoutMs", "maxOutputBytes"]) {
+      assert(!Object.prototype.hasOwnProperty.call(token.oracle, key), "approval oracle still binds " + key);
     }
     s.write("GATES.md", gate("G1", "oracle", "node check.mjs", "OK", "  CWD: b\n"));
     const changed = await gateRun(s, [], { approve: false });
@@ -443,15 +450,23 @@ test("regex: worker startup is outside the match budget and concurrency is cappe
   } finally { s.cleanup(); }
 });
 
-test("execution: output is capped and overflow cannot certify a gate", async () => {
+test("execution: 3 MiB of output is checked completely, EXPECT at the very end is found", async () => {
   const s = sandbox();
   try {
-    s.write("large.mjs", "process.stdout.write('x'.repeat(1100000)); console.log('FINAL');\n");
-    s.write("GATES.md", gate("G1", "bounded output", "node large.mjs", "FINAL"));
+    s.write("large.mjs", "process.stdout.write('x'.repeat(3 * 1024 * 1024)); console.log('FINAL');\n");
+    s.write("GATES.md", gate("G1", "large output", "node large.mjs", "FINAL"));
     const result = await gateRun(s, []);
-    assert(result.code === 1, result.out.slice(-2000));
-    has(result.out, "output exceeded 1048576 bytes");
-    assert(result.out.length < 1100000, "transcript leaked the full output");
+    assert(result.code === 0, result.out.slice(-2000));
+    has(result.out, "PASS GATES:G1");
+    assert(result.out.length < 100000, "transcript leaked the full output");
+    // Length and SHA-256 stand in for the text: 3 MiB plus "FINAL" and the newline.
+    has(s.read("GATES.md"), "output-bytes=" + (3 * 1024 * 1024 + 6));
+    // Output that does not contain EXPECT is red, however large it is.
+    s.write("GATES.md", gate("G1", "large output", "node large.mjs", "ABSENT"));
+    const missing = await gateRun(s, ["--reverify"]);
+    assert(missing.code === 1, missing.out.slice(-2000));
+    has(missing.out, "FAIL GATES:G1");
+    lacks(missing.out, "output exceeded");
   } finally { s.cleanup(); }
 });
 
@@ -807,7 +822,7 @@ test("posix cleanup: an exited supervisor never targets a reusable process group
   assert(group === null && !direct, "an exited supervisor's reusable PID/PGID was signalled");
 });
 
-test("win32 integration: tree cleanup succeeds or an access-denied fallback is explicit and bounded", async () => {
+test("win32 integration: hang cleanup succeeds or an access-denied fallback is explicit and bounded", async () => {
   if (process.platform !== "win32") skipTest("requires Windows taskkill integration");
   const s = sandbox();
   const pids = [];
@@ -825,11 +840,12 @@ test("win32 integration: tree cleanup succeeds or an access-denied fallback is e
     ].join("\n"));
     s.write("GATES.md", gate("G1", "nested process times out", "node parent.mjs", "never printed"));
     const started = Date.now();
-    const result = await gateRun(s, ["--timeout", "1"]);
+    const result = await gateRun(s, [], { env: HANG_ENV });
     const elapsed = Date.now() - started;
     assert(result.code === 1, result.out);
-    has(result.out, "timed out after 1s");
-    assert(elapsed < 12000, "bounded timeout took " + elapsed + "ms\n" + result.out);
+    has(result.out, "HUNG");
+    lacks(result.out, "timed out");
+    assert(elapsed < 40000, "hang handling took " + elapsed + "ms\n" + result.out);
     await waitForPath(s.path("shell.pid"));
     await waitForPath(s.path("parent.pid"));
     await waitForPath(s.path("descendant.pid"));
@@ -848,7 +864,7 @@ test("win32 integration: tree cleanup succeeds or an access-denied fallback is e
   }
 });
 
-test("execution: timeout settlement is bounded even when a detached descendant keeps pipes", async () => {
+test("execution: a hang is settled even when a detached descendant keeps pipes", async () => {
   const s = sandbox();
   let descendantPid = null;
   let escapePid = null;
@@ -866,11 +882,12 @@ test("execution: timeout settlement is bounded even when a detached descendant k
     ].join("\n"));
     s.write("GATES.md", gate("G1", "escaped pipe holder times out", "node escape.mjs", "never printed"));
     const started = Date.now();
-    const result = await gateRun(s, ["--timeout", "1"]);
+    const result = await gateRun(s, [], { env: HANG_ENV });
     const elapsed = Date.now() - started;
     assert(result.code === 1, result.out);
-    has(result.out, "timed out after 1s");
-    assert(elapsed < 7000, "checker did not settle independently after cleanup request: " + elapsed + "ms");
+    has(result.out, "HUNG");
+    lacks(result.out, "timed out");
+    assert(elapsed < 30000, "checker did not settle after the hang was judged: " + elapsed + "ms");
     await waitForPath(s.path("escape.pid"));
     await waitForPath(s.path("pipe-holder.pid"));
     escapePid = Number(s.read("escape.pid"));
@@ -905,9 +922,10 @@ test("posix integration: an exited shell leader still has its ordinary descendan
       "",
     ].join("\n"));
     s.write("GATES.md", gate("G1", "orphaned group member times out", "node exiting-parent.mjs", "never printed"));
-    const result = await gateRun(s, ["--timeout", "1"]);
+    const result = await gateRun(s, [], { env: HANG_ENV });
     assert(result.code === 1, result.out);
-    has(result.out, "timed out after 1s");
+    has(result.out, "HUNG");
+    lacks(result.out, "timed out");
     has(result.out, "signal=SIGKILL");
     await waitForPath(s.path("ordinary-child.pid"));
     descendantPid = Number(s.read("ordinary-child.pid"));

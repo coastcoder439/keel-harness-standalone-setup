@@ -99,7 +99,9 @@ export function writeProfile(profile, env = process.env) {
 // Gemessene Werte (Latenz) ergaenzen, ohne die Hardware-Messung zu verlieren.
 // Manuelle Kontrolle (Owner 21.09.): der Nutzer darf Kerne und Speichergrenze im Dashboard setzen; die
 // Wahl liegt als `overrides` im Profil, Umgebungsvariablen gewinnen weiterhin, null loescht die Wahl.
-export const OVERRIDE_LIMITS = { voiceCores: { min: 1, max: 32 }, voiceJobMiB: { min: 2560, max: 16384 } };
+// freeRamFloorGb (P13, C2): die eine Untergrenze für freien Arbeitsspeicher, gilt für Agenten-Wellen, Stimme und
+// Architekturbilder (harness-core/system/ram-floor.mjs); Kommazahlen sind erlaubt, ohne Wert gilt 4.
+export const OVERRIDE_LIMITS = { voiceCores: { min: 1, max: 32 }, voiceJobMiB: { min: 2560, max: 16384 }, freeRamFloorGb: { min: 2, max: 4, integer: false } };
 export function mergeOverrides(profile, overrides) {
   const next = { ...(profile.overrides || {}) };
   for (const [key, limit] of Object.entries(OVERRIDE_LIMITS)) {
@@ -107,7 +109,8 @@ export function mergeOverrides(profile, overrides) {
     const value = overrides[key];
     if (value === null || value === undefined || value === '') { delete next[key]; continue; }
     const number = Number(value);
-    if (!Number.isInteger(number) || number < limit.min || number > limit.max) throw new Error(`${key} muss eine ganze Zahl zwischen ${limit.min} und ${limit.max} sein.`);
+    const whole = limit.integer !== false;
+    if (!Number.isFinite(number) || (whole && !Number.isInteger(number)) || number < limit.min || number > limit.max) throw new Error(`${key} muss ${whole ? 'eine ganze Zahl' : 'eine Zahl'} zwischen ${limit.min} und ${limit.max} sein.`);
     next[key] = number;
   }
   return { ...profile, overrides: next };
@@ -127,10 +130,13 @@ export async function refreshProfile(options = {}) {
   return { profile, recommendations: recommendSettings(profile), file };
 }
 
+// Kein Top-Level-await: das Modul bleibt per require() ladbar (das Dashboard und Tests laden es so).
 if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url))) {
+  void (async () => {
   const { profile, recommendations, file } = await refreshProfile();
   console.log(JSON.stringify({ file, profile, recommendations }, null, 2));
   console.error(`Systemprofil geschrieben: ${file}`);
   console.error(`CPU ${profile.cpu.model || '?'} (${profile.cpu.physicalCores ?? '?'} Kerne / ${profile.cpu.logicalProcessors ?? '?'} Threads), RAM ${Math.round(profile.memory.totalMiB / 1024)} GB, GPU ${profile.gpus.map(g => g.name).join(', ') || 'keine erkannt'}`);
   for (const [key, item] of Object.entries(recommendations)) console.error(`  ${key}: ${item.value} — ${item.reason}`);
+  })();
 }

@@ -34,15 +34,26 @@ commands:
          --requirement T --requirement T [--requirement T ...]
          [--leaf leaf-<id>=<glob>[,<glob>] ...] [--planned-start D --planned-end D]
          [--owner-request-file FILE | --owner-request T] [--owner-source T]
-         [--harness-root DIR] [--takeover]
+         [--harness-root DIR] [--takeover [--reason T]]
       complete bundle in the standard format inside the planning binding of
       --session: OWNER.md (R<k> -> C<k>), PACKAGE.md (fields, plan, Abnahme,
       depth tree), GATES.md (root gate for the last requirement) and one ledger
       per --leaf (default leaf-work=docs/packages/<ID>/evidence/**); every leaf
-      needs one requirement and the root one more. An untouched planning
-      scaffold is taken over; an OWNER.md already written into it is kept and
-      replaces the request switches. The binding stays open (file it later with
-      package-bootstrap.mjs plan). Then doctor.
+      needs one requirement (the root takes the last one when one is left over,
+      otherwise it restates the last as the acceptance of the whole, so one step
+      and one requirement are a complete package). Cut the leaves by connected
+      files, not by areas: a leaf is the files that change and are checked
+      together (a component with its test), never "frontend" or "backend"; a
+      tiny change (one identifier, one text) is one step, or goes the light way
+      (the orchestrator writes evidence/ and design/ of its package itself).
+      The title is the package name and has to come from the Owner's order
+      (a word of it, or a name the Owner gave); a generic one such as
+      "offene-pakete" only draws a warning with a proposal, no refusal. The
+      Owner request is taken over completely: it ends at an owner-end marker in
+      OWNER.md, so a "##" line inside it stays part of the request. An untouched
+      planning scaffold is taken over; an OWNER.md already written into it is
+      kept and replaces the request switches. The binding stays open (file it
+      later with package-bootstrap.mjs plan). Then doctor.
   import --source FILE [--source FILE ...] --kind flat|pfile|todo
          (--package ID | --into ID) [--preview | --apply]
          [field options as for create] [--owner-request-file FILE | --owner-request T]
@@ -76,7 +87,7 @@ const VALUE = new Set([
   "--root", "--package", "--into", "--source", "--kind", "--problem", "--intent", "--goal",
   "--scope-in", "--scope-out", "--context", "--step", "--planned-start", "--planned-end",
   "--owner-request-file", "--owner-request", "--owner-source", "--unlazy", "--unlazy-root", "--done",
-  "--harness-root", "--session", "--requirement", "--leaf",
+  "--harness-root", "--session", "--requirement", "--leaf", "--reason",
 ]);
 const REPEATABLE = new Set(["--source", "--step", "--requirement", "--leaf"]);
 const FLAGS = new Set(["--preview", "--apply", "--json", "--help", "-h", "--takeover", "--prepare"]);
@@ -150,15 +161,35 @@ function findUnlazy(options, root) {
   return found;
 }
 
-function packageCli(unlazy, root, args) {
-  const result = spawnSync(process.execPath, [join(unlazy, "scripts", "package-cli.mjs"), ...args, "--root", root], {
+// package-cli has no time limit of its own (P15, C13): it runs through the Unlazy silence watcher
+// (scripts/lib/silence-watch.mjs next to package-cli.mjs) and counts as hung only when it is silent and its
+// process tree does no work (KEEL_SILENCE_MS decides how long silent). A slow doctor or create is therefore no longer
+// cut off after 60 s. A tree without the watcher is an installation error, not a reason to use a fixed time.
+const silenceWatchModules = new Map();
+
+async function silenceWatch(unlazy) {
+  const file = join(unlazy, "scripts", "lib", "silence-watch.mjs");
+  if (!existsSync(file)) throw new UsageError("the Unlazy silence watcher is missing (" + file + "); update the vendored Unlazy");
+  if (!silenceWatchModules.has(file)) {
+    const loaded = await import(pathToFileURL(file).href);
+    if (typeof loaded.runWatched !== "function") throw new UsageError("silence-watch.mjs exports no runWatched: " + file);
+    silenceWatchModules.set(file, loaded);
+  }
+  return silenceWatchModules.get(file);
+}
+
+async function packageCli(unlazy, root, args) {
+  const watch = await silenceWatch(unlazy);
+  const result = await watch.runWatched(process.execPath, [join(unlazy, "scripts", "package-cli.mjs"), ...args, "--root", root], {
     cwd: root,
-    encoding: "utf8",
-    windowsHide: true,
-    timeout: 60_000,
     env: { ...process.env, UNLAZY_PACKAGE: "", UNLAZY_SCOPE: "" },
   });
-  return { status: result.status ?? 2, stdout: result.stdout || "", stderr: result.stderr || String(result.error?.message || "") };
+  if (result.hung) {
+    return { status: 2, stdout: result.stdout || "", hung: true,
+      stderr: "package-cli " + args[0] + " hung: " + (result.hungReason || "no output and no work") +
+        "; it was stopped as hung, not for taking long" };
+  }
+  return { status: result.code ?? 2, stdout: result.stdout || "", stderr: result.stderr || String(result.spawnError || "") };
 }
 
 // --- Reading sources ----------------------------------------------------------
@@ -418,27 +449,38 @@ function writeJournal(root, packageId, value) {
   return file;
 }
 
+// P20, D14: Git runs as the real git.exe (no cmd\git.exe wrapper process) through the Harness helper when the skill sits in a
+// Harness tree; a skill copied elsewhere keeps working with plain "git".
+let gitBinaryModule;
+function gitRun(args, options) {
+  if (gitBinaryModule === undefined) {
+    try { gitBinaryModule = createRequire(import.meta.url)("../../../harness-core/git/git-binary.cjs"); }
+    catch { gitBinaryModule = null; }
+  }
+  return gitBinaryModule ? gitBinaryModule.gitSync(args, options) : spawnSync("git", args, options);
+}
+
 function assertRuntimeIgnored(root) {
-  const check = spawnSync("git", ["-C", root, "check-ignore", "-q", ".unlazy/.package-standard/undo/x.json"], { windowsHide: true });
+  const check = gitRun(["-C", root, "check-ignore", "-q", ".unlazy/.package-standard/undo/x.json"], { windowsHide: true });
   if (check.status !== 0) throw new UsageError(".unlazy/ must be ignored by Git before apply keeps its undo journal there");
 }
 
-function doctor(unlazy, root, packageId) {
-  const result = packageCli(unlazy, root, ["doctor", "--package", packageId, "--json"]);
+async function doctor(unlazy, root, packageId) {
+  const result = await packageCli(unlazy, root, ["doctor", "--package", packageId, "--json"]);
   let parsed = null;
   try { parsed = JSON.parse(result.stdout); } catch { /* reported below */ }
   const diagnostics = parsed?.packages?.[0]?.diagnostics ?? [{ code: "DOCTOR_OUTPUT", message: (result.stderr || result.stdout).trim() }];
   return { ok: result.status === 0 && diagnostics.length === 0, diagnostics };
 }
 
-function createBundle(unlazy, root, packageId, options, fields, steps, statusLine, extraFiles = {}) {
+async function createBundle(unlazy, root, packageId, options, fields, steps, statusLine, extraFiles = {}) {
   const directory = join(root, "docs", "packages", packageId);
   if (existsSync(directory)) throw new UsageError("package already exists: docs/packages/" + packageId);
   const args = ["create", "--package", packageId];
   if (options["owner-request-file"]) args.push("--owner-request-file", resolve(options["owner-request-file"]));
   else if (options["owner-request"]) args.push("--owner-request", options["owner-request"]);
   if (options["owner-source"]) args.push("--owner-source", options["owner-source"]);
-  const created = packageCli(unlazy, root, args);
+  const created = await packageCli(unlazy, root, args);
   if (created.status !== 0) throw new UsageError("package-cli create failed: " + (created.stderr || created.stdout).trim());
   try {
     rewriteCreated(join(directory, "PACKAGE.md"), fields, steps, statusLine);
@@ -500,10 +542,11 @@ function leavesFrom(options, packageId) {
   return leaves;
 }
 
-// C1..C(n-1) in contiguous blocks over the leaves in --leaf order, the front
-// leaves one more on a remainder; C<n> belongs to the root gate GATES.md:G1.
+// The requirements handed to the leaves go in contiguous blocks over the leaves in
+// --leaf order, the front leaves one more on a remainder. The root gate GATES.md:G1
+// takes the last requirement when one is left over for it (see bundleTexts).
 function distribute(requirements, leaves) {
-  const share = requirements.length - 1;
+  const share = requirements.length;
   const base = Math.floor(share / leaves.length);
   const rest = share % leaves.length;
   let next = 0;
@@ -518,26 +561,107 @@ function distribute(requirements, leaves) {
   });
 }
 
+// The Original request ends at the owner-end marker, never at a heading inside the Owner's text (C7): the order is
+// taken over completely and a "## ..." line in it stays text. The same section as formatOwnerRequestSection of
+// vendor/unlazy/scripts/lib/owner-contract.cjs (a test holds both equal).
+const OWNER_END_MARKER = "<!-- owner-end -->";
+
+function ownerRequestSection(request) {
+  const text = String(request ?? "").replace(/\r\n?/gu, "\n").replace(/^(?:[ \t]*\n)+/u, "").replace(/\s+$/u, "");
+  return "## Original request\n\n" + text + "\n" + OWNER_END_MARKER + "\n";
+}
+
 function ownerContract(packageId, source, request, requirementLines) {
   return "# Owner contract: " + packageId + "\n\nSchema: 1\nSource: " + source + "\nCaptured: " + today() +
-    "\n\n## Original request\n\n" + request + (request.endsWith("\n") ? "" : "\n") +
+    "\n\n" + ownerRequestSection(request) +
     "\n## Requirements\n\n" + requirementLines.join("\n") + "\n";
 }
 
 function ownerRequest(options) {
-  if (options["owner-request-file"]) return readFileSync(resolve(options["owner-request-file"]), "utf8");
+  if (options["owner-request-file"]) return readFileSync(resolve(options["owner-request-file"]), "utf8").replace(/^\uFEFF/u, "");
   if (options["owner-request"] !== undefined) return options["owner-request"];
   return null;
 }
 
+// The request text of an OWNER.md already on disk (a kept planning scaffold), read the way the Unlazy parser reads it.
+function requestOfOwnerText(text) {
+  const lines = String(text).split(/\r?\n/u);
+  const start = lines.findIndex((line) => /^## Original request\s*$/u.test(line));
+  if (start === -1) return "";
+  let marker = -1;
+  for (let index = lines.length - 1; index > start; index -= 1) if (lines[index] === OWNER_END_MARKER) { marker = index; break; }
+  const after = lines.slice(start + 1);
+  const stop = after.findIndex((line) => /^## Requirements\s*$/u.test(line));
+  const body = marker !== -1 ? lines.slice(start + 1, marker) : (stop === -1 ? after : after.slice(0, stop));
+  return body.join("\n").trim();
+}
+
+// --- C16: the title (the package name) comes from the Owner's order ---------------------------------------------
+// The package name is its title (PACKAGE_TITLE_ID). A generic one such as "offene-pakete" says nothing about the order and
+// made packages unfindable. The name must share a word with the Owner's order, or be named by the Owner. Otherwise there
+// is a warning with a suggestion from the first words of the order; never a refusal.
+const GENERIC_TITLE_WORDS = new Set(["offene", "offen", "pakete", "paket", "package", "packages", "open", "misc", "diverses", "sonstiges",
+  "todo", "todos", "neu", "neue", "neues", "new", "test", "tests", "temp", "tmp", "work", "arbeit", "aufgabe", "aufgaben", "task", "tasks",
+  "projekt", "project", "wip", "run", "batch", "sammel", "allgemein", "general", "alles", "stuff", "dinge", "sache", "sachen"]);
+const STOP_WORDS = new Set(["der", "die", "das", "den", "dem", "des", "und", "oder", "ein", "eine", "einen", "einem", "einer", "mit", "fuer",
+  "von", "zu", "zur", "zum", "im", "in", "auf", "an", "ist", "sind", "wird", "werden", "ich", "du", "wir", "bitte", "mach", "mache",
+  "the", "a", "an", "of", "to", "for", "and", "or", "is", "are", "with", "please", "make", "need", "want", "dass", "nicht", "auch", "noch"]);
+
+function words(text) {
+  return String(text).toLowerCase().replaceAll("ß", "ss").normalize("NFD").replace(/[\u0300-\u036f]/gu, "")
+    .split(/[^a-z0-9]+/u).filter(Boolean);
+}
+
+function titleWarning(packageId, requestText) {
+  const request = String(requestText || "").trim();
+  if (!request) return null;
+  if (request.toLowerCase().includes(packageId.toLowerCase())) return null;
+  const requestWords = words(request);
+  const content = words(packageId).filter((word) => word.length >= 3 && !/^\d+$/u.test(word) && !GENERIC_TITLE_WORDS.has(word));
+  const shared = content.some((word) => requestWords.some((other) =>
+    other === word || (Math.min(other.length, word.length) >= 4 && (other.startsWith(word) || word.startsWith(other)))));
+  if (shared) return null;
+  const proposal = requestWords.filter((word) => word.length >= 3 && !STOP_WORDS.has(word) && !/^\d+$/u.test(word)).slice(0, 4).join("-").slice(0, 60);
+  return {
+    code: "TITLE_NOT_FROM_ORDER",
+    message: "Der Titel (Paketname) " + packageId + " kommt aus keinem Wort des Owner-Auftrags und nennt auch keinen vom Owner genannten Namen; " +
+      "ein Titel ohne Bezug zum Auftrag macht das Paket unauffindbar." +
+      (proposal ? " Vorschlag aus den ersten Wörtern des Auftrags: " + proposal + "." : "") + " Das ist nur eine Warnung, nichts ist gesperrt.",
+    ...(proposal ? { suggestion: proposal } : {}),
+  };
+}
+
+// --- C15: cut by connected files, not by areas ------------------------------------------------------------------
+const AREA_WORDS = new Set(["frontend", "backend", "ui", "api", "docs", "doku", "tests", "test", "server", "client", "database", "db",
+  "styles", "css", "design", "infra", "config"]);
+
+function cutWarnings(leaves) {
+  if (leaves.length < 2) return [];
+  const areas = leaves.filter((leaf) => AREA_WORDS.has(leaf.id.slice("leaf-".length).toLowerCase()));
+  if (!areas.length) return [];
+  return [{
+    code: "LEAF_BY_AREA",
+    message: "Die Leaves " + areas.map((leaf) => leaf.id).join(", ") + " sind nach Bereichen benannt. Schneide die Arbeitsschritte nach " +
+      "zusammenhängenden Dateien (ein Leaf = die Dateien, die zusammen geändert und zusammen geprüft werden, etwa eine Komponente samt " +
+      "ihrem Test), nicht nach Bereichen: Agenten je Bereich kosteten 11 Wellen statt weniger. Eine Kleinständerung (eine Kennung, ein Text) " +
+      "ist ein Schritt oder geht den leichten Weg (Orchestrator schreibt evidence/ und design/ seines Pakets selbst). Das ist nur eine Warnung.",
+  }];
+}
+
 function bundleTexts(packageId, options, fields, steps, requirements, leaves) {
   const n = requirements.length;
-  const assigned = distribute(requirements, leaves);
+  // No minimum beyond one requirement per leaf (D2). The root gate takes the last requirement when one is left over for it;
+  // otherwise it restates the last requirement as the acceptance of the whole, as one more contract point.
+  const rootOwn = n >= leaves.length + 1;
+  const forLeaves = rootOwn ? requirements.slice(0, -1) : requirements;
+  const rootText = rootOwn ? requirements[n - 1] : "Gesamtabnahme: " + requirements[n - 1];
+  const contracts = forLeaves.length + 1;
+  const assigned = distribute(forLeaves, leaves);
   const owner = ownerContract(packageId, options["owner-source"] ? oneLine(options["owner-source"]) : "package-standard.mjs create",
     ownerRequest(options) ?? "", requirements.map((text, index) => "- R" + (index + 1) + " -> C" + (index + 1) + ": " + text));
   const abnahme = [
     ...assigned.flatMap((leaf) => leaf.items.map((item) => "- C" + item.k + " -> gates/" + leaf.id + ".md:L" + item.k + ": " + item.text)),
-    "- C" + n + " -> GATES.md:G1: " + requirements[n - 1],
+    "- C" + contracts + " -> GATES.md:G1: " + rootText,
   ];
   const tree = [
     "- ROOT GATES.md <- none: " + fields.goal,
@@ -548,12 +672,12 @@ function bundleTexts(packageId, options, fields, steps, requirements, leaves) {
     "## Status\n\n" + today() + " - Angelegt mit package-standard.mjs create; nicht gestartet.\n\n" +
     "## Abnahme\n\n" + abnahme.join("\n") + "\n\n" +
     "## Abschluss\n\n" +
-    "Coverage: " + n + "/" + n + " Owner-Anforderungen gemappt; 0/" + n + " erfüllt.\n" +
+    "Coverage: " + contracts + "/" + contracts + " Owner-Anforderungen gemappt; 0/" + contracts + " erfüllt.\n" +
     "Fulfillment: nicht erfuellt - Paket angelegt, nicht gestartet.\n" +
     "Geprueft gegen: package-cli doctor.\n" +
     "Offen: Plan-Schritte 1 bis " + steps.length + ".\n\n" +
     "## Anhang\n\n### Depth Tree\n\n" + tree.join("\n") + "\n";
-  const gatesText = "# Gates: " + packageId + "\n\n- [ ] G1: " + requirements[n - 1] + "\n  EVIDENCE: pending\n";
+  const gatesText = "# Gates: " + packageId + "\n\n- [ ] G1: " + rootText + "\n  EVIDENCE: pending\n";
   const ledgers = {};
   for (const leaf of assigned) {
     ledgers[leaf.id] = "# Leaf: " + leaf.id + "\n\nOWNS: " + leaf.owns.join(", ") + "\n\nScope: " +
@@ -566,14 +690,14 @@ function bundleTexts(packageId, options, fields, steps, requirements, leaves) {
 
 // Writes the complete bundle through package-cli create (atomic directory and
 // schema check), then replaces its draft files with the generated ones.
-function writeCompleteBundle(unlazy, root, packageId, options, texts, keptOwner) {
+async function writeCompleteBundle(unlazy, root, packageId, options, texts, keptOwner) {
   const directory = join(root, "docs", "packages", packageId);
   if (existsSync(directory)) throw new UsageError("package already exists: docs/packages/" + packageId);
   const args = ["create", "--package", packageId, "--json"];
   if (options["owner-request-file"]) args.push("--owner-request-file", resolve(options["owner-request-file"]));
   else if (options["owner-request"] !== undefined) args.push("--owner-request", options["owner-request"]);
   if (options["owner-source"]) args.push("--owner-source", oneLine(options["owner-source"]));
-  const created = packageCli(unlazy, root, args);
+  const created = await packageCli(unlazy, root, args);
   let parsed = null;
   try { parsed = JSON.parse(created.stdout); } catch { /* reported below */ }
   if (created.status !== 0 || !parsed || typeof parsed !== "object") {
@@ -596,7 +720,7 @@ function writeCompleteBundle(unlazy, root, packageId, options, texts, keptOwner)
   return directory;
 }
 
-function commandCreate(options) {
+async function commandCreate(options) {
   const root = repositoryRoot(options);
   const packageId = assertPackageId(options.package, "--package");
   if (options["owner-request-file"] && options["owner-request"] !== undefined) {
@@ -613,10 +737,13 @@ function commandCreate(options) {
   const keptOwnerScaffold = scaffold.scaffold && scaffold.ownerEdited;
   const { fields, missing } = fieldsFrom(options);
   if (!options.step.length) missing.push("Plan (--step)");
-  if (ownerRequest(options) === null && !keptOwnerScaffold) missing.push("Originalauftrag (--owner-request-file oder --owner-request)");
+  const givenOrder = ownerRequest(options);
+  if (givenOrder === null && !keptOwnerScaffold) missing.push("Originalauftrag (--owner-request-file oder --owner-request)");
+  // No minimum length (D2), but an empty order is no order.
+  else if (givenOrder !== null && !givenOrder.trim()) missing.push("Originalauftrag (nicht leer)");
   if (bootstrap && !String(options.session || "").trim()) missing.push("Sitzung (--session)");
-  if (requirements.length < leaves.length + 1) {
-    missing.push("Anforderungen: mindestens " + (leaves.length + 1) + " (je Leaf eine, dazu die Wurzel)");
+  if (requirements.length < leaves.length) {
+    missing.push("Anforderungen: mindestens " + leaves.length + " (je Leaf eine)");
   }
   if (missing.length) {
     print({ ok: false, packageId, missing }, true);
@@ -627,13 +754,13 @@ function commandCreate(options) {
   let binding = null;
   let overlaps = [];
   if (!bootstrap) {
-    writeCompleteBundle(unlazy, root, packageId, options, texts, null);
+    await writeCompleteBundle(unlazy, root, packageId, options, texts, null);
   } else {
     let begun;
     try {
       begun = bootstrap.begin({
         harnessRoot, root, packageId, scope: packageId, sessionId: options.session,
-        owns: leaves.flatMap((leaf) => leaf.owns), takeover: Boolean(options.takeover),
+        owns: leaves.flatMap((leaf) => leaf.owns), takeover: Boolean(options.takeover), reason: options.reason,
         unlazyRoot: explicitUnlazy(options) ?? undefined,
       });
     } catch (error) {
@@ -645,18 +772,20 @@ function commandCreate(options) {
     if (!now.scaffold) throw new UsageError("package already exists: docs/packages/" + packageId);
     const keptOwner = now.ownerEdited ? readFileSync(join(directory, "OWNER.md")) : null;
     const parked = join(root, "docs", "packages", "." + packageId + ".scaffold-" + randomBytes(8).toString("hex"));
-    renameSync(directory, parked);
+    bootstrap.renameWithRetry(directory, parked);
     try {
-      writeCompleteBundle(unlazy, root, packageId, options, texts, keptOwner);
+      await writeCompleteBundle(unlazy, root, packageId, options, texts, keptOwner);
     } catch (error) {
       rmSync(directory, { recursive: true, force: true });
-      renameSync(parked, directory);
+      bootstrap.renameWithRetry(parked, directory);
       throw error;
     }
     rmSync(parked, { recursive: true, force: true });
   }
-  const result = doctor(unlazy, root, packageId);
-  print({ ok: result.ok, packageId, bundle: "docs/packages/" + packageId, diagnostics: result.diagnostics, binding, overlaps }, options.json);
+  const result = await doctor(unlazy, root, packageId);
+  const orderText = ownerRequest(options) ?? (keptOwnerScaffold ? requestOfOwnerText(readFileSync(join(directory, "OWNER.md"), "utf8")) : "");
+  const warnings = [titleWarning(packageId, orderText), ...cutWarnings(leaves)].filter(Boolean);
+  print({ ok: result.ok, packageId, bundle: "docs/packages/" + packageId, diagnostics: result.diagnostics, binding, overlaps, warnings }, options.json);
   return result.ok ? 0 : 1;
 }
 
@@ -778,8 +907,9 @@ async function commandMigrate(options, root, packageId) {
   writeFileSync(join(directory, "design", "imported-" + packageId + ".md"), bytes, { flag: "wx" });
   journal.files = bundleFiles(directory).map((file) => ({ path: relative(root, file).split("\\").join("/"), sha256: sha256(readFileSync(file)) }));
   writeJournal(root, packageId, journal);
-  const result = doctor(unlazy, root, packageId);
-  print({ ok: result.ok, applied: true, preview, diagnostics: result.diagnostics,
+  const result = await doctor(unlazy, root, packageId);
+  const warnings = [titleWarning(packageId, request ?? "")].filter(Boolean);
+  print({ ok: result.ok, applied: true, preview, diagnostics: result.diagnostics, warnings,
     undo: "package-standard.mjs undo --root <REPO> --package " + packageId }, true);
   return result.ok ? 0 : 1;
 }
@@ -812,7 +942,7 @@ async function commandImport(options) {
     for (const source of plan.sources) {
       extra["design/imported-" + basename(source.file)] = readFileSync(source.file, "utf8");
     }
-    const directory = createBundle(unlazy, plan.root, plan.packageId, options, plan.fields, plan.steps, statusLine, extra);
+    const directory = await createBundle(unlazy, plan.root, plan.packageId, options, plan.fields, plan.steps, statusLine, extra);
     journal = {
       schema: 1, mode: "new", packageId: plan.packageId, appliedAt: new Date().toISOString(),
       files: bundleFiles(directory).map((file) => ({ path: relative(plan.root, file).split("\\").join("/"), sha256: sha256(readFileSync(file)) })),
@@ -837,8 +967,10 @@ async function commandImport(options) {
     };
   }
   writeJournal(plan.root, plan.packageId, journal);
-  const result = doctor(unlazy, plan.root, plan.packageId);
-  print({ ok: result.ok, applied: true, preview, diagnostics: result.diagnostics, undo: "package-standard.mjs undo --root <REPO> --package " + plan.packageId }, true);
+  const result = await doctor(unlazy, plan.root, plan.packageId);
+  const warnings = plan.mode === "new" ? [titleWarning(plan.packageId, ownerRequest(options) ?? "")].filter(Boolean) : [];
+  print({ ok: result.ok, applied: true, preview, diagnostics: result.diagnostics, warnings,
+    undo: "package-standard.mjs undo --root <REPO> --package " + plan.packageId }, true);
   return result.ok ? 0 : 1;
 }
 
@@ -847,7 +979,7 @@ async function commandImport(options) {
 const UNLAZY_LINE_RE = /^\/?\.unlazy\/$/u;
 
 function gitIgnoresRuntime(root) {
-  return spawnSync("git", ["-C", root, "check-ignore", "-q", ".unlazy/probe"], { windowsHide: true }).status === 0;
+  return gitRun(["-C", root, "check-ignore", "-q", ".unlazy/probe"], { windowsHide: true }).status === 0;
 }
 
 function decodeIgnoreFile(bytes) {
@@ -976,7 +1108,7 @@ async function main() {
   if (extra.length) { process.stderr.write("package-standard: unexpected argument " + extra[0] + "\n"); return 2; }
   try {
     if (options.root && existsSync(join(resolve(options.root), ".git"))) releaseLegacyJournals(resolve(options.root));
-    if (command === "create") return commandCreate(options);
+    if (command === "create") return await commandCreate(options);
     if (command === "import") return await commandImport(options);
     if (command === "prepare") return commandPrepare(options);
     if (command === "undo") return commandUndo(options);

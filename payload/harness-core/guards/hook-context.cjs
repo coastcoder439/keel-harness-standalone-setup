@@ -60,4 +60,13 @@ function hookSession(payload, env = process.env) {
   return String(env.KEEL_PACKAGE_SESSION || payload?.session_id || "").trim();
 }
 
-module.exports = { canonicalPath, hookSession, msysPath, ruleRoot };
+// The role of the session a hook judges (Karte Arbeitsweise, 07.10.2026): a worker agent is started by the
+// Package-Executor, which puts KEEL_PACKAGE_SESSION into the environment of the Claude or Codex process; the hook
+// inherits it from the host, and no tool call can change it. Every other session is a main session (Owner,
+// orchestrator, onboarding, normal work). The same rules hold for both; what a session not bound to a work step may do
+// beside product work (Git maintenance, project tools, MCP) is decided in session-scope.cjs.
+function isWorkerSession(env = process.env) {
+  return String(env.KEEL_PACKAGE_SESSION || "").trim() !== "";
+}
+
+module.exports = { canonicalPath, hookSession, isWorkerSession, msysPath, ruleRoot };

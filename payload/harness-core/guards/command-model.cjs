@@ -244,10 +244,224 @@ function hasDynamicEvaluation(command) {
     if (quote === "'" || isQuoteMark) return false;
     return (char === "$" && text[index + 1] === "(") || char === "`";
   });
-  if (substitution) return true;
-  const code = withoutHeredocs(text);
+  return substitution || hasProcessSubstitution(text);
+}
+
+// Process substitution, <( and >( outside any quotes (heredoc bodies are data).
+function hasProcessSubstitution(command) {
+  const code = withoutHeredocs(String(command || ""));
   return scanQuoted(code, (char, index, quote, isQuoteMark) =>
     !quote && !isQuoteMark && (char === "<" || char === ">") && code[index + 1] === "(");
+}
+
+// The text a command substitution leaves in the outer command. It stays a word with a `$`
+// and parentheses, so a path check still refuses it as non-literal, and no separator inside
+// the substituted command splits the outer segment.
+const SUBSTITUTION_WORD = "$(__subst__)";
+const SUBSTITUTED = /\$\(__subst__\)/u;
+// Appended to a word whose real text the shell decides later by quoting or brace expansion
+// (`$'...'`, `-{d,e}elete`): the word as read here is not the word the program gets.
+const EXPANDED_MARK = "\u0000";
+
+// Index of the `)` that closes a `$(` whose body starts at `from`; -1 when it never closes.
+// Quotes, nested substitutions and backticks inside are skipped as units.
+function closingParenthesis(text, from) {
+  let depth = 1;
+  let index = from;
+  while (index < text.length) {
+    const char = text[index];
+    if (char === "\\") { index += 2; continue; }
+    if (char === "'") {
+      const end = text.indexOf("'", index + 1);
+      if (end < 0) return -1;
+      index = end + 1;
+      continue;
+    }
+    if (char === "\"") {
+      index = afterDoubleQuoted(text, index + 1);
+      if (index < 0) return -1;
+      continue;
+    }
+    if (char === "`") {
+      const end = closingBacktick(text, index + 1);
+      if (end < 0) return -1;
+      index = end + 1;
+      continue;
+    }
+    if (char === "$" && text[index + 1] === "(") {
+      const end = closingParenthesis(text, index + 2);
+      if (end < 0) return -1;
+      index = end + 1;
+      continue;
+    }
+    if (char === "(") depth += 1;
+    else if (char === ")") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+    index += 1;
+  }
+  return -1;
+}
+
+// Index after the double quote that closes a string whose body starts at `from`; -1 when open.
+function afterDoubleQuoted(text, from) {
+  let index = from;
+  while (index < text.length) {
+    const char = text[index];
+    if (char === "\\") { index += 2; continue; }
+    if (char === "\"") return index + 1;
+    if (char === "`") {
+      const end = closingBacktick(text, index + 1);
+      if (end < 0) return -1;
+      index = end + 1;
+      continue;
+    }
+    if (char === "$" && text[index + 1] === "(") {
+      const end = closingParenthesis(text, index + 2);
+      if (end < 0) return -1;
+      index = end + 1;
+      continue;
+    }
+    index += 1;
+  }
+  return -1;
+}
+
+function closingBacktick(text, from) {
+  for (let index = from; index < text.length; index += 1) {
+    if (text[index] === "\\") { index += 1; continue; }
+    if (text[index] === "`") return index;
+  }
+  return -1;
+}
+
+// The commands a Bash line substitutes: `$(...)` and backticks outside single quotes, outermost
+// level only (a nested substitution is found when the caller judges its container).
+// { ok, outer, inner, other }: outer is the line with every substitution replaced by one inert
+// word, inner the substituted command texts in source order, other true for what is not a
+// plain substitution (process substitution, arithmetic $((...)), which stay undecidable), ok
+// false when a substitution never closes. The caller judges every inner command with the same
+// policy as a line of its own and the outer line with the words in place of the results.
+function commandSubstitutions(command) {
+  const text = String(command || "");
+  const inner = [];
+  let outer = "";
+  let quote = null;
+  let index = 0;
+  const failed = () => ({ ok: false, outer: text, inner: [], other: true });
+  while (index < text.length) {
+    const char = text[index];
+    if (quote === "'") {
+      outer += char;
+      if (char === "'") quote = null;
+      index += 1;
+      continue;
+    }
+    if (char === "\\") {
+      outer += char + (text[index + 1] ?? "");
+      index += 2;
+      continue;
+    }
+    if (char === "'" && quote === null) { quote = "'"; outer += char; index += 1; continue; }
+    if (char === "\"") { quote = quote === "\"" ? null : "\""; outer += char; index += 1; continue; }
+    if (char === "$" && text[index + 1] === "(") {
+      if (text[index + 2] === "(") return { ok: true, outer: text, inner: [], other: true };
+      const end = closingParenthesis(text, index + 2);
+      if (end < 0) return failed();
+      inner.push(text.slice(index + 2, end));
+      outer += SUBSTITUTION_WORD;
+      index = end + 1;
+      continue;
+    }
+    if (char === "`") {
+      const end = closingBacktick(text, index + 1);
+      if (end < 0) return failed();
+      inner.push(text.slice(index + 1, end).replace(/\\([`\\$])/gu, "$1"));
+      outer += SUBSTITUTION_WORD;
+      index = end + 1;
+      continue;
+    }
+    outer += char;
+    index += 1;
+  }
+  return { ok: true, outer, inner, other: hasProcessSubstitution(text) };
+}
+
+// The words of one Bash segment as the shell hands them to the program: adjacent quoted and
+// unquoted parts of a word join (`'a'"b"c` is abc), quotes and escapes go, single quotes keep
+// everything. tokens() keeps every quote character of a word that starts unquoted and splits a
+// word at a quote in its middle, so `awk 'BEGIN{sys'"tem"'("x")}'` read as three harmless
+// words; guards that judge an option or a program text read the words from here.
+// A word that carries a command substitution contains SUBSTITUTION_WORD; a word whose real
+// text depends on `$'...'` quoting or brace expansion ends with EXPANDED_MARK.
+function shellWords(segment) {
+  const text = String(segment || "");
+  const words = [];
+  let current = "";
+  let started = false;
+  let expanded = false;
+  let index = 0;
+  const finish = () => {
+    if (started) words.push(expanded ? current + EXPANDED_MARK : current);
+    current = "";
+    started = false;
+    expanded = false;
+  };
+  while (index < text.length) {
+    const char = text[index];
+    if (char === " " || char === "\t" || char === "\n" || char === "\r") { finish(); index += 1; continue; }
+    if (char === "'") {
+      started = true;
+      const end = text.indexOf("'", index + 1);
+      if (end < 0) { current += text.slice(index + 1); expanded = true; index = text.length; continue; }
+      current += text.slice(index + 1, end);
+      index = end + 1;
+      continue;
+    }
+    if (char === "\"") {
+      started = true;
+      index += 1;
+      while (index < text.length && text[index] !== "\"") {
+        if (text[index] === "\\" && index + 1 < text.length && "$`\"\\\n".includes(text[index + 1])) {
+          if (text[index + 1] !== "\n") current += text[index + 1];
+          index += 2;
+          continue;
+        }
+        current += text[index];
+        index += 1;
+      }
+      if (index >= text.length) expanded = true;
+      index += 1;
+      continue;
+    }
+    if (char === "\\") {
+      started = true;
+      if (index + 1 < text.length && text[index + 1] !== "\n") current += text[index + 1];
+      index += 2;
+      continue;
+    }
+    if (char === "$" && (text[index + 1] === "'" || text[index + 1] === "\"")) {
+      started = true;
+      expanded = true;
+      index += 1;
+      continue;
+    }
+    if (char === "{" && text[index - 1] !== "$" && /^\{[^\s{}]*(?:,|\.\.)[^\s]*\}/u.test(text.slice(index))) expanded = true;
+    started = true;
+    current += char;
+    index += 1;
+  }
+  finish();
+  return words;
+}
+
+function isSubstitutedWord(word) {
+  return SUBSTITUTED.test(String(word));
+}
+
+function isExpandedWord(word) {
+  return String(word).includes(EXPANDED_MARK);
 }
 
 // Heredoc bodies are data (for example a file written by cat <<EOF), not commands. Only
@@ -495,6 +709,14 @@ function normalizePowerShell(raw) {
   return { invocations, redirections, merges, envAssignments, assignments, members };
 }
 
+// A2: one parse per command string and PowerShell in a process. The guards of one tool call run in one process
+// (.claude/pretool-guards.js); git-intent-guard, shell-mutation-guard and danger-guard each ask for the same command,
+// and a parse is a powershell.exe start of about a second. The parser only turns a string into facts, so the same
+// string gives the same facts; only a readable result is kept (a failed start is tried again). The store keeps the
+// last PARSE_MEMORY strings, so a long-lived process does not grow with every command it ever judged.
+const PARSE_MEMORY = 32;
+const parsedPowerShell = new Map();
+
 function parsePowerShell(command, options = {}) {
   const text = String(command || "");
   if (Buffer.byteLength(text, "utf8") > MAX_POWERSHELL_COMMAND) {
@@ -502,6 +724,17 @@ function parsePowerShell(command, options = {}) {
   }
   const executable = options.powershell || powershellExecutable(options.env || process.env);
   if (!executable) return { dialect: "powershell", ok: false, error: "no PowerShell is installed to parse the command" };
+  const key = executable + "\0" + text;
+  if (parsedPowerShell.has(key)) return parsedPowerShell.get(key);
+  const result = parsePowerShellOnce(text, executable, options);
+  if (result.ok || /^PowerShell parse error: /u.test(String(result.error || ""))) {
+    parsedPowerShell.set(key, result);
+    if (parsedPowerShell.size > PARSE_MEMORY) parsedPowerShell.delete(parsedPowerShell.keys().next().value);
+  }
+  return result;
+}
+
+function parsePowerShellOnce(text, executable, options) {
   const encoded = Buffer.from(POWERSHELL_PARSER, "utf16le").toString("base64");
   const result = spawnSync(executable, ["-NoProfile", "-NonInteractive", "-OutputFormat", "Text", "-EncodedCommand", encoded], {
     encoding: "utf8",
@@ -653,16 +886,21 @@ module.exports = {
   bashRedirections,
   bashSegmentKind,
   commandStart,
+  commandSubstitutions,
   dialectFor,
   executableName,
   hasDynamicEvaluation,
   hasOutputRedirection,
+  hasProcessSubstitution,
+  isExpandedWord,
+  isSubstitutedWord,
   parse,
   parsePowerShell,
   posixEquivalent,
   powershellExecutable,
   scanQuoted,
   segments,
+  shellWords,
   tokens,
   withoutHeredocs,
   wrapperPayloadsFromWords,

@@ -289,6 +289,34 @@ test("closed requires complete plan, current evidence, full contract, and consis
   assert.equal(status.closable, false);
 });
 
+test("EVIDENCE lines with and without the retired oracleDigest field are equally valid (A17)", () => {
+  const lines = {
+    old: "schema=2; exit=0; shellId=win32:cmd.exe; cwd=.; oracleDigest=sha256:" + "a".repeat(64) +
+      "; EXPECT=matched; output-sha256=" + "b".repeat(64) + "; output-bytes=24",
+    current: "schema=2; exit=0; shellId=win32:cmd.exe; cwd=.; EXPECT=matched; output-sha256=" + "b".repeat(64) +
+      "; output-bytes=24",
+    malformedDigest: "schema=2; exit=0; shellId=win32:cmd.exe; cwd=.; oracleDigest=sha256:0; EXPECT=matched; output-sha256=0",
+  };
+  const snapshots = [];
+  for (const [name, evidence] of Object.entries(lines)) {
+    const root = repo("evidence-" + name);
+    writeBundle(root, "evidence-" + name, {
+      package: packageText("evidence-" + name, {
+        plan: "1. [x] Implement the observable outcome.",
+        fulfillment: "erfuellt - the goal holds.",
+        open: "nichts",
+      }),
+      rootGates: "# Gates: fixture\n\n- [x] G1: observable fixture outcome\n  CHECK: node -e \"console.log('OK')\"\n  EXPECT: OK\n  EVIDENCE: " +
+        evidence + "\n",
+    });
+    const status = inspect(root, "evidence-" + name);
+    assert.deepEqual(status.diagnostics, [], name);
+    assert.equal(status.status, "closed", name);
+    snapshots.push([name, status.gates]);
+  }
+  for (const [name, gates] of snapshots) assert.deepEqual(gates, snapshots[0][1], name + ": the field changes nothing");
+});
+
 test("solo and fan-out sidecar layout rejects missing or redundant .gitkeep", () => {
   const soloRoot = repo("missing-gitkeep");
   writeBundle(soloRoot, "missing-gitkeep", { gitkeep: false });

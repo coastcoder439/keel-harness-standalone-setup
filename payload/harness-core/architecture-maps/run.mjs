@@ -13,7 +13,7 @@
 // startet nicht, CLI endet mit Fehler, Isolation verletzt, Modell nicht wählbar, Plugin nicht vorgebaut.
 // Jeder Fehler steht zusätzlich im Protokoll des Projekts, damit das Dashboard ihn als letzten Lauf zeigt.
 
-import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
@@ -21,6 +21,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { PROCESS_ID, appendRunLog, architectureMapsDataDirectory, projectKey, runArchitectureMapsJob, runPluginPrebuildJob } from "./job.mjs";
 
 const harnessRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const { runWatchedChild } = createRequire(import.meta.url)("../binding/watched-child.cjs");
 
 export function parseArgs(argv) {
   let project = null;
@@ -55,11 +56,14 @@ export function parseArgs(argv) {
 /**
  * Echter Läufer: startet die aufgelöste claude.exe ohne Shell mit der Umgebung des Jobs
  * (CLAUDE_PLUGIN_ROOT, Gate A1), sammelt die JSON-Ausgabe für die Token-Zahlen und reicht stderr durch.
+ * Der Aufruf hatte keinen Zeitschutz (D12) und einen Deckel von 256 MiB für die Ausgabe; jetzt läuft er unter dem
+ * Stille-Wächter (P15, vendor/unlazy/scripts/lib/silence-watch.mjs): kein Zeitlimit, kein Ausgabe-Deckel, ein
+ * Abbruch nur, wenn die CLI KEEL_SILENCE_MS lang nichts ausgibt UND ihr Prozessbaum nicht arbeitet. Das Ergebnis
+ * hat die Form des früheren spawnSync-Ergebnisses plus { hung, hungReason }. `runChild` und `baseEnv` sind für Tests.
  */
-export function defaultCliRunner(invocation, options, { spawnImpl = spawnSync, baseEnv = process.env } = {}) {
-  const result = spawnImpl(invocation.executable, invocation.args, {
-    cwd: options.cwd, encoding: "utf8", windowsHide: true, maxBuffer: 256 * 1024 * 1024,
-    stdio: ["ignore", "pipe", "pipe"],
+export async function defaultCliRunner(invocation, options, { runChild = runWatchedChild, baseEnv = process.env } = {}) {
+  const result = await runChild(invocation.executable, invocation.args, {
+    cwd: options.cwd,
     env: { ...baseEnv, ...(invocation.env || {}) },
   });
   if (result.stderr) process.stderr.write(result.stderr);
@@ -71,12 +75,12 @@ export function defaultCliRunner(invocation, options, { spawnImpl = spawnSync, b
  * injizierbarer `cliRunner`/`freeMemoryBytes`/`pluginStatus` für Tests. Liefert das Job-Ergebnis und den
  * Exit-Code; Fehler werden ins Protokoll des Projekts geschrieben und als `exitCode: 1` gemeldet.
  */
-export function run(argv, { cliRunner = defaultCliRunner, freeMemoryBytes = os.freemem(), dataDir, env = process.env, pluginStatus, now = new Date() } = {}) {
+export async function run(argv, { cliRunner = defaultCliRunner, freeMemoryBytes = os.freemem(), dataDir, env = process.env, pluginStatus, now = new Date() } = {}) {
   const { project, force, prebuild } = parseArgs(argv);
   if (prebuild) throw new Error("--prebuild läuft über runPrebuild, nicht über run.");
   const directory = dataDir ?? architectureMapsDataDirectory({ env });
   try {
-    const result = runArchitectureMapsJob({ projectRoot: project, dataDir: directory, harnessRoot, env, freeMemoryBytes, forced: force, cliRunner, pluginStatus, now });
+    const result = await runArchitectureMapsJob({ projectRoot: project, dataDir: directory, harnessRoot, env, freeMemoryBytes, forced: force, cliRunner, pluginStatus, now });
     const failed = Boolean(result.error) || (result.started === false && typeof result.reason === "string" && result.reason.startsWith("Plugin nicht vorgebaut"));
     return { ...result, exitCode: failed ? 1 : 0 };
   } catch (error) {
@@ -94,11 +98,11 @@ export function run(argv, { cliRunner = defaultCliRunner, freeMemoryBytes = os.f
  * in der Statusdatei, die die Dashboard-Karte liest. Exit-Code 0 bei Erfolg oder wenn nichts zu tun war,
  * 1 bei einem Fehlschlag (der Grund steht in der Statusdatei). `exec` ist für Tests injizierbar.
  */
-export function runPrebuild(argv, { dataDir, env = process.env, exec, lockFile, now = new Date(), log = (text) => process.stdout.write(text) } = {}) {
+export async function runPrebuild(argv, { dataDir, env = process.env, exec, lockFile, now = new Date(), log = (text) => process.stdout.write(text) } = {}) {
   const { prebuild, pluginDir } = parseArgs(argv);
   if (!prebuild) throw new Error("runPrebuild erwartet --prebuild.");
   const directory = dataDir ?? architectureMapsDataDirectory({ env });
-  const result = runPluginPrebuildJob({
+  const result = await runPluginPrebuildJob({
     dataDir: directory, env, now, log, ...(pluginDir ? { pluginDir } : {}), ...(exec ? { exec } : {}), ...(lockFile ? { lockFile } : {}),
   });
   return { ...result, exitCode: result.ok || result.skipped ? 0 : 1 };
@@ -108,12 +112,12 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   let result;
   try {
     if (process.argv.slice(2).includes("--prebuild")) {
-      const prebuild = runPrebuild(process.argv.slice(2));
+      const prebuild = await runPrebuild(process.argv.slice(2));
       console.log(JSON.stringify({ ok: prebuild.ok, skipped: prebuild.skipped ?? false, reason: prebuild.reason ?? null, error: prebuild.error ?? null, steps: prebuild.steps ?? [] }, null, 2));
       if (prebuild.error) console.error(prebuild.error);
       process.exit(prebuild.exitCode);
     }
-    result = run(process.argv.slice(2));
+    result = await run(process.argv.slice(2));
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
     process.exit(1);

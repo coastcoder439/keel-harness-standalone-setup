@@ -38,7 +38,9 @@ einen Gesamtbefehl `node checks/run-all.mjs`:
   vollständige vendorierte Unlazy-Methode aus (acht erklärte Plattform-Skips).
 
 `node checks/run-all.mjs` zählt je Phase pass, fail und skip gegen die erwarteten
-Skips und gibt `KEEL_HARNESS_OK` nur aus, wenn alle drei Phasen grün sind. Die
+Skips und gibt `KEEL_HARNESS_OK` nur aus, wenn alle drei Phasen grün sind. Mit
+`--layout-only` prüft die dritte Phase nur das installierte Unlazy-Layout (die
+Frischinstallation der Quelle; die Suite läuft dort einmal je Code-Stand). Die
 Quell-Referenz des Harness (requirements-audit, integration-contract, test-matrix und
 der Marker HARNESS_REFERENCE_OK) gehört zum Quellbaum des Harness und ist nicht Teil
 dieser Installation. Ein einzelnes grünes Gate beweist ausschließlich das, was sein

@@ -6,7 +6,7 @@ import { getDispatchWave, updateDispatch } from "./lib/dispatch.mjs";
 import { resolvePackageTarget } from "./lib/packages.mjs";
 import { inspectPackageBundle } from "./lib/package-schema.mjs";
 
-const COMMANDS = new Set(["open", "start", "seal", "return", "abandon", "recover", "restart", "reopen", "status"]);
+const COMMANDS = new Set(["open", "start", "seal", "return", "abandon", "discard", "recover", "restart", "reopen", "status"]);
 const args = process.argv.slice(2);
 
 function usage() {
@@ -17,6 +17,7 @@ function usage() {
     "  dispatch-check.mjs seal --scope ID [--package ID] --wave ID [--root PATH]",
     "  dispatch-check.mjs return --scope ID [--package ID] --wave ID --leaf ID [--root PATH]",
     "  dispatch-check.mjs abandon --scope ID [--package ID] --wave ID --reason TEXT [--root PATH]",
+    "  dispatch-check.mjs discard --scope ID [--package ID] --wave ID --reason TEXT [--root PATH]",
     "  dispatch-check.mjs recover --scope ID [--package ID] --wave ID --replacement-wave ID [--root PATH]",
     "  dispatch-check.mjs recover --scope ID [--package ID] --wave ID [--root PATH]",
     "  dispatch-check.mjs restart --scope ID [--package ID] --wave ID --leaf ID --handle OPAQUE_ID [--root PATH]",
@@ -25,6 +26,8 @@ function usage() {
     "",
     "Normal commands resolve an active package.ref and persist schema-2 scope/package identity.",
     "Use --legacy only for explicit schema-1 diagnosis during migration.",
+    "discard removes an open or abandoned wave in which no leaf ever started, so its id is free again; a wave",
+    "with a started leaf is refused and ends through abandon and recover.",
     "recover without --replacement-wave needs a return of every leaf in the abandoned wave itself or in a",
     "complete wave. restart gives a started, unreturned member of a sealed wave a new handle; reopen moves the",
     "return of a member back so that it can be restarted and returned again.",
@@ -88,6 +91,9 @@ if (command === "open") {
 } else if (command === "abandon") {
   if (options.leaves.length || options.handle !== null) die("abandon does not accept --leaf or --handle");
   if (options.reason === null || !options.reason.trim()) die("abandon requires --reason");
+} else if (command === "discard") {
+  if (options.leaves.length || options.handle !== null) die("discard does not accept --leaf or --handle");
+  if (options.reason === null || !options.reason.trim()) die("discard requires --reason");
 } else if (command === "recover") {
   if (options.leaves.length || options.handle !== null || options.reason !== null) {
     die("recover does not accept --leaf, --handle, or --reason");
@@ -129,8 +135,8 @@ if (options.legacy) {
       die("fan-out contract is invalid before dispatch: " +
         packageStatus.diagnostics.map((item) => item.code).join(", "));
     }
-    if (!packageStatus.depthTree.defined || packageStatus.depthTree.ledgers < 2) {
-      die("dispatch open requires a fan-out bundle with a complete Depth Tree and contract mapping");
+    if (!packageStatus.depthTree.defined) {
+      die("dispatch open requires a bundle with a complete Depth Tree and contract mapping");
     }
     const declaredLeaves = new Set(target.gateFiles
       .map((file) => file.replaceAll("\\", "/").match(/\/gates\/leaf-([^/]+)\.md$/))
@@ -182,6 +188,7 @@ try {
   else if (command === "seal") console.log("SEALED " + options.wave + " (" + started + "/" + wave.leaves.length + " started)");
   else if (command === "abandon") console.log(summary(wave, options.wave));
   else if (command === "recover") console.log(summary(wave, options.wave));
+  else if (command === "discard") console.log("DISCARDED " + options.wave + " (0/" + wave.leaves.length + " started): " + wave.reason);
   else if (command === "restart") console.log("RESTARTED " + options.wave + " " + options.leaves[0] + " (" + started + "/" + wave.leaves.length + " started)");
   else if (command === "reopen") console.log("REOPENED " + options.wave + " " + options.leaves[0] + " (" + returned + "/" + wave.leaves.length + " returned)");
   else if (wave.state === "complete") console.log("COMPLETE " + options.wave + " (" + returned + "/" + wave.leaves.length + " returned)");

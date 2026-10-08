@@ -6,11 +6,12 @@ import {
   lstatSync,
   mkdirSync,
   readFileSync,
-  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { realpathSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import packageContext from "./lib/package-context.cjs";
 import ownerContract from "./lib/owner-contract.cjs";
 import {
@@ -20,7 +21,7 @@ import {
   resolveRepository,
 } from "./lib/packages.mjs";
 import { inspectPackageBundle, publicPackageStatus, PACKAGE_SCHEMA_VERSION } from "./lib/package-schema.mjs";
-import { activatePackage, closePackage, transitionFollowUpDuty } from "./lib/package-lifecycle.mjs";
+import { activatePackage, closePackage, renameWithRetry, transitionFollowUpDuty } from "./lib/package-lifecycle.mjs";
 import { measureRepositoryPackages } from "./lib/package-measure.mjs";
 import {
   addRoadmapMilestone,
@@ -57,9 +58,11 @@ commands:
   duty-assess --package ID --scope ID --gate LEDGER:GATE
   duty-add --package ID --scope ID --duty ID --owner TEXT --trigger TEXT --due-state open|due --gate LEDGER:GATE
   duty-resolve --package ID --scope ID --duty ID [--gate LEDGER:GATE]
-  duty-waive --package ID --scope ID --duty ID --owner-ok TEXT
-  close --package ID --scope ID [--reuse-integration SHA]
-                            reverify and atomically close package
+  duty-waive --package ID --scope ID --duty ID (--owner-ok TEXT | --owner-ok-file FILE)
+  close --package ID --scope ID
+                            check every gate at HEAD in a clean copy (gate-check --at;
+                            a stored result of the same code state counts) and
+                            atomically close the package
   roadmap                   show the optional project roadmap docs/roadmap.json
   roadmap-add --title TEXT [--due YYYY-MM-DD] [--package ID]   add a milestone
   roadmap-assign --package ID --milestone ID|none   link a package or unlink it
@@ -73,8 +76,9 @@ targeting:
   --timeout S               close gate timeout in seconds
   --jobs N                  close gate concurrency
   --shell PATH              close gate shell
-  --owner-ok TEXT           Owner-OK wording (duty-waive)
-  --reuse-integration SHA   close reuses the integration verified at SHA
+  --owner-ok TEXT           Owner-OK wording (duty-waive): the Owner's own words, any length, any characters
+  --owner-ok-file FILE      the same wording from a file in the session temp folder or the run folder (.unlazy)
+  --reuse-integration SHA   accepted for older callers, changes nothing (SHA must be HEAD)
   --all                     every bundle (doctor only)
   --json                    emit JSON only
 
@@ -84,7 +88,7 @@ exit codes: 0 valid/met or successful mutation; 1 valid but incomplete;
 const VALUE_OPTIONS = new Set([
   "--root", "--package", "--scope", "--repo-key", "--session",
   "--timeout", "--jobs", "--shell",
-  "--duty", "--owner", "--trigger", "--due-state", "--gate", "--owner-ok", "--reuse-integration",
+  "--duty", "--owner", "--trigger", "--due-state", "--gate", "--owner-ok", "--owner-ok-file", "--reuse-integration",
   "--owner-request", "--owner-request-file", "--owner-source",
   "--title", "--due", "--milestone",
 ]);
@@ -143,6 +147,8 @@ function targetOptions(root, options) {
     scope: options.scope,
     repoKey: options["repo-key"] || ".",
     sessionId: options.session,
+    // main() resolved this root through Git once for this run (B15): the target lookup does not ask again.
+    verifiedRoot: true,
   };
 }
 
@@ -198,23 +204,63 @@ function localDate(now = new Date()) {
 // (OWNER_REQUEST) until the original request is captured, so a repository
 // with ownerContractRequired=true can create bundles without inventing one.
 function defaultOwner(packageId, owner) {
-  const request = owner.request
-    ? owner.request.replace(/\r\n/g, "\n").replace(/\s+$/u, "")
-    : "<Copy the original Owner request here verbatim before activation.>";
+  // The request ends at the owner-end marker, so a heading inside the Owner's text stays part of the text (C7).
+  const section = ownerContract.formatOwnerRequestSection(owner.request
+    ? owner.request.replace(/^﻿/u, "")
+    : "<Copy the original Owner request here verbatim before activation.>");
   return `# Owner contract: ${packageId}
 
 Schema: 1
 Source: ${owner.source || (owner.request ? "package-cli create --owner-request" : "package-cli create (Owner request not captured yet)")}
 Captured: ${localDate()}
 
-## Original request
-
-${request}
-
+${section}
 ## Requirements
 
 - R1 -> C1: The declared package outcome is implemented and verified.
 `;
+}
+
+// The Owner's wording from a file (--owner-ok-file): only from the session temp folder or the run folder (.unlazy) of
+// the repository and never from inside a Git working tree, so a file of the working tree is never read as an Owner
+// quote. Read as it is (UTF-8, or UTF-16 with a byte order mark); exactly one final line break belongs to the editor
+// and falls away.
+function readOwnerWordingFile(file, root) {
+  const resolved = resolve(String(file));
+  let info;
+  try { info = lstatSync(resolved); } catch { throw new Error("--owner-ok-file does not exist: " + resolved); }
+  if (info.isSymbolicLink() || !info.isFile() || (typeof info.nlink === "number" && info.nlink !== 1)) {
+    throw new Error("--owner-ok-file must be a single-link regular file: " + resolved);
+  }
+  const real = realpathSync.native(resolved);
+  const below = (base, path) => {
+    const step = relative(base, path);
+    return step !== "" && !step.startsWith("..") && !isAbsolute(step);
+  };
+  // A folder with .git between the allowed folder and the file makes it a file of that working tree, also when the
+  // working tree itself lies in the temp folder (a clean copy, a release clone).
+  const workingTreeBetween = (base, path) => {
+    for (let directory = dirname(path); below(base, directory); directory = dirname(directory)) {
+      if (existsSync(join(directory, ".git"))) return true;
+    }
+    return false;
+  };
+  const inside = [tmpdir(), join(root, ".unlazy")].some((folder) => {
+    try {
+      const base = realpathSync.native(folder);
+      return below(base, real) && !workingTreeBetween(base, real);
+    } catch { return false; }
+  });
+  if (!inside) throw new Error("--owner-ok-file must lie in the session temp folder or the run folder (.unlazy), not in a Git working tree: " + resolved);
+  const bytes = readFileSync(real);
+  let text;
+  try {
+    if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) text = new TextDecoder("utf-16le", { fatal: true }).decode(bytes.subarray(2));
+    else text = new TextDecoder("utf-8", { fatal: true }).decode(bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? bytes.subarray(3) : bytes);
+  } catch { throw new Error("--owner-ok-file is not valid UTF-8 text: " + resolved); }
+  const wording = text.replace(/\r?\n$/u, "");
+  if (!wording.trim()) throw new Error("--owner-ok-file holds no Owner wording");
+  return wording;
 }
 
 function ownerRequestOption(options) {
@@ -269,7 +315,8 @@ function createBundle(root, packageId, repoKey, owner = { request: null, source:
     if (blocking.length) {
       throw new Error("generated bundle failed schema: " + blocking.map((item) => item.message).join("; "));
     }
-    renameSync(temporary, targetDir);
+    // A virus scanner or indexer may hold the fresh directory for a moment (Windows EPERM/EBUSY/EACCES): retry.
+    renameWithRetry(temporary, targetDir);
   } catch (error) {
     try { rmSync(temporary, { recursive: true, force: true, maxRetries: 5, retryDelay: 30 }); } catch { /* preserve primary error */ }
     throw error;
@@ -283,7 +330,7 @@ function packageStatus(root, options) {
 }
 
 function packageStatuses(root, options) {
-  return resolveAllPackageTargets({ root, repoKey: options["repo-key"] || "." })
+  return resolveAllPackageTargets({ root, repoKey: options["repo-key"] || ".", verifiedRoot: true })
     .map((target) => inspectPackageBundle(target));
 }
 
@@ -392,7 +439,7 @@ if (!parsed) {
         else for (const status of statuses) console.log(status.repoKey + "::" + status.packageId + " " + status.status);
       } else if (command === "measure") {
         if (options.package || options.scope || options.all) throw new Error("measure does not accept --package, --scope, or --all");
-        const measured = measureRepositoryPackages({ root, repoKey });
+        const measured = measureRepositoryPackages({ root, repoKey, verifiedRoot: true });
         const packages = measured.packages;
         if (options.json) {
           print({ ...measured, repoRoot: root }, true);
@@ -436,7 +483,10 @@ if (!parsed) {
       } else if (["duty-assess", "duty-add", "duty-resolve", "duty-waive"].includes(command)) {
         if (!options.package || !options.scope) throw new Error(command + " requires --package ID and --scope ID");
         if (options.all || options.session) throw new Error(command + " does not accept --all or --session");
-        if (command === "duty-waive" && !options["owner-ok"]) throw new Error("duty-waive requires --owner-ok TEXT");
+        if (command === "duty-waive" && !options["owner-ok"] && !options["owner-ok-file"]) {
+          throw new Error("duty-waive requires --owner-ok TEXT or --owner-ok-file FILE");
+        }
+        if (options["owner-ok"] && options["owner-ok-file"]) throw new Error("use either --owner-ok or --owner-ok-file, not both");
         const action = command.slice("duty-".length).replace("assess", "assess").replace("add", "add")
           .replace("resolve", "resolve").replace("waive", "waive");
         const result = await transitionFollowUpDuty({
@@ -450,7 +500,7 @@ if (!parsed) {
           trigger: options.trigger,
           dueState: options["due-state"],
           gate: options.gate,
-          ownerOk: options["owner-ok"],
+          ownerOk: options["owner-ok-file"] ? readOwnerWordingFile(options["owner-ok-file"], root) : options["owner-ok"],
         });
         print(options.json ? result : result, options.json);
       } else if (command === "close") {

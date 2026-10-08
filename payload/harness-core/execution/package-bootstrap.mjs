@@ -14,12 +14,12 @@ function parse(argv) {
     const key = argv.shift();
     if (key === "--json") options.json = true;
     else if (key === "--takeover") options.takeover = true;
-    else if (["--harness-root", "--root", "--package", "--scope", "--session", "--unlazy-root", "--owns"].includes(key)) {
+    else if (["--harness-root", "--root", "--package", "--scope", "--session", "--unlazy-root", "--owns", "--reason"].includes(key)) {
       const value = argv.shift();
       if (!value || value.startsWith("--")) throw new Error(key + " requires a value");
       if (key === "--owns") options.owns = [...(options.owns || []), ...value.split(",")];
       else options[{ "--harness-root": "harnessRoot", "--root": "root", "--package": "packageId",
-        "--scope": "scope", "--session": "sessionId", "--unlazy-root": "unlazyRoot" }[key]] = value;
+        "--scope": "scope", "--session": "sessionId", "--unlazy-root": "unlazyRoot", "--reason": "reason" }[key]] = value;
     } else throw new Error("unknown option " + key);
   }
   if (!["begin", "status", "finish", "plan"].includes(options.command)) throw new Error("command must be begin, status, finish, or plan");
@@ -37,14 +37,16 @@ function text(command, result) {
 async function main() {
   if (process.argv.includes("--help") || process.argv.includes("-h")) {
     process.stdout.write("usage: package-bootstrap.mjs <begin|status|finish|plan> --harness-root DIR --session ID " +
-      "[--root REPO --package ID --scope ID] [--unlazy-root DIR] [--owns GLOB ...] [--takeover] --json\n");
+      "[--root REPO --package ID --scope ID] [--unlazy-root DIR] [--owns GLOB ...] [--takeover --reason TEXT] --json\n" +
+      "--takeover moves the planning binding of the package to this session once its holder has been silent for silenceMs " +
+      "(KEEL_SILENCE_MS, 30 minutes by default); an active package also needs --reason.\n");
     return;
   }
   try {
     const options = parse(process.argv.slice(2));
     const result = options.command === "begin" ? bootstrap.begin(options) :
       options.command === "finish" ? bootstrap.finish(options) :
-        options.command === "plan" ? bootstrap.plan(options) : bootstrap.find(options);
+        options.command === "plan" ? await bootstrap.plan(options) : bootstrap.find(options);
     process.stdout.write((options.json ? JSON.stringify(result) : text(options.command, result)) + "\n");
   } catch (error) {
     process.stderr.write("PACKAGE_BOOTSTRAP_" + (error.code || "FAILED") + ": " + error.message + "\n");

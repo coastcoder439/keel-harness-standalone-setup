@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { resolvePackageTarget } from "../scripts/lib/packages.mjs";
 import { inspectPackageBundle, parsePackageDocument } from "../scripts/lib/package-schema.mjs";
@@ -306,7 +307,7 @@ test("create reads the Owner request from a file", () => {
   const created = run(root, "create", "--package", "fromfile", "--owner-request-file", requestFile);
   assert.equal(created.status, 0, created.stderr);
   const owner = readFileSync(join(root, "docs", "packages", "fromfile", "OWNER.md"), "utf8");
-  assert.match(owner, /aus einer Datei anlegen lassen\.\n\n## Requirements/u);
+  assert.match(owner, /aus einer Datei anlegen lassen\.\n<!-- owner-end -->\n\n## Requirements/u);
 });
 
 test("create without an Owner request no longer fails under ownerContractRequired=true and leaves an honest skeleton", () => {
@@ -448,6 +449,145 @@ test("migrate blocks a legacy Scope without the Drin/Nicht drin form instead of 
   const result = prepareLegacyMigration("legacy-bad-scope", legacyText("legacy-bad-scope", ["**Scope:** everything"]));
   assert.equal(result.migrationBlocked, true);
   assert.ok(result.blockers.some((entry) => entry.code === "GENERATED_PACKAGE_SCOPE_FORM"), JSON.stringify(result.blockers));
+});
+
+// --- P14: C7 (the Owner request ends at a marker, never at a heading) and D2 (no minimum length) --------------------
+
+const ownerContractLib = createRequire(import.meta.url)("../scripts/lib/owner-contract.cjs");
+
+function ownerFile(requestSection, requirements = ["- R1 -> C1: The outcome is present."]) {
+  return "# Owner contract: demo\n\nSchema: 1\nSource: fixture\nCaptured: 2026-10-06\n\n" + requestSection +
+    "\n## Requirements\n\n" + requirements.join("\n") + "\n";
+}
+
+test("C7: an order with headings, a Requirements heading and header lookalikes is read whole when it ends at the marker", () => {
+  const request = ["Baue die Suche.", "", "## Anforderungen", "- schnell", "", "## Requirements", "- R9 -> C9: nur Text", "",
+    "## Original request", "Schema: 2", "Source: fremd", "Captured: 1999-01-01", "# Owner contract: fremd", "Ende."].join("\n");
+  const parsed = ownerContractLib.parseOwnerContract(ownerFile(ownerContractLib.formatOwnerRequestSection(request)), { packageId: "demo" });
+  assert.deepEqual(parsed.diagnostics, []);
+  assert.equal(parsed.originalRequest, request);
+  assert.equal(parsed.requestText, request);
+  assert.equal(parsed.endMarker, true);
+  assert.deepEqual(parsed.requirements.map((item) => item.requirementId), ["R1"]);
+  assert.equal(parsed.source, "fixture");
+  assert.equal(parsed.captured, "2026-10-06");
+  assert.equal(parsed.packageId, "demo");
+  // the request digest is the digest of the whole order
+  assert.equal(parsed.requestDigest, ownerContractLib.parseOwnerContract(ownerFile(ownerContractLib.formatOwnerRequestSection(request)), { packageId: "demo" }).requestDigest);
+});
+
+test("C7: a marker line inside the order does not end it; the last marker does", () => {
+  const request = "Vorher.\n" + ownerContractLib.OWNER_END_MARKER + "\nNachher.";
+  const parsed = ownerContractLib.parseOwnerContract(ownerFile(ownerContractLib.formatOwnerRequestSection(request)), { packageId: "demo" });
+  assert.equal(parsed.originalRequest, request);
+  assert.deepEqual(parsed.requirements.map((item) => item.requirementId), ["R1"]);
+});
+
+test("C7: a file of the older format (no marker) is still read as before, with the order cut at its first heading and complete in requestText", () => {
+  const text = ownerFile("## Original request\n\nBaue die Suche.\n\n## Eine Überschrift\n\nText.\n");
+  const parsed = ownerContractLib.parseOwnerContract(text, { packageId: "demo" });
+  assert.deepEqual(parsed.diagnostics, []);
+  assert.equal(parsed.endMarker, false);
+  assert.equal(parsed.originalRequest, "Baue die Suche.", "unchanged: the request digest of a bound package stays");
+  assert.equal(parsed.requestText, "Baue die Suche.\n\n## Eine Überschrift\n\nText.", "the order given to an agent is whole");
+  assert.deepEqual(parsed.requirements.map((item) => item.requirementId), ["R1"]);
+  // the digest of the older reading equals what a version before this one computed
+  const crlf = ownerContractLib.parseOwnerContract(text.replaceAll("\n", "\r\n"), { packageId: "demo" });
+  assert.equal(crlf.originalRequest.replace(/\r\n/gu, "\n"), "Baue die Suche.");
+});
+
+test("D2: an order of five characters is valid; an empty or whitespace-only one is not", () => {
+  const tiny = ownerContractLib.parseOwnerContract(ownerFile(ownerContractLib.formatOwnerRequestSection("Mach!")), { packageId: "demo" });
+  assert.deepEqual(tiny.diagnostics, []);
+  const oldTiny = ownerContractLib.parseOwnerContract(ownerFile("## Original request\n\nMach!\n"), { packageId: "demo" });
+  assert.deepEqual(oldTiny.diagnostics, [], "the older format has no minimum length either");
+  for (const empty of ["", "   ", "\n\n"]) {
+    const parsed = ownerContractLib.parseOwnerContract(ownerFile(ownerContractLib.formatOwnerRequestSection(empty)), { packageId: "demo" });
+    assert.deepEqual(parsed.diagnostics.map((item) => item.code), ["OWNER_REQUEST"], JSON.stringify(empty));
+  }
+  const missing = ownerContractLib.parseOwnerContract(ownerFile("## Original request\n\n"), { packageId: "demo" });
+  assert.deepEqual(missing.diagnostics.map((item) => item.code), ["OWNER_REQUEST"]);
+});
+
+test("placeholder: only the known template texts are a placeholder, and only when nothing else stands in the order", () => {
+  const skeleton = "<Copy the original Owner request here verbatim before activation.>";
+  const template = "<Copy the Owner request here without replacing it with the implementation plan.>";
+  for (const text of [skeleton, template, "[AUSFUELLEN]", "\n" + template + "\n\n[AUSFUELLEN]\n", "  " + skeleton + "  "]) {
+    assert.equal(ownerContractLib.isPlaceholderRequest(text), true, JSON.stringify(text));
+    const parsed = ownerContractLib.parseOwnerContract(ownerFile(ownerContractLib.formatOwnerRequestSection(text)), { packageId: "demo" });
+    assert.deepEqual(parsed.diagnostics.map((item) => item.code), ["OWNER_REQUEST"], JSON.stringify(text));
+    const old = ownerContractLib.parseOwnerContract(ownerFile("## Original request\n\n" + text + "\n"), { packageId: "demo" });
+    assert.deepEqual(old.diagnostics.map((item) => item.code), ["OWNER_REQUEST"], "older format: " + JSON.stringify(text));
+  }
+  for (const text of ["Baue einen <Button> in die Leiste.", "Nutze Map<string, number> statt Object.", "<div> ersetzen",
+    "Map<K,V>", "<Button>", "Mach das.\n" + skeleton, "[AUSFUELLEN] heißt hier: der Owner schreibt es später, baue trotzdem."]) {
+    assert.equal(ownerContractLib.isPlaceholderRequest(text), false, JSON.stringify(text));
+    const parsed = ownerContractLib.parseOwnerContract(ownerFile(ownerContractLib.formatOwnerRequestSection(text)), { packageId: "demo" });
+    assert.deepEqual(parsed.diagnostics, [], JSON.stringify(text));
+    assert.equal(parsed.originalRequest, text);
+  }
+  assert.ok(ownerContractLib.PLACEHOLDER_LINES.includes(skeleton), "the skeleton of package-cli create is a known placeholder");
+  assert.match(readFileSync(cli, "utf8"), /"<Copy the original Owner request here verbatim before activation\.>"/u,
+    "package-cli create still writes exactly this skeleton text");
+});
+
+test("placeholder: package-cli create takes an order with <Button> and Map<K,V> word for word, and the doctor is clean", () => {
+  for (const [id, order] of [["button", "Baue einen <Button> in die Kopfleiste und ein <div> darum."],
+    ["generic", "Ersetze das Objekt durch Map<K,V>, genauer Map<string, number>."]]) {
+    const root = repo("create-brackets-" + id);
+    const created = run(root, "create", "--package", id, "--owner-request", order, "--json");
+    assert.equal(created.status, 0, created.stdout + created.stderr);
+    assert.deepEqual(JSON.parse(created.stdout).diagnostics, []);
+    const owner = readFileSync(join(root, "docs", "packages", id, "OWNER.md"), "utf8");
+    assert.equal(ownerContractLib.parseOwnerContract(owner, { packageId: id }).originalRequest, order);
+    const doctor = run(root, "doctor", "--package", id, "--json");
+    assert.deepEqual(JSON.parse(doctor.stdout).packages[0].diagnostics, [], doctor.stdout);
+    assert.equal(doctor.status, 0, doctor.stdout + doctor.stderr);
+  }
+});
+
+test("C7: package-cli create writes the marker and keeps a heading of the order inside it", () => {
+  const root = repo("create-owner-heading");
+  const order = "Erster Absatz.\n\n## Eine Überschrift im Auftrag\n\nZweiter Absatz.";
+  const created = run(root, "create", "--package", "heading", "--owner-request", order, "--json");
+  assert.equal(created.status, 0, created.stderr);
+  const owner = readFileSync(join(root, "docs", "packages", "heading", "OWNER.md"), "utf8");
+  assert.ok(owner.includes("## Original request\n\n" + order + "\n" + ownerContractLib.OWNER_END_MARKER + "\n\n## Requirements"), owner);
+  const parsed = ownerContractLib.parseOwnerContract(owner, { packageId: "heading" });
+  assert.equal(parsed.originalRequest, order);
+  assert.deepEqual(parsed.diagnostics, []);
+  assert.deepEqual(JSON.parse(created.stdout).diagnostics, []);
+  const short = repo("create-owner-short");
+  const tiny = run(short, "create", "--package", "tiny", "--owner-request", "Mach!", "--json");
+  assert.equal(tiny.status, 0, tiny.stderr);
+  assert.deepEqual(JSON.parse(tiny.stdout).diagnostics, [], "a five character order passes the doctor");
+});
+
+test("D13: duty-waive takes the Owner's quote from --owner-ok-file, any length and characters, and refuses a file of the working tree", () => {
+  const root = repo("waive-file");
+  const quoteFile = join(suiteRoot, "waive-quote.txt");
+  writeFileSync(quoteFile, 'Ja, "erlassen".\n\n## Abschluss\n' + "q".repeat(3000) + "\n", "utf8");
+  // a file that lies neither in the temp folder nor in a run folder (this test file itself)
+  const inTree = fileURLToPath(import.meta.url);
+  // the option is parsed before the package is looked at: such a file is refused with its own message
+  const refused = run(root, "duty-waive", "--package", "demo", "--scope", "demo", "--duty", "d", "--owner-ok-file", inTree);
+  assert.notEqual(refused.status, 0);
+  assert.match(refused.stderr, /session temp folder or the run folder/u);
+  // the fixture repository lies in the temp folder, yet a file of its working tree is still refused
+  const inTempTree = join(root, "quote-in-tree.txt");
+  writeFileSync(inTempTree, "Ja\n", "utf8");
+  const refusedTemp = run(root, "duty-waive", "--package", "demo", "--scope", "demo", "--duty", "d", "--owner-ok-file", inTempTree);
+  assert.notEqual(refusedTemp.status, 0);
+  assert.match(refusedTemp.stderr, /session temp folder or the run folder \(\.unlazy\), not in a Git working tree/u);
+  const both = run(root, "duty-waive", "--package", "demo", "--scope", "demo", "--duty", "d", "--owner-ok", "x", "--owner-ok-file", quoteFile);
+  assert.notEqual(both.status, 0);
+  assert.match(both.stderr, /either --owner-ok or --owner-ok-file/u);
+  const neither = run(root, "duty-waive", "--package", "demo", "--scope", "demo", "--duty", "d");
+  assert.match(neither.stderr, /requires --owner-ok TEXT or --owner-ok-file FILE/u);
+  const blank = join(suiteRoot, "waive-blank.txt");
+  writeFileSync(blank, "  \n", "utf8");
+  const empty = run(root, "duty-waive", "--package", "demo", "--scope", "demo", "--duty", "d", "--owner-ok-file", blank);
+  assert.match(empty.stderr, /holds no Owner wording/u);
 });
 
 rmSync(suiteRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });

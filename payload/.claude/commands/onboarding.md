@@ -1,27 +1,26 @@
 ---
-description: Fuehrt das einmalige Onboarding innerhalb des vorinstallierten Onboarding-Pakets aus.
+description: Fuehrt das einmalige Onboarding aus: die Sitzung fragt den Menschen und schreibt das Installationsprofil selbst.
 ---
 
-Dieser Befehl laeuft nur, solange `docs/harness-instance.md` noch `[AUSFUELLEN]` enthaelt. Der Installer
-hat dafuer bereits das echte Repo-Paket `docs/packages/harness-onboarding/`, seinen
-unveraenderlichen `OWNER.md`, den Depth Tree und ein Leaf mit den exakten Schreibrechten
-angelegt. Fehlt dieses Paket oder die Leaf-Bindung, wird nicht geschrieben; repariere
-zuerst die Installation.
+Dieser Befehl laeuft nur, solange `docs/harness-instance.md` noch `[AUSFUELLEN]` enthaelt. Er braucht kein Paket und
+keinen Arbeitsagenten: **du** fragst den Menschen und schreibst **nur** das Profil `docs/harness-instance.md`. Der
+Installer legt kein Onboarding-Paket an; ein `harness-onboarding`-Paket einer aelteren Installation ist stillgelegt
+und wird nicht fortgesetzt.
 
-1. Starte bzw. setze das Onboarding-Leaf mit dem Package Executor fort. Lies
-   `OWNER.md`, `PACKAGE.md`, den Leaf-Vertrag und seine `OWNS`-Pfade.
-2. Frage jede noch offene `[AUSFUELLEN]`-Angabe in `docs/harness-instance.md` einzeln ab und schreibe nur die vom
-   Menschen bestaetigten Antworten. Raten und stilles Entfernen von Platzhaltern sind
-   verboten.
-3. Ergaenze `docs/tool-landscape.md` nur um bestaetigte Werkzeuge. Zugangs-WERTE kommen
-   nie in Dateien; nur Namen und gemessener Verbindungsstatus sind zulaessig.
-4. Owner-Entscheidungen zu Remote, erlaubten Schreibzielen, versionierten Einstellungen
-   und Sitzungsrollen bleiben manuelle Gates im Paket.
-5. Verifiziere das Leaf lokal, nimm den Ruecklauf ueber `package-executor return` an und
-   integriere das Paket genau einmal ueber `package-executor integrate`. Kein roher
-   Git-Befehl und kein Auto-Push.
-6. Berichte offene Platzhalter, Werkzeugstatus, Gate-Evidence und den naechsten exakten
-   Paket-Schritt. Publish bleibt ein eigener, vom Owner freizugebender `/save-work`-Schritt.
+1. Lies `docs/harness-instance.md`. Jede Zeile mit `[AUSFUELLEN]` ist eine offene Angabe.
+2. Frage jede offene Angabe einzeln ab, eine Frage nach der anderen (AskUserQuestion oder eine einzelne Frage im Chat).
+   Raten, Standardwerte und stilles Entfernen von Platzhaltern sind verboten; nimm nur, was der Mensch bestaetigt.
+3. Schreibe jede bestaetigte Antwort sofort in ihre Zeile von `docs/harness-instance.md` und lasse alle anderen
+   Zeilen unveraendert. Eine Antwort bleibt so auch dann erhalten, wenn der Mensch mittendrin abbricht.
+4. Entscheidungen zu Remote, erlaubten Schreibzielen, Publish-Regel und Sitzungsrichtlinie trifft der Mensch:
+   frage sie ausdruecklich ab und uebernimm nie einen Vorschlag als gegeben. Andere Dateien schreibst du hier nicht:
+   weder `docs/tool-landscape.md` noch Einstellungen noch `docs/08-sessions-rollen.md`. Was an Werkzeugen oder
+   Zugaengen auffaellt, nennst du am Ende als Vorschlag fuer spaetere Arbeit (nur Namen, nie Zugangswerte).
+5. Pruefe das Ergebnis mit `node checks/onboarding-ready.mjs --root . --mode profile`; erwartet ist `PROFILE READY`.
+   Danach ist keine Marke mehr da, und der Sitzungsstart schlaegt das Onboarding nicht mehr vor.
+6. Berichte, welche Werte gesetzt sind und was offen bleibt. Publish bleibt ein eigener, vom Owner freizugebender
+   `/save-work`-Schritt.
 
-Bricht der Mensch ab, bleibt der Paket- und Platzhalterzustand offen und wird in der
-naechsten Sitzung aus derselben kanonischen Runtime fortgesetzt.
+Bricht der Mensch ab, stehen die noch offenen `[AUSFUELLEN]`-Zeilen weiter in der Datei und die schon bestaetigten
+Antworten sind gespeichert. Der naechste Sitzungsstart schlaegt das Onboarding wieder vor, bis keine Marke mehr da ist;
+er erzwingt es nie.

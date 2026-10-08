@@ -14,22 +14,57 @@
 // Codex 0.153.4: the hook fires for PowerShell commands and its JSON deny holds).
 // Both see their package session as KEEL_PACKAGE_SESSION and the rule root as
 // KEEL_HARNESS_ROOT.
+//
+// Run limits (P12, C1/C12): no step count, no total time, no start time. A run
+// is ended only
+//  - when it is really hung: no tool call open and no event for the silence time
+//    (silence-watch.mjs, KEEL_SILENCE_MS), status `hung`;
+//  - at its cost frame: Claude's own --max-budget-usd. Codex has no such switch and reports usage only
+//    when a turn ends, so its token frame is counted from the rollout file Codex writes while it works
+//    (codex-rollout.mjs, read incrementally) and from turn.completed; the run is stopped when the rollout
+//    shows the frame used up during a turn, status `budget-reached`, resumable with the native session id.
+//    A process that ends by itself with success after turn.completed is never killed for the frame: it is
+//    `provider-returned`, with a hint that the frame was exceeded;
+//  - when a PreToolUse hook refused the same tool input three times in a row, status `repeated-block`. Claude
+//    shows a refusal as a tool_result in its stream; Codex shows none in `exec --json`, so its refusals are read
+//    from the same rollout file (answers to tool calls, joined to their calls by call_id).
+// A deadline (--deadline-seconds) and a turn limit (--max-turns) exist only when the
+// caller asks for them.
 
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
 import { spawn, spawnSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { replaceFileSync } from "./atomic-file.mjs";
 import { CODEX_MODEL, CODEX_EFFORT } from "./codex-pin.mjs";
+import { createEventTracker } from "./provider-events.mjs";
+import { createRolloutReader, codexSessionsRoot } from "./codex-rollout.mjs";
 
 const hereFile = fileURLToPath(import.meta.url);
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 const RUN_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const ACTIVE = new Set(["queued", "starting", "running", "abort-requested", "timeout-requested"]);
-const TERMINAL = new Set(["provider-start-failed", "provider-returned", "provider-failed", "aborted", "timed-out", "vanished"]);
+// hung, budget-reached and repeated-block end the provider process; the Orchestrator decides what follows
+// (resume, retry, reassign, abort).
+const TERMINAL = new Set(["provider-start-failed", "provider-returned", "provider-failed", "aborted", "timed-out", "vanished",
+  "hung", "budget-reached", "repeated-block"]);
+export const TERMINAL_STATES = TERMINAL;
+// Format of the run state and the manifest. 1: deadline and turn count mandatory. 2 (P12): both optional
+// (deadlineAt may be null), cost frame and resume added. Version 1 runs are read and checked as before.
+const RUN_FORMAT = 2;
+const READABLE_FORMATS = new Set([1, 2]);
+// The log of a run is cut at this size to protect the disk; it is no limit on the work. Origin: self-built
+// (F1), no function of Claude Code or Codex. The cut is never silent: a keel_log_truncated line ends the log
+// and the run record carries logTruncated.
 const MAX_OUTPUT_BYTES = 32 * 1024 * 1024;
+export const DEFAULT_COST_BUDGET_USD = 20;
+export const DEFAULT_TOKEN_BUDGET = 2_000_000;
+// How often the Codex rollout file is read while the event stream is quiet (and at most this often while it is
+// busy: a read costs a stat and the new bytes). KEEL_ROLLOUT_POLL_MS shortens it for tests.
+const ROLLOUT_POLL_MS = 5_000;
+const ROLLOUT_MIN_GAP_MS = 250;
 
 function runtimeError(code, message) {
   const error = new Error(message);
@@ -48,6 +83,23 @@ function boundedInteger(value, label, minimum, maximum) {
   if (!Number.isInteger(number) || number < minimum || number > maximum) {
     throw runtimeError("PROVIDER_RUNTIME_INPUT", label + " must be an integer from " + minimum + " to " + maximum);
   }
+  return number;
+}
+
+// A whole number of at least 1 without an upper bound of our own.
+function positiveInteger(value, label) {
+  const number = Number(value);
+  if (!Number.isSafeInteger(number) || number < 1) {
+    throw runtimeError("PROVIDER_RUNTIME_INPUT", label + " must be a whole number of at least 1");
+  }
+  return number;
+}
+
+const absent = (value) => value === undefined || value === null || value === "";
+
+function positiveNumber(value, label) {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number <= 0) throw runtimeError("PROVIDER_RUNTIME_INPUT", label + " must be a number above 0");
   return number;
 }
 
@@ -90,7 +142,7 @@ function controlPath(repoRoot, scope, runId) {
 }
 
 function validateRun(value, expected = {}) {
-  if (!value || value.schemaVersion !== 1 || !RUN_ID.test(String(value.runId || "")) ||
+  if (!value || !READABLE_FORMATS.has(value.schemaVersion) || !RUN_ID.test(String(value.runId || "")) ||
       !IDENTIFIER.test(String(value.packageId || "")) || !IDENTIFIER.test(String(value.scope || "")) ||
       !IDENTIFIER.test(String(value.leaf || "")) || !["claude", "codex"].includes(value.provider) ||
       (!ACTIVE.has(value.state) && !TERMINAL.has(value.state))) {
@@ -102,8 +154,10 @@ function validateRun(value, expected = {}) {
     }
   }
   if (value.nativeHandle !== null && value.nativeHandle !== undefined) safeLine(value.nativeHandle, "native handle", 256);
-  if (!Number.isFinite(Date.parse(value.createdAt)) || !Number.isFinite(Date.parse(value.deadlineAt)) ||
-      !Number.isFinite(Date.parse(value.lastHeartbeatAt))) {
+  // Version 1 always carried a deadline. From version 2 on it is optional: null means "no deadline".
+  const deadlineOptional = value.schemaVersion >= 2 && value.deadlineAt === null;
+  if (!Number.isFinite(Date.parse(value.createdAt)) || !Number.isFinite(Date.parse(value.lastHeartbeatAt)) ||
+      (!deadlineOptional && !Number.isFinite(Date.parse(value.deadlineAt)))) {
     throw runtimeError("PROVIDER_RUN_INVALID", "provider run timestamps are invalid");
   }
   return value;
@@ -158,9 +212,13 @@ export function workerGuardHooks(harnessRoot) {
   if (!Array.isArray(groups) || !groups.length) {
     throw runtimeError("PROVIDER_GUARDS", "the Harness root has no PreToolUse guards: " + file);
   }
+  // The guards start in exec form (P5, A1: "command": "node", "args": ["${CLAUDE_PROJECT_DIR}/<guard program>", <group>],
+  // no shell; Claude Code substitutes only the braced placeholder there); the fixed root goes into the command and into
+  // every argument, so the worker gets the same start form as the root.
   const root = harnessRoot.split(path.sep).join("/");
+  const fixed = (value) => String(value ?? "").replaceAll("${CLAUDE_PROJECT_DIR}", root).replaceAll("$CLAUDE_PROJECT_DIR", root);
   return groups.map((group) => ({ ...group, hooks: (group.hooks || []).map((hook) => ({
-    ...hook, command: String(hook.command || "").replaceAll("$CLAUDE_PROJECT_DIR", root),
+    ...hook, command: fixed(hook.command), ...(Array.isArray(hook.args) ? { args: hook.args.map(fixed) } : {}),
   })) }));
 }
 
@@ -192,6 +250,23 @@ export function codexGuardHooks(harnessRoot) {
   return "[" + entries.join(",") + "]";
 }
 
+// A resumed run continues the native session of an earlier run of the same leaf (Claude --resume <session id>,
+// codex exec resume <thread id>) with a new cost frame instead of starting over.
+function resumeSpec(value, provider) {
+  if (value === undefined || value === null) return null;
+  const nativeHandle = safeLine(value.nativeHandle, "resume native handle", 256);
+  if (!RUN_ID.test(String(value.fromRunId || ""))) throw runtimeError("PROVIDER_RUNTIME_INPUT", "resume fromRunId is invalid");
+  if (value.provider !== undefined && value.provider !== provider) {
+    throw runtimeError("PROVIDER_RUNTIME_INPUT", "a run is resumed by the provider that started it");
+  }
+  return {
+    nativeHandle,
+    fromRunId: value.fromRunId,
+    reason: value.reason ? safeLine(value.reason, "resume reason", 200) : null,
+    message: value.message ? safeLine(value.message, "resume message", 500) : null,
+  };
+}
+
 export async function launchProviderRun(options) {
   const repoRoot = fs.realpathSync(path.resolve(options.repoRoot));
   const scope = identifier(options.scope, "scope");
@@ -201,17 +276,31 @@ export async function launchProviderRun(options) {
   const provider = String(options.provider || "");
   if (!new Set(["claude", "codex"]).has(provider)) throw runtimeError("PROVIDER_RUNTIME_INPUT", "provider must be claude or codex");
   const briefFile = fs.realpathSync(path.resolve(options.briefFile));
+  // P18: a step with a working copy of its own runs there; the copy lives inside the ignored runtime folder of the repository.
+  let workDir = null;
+  if (!absent(options.workDir)) {
+    workDir = fs.realpathSync(path.resolve(options.workDir));
+    const relativeWork = path.relative(repoRoot, workDir);
+    if (!relativeWork || relativeWork.startsWith(".." + path.sep) || path.isAbsolute(relativeWork)) {
+      throw runtimeError("PROVIDER_RUNTIME_INPUT", "workDir must be inside the package repository");
+    }
+  }
   const relativeBrief = path.relative(repoRoot, briefFile);
   if (!relativeBrief || relativeBrief.startsWith(".." + path.sep) || path.isAbsolute(relativeBrief)) {
     throw runtimeError("PROVIDER_RUNTIME_INPUT", "briefFile must be inside the package repository");
   }
-  const deadlineSeconds = boundedInteger(options.deadlineSeconds ?? 900, "deadlineSeconds", 1, 86_400);
-  const startTimeoutSeconds = boundedInteger(options.startTimeoutSeconds ?? 30, "startTimeoutSeconds", 1, 300);
-  const maxTurns = boundedInteger(options.maxTurns ?? 32, "maxTurns", 1, 128);
+  // No default and no upper bound: a deadline and a turn limit exist only when the caller names them.
+  const deadlineSeconds = absent(options.deadlineSeconds) ? null : positiveInteger(options.deadlineSeconds, "deadlineSeconds");
+  const maxTurns = absent(options.maxTurns) ? null : positiveInteger(options.maxTurns, "maxTurns");
+  // The cost frame is the brake (C12): Claude's own --max-budget-usd, for Codex a token frame counted from usage.
+  const costBudgetUsd = provider === "claude" ? positiveNumber(options.costBudgetUsd ?? DEFAULT_COST_BUDGET_USD, "costBudgetUsd") : null;
+  const tokenBudget = provider === "codex" ? positiveInteger(options.tokenBudget ?? DEFAULT_TOKEN_BUDGET, "tokenBudget") : null;
+  const resume = resumeSpec(options.resume, provider);
   const executable = safeLine(options.claudeExecutable || "claude", "Claude executable", 2_000);
   const prefixArgs = Array.isArray(options.claudePrefixArgs) ? options.claudePrefixArgs.map((item) => safeLine(item, "Claude prefix argument", 2_000)) : [];
   if (!options.harnessRoot) throw runtimeError("PROVIDER_RUNTIME_INPUT", "harnessRoot is required: every worker runs under the Harness guards");
   const harnessRoot = fs.realpathSync(path.resolve(options.harnessRoot));
+  const unlazyRoot = absent(options.unlazyRoot) ? null : fs.realpathSync(path.resolve(options.unlazyRoot));
   let codexCommand = null;
   if (provider === "codex") {
     const requested = options.codexCommand || { command: "codex", prefixArgs: [] };
@@ -220,6 +309,7 @@ export async function launchProviderRun(options) {
   }
   // Fail before any process starts when the guards cannot be handed to the worker.
   const guards = provider === "codex" ? codexGuardHooks(harnessRoot) : workerGuardHooks(harnessRoot);
+  const attempt = positiveInteger(options.attempt ?? 1, "attempt");
   const runId = crypto.randomUUID();
   const directory = runDirectory(repoRoot, scope, runId);
   fs.mkdirSync(path.dirname(directory), { recursive: true });
@@ -230,9 +320,10 @@ export async function launchProviderRun(options) {
     atomicJson(settingsFile, { hooks: { PreToolUse: guards } });
   }
   const createdAt = new Date().toISOString();
-  const deadlineAt = new Date(Date.now() + deadlineSeconds * 1_000).toISOString();
+  const deadlineAt = deadlineSeconds === null ? null : new Date(Date.now() + deadlineSeconds * 1_000).toISOString();
+  if (deadlineSeconds !== null && deadlineAt === null) throw runtimeError("PROVIDER_RUNTIME_INPUT", "deadlineSeconds is too large");
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: RUN_FORMAT,
     runId,
     repoRoot,
     packageId,
@@ -241,10 +332,16 @@ export async function launchProviderRun(options) {
     leaf,
     provider,
     briefFile,
+    workDir,
     executable,
     prefixArgs,
     maxTurns,
     deadlineAt,
+    costBudgetUsd,
+    tokenBudget,
+    codexHome: provider === "codex" && !absent(options.codexHome) ? path.resolve(options.codexHome) : null,
+    resume,
+    unlazyRoot,
     model: provider === "codex" ? CODEX_MODEL : null,
     effort: provider === "codex" ? CODEX_EFFORT : null,
     permissionMode: "bypassPermissions",
@@ -255,7 +352,7 @@ export async function launchProviderRun(options) {
   };
   atomicJson(manifestPath(repoRoot, scope, runId), manifest);
   atomicJson(providerRunPath(repoRoot, scope, runId), {
-    schemaVersion: 1,
+    schemaVersion: RUN_FORMAT,
     runId,
     packageId,
     scope,
@@ -266,14 +363,18 @@ export async function launchProviderRun(options) {
     nativeHandle: null,
     workerPid: null,
     providerPid: null,
-    attempt: boundedInteger(options.attempt ?? 1, "attempt", 1, 1_000),
+    attempt,
     createdAt,
     deadlineAt,
+    costBudgetUsd,
+    tokenBudget,
+    ...(resume ? { resumedFrom: resume.fromRunId } : {}),
     lastHeartbeatAt: createdAt,
     providerOutputEvidence: false,
   });
 
   let worker;
+  const workerExit = { done: false, at: 0, code: null };
   try {
     worker = spawn(process.execPath, [hereFile, "worker", "--manifest", manifestPath(repoRoot, scope, runId)], {
       cwd: repoRoot,
@@ -283,24 +384,31 @@ export async function launchProviderRun(options) {
       env: { ...process.env, UNLAZY_PACKAGE: packageId, UNLAZY_SCOPE: scope, KEEL_PACKAGE_SESSION: sessionId },
     });
     worker.unref();
+    worker.once("exit", (code) => { workerExit.done = true; workerExit.at = Date.now(); workerExit.code = code; });
   } catch (error) {
     writeRun(repoRoot, scope, runId, (run) => ({ ...run, state: "provider-start-failed",
       failure: { code: "WORKER_SPAWN", message: error.message }, finishedAt: new Date().toISOString() }));
     throw terminalFailure(readProviderRun(repoRoot, scope, runId));
   }
 
-  const startDeadline = Date.now() + startTimeoutSeconds * 1_000;
-  while (Date.now() < startDeadline) {
-    const run = readProviderRun(repoRoot, scope, runId);
-    if ((run.state === "running" || run.state === "provider-returned") && run.nativeHandle) return run;
+  // No start time (C1): waiting for the native handle ends when the handle arrives, when the run ends, when
+  // the worker is gone without a verdict, or through the silence watcher of the worker if the start hangs.
+  const launched = new Set(["running", "provider-returned", "hung", "budget-reached", "repeated-block"]);
+  for (;;) {
+    let run = await refreshProviderRun({ repoRoot, scope, runId });
+    if (launched.has(run.state) && run.nativeHandle) return run;
     if (TERMINAL.has(run.state)) throw terminalFailure(run);
+    if (workerExit.done && Date.now() - workerExit.at >= 500) {
+      run = readProviderRun(repoRoot, scope, runId);
+      if (launched.has(run.state) && run.nativeHandle) return run;
+      if (TERMINAL.has(run.state)) throw terminalFailure(run);
+      writeRun(repoRoot, scope, runId, (current) => ({ ...current, state: "provider-start-failed",
+        failure: { code: "WORKER_EXITED", message: "the provider worker exited (code " + workerExit.code + ") before the provider started" },
+        finishedAt: new Date().toISOString() }));
+      throw terminalFailure(readProviderRun(repoRoot, scope, runId));
+    }
     await delay(50);
   }
-  await requestProviderStop({ repoRoot, scope, runId, action: "timeout", reason: "native handle start deadline expired" });
-  const run = readProviderRun(repoRoot, scope, runId);
-  const error = runtimeError("PROVIDER_START_TIMEOUT", "provider emitted no native session handle within " + startTimeoutSeconds + " seconds");
-  error.run = run;
-  throw error;
 }
 
 export async function requestProviderStop(options) {
@@ -330,7 +438,9 @@ export async function refreshProviderRun(options) {
   if (!ACTIVE.has(run.state)) return run;
   const now = options.now ? new Date(options.now) : new Date();
   if (!Number.isFinite(now.getTime())) throw runtimeError("PROVIDER_RUNTIME_INPUT", "now must be an ISO timestamp");
-  if (now.getTime() >= Date.parse(run.deadlineAt) && run.state !== "timeout-requested") {
+  // A run without a deadline (deadlineAt null, the normal case) is never timed out here.
+  if (run.deadlineAt !== null && run.deadlineAt !== undefined && now.getTime() >= Date.parse(run.deadlineAt) &&
+      run.state !== "timeout-requested") {
     await requestProviderStop({ ...options, action: "timeout", reason: "provider run deadline expired" });
     run = readProviderRun(options.repoRoot, options.scope, options.runId, options.expected || {});
   }
@@ -363,7 +473,7 @@ export async function refreshProviderRun(options) {
 function readManifest(file) {
   const resolved = fs.realpathSync(path.resolve(file));
   const value = readJson(resolved, "provider manifest");
-  if (!value || value.schemaVersion !== 1 || !RUN_ID.test(String(value.runId || "")) ||
+  if (!value || !READABLE_FORMATS.has(value.schemaVersion) || !RUN_ID.test(String(value.runId || "")) ||
       !["claude", "codex"].includes(value.provider) || !Array.isArray(value.prefixArgs)) {
     throw runtimeError("PROVIDER_MANIFEST", "provider manifest has an invalid shape");
   }
@@ -391,44 +501,72 @@ function terminateProcessTree(pid) {
   }, 2_000).unref();
 }
 
-function appendBounded(file, bytes) {
-  const current = fs.existsSync(file) ? fs.statSync(file).size : 0;
-  if (current >= MAX_OUTPUT_BYTES) return;
-  const remaining = MAX_OUTPUT_BYTES - current;
-  fs.appendFileSync(file, bytes.subarray(0, remaining));
+// A log file with a size bound that says so when it cuts: the bytes up to the bound stay, then one line
+// {"type":"keel_log_truncated","bytes":<bytes kept>} follows, and onTruncate lets the run record carry
+// logTruncated. Everything after that is only counted (dropped).
+export function boundedLog(file, { limit = MAX_OUTPUT_BYTES, onTruncate = null } = {}) {
+  const log = { file, written: fs.existsSync(file) ? fs.statSync(file).size : 0, dropped: 0, truncated: false };
+  log.write = (bytes) => {
+    if (!log.truncated && log.written + bytes.length <= limit) {
+      fs.appendFileSync(file, bytes);
+      log.written += bytes.length;
+      return;
+    }
+    if (log.truncated) { log.dropped += bytes.length; return; }
+    const room = Math.max(0, limit - log.written);
+    if (room) fs.appendFileSync(file, bytes.subarray(0, room));
+    log.written += room;
+    log.dropped += bytes.length - room;
+    log.truncated = true;
+    fs.appendFileSync(file, "\n" + JSON.stringify({ type: "keel_log_truncated", bytes: log.written }) + "\n");
+    if (onTruncate) onTruncate(log);
+  };
+  return log;
 }
 
 function routePrompt(manifest) {
   const brief = JSON.stringify(manifest.briefFile);
+  if (manifest.resume) {
+    return `Read ${brief} and continue exactly that bound leaf contract: your previous run stopped` +
+      `${manifest.resume.reason ? " (" + manifest.resume.reason + ")" : ""} before it was finished. Do not widen OWNS. ` +
+      `${manifest.resume.message ? manifest.resume.message + " " : ""}` +
+      "Return a concise result; the parent will reverify locally.";
+  }
   return `Read ${brief} and execute exactly that bound leaf contract. Do not widen OWNS. ` +
     "Return a concise result; the parent will reverify locally.";
 }
 
 // The exact provider process of a run: Claude print mode with the root's guards as its only
-// settings, or Codex exec with the same guards handed over as hooks (E6/E8).
+// settings, or Codex exec with the same guards handed over as hooks (E6/E8). A step limit goes
+// to Claude only when the manifest names one; the cost frame goes along as Claude's own
+// --max-budget-usd. A resumed run continues the native session instead of starting a new one.
 export function providerProcess(manifest) {
   // A run manifest without its guards never starts: an unguarded worker is the gap this
   // runtime closes (E6/E8).
   if (!manifest.harnessRoot) throw runtimeError("PROVIDER_GUARDS", "run manifest names no Harness root");
+  const resume = manifest.resume || null;
   if (manifest.provider === "codex") {
     if (!manifest.codexHooks || !manifest.codexCommand) throw runtimeError("PROVIDER_GUARDS", "run manifest carries no Codex guards");
-    return {
-      command: manifest.codexCommand.command,
-      args: [
-        ...manifest.codexCommand.prefixArgs,
-        "exec",
-        "--json",
-        "--dangerously-bypass-hook-trust",
-        "-s", "workspace-write",
-        "-C", manifest.repoRoot,
-        "-m", manifest.model,
-        "-c", "model_reasoning_effort=" + tomlLiteral(manifest.effort),
-        "-c", "hooks.PreToolUse=" + manifest.codexHooks,
-        routePrompt(manifest),
-      ],
-    };
+    const shared = [
+      "--json",
+      "--dangerously-bypass-hook-trust",
+    ];
+    const settings = [
+      "-m", manifest.model,
+      "-c", "model_reasoning_effort=" + tomlLiteral(manifest.effort),
+      "-c", "hooks.PreToolUse=" + manifest.codexHooks,
+    ];
+    // codex exec resume takes neither -s nor -C (codex exec resume --help, 0.153.4): the sandbox goes as a
+    // config value and the working directory is the worker's own.
+    const args = resume
+      ? ["exec", "resume", ...shared, "-c", "sandbox_mode=" + tomlLiteral("workspace-write"), ...settings, resume.nativeHandle, routePrompt(manifest)]
+      : ["exec", ...shared, "-s", "workspace-write", "-C", manifest.workDir || manifest.repoRoot, ...settings, routePrompt(manifest)];
+    return { command: manifest.codexCommand.command, args: [...manifest.codexCommand.prefixArgs, ...args] };
   }
   if (!manifest.settingsFile) throw runtimeError("PROVIDER_GUARDS", "run manifest carries no guard settings");
+  const turnLimit = Number.isInteger(manifest.maxTurns) && manifest.maxTurns > 0 ? ["--max-turns", String(manifest.maxTurns)] : [];
+  const costFrame = Number.isFinite(manifest.costBudgetUsd) && manifest.costBudgetUsd > 0
+    ? ["--max-budget-usd", String(manifest.costBudgetUsd)] : [];
   return {
     command: manifest.executable,
     args: [
@@ -436,12 +574,14 @@ export function providerProcess(manifest) {
       "-p",
       "--output-format", "stream-json",
       "--verbose",
-      "--max-turns", String(manifest.maxTurns),
+      ...turnLimit,
       // A print-mode worker has no operator who could answer a permission prompt; the
       // guards decide instead, and a guard denial holds even under bypassPermissions.
       "--permission-mode", manifest.permissionMode,
       "--setting-sources", "",
       "--settings", manifest.settingsFile,
+      ...costFrame,
+      ...(resume ? ["--resume", resume.nativeHandle] : []),
       routePrompt(manifest),
     ],
   };
@@ -456,20 +596,81 @@ export function providerEnvironment(manifest, base = process.env) {
   return env;
 }
 
+// The silence watcher (vendor/unlazy/scripts/lib/silence-watch.mjs): from the Unlazy root the executor
+// named, else from the runtime that ships next to this Harness tree (inside it in the standalone layout,
+// beside it in the source layout).
+async function loadSilenceWatch(manifest) {
+  const tree = path.resolve(path.dirname(hereFile), "..", "..");
+  const roots = [manifest.unlazyRoot, path.join(tree, "vendor", "unlazy"), path.join(path.dirname(tree), "vendor", "unlazy")]
+    .filter(Boolean);
+  const files = roots.map((root) => path.join(root, "scripts", "lib", "silence-watch.mjs"));
+  const file = files.find((candidate) => fs.existsSync(candidate));
+  if (!file) throw runtimeError("PROVIDER_SILENCE_WATCH", "silence-watch.mjs not found: " + files.join(", "));
+  const module = await import(pathToFileURL(file).href);
+  if (typeof module.runWatched !== "function") throw runtimeError("PROVIDER_SILENCE_WATCH", "silence-watch.mjs exports no runWatched");
+  return module;
+}
+
+// The verdict of a run that has ended, from what the provider process and its event stream said.
+// Precedence: a requested stop (abort, timeout), a guard that refused the same input three times,
+// the cost frame, a hang, then the plain result.
+export function runVerdict({ stopAction, ownStop, tracker, result, nativeHandle, manifest }) {
+  const events = tracker.state;
+  if (stopAction === "abort") return { state: "aborted", failure: null };
+  if (stopAction === "timeout") return { state: "timed-out", failure: null };
+  if (ownStop === "repeated-block" && events.repeatedBlock) {
+    const block = events.repeatedBlock;
+    return { state: "repeated-block", failure: { code: "REPEATED_BLOCK",
+      message: "a guard refused the same " + block.tool + " input " + block.count + " times: " + block.command },
+    blocked: { tool: block.tool, command: block.command, input: block.input, message: block.message, count: block.count } };
+  }
+  // Codex: a process that ended by itself with success finished its work, whatever the frame says, also when the silence
+  // watcher judged it hung a moment before it left (its kill is SIGKILL / taskkill /F and never leaves exit 0; P27). It
+  // is never stopped after turn.completed (Orchestrator, 06.10.2026): provider-returned with a hint. Claude: the frame decides.
+  const endedByItself = result.code === 0 && !result.signal;
+  const finishedAnyway = manifest.provider === "codex" && endedByItself;
+  if (events.budgetReached && !finishedAnyway) {
+    const message = manifest.provider === "claude"
+      ? "provider result error_max_budget_usd: the cost frame of " + manifest.costBudgetUsd + " USD is used up"
+      : "the token frame of " + manifest.tokenBudget + " is used up (" + events.tokensUsed + " counted)";
+    return { state: "budget-reached", failure: { code: "BUDGET_REACHED", message } };
+  }
+  if (result.hung && !finishedAnyway) return { state: "hung", failure: { code: "PROVIDER_HUNG", message: String(result.hungReason || "the provider run hung") } };
+  if (!nativeHandle) {
+    return { state: "provider-start-failed", failure: { code: "NO_NATIVE_HANDLE",
+      message: "the provider emitted no native session handle" + (result.spawnError ? " (provider process error: " + result.spawnError + ")" : "") } };
+  }
+  if (result.code !== 0 || events.resultErrored) {
+    const message = result.code === 0 && events.resultErrored
+      ? "provider result " + events.resultSubtype
+      : "provider exited " + result.code + (result.signal ? " via " + result.signal : "");
+    const said = events.resultErrored && events.resultMessage ? ": " + events.resultMessage : "";
+    return { state: "provider-failed", failure: { code: "PROVIDER_EXIT", message: message + said } };
+  }
+  if (events.budgetReached) {
+    return { state: "provider-returned", failure: null, hints: ["the token frame of " + manifest.tokenBudget +
+      " was exceeded (" + events.tokensUsed + " counted) and the run ended by itself with success: it was not stopped"] };
+  }
+  return { state: "provider-returned", failure: null };
+}
+
 async function workerMain(manifestFile) {
   const manifest = readManifest(manifestFile);
   const stateFile = providerRunPath(manifest.repoRoot, manifest.scope, manifest.runId);
   const stdoutFile = path.join(path.dirname(stateFile), "provider.stdout.ndjson");
   const stderrFile = path.join(path.dirname(stateFile), "provider.stderr.log");
+  const tracker = createEventTracker({ provider: manifest.provider, tokenBudget: manifest.tokenBudget });
   let stopAction = null;
-  let resultErrored = false;
-  let resultSubtype = "";
+  let ownStop = null;
   let stdoutBuffer = "";
   let finalized = false;
   let child = null;
+  let handleRecorded = false;
+  let rolloutTimer = null;
 
   const update = (transform) => writeRun(manifest.repoRoot, manifest.scope, manifest.runId, transform);
-  update((run) => ({ ...run, state: "starting", workerPid: process.pid, startedAt: new Date().toISOString(),
+  const startedAtMs = Date.now();
+  update((run) => ({ ...run, state: "starting", workerPid: process.pid, startedAt: new Date(startedAtMs).toISOString(),
     lastHeartbeatAt: new Date().toISOString() }));
 
   const heartbeat = setInterval(() => {
@@ -480,6 +681,7 @@ async function workerMain(manifestFile) {
   }, 1_000);
   heartbeat.unref();
 
+  const stopProvider = () => { if (child) terminateProcessTree(child.pid); };
   const controlPoll = setInterval(() => {
     const file = controlPath(manifest.repoRoot, manifest.scope, manifest.runId);
     if (!fs.existsSync(file) || stopAction) return;
@@ -487,103 +689,149 @@ async function workerMain(manifestFile) {
       const control = readJson(file, "provider control");
       if (control.runId !== manifest.runId || !["abort", "timeout"].includes(control.action)) return;
       stopAction = control.action;
-      if (child) terminateProcessTree(child.pid);
+      stopProvider();
     } catch { /* invalid control is ignored here and remains diagnosable on disk */ }
   }, 200);
   controlPoll.unref();
 
-  const deadlineTimer = setTimeout(() => {
-    if (finalized) return;
-    stopAction = "timeout";
-    if (child) terminateProcessTree(child.pid);
-  }, Math.max(1, Date.parse(manifest.deadlineAt) - Date.now()));
-  deadlineTimer.unref();
+  // The deadline timer exists only for a run whose caller asked for a deadline.
+  let deadlineTimer = null;
+  if (manifest.deadlineAt) {
+    deadlineTimer = setTimeout(() => {
+      if (finalized) return;
+      stopAction = "timeout";
+      stopProvider();
+    }, Math.max(1, Date.parse(manifest.deadlineAt) - Date.now()));
+    deadlineTimer.unref();
+  }
+  const clearTimers = () => {
+    clearInterval(heartbeat);
+    clearInterval(controlPoll);
+    if (deadlineTimer) clearTimeout(deadlineTimer);
+    if (rolloutTimer) clearInterval(rolloutTimer);
+  };
+  const startFailed = (code, message) => {
+    clearTimers();
+    update((run) => ({ ...run, state: "provider-start-failed", finishedAt: new Date().toISOString(),
+      failure: { code, message }, lastHeartbeatAt: new Date().toISOString() }));
+  };
+
+  let silenceWatch;
+  try { silenceWatch = await loadSilenceWatch(manifest); }
+  catch (error) { startFailed(error.code || "PROVIDER_SILENCE_WATCH", error.message); return; }
+  let provider;
+  try { provider = providerProcess(manifest); }
+  catch (error) { startFailed("PROVIDER_SPAWN", error.message); return; }
+
+  const logs = {
+    stdout: boundedLog(stdoutFile, { onTruncate: () => { try { update((run) => ({ ...run, logTruncated: true })); } catch { /* noted at the end */ } } }),
+    stderr: boundedLog(stderrFile, { onTruncate: () => { try { update((run) => ({ ...run, logTruncated: true })); } catch { /* noted at the end */ } } }),
+  };
+
+  // The run stops itself in two cases only: a PreToolUse hook refused the same input three times in a row, and
+  // the rollout file showed the token frame of a Codex run used up while a turn was running (Claude ends its
+  // own run at --max-budget-usd). The frame reached at turn.completed stops nothing: the process ends by itself.
+  const stopWhenDue = () => {
+    if (ownStop || stopAction || finalized) return;
+    if (tracker.state.repeatedBlock) ownStop = "repeated-block";
+    else if (codex && tracker.state.budgetStop) ownStop = "budget-reached";
+    if (ownStop) stopProvider();
+  };
+
+  // Codex reports usage only at the end of a turn, so during a turn its rollout file is read for the token
+  // count (decision of the Orchestrator, 06.10.2026, a deliberate deviation from "counted from turn.completed").
+  // The same pass reads the answers to the tool calls: a call that a PreToolUse hook refused leaves no item in
+  // the event stream, only a response_item in the rollout file, and those answers go through the tracker's
+  // counter of repeated refusals (provider-events.mjs, codex-rollout.mjs).
+  // Read at every stream event (at most every ROLLOUT_MIN_GAP_MS) and every ROLLOUT_POLL_MS while the stream is
+  // quiet. A missing file leaves the count at turn.completed and is noted in the run record.
+  const codex = manifest.provider === "codex" && Number.isFinite(manifest.tokenBudget) && manifest.tokenBudget > 0;
+  const rolloutRoot = codexSessionsRoot(manifest.codexHome);
+  let rollout = null;
+  let lastRolloutPoll = 0;
+  const pollRollout = (force = false) => {
+    if (!codex || !tracker.state.nativeHandle) return;
+    const now = Date.now();
+    if (!force && now - lastRolloutPoll < ROLLOUT_MIN_GAP_MS) return;
+    lastRolloutPoll = now;
+    rollout ??= createRolloutReader({ sessionsRoot: rolloutRoot, threadId: tracker.state.nativeHandle, since: startedAtMs });
+    try { rollout.poll(); } catch { /* the file is read again at the next poll */ }
+    tracker.noteRolloutTokens(rollout.runTokens);
+    for (const answer of rollout.takeToolResults()) tracker.noteToolResult(answer);
+  };
+  if (codex) {
+    rolloutTimer = setInterval(() => { pollRollout(true); stopWhenDue(); }, Number(process.env.KEEL_ROLLOUT_POLL_MS) || ROLLOUT_POLL_MS);
+    rolloutTimer.unref();
+  }
 
   const recordEvent = (event) => {
     if (!event || typeof event !== "object") return;
-    // Claude: the last result event of a session decides (measured 05.10.2026: error_max_turns
-    // followed by success in the same session, exit 0).
-    if (event.type === "result") {
-      const subtype = String(event.subtype || "");
-      resultErrored = event.is_error === true || subtype.startsWith("error");
-      resultSubtype = resultErrored ? (subtype || "error") : "";
+    tracker.feed(event);
+    const nativeHandle = tracker.state.nativeHandle;
+    if (nativeHandle && !handleRecorded) {
+      safeLine(nativeHandle, "native handle", 256);
+      handleRecorded = true;
+      update((run) => ({ ...run, state: run.state === "starting" || run.state === "queued" ? "running" : run.state,
+        nativeHandle: run.nativeHandle || nativeHandle, providerPid: child?.pid || run.providerPid,
+        nativeStartedAt: run.nativeStartedAt || new Date().toISOString(), lastHeartbeatAt: new Date().toISOString() }));
     }
-    // Codex reports a failed turn as turn.failed; its "error" events are often warnings
-    // (measured 01.10.2026: "Skill descriptions were shortened ...") and fail nothing. A later
-    // turn.completed of the same session takes the failure back.
-    if (event.type === "turn.failed") { resultErrored = true; resultSubtype = "turn.failed"; }
-    if (event.type === "turn.completed") { resultErrored = false; resultSubtype = ""; }
-    const nativeValue = typeof event.session_id === "string" ? event.session_id
-      : event.type === "thread.started" && typeof event.thread_id === "string" ? event.thread_id : "";
-    const nativeHandle = nativeValue.trim();
-    if (!nativeHandle) return;
-    safeLine(nativeHandle, "native handle", 256);
-    update((run) => ({ ...run, state: run.state === "starting" || run.state === "queued" ? "running" : run.state,
-      nativeHandle: run.nativeHandle || nativeHandle, providerPid: child?.pid || run.providerPid,
-      nativeStartedAt: run.nativeStartedAt || new Date().toISOString(), lastHeartbeatAt: new Date().toISOString() }));
+    pollRollout();
+    stopWhenDue();
+  };
+  const recordLine = (line) => {
+    try { recordEvent(JSON.parse(line)); } catch { /* provider diagnostics remain in the raw log */ }
   };
 
+  let result;
   try {
-    const provider = providerProcess(manifest);
-    child = spawn(provider.command, provider.args, {
-      cwd: manifest.repoRoot,
-      detached: process.platform !== "win32",
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
+    result = await silenceWatch.runWatched(provider.command, provider.args, {
+      cwd: manifest.workDir || manifest.repoRoot,
       env: providerEnvironment(manifest),
+      discardOutput: true,
+      // A tool call that was started and not answered is work, not a hang: the stream is quiet while it runs.
+      activity: () => tracker.openTools > 0,
+      onSpawn: (spawned) => {
+        child = spawned;
+        try { update((run) => ({ ...run, providerPid: child.pid, lastHeartbeatAt: new Date().toISOString() })); } catch { /* final transition reports */ }
+      },
+      onOutput: (kind, chunk) => {
+        if (kind === "stderr") { logs.stderr.write(chunk); return; }
+        logs.stdout.write(chunk);
+        stdoutBuffer += chunk.toString("utf8");
+        const lines = stdoutBuffer.split(/\r?\n/u);
+        stdoutBuffer = lines.pop() || "";
+        for (const line of lines.filter(Boolean)) recordLine(line);
+      },
     });
-    update((run) => ({ ...run, providerPid: child.pid, lastHeartbeatAt: new Date().toISOString() }));
   } catch (error) {
-    clearInterval(heartbeat); clearInterval(controlPoll); clearTimeout(deadlineTimer);
-    update((run) => ({ ...run, state: "provider-start-failed", finishedAt: new Date().toISOString(),
-      failure: { code: "PROVIDER_SPAWN", message: error.message }, lastHeartbeatAt: new Date().toISOString() }));
+    startFailed("PROVIDER_SPAWN", error.message);
     return;
   }
+  finalized = true;
+  clearTimers();
+  if (stdoutBuffer.trim()) recordLine(stdoutBuffer);
+  pollRollout(true);
+  if (result.spawnError) logs.stderr.write(Buffer.from("provider process error: " + result.spawnError + "\n"));
 
-  child.stdout.on("data", (chunk) => {
-    appendBounded(stdoutFile, chunk);
-    stdoutBuffer += chunk.toString("utf8");
-    const lines = stdoutBuffer.split(/\r?\n/u);
-    stdoutBuffer = lines.pop() || "";
-    for (const line of lines.filter(Boolean)) {
-      try { recordEvent(JSON.parse(line)); } catch { /* provider diagnostics remain in the raw log */ }
-    }
-  });
-  child.stderr.on("data", (chunk) => appendBounded(stderrFile, chunk));
-  child.on("error", (error) => {
-    appendBounded(stderrFile, Buffer.from("provider process error: " + error.message + "\n"));
-  });
-
-  await new Promise((resolve) => child.once("close", (code, signal) => {
-    finalized = true;
-    clearInterval(heartbeat); clearInterval(controlPoll); clearTimeout(deadlineTimer);
-    if (stdoutBuffer.trim()) {
-      try { recordEvent(JSON.parse(stdoutBuffer)); } catch { /* raw output is retained */ }
-    }
-    const current = readProviderRun(manifest.repoRoot, manifest.scope, manifest.runId);
-    let state;
-    let failure = null;
-    if (stopAction === "abort") state = "aborted";
-    else if (stopAction === "timeout") state = "timed-out";
-    else if (!current.nativeHandle) {
-      state = "provider-start-failed";
-      failure = { code: "NO_NATIVE_HANDLE", message: "the provider emitted no native session handle" };
-    } else if (code !== 0 || resultErrored) {
-      state = "provider-failed";
-      const message = code === 0 && resultErrored
-        ? "provider result " + resultSubtype
-        : "provider exited " + code + (signal ? " via " + signal : "");
-      failure = { code: "PROVIDER_EXIT", message };
-    } else state = "provider-returned";
-    const stdout = fs.existsSync(stdoutFile) ? fs.readFileSync(stdoutFile) : Buffer.alloc(0);
-    const stderr = fs.existsSync(stderrFile) ? fs.readFileSync(stderrFile) : Buffer.alloc(0);
-    update((run) => ({ ...run, state, exitCode: code, signal: signal || null,
-      finishedAt: new Date().toISOString(), lastHeartbeatAt: new Date().toISOString(),
-      providerOutputDigest: sha256(Buffer.concat([stdout, Buffer.from("\0"), stderr])),
-      providerOutputBytes: stdout.length + stderr.length, providerOutputEvidence: false,
-      ...(failure ? { failure } : {}) }));
-    resolve();
-  }));
+  const current = readProviderRun(manifest.repoRoot, manifest.scope, manifest.runId);
+  const verdict = runVerdict({ stopAction, ownStop, tracker, result, nativeHandle: current.nativeHandle, manifest });
+  const stdout = fs.existsSync(stdoutFile) ? fs.readFileSync(stdoutFile) : Buffer.alloc(0);
+  const stderr = fs.existsSync(stderrFile) ? fs.readFileSync(stderrFile) : Buffer.alloc(0);
+  const truncated = logs.stdout.truncated || logs.stderr.truncated;
+  const hints = [...(verdict.hints || [])];
+  if (codex && tracker.state.nativeHandle && !rollout?.file) {
+    hints.push("the Codex rollout file of thread " + tracker.state.nativeHandle + " was not found under " + rolloutRoot +
+      "; the token frame was counted from turn.completed only");
+  }
+  update((run) => ({ ...run, state: verdict.state, exitCode: result.code, signal: result.signal || null,
+    finishedAt: new Date().toISOString(), lastHeartbeatAt: new Date().toISOString(),
+    providerOutputDigest: sha256(Buffer.concat([stdout, Buffer.from("\0"), stderr])),
+    providerOutputBytes: stdout.length + stderr.length, providerOutputEvidence: false,
+    ...(manifest.provider === "codex" ? { tokensUsed: tracker.state.tokensUsed } : {}),
+    ...(truncated ? { logTruncated: true, logDroppedBytes: logs.stdout.dropped + logs.stderr.dropped } : {}),
+    ...(hints.length ? { hints } : {}),
+    ...(verdict.blocked ? { blocked: verdict.blocked } : {}),
+    ...(verdict.failure ? { failure: verdict.failure } : {}) }));
 }
 
 async function cli() {

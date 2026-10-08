@@ -25,7 +25,8 @@ description: Dex Horthy's 4-gate feature workflow — Product, Architecture, Pro
 - Jede Abschluss-Meldung endet im Hausformat "Geprueft gegen: … · Offen: …";
   vor Fertig-/Uebergabe-Aussagen laeuft der Skill `completeness` (Coverage)
   plus der Fulfillment-Blick (working-method.md).
-- Verify bei UI: "browser-test it" heisst hier ECHTER Screenshot, beide
+- Verify bei UI: "browser-test it" heisst hier ECHTER Screenshot (festes Skript
+  `checks/ui-shots.mjs`, nur die im Gate genannten Zustaende, Bild am Code-Stand), beide
   Themes, gegen die Design-Skills und die genehmigten Entwuerfe — auch fuer Mockups.
 - Mapping zur Haus-Schleife: Gate 1 ≈ Problem/Intent, Gate 2+3 ≈ Depth Tree
   und Contract vor Fan-out, Gate 4 ≈ Bau+Verify; Zahlen werden gemessen, nie

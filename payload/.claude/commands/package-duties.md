@@ -8,10 +8,12 @@ Verwende den gemeinsamen Executor-Präfix mit genau einem dieser Kommandos:
 - `duty-add --duty <ID> --owner "<OWNER>" --trigger "<TRIGGER>" --due-state open|due --gate <LEDGER:GATE> --json`
 - `duty-resolve --duty <ID> [--gate <LEDGER:GATE>] --json`
 - nach dem OK des Owners im Chat, in einem Schritt:
-  `duty-waive --duty <ID> --owner-ok "<WORTLAUT>" --json`
+  `duty-waive --duty <ID> --owner-ok "<WORTLAUT>" --json` (Mehrzeiliges oder Anführungszeichen:
+  `--owner-ok-file <DATEI>`; das Zitat des Owners, nie eine Satzform)
 
-`duty-waive` bildet daraus die Zeile
-`Owner-OK: waive-duty:<ID> <YYYY-MM-DD> <aktueller HEAD> "<WORTLAUT>"`, legt sie als
+`duty-waive` bildet daraus den Eintrag
+`Owner-OK: waive-duty:<ID> <YYYY-MM-DD> <aktueller HEAD> "<WORTLAUT>"` (lange oder mehrzeilige
+Zitate als Block darunter), legt ihn als
 `waiver` im Pflichtstand ab und schreibt einen dauerhaften Beleg. Es gibt keine
 Freigabedatei, keine Challenge und kein `plan-duty-waiver` mehr.
 

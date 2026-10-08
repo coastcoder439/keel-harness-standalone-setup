@@ -12,7 +12,7 @@
 // Eine Quelle für drei Aufrufer: der Job schreibt daraus `.ua/.understandignore`, die Kostenschätzung und
 // das Dashboard rechnen mit genau diesem Text, damit Schätzung und Lauf denselben Umfang haben.
 
-import { spawnSync } from "node:child_process";
+import gitBinary from "../git/git-binary.cjs";
 
 /** Wörtlich aus download-approval.md Abschnitt 4 („Ignore-Vorschlag“), vom Owner am 26.09.2026 freigegeben. */
 export const APPROVED_IGNORE_PATTERNS = Object.freeze([
@@ -31,7 +31,7 @@ export const IGNORE_FILE_NAME = ".understandignore";
  * (`--untracked-files=normal`), mit `/` am Ende für Ordner. Kein git oder kein Repository: leere Liste.
  */
 export function untrackedPaths(projectRoot, { dataDirectoryName = ".ua" } = {}) {
-  const result = spawnSync("git", ["status", "--porcelain=v1", "-z", "--untracked-files=normal"], {
+  const result = gitBinary.gitSync(["status", "--porcelain=v1", "-z", "--untracked-files=normal"], {
     cwd: projectRoot, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, windowsHide: true,
   });
   if (result.status !== 0 || typeof result.stdout !== "string") return [];

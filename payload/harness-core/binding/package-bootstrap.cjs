@@ -6,16 +6,24 @@
 // plan files a written bundle as planned (bundle, no package.ref, no record)
 // so one session can write several packages in a row; begin and plan report
 // OWNS overlaps with active packages, prune orphaned records, and a planning
-// binding moves to a new session id only through an explicit --takeover.
+// binding moves to a new session id in exactly two ways (P4 D15): automatically,
+// when the transcript of the new session proves it is the same conversation as
+// the holder (adoptByTranscript: the first sessionId line of the transcript names
+// the holder; the proof alone decides, never the time), or by
+// hand through --takeover, which takes a holder only once it has been silent for
+// silenceMs (an active package also needs --reason). A live foreign session keeps
+// its binding either way.
 
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
 const repository = require("./repository.cjs");
 const unlazyRuntime = require("./unlazy-runtime.cjs");
 const bundleFiles = require("./bundle-files.cjs");
 const ownership = require("./package-ownership.cjs");
+const hookActivity = require("./hook-activity.cjs");
+const { renameWithRetry } = require("./rename-retry.cjs");
+const { hungMessage, runWatchedChild } = require("./watched-child.cjs");
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 const realpath = fs.realpathSync.native || fs.realpathSync;
@@ -56,25 +64,7 @@ function recordPath(harnessRoot, sessionId) {
   return path.join(harnessRoot, ".unlazy", ".bootstrap", key);
 }
 
-const RENAME_RETRY_CODES = new Set(["EPERM", "EBUSY", "EACCES"]);
-const RENAME_RETRY_WAITS = Object.freeze([50, 100, 200, 400, 800]);
-
-function sleepSync(milliseconds) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
-}
-
-// A short-lived handle of another process (virus scanner, indexer, file watcher)
-// makes a Windows rename fail with EPERM/EBUSY/EACCES. Retry up to 6 attempts,
-// then rethrow the original error; other codes and platforms fail at once.
-function renameWithRetry(from, to, { rename = fs.renameSync, sleep = sleepSync, platform = process.platform } = {}) {
-  for (let attempt = 0; ; attempt += 1) {
-    try { return rename(from, to); }
-    catch (error) {
-      if (platform !== "win32" || !RENAME_RETRY_CODES.has(error && error.code) || attempt >= RENAME_RETRY_WAITS.length) throw error;
-      sleep(RENAME_RETRY_WAITS[attempt]);
-    }
-  }
-}
+// The one rename-with-retry of the Harness tree lives in rename-retry.cjs (P15); it is re-exported below.
 
 function atomicJson(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -280,9 +270,22 @@ function readRecords(harnessRoot) {
   return { records, invalidRecords };
 }
 
-function orphanReason(value) {
+// The repository snapshots of ONE run (P15, B15): the same repository is asked once per run, however many
+// records and steps of that run need it (each snapshot is three Git processes). The memory lives and dies with
+// the run that made it: a later run asks Git again, so a repository that changed in between (new HEAD, other
+// git dir, gone) is never answered from an old run. A failed probe is not remembered.
+function runSnapshots() {
+  const known = new Map();
+  return (startPath) => {
+    const key = repository.pathKey(startPath);
+    if (!known.has(key)) known.set(key, repository.repositorySnapshot(startPath));
+    return known.get(key);
+  };
+}
+
+function orphanReason(value, snapshotOf = repository.repositorySnapshot) {
   let snapshot;
-  try { snapshot = repository.repositorySnapshot(value.repoRoot); }
+  try { snapshot = snapshotOf(value.repoRoot); }
   catch { return { reason: "repository-missing" }; }
   if (!repository.samePath(snapshot.gitDir, value.gitDir)) return { reason: "repository-changed" };
   const bundle = path.join(snapshot.repoRoot, "docs", "packages", value.packageId);
@@ -305,7 +308,7 @@ function pruneOrphanedRecords(options = {}) {
   const doomed = [];
   const living = [];
   for (const record of records) {
-    const state = orphanReason(record.value);
+    const state = orphanReason(record.value, options.snapshotOf);
     if (state.reason) doomed.push({ record, reason: state.reason });
     else living.push({ ...record, repoRoot: state.repoRoot });
   }
@@ -331,15 +334,63 @@ function quote(value) {
   return "\"" + String(value).replaceAll("\"", "\\\"") + "\"";
 }
 
-function takeoverCommand(options, harnessRoot, repoRoot, packageId, scope, sessionId) {
+function takeoverCommand(options, harnessRoot, repoRoot, packageId, scope, sessionId, reason) {
   const parts = ["node", quote(path.join(__dirname, "..", "execution", "package-bootstrap.mjs")), "begin",
     "--harness-root", quote(harnessRoot), "--root", quote(repoRoot), "--package", packageId,
     "--scope", scope, "--session", quote(sessionId)];
   if (options.unlazyRoot) parts.push("--unlazy-root", quote(options.unlazyRoot));
   for (const claim of ownsArgument(options.owns)) parts.push("--owns", quote(claim.pattern));
-  parts.push("--takeover");
+  parts.push("--takeover", "--reason", quote(reason || "<Grund>"));
   if (options.json) parts.push("--json");
   return parts.join(" ");
+}
+
+// The planning bindings other sessions hold for one package of one repository, newest first.
+function holdersOf(harnessRoot, repoRoot, packageId, sessionId) {
+  return readRecords(harnessRoot).records.filter((item) => item.value.sessionId !== sessionId &&
+    sameId(item.value.packageId, packageId) && repository.samePath(item.value.repoRoot, repoRoot))
+    .sort((left, right) => recordTime(right.value) - recordTime(left.value));
+}
+
+const REASON_LIMIT = 500;
+
+function takeoverReason(value) {
+  const text = String(value === undefined || value === null ? "" : value).trim();
+  if (/[\0\r\n]/u.test(text)) fail("--reason must be one line of text", "TAKEOVER_REASON_INVALID");
+  return text.slice(0, REASON_LIMIT);
+}
+
+// A planning binding may be taken over by hand only from holders that have been silent for silenceMs (P4 D15),
+// whether the package is active or not; an active package also needs a reason. The one exception is the proof
+// that it is the same conversation: options.transcriptPath (passed by a hook from its input, never read from the
+// command line) names the holder in its sessionId field. Returns the holders to retire.
+function checkedTakeover(options, harnessRoot, snapshot, packageId, scope, sessionId, reason, isActive) {
+  const holders = holdersOf(harnessRoot, snapshot.repoRoot, packageId, sessionId);
+  if (!holders.length) {
+    if (isActive) fail("package " + packageId + " is active; a planning binding cannot be taken over", "PACKAGE_ACTIVE", { next: ACTIVE_NEXT });
+    return holders;
+  }
+  if (isActive && !reason) {
+    fail("package " + packageId + " is active; taking over its planning binding needs a reason: " +
+      takeoverCommand(options, harnessRoot, snapshot.repoRoot, packageId, scope, sessionId), "TAKEOVER_REASON_REQUIRED");
+  }
+  const named = options.transcriptPath ? transcriptSessionIds(path.resolve(String(options.transcriptPath))) : new Set();
+  named.delete(sessionId);
+  const limit = options.silenceMs === undefined ? hookActivity.silenceLimitMs(options.env || process.env) : options.silenceMs;
+  const now = options.now === undefined ? Date.now() : options.now;
+  for (const holder of holders) {
+    if (named.has(holder.value.sessionId)) continue;
+    const silent = hookActivity.silentForMs(holder.file, now);
+    if (silent < limit) {
+      fail("package " + packageId + " is held by session " + holder.value.sessionId + ", which was active " + Math.round(silent / 1000) +
+        " s ago; a planning binding can be taken over once its holder has been silent for " +
+        Math.round(limit / 1000) + " s (no hook of that session ran; KEEL_SILENCE_MS changes the limit)", "PLANNER_ACTIVE",
+      { holder: holder.value.sessionId, silentMs: Math.round(silent), limitMs: limit,
+        next: "wait until the holder has been silent for " + Math.round(limit / 1000) + " s, then run: " +
+          takeoverCommand(options, harnessRoot, snapshot.repoRoot, packageId, scope, sessionId, reason) });
+    }
+  }
+  return holders;
 }
 
 function begin(options) {
@@ -353,10 +404,10 @@ function begin(options) {
   const scope = id(options.scope || packageId, "scope");
   const sessionId = validSession(options.sessionId);
   const ownsClaims = ownsArgument(options.owns);
-  if (options.takeover && packageActive(snapshot.repoRoot, packageId)) {
-    fail("package " + packageId + " is active; a planning binding cannot be taken over", "PACKAGE_ACTIVE",
-      { next: ACTIVE_NEXT });
-  }
+  const reason = takeoverReason(options.reason);
+  // Read before the pruning below: an active package's record counts as obsolete there and is removed.
+  const checkedHolders = options.takeover
+    ? checkedTakeover(options, harnessRoot, snapshot, packageId, scope, sessionId, reason, packageActive(snapshot.repoRoot, packageId)) : null;
   const { prunedRecords, invalidRecords } = pruneOrphanedRecords({ harnessRoot });
   const report = (value) => {
     const ownsChecked = [...ownsClaims, ...writtenClaims(snapshot.repoRoot, packageId)];
@@ -372,9 +423,7 @@ function begin(options) {
     }
     return report({ ...existing, record: file, idempotent: true });
   }
-  const holders = readRecords(harnessRoot).records.filter((item) => item.value.sessionId !== sessionId &&
-    sameId(item.value.packageId, packageId) && repository.samePath(item.value.repoRoot, snapshot.repoRoot))
-    .sort((left, right) => recordTime(right.value) - recordTime(left.value));
+  const holders = checkedHolders || holdersOf(harnessRoot, snapshot.repoRoot, packageId, sessionId);
   if (holders.length && !options.takeover) {
     const holder = holders[0].value;
     fail("package " + packageId + " is held by session " + holder.sessionId + " since " + holder.createdAt +
@@ -399,13 +448,15 @@ function begin(options) {
   if (holders.length) {
     value.takenOverFrom = holders[0].value.sessionId;
     value.takenOverAt = createdAt;
+    value.takenOverVia = "manual";
+    if (reason) value.takenOverReason = reason;
   }
   atomicJson(file, value);
   for (const holder of holders) removeQuietly(holder.file);
   return report({ ...value, record: file, packageDir, idempotent: false });
 }
 
-function find(options) {
+function find(options, snapshotOf = repository.repositorySnapshot) {
   const harnessRoot = harnessControlRoot(options.harnessRoot);
   const sessionId = validSession(options.sessionId);
   const file = recordPath(harnessRoot, sessionId);
@@ -415,7 +466,7 @@ function find(options) {
       !IDENTIFIER.test(value.scope) || !repository.samePath(value.harnessRoot, harnessRoot)) {
     fail("package bootstrap identity is invalid");
   }
-  const snapshot = repository.repositorySnapshot(value.repoRoot);
+  const snapshot = snapshotOf(value.repoRoot);
   if (!repository.samePath(snapshot.gitDir, value.gitDir)) fail("package bootstrap repository changed");
   const expected = path.join(snapshot.repoRoot, "docs", "packages", value.packageId);
   if (!fs.existsSync(expected) || !fs.lstatSync(expected).isDirectory() || fs.lstatSync(expected).isSymbolicLink()) {
@@ -424,7 +475,205 @@ function find(options) {
   return { ...value, repoRoot: snapshot.repoRoot, packageDir: expected, record: file };
 }
 
+// --- D15: the planning binding survives a resumed conversation -------------------------------------
+// Claude Code gives a resumed conversation a new session id; the harness then treats its own session as a
+// foreign one. The transcript file of the new session (transcript_path of the hook input) starts with the
+// replayed history of the old one: its first lines carry the old id in their top-level sessionId field, the new
+// id follows only later. Measured on real resumed files of this machine (7 of 949 files, line 1 each):
+// docs/harness-rebuild/packages/P4-evidence-resume.md. A fresh conversation starts with its own id.
+// The proof is therefore the FIRST complete line that carries a sessionId field: it names the conversation the
+// transcript continues, and no line with another id stands before it. A line further down proves nothing, even
+// with the right field: the transcript grows by appending, so whoever could append a line could forge one. The
+// host writes the transcript; the agent cannot, because write-guard refuses the transcript store and the
+// transcript_path of the session for Write/Edit, the shell and Codex patches (HOST_TRANSCRIPT_WRITE). Only that
+// field counts, never the text of a message: a session id in a tool result or a chat line (an error message
+// names the holder of a package) proves nothing. The proof alone decides; there is no time after which a
+// binding moves by itself (a holder silent for silenceMs moves only by hand, --takeover).
+const TRANSCRIPT_HEAD_BYTES = 256 * 1024;
+
+// The session id the transcript continues: the sessionId field of the first complete line within the first
+// TRANSCRIPT_HEAD_BYTES that has one. null when there is none, when that field is empty or no string, and for an
+// unreadable file or a link. Never throws.
+function transcriptOriginSessionId(file, limit = TRANSCRIPT_HEAD_BYTES) {
+  let fd = null;
+  try {
+    const info = fs.lstatSync(file);
+    if (!info.isFile() || info.isSymbolicLink()) return null;
+    fd = fs.openSync(file, "r");
+    const buffer = Buffer.alloc(Math.min(limit, info.size));
+    let filled = 0;
+    while (filled < buffer.length) {
+      const read = fs.readSync(fd, buffer, filled, buffer.length - filled, filled);
+      if (read === 0) break;
+      filled += read;
+    }
+    const lines = buffer.subarray(0, filled).toString("utf8").split("\n");
+    // A line cut by the limit is no complete JSON.
+    if (info.size > filled) lines.pop();
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      let entry;
+      try { entry = JSON.parse(line); } catch { continue; }
+      if (!entry || typeof entry !== "object" || Array.isArray(entry) || !Object.prototype.hasOwnProperty.call(entry, "sessionId")) continue;
+      return typeof entry.sessionId === "string" && entry.sessionId ? entry.sessionId : null;
+    }
+  } catch { /* an unreadable transcript proves nothing */ }
+  finally { if (fd !== null) { try { fs.closeSync(fd); } catch { /* closed */ } } }
+  return null;
+}
+
+// The session ids the transcript proves to be the same conversation: at most one, the origin. Never throws.
+function transcriptSessionIds(file, limit = TRANSCRIPT_HEAD_BYTES) {
+  const origin = transcriptOriginSessionId(file, limit);
+  return new Set(origin ? [origin] : []);
+}
+
+// Moves the planning binding of the same conversation to the new session id. Returns
+// { adopted: false, reason } or { adopted: true, from, record }; never throws. reason is one of
+// no-record-dir, has-record, no-transcript, no-match, ambiguous (two records of the named session), error. Only
+// the session named by the first sessionId line of the transcript can be adopted (transcriptOriginSessionId); a
+// transcript that begins with the caller's own id adopts nothing, whatever follows. The holder's activity plays
+// no part: the transcript proves it is the same conversation (Orchestrator decision on P4 D15).
+function adoptByTranscript(options) {
+  try {
+    const harnessRoot = harnessControlRoot(options.harnessRoot);
+    const sessionId = validSession(options.sessionId);
+    const file = recordPath(harnessRoot, sessionId);
+    if (fs.existsSync(file)) return { adopted: false, reason: "has-record" };
+    if (!fs.existsSync(path.dirname(file))) return { adopted: false, reason: "no-record-dir" };
+    if (!options.transcriptPath) return { adopted: false, reason: "no-transcript" };
+    const { records } = readRecords(harnessRoot);
+    if (!records.length) return { adopted: false, reason: "no-match" };
+    const named = transcriptSessionIds(path.resolve(String(options.transcriptPath)));
+    const hadIds = named.size > 0;
+    named.delete(sessionId);
+    const holders = records.filter((item) => named.has(item.value.sessionId));
+    if (!holders.length) return { adopted: false, reason: hadIds ? "no-match" : "no-transcript" };
+    if (holders.length > 1) return { adopted: false, reason: "ambiguous" };
+    const holder = holders[0];
+    // The record must still describe a usable planning binding: its repository and bundle are checked like
+    // find does; one that cannot be used is no binding to carry over. An active package is no reason to refuse:
+    // its record stays only until the next cleanup, and the new session may still write evidence and design.
+    const state = orphanReason(holder.value);
+    if (state.reason && state.reason !== "package-active") return { adopted: false, reason: "no-match" };
+    const at = new Date().toISOString();
+    const transfers = Array.isArray(holder.value.transfers) ? holder.value.transfers.slice(-19) : [];
+    transfers.push({ at, from: holder.value.sessionId, to: sessionId, via: "transcript" });
+    const value = { ...holder.value, sessionId, takenOverFrom: holder.value.sessionId, takenOverAt: at, takenOverVia: "transcript",
+      transfers };
+    atomicJson(file, value);
+    removeQuietly(holder.file);
+    return { adopted: true, from: holder.value.sessionId, record: file, packageId: value.packageId };
+  } catch (error) {
+    return { adopted: false, reason: "error", message: String(error && error.message || error) };
+  }
+}
+
+// The planning bindings of other sessions a refusal may name, with the exact command that takes each over by
+// hand (D15). Only two kinds are named, so a refusal never shows one session the package of another live one:
+//   - holders the transcript of the calling session names in its sessionId field (options.transcriptPath, from
+//     the hook input): the same conversation;
+//   - holders of the SAME package (options.packageId) in the SAME repository (options.repoRoot) that ran no
+//     hook for silenceMs: only those can be taken over by hand.
+// Without a transcript and without a package and repository, nothing is named. Never throws.
+function planningHolders(options) {
+  try {
+    const harnessRoot = harnessControlRoot(options.harnessRoot);
+    const sessionId = validSession(options.sessionId);
+    const now = options.now === undefined ? Date.now() : options.now;
+    const limit = options.silenceMs === undefined ? hookActivity.silenceLimitMs(options.env || process.env) : options.silenceMs;
+    const named = options.transcriptPath ? transcriptSessionIds(path.resolve(String(options.transcriptPath))) : new Set();
+    named.delete(sessionId);
+    const repoRoot = options.repoRoot ? path.resolve(String(options.repoRoot)) : null;
+    const packageId = options.packageId ? String(options.packageId) : null;
+    return readRecords(harnessRoot).records.filter((item) => item.value.sessionId !== sessionId)
+      .map((item) => {
+        const silent = hookActivity.silentForMs(item.file, now);
+        const proven = named.has(item.value.sessionId);
+        const silentSame = Boolean(repoRoot && packageId && silent >= limit && sameId(item.value.packageId, packageId) &&
+          repository.samePath(item.value.repoRoot, repoRoot));
+        return { item, silent, proven, show: proven || silentSame };
+      })
+      .filter((entry) => entry.show)
+      .sort((left, right) => recordTime(right.item.value) - recordTime(left.item.value)).slice(0, 5).map(({ item, silent, proven }) => {
+        const scope = IDENTIFIER.test(String(item.value.scope)) ? item.value.scope : item.value.packageId;
+        return { sessionId: item.value.sessionId, packageId: item.value.packageId, scope, repoRoot: item.value.repoRoot,
+          silentMs: Math.round(silent), via: proven ? "transcript" : "silence",
+          command: takeoverCommand({ unlazyRoot: item.value.unlazyRoot }, harnessRoot, item.value.repoRoot, item.value.packageId,
+            scope, sessionId) };
+      });
+  } catch {
+    return [];
+  }
+}
+
+// --- D1: the light route for evidence and design -------------------------------------------------
+// The session that holds the planning binding of a package, or that orchestrates it, writes
+// docs/packages/<id>/evidence/** and docs/packages/<id>/design/** of THAT package directly. PACKAGE.md,
+// GATES.md, gates/**, OWNER.md and everything else stay closed; this is no widening of OWNS but the one
+// place where the Orchestrator keeps proof and reports, which no worker has to write for it.
+const REPORT_FOLDERS = new Set(["evidence", "design"]);
+
+function foldName(name) {
+  const lower = String(name).toLowerCase();
+  return process.platform === "win32" ? lower.replace(/:.*$/u, "").replace(/[. ]+$/u, "") : lower;
+}
+
+// null when the target is not below evidence/ or design/ of the package directory; otherwise
+// { allowed, code, relative, next }.
+function reportTarget(packageDir, targetPath) {
+  const target = path.resolve(targetPath);
+  if (!repository.isPathInside(packageDir, target) || repository.samePath(packageDir, target)) return null;
+  const relative = path.relative(packageDir, target).replaceAll("\\", "/");
+  const parts = relative.split("/");
+  if (parts.length < 2 || !REPORT_FOLDERS.has(foldName(parts[0])) || parts.some((part) => part === "" || part === "..")) return null;
+  for (let parent = path.dirname(target); repository.isPathInside(packageDir, parent) && !repository.samePath(parent, packageDir);
+    parent = path.dirname(parent)) {
+    if (fs.existsSync(parent) && fs.lstatSync(parent).isSymbolicLink()) {
+      return { allowed: false, code: "BOOTSTRAP_LINK", next: "replace linked package components with real directories" };
+    }
+  }
+  try {
+    const info = fs.lstatSync(target);
+    if (info.isSymbolicLink() || !info.isFile() || (typeof info.nlink === "number" && info.nlink !== 1)) {
+      return { allowed: false, code: "BOOTSTRAP_LINK", next: "write only regular files with one name below evidence/ and design/" };
+    }
+  } catch { /* a new file */ }
+  return { allowed: true, code: "BOUND_REPORT_WRITE", relative };
+}
+
+// The orchestrator record of a session (orchestrator-role.mjs): packages the session started, dispatched or
+// planned. Read-only here; the file is written by recordOrchestrator.
+function orchestratedPackages(harnessRoot, sessionId) {
+  try {
+    const root = realpath(path.resolve(String(harnessRoot || "")));
+    const key = crypto.createHash("sha256").update(validSession(sessionId)).digest("hex") + ".json";
+    const file = path.join(root, ".unlazy", ".orchestrators", key);
+    const info = fs.lstatSync(file);
+    if (!info.isFile() || info.isSymbolicLink() || (typeof info.nlink === "number" && info.nlink !== 1)) return [];
+    const value = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!value || value.schemaVersion !== 1 || value.sessionId !== String(sessionId).trim() || !Array.isArray(value.packages)) return [];
+    return value.packages.filter((item) => item && typeof item.repoRoot === "string" && IDENTIFIER.test(String(item.packageId)));
+  } catch {
+    return [];
+  }
+}
+
+// Decision for a session that orchestrates packages: null when no recorded package of it owns the target.
+function authorizeOrchestratorWrite(options) {
+  for (const item of orchestratedPackages(options.harnessRoot, options.sessionId)) {
+    const packageDir = path.join(item.repoRoot, "docs", "packages", item.packageId);
+    let info;
+    try { info = fs.lstatSync(packageDir); } catch { continue; }
+    if (!info.isDirectory() || info.isSymbolicLink()) continue;
+    const decision = reportTarget(packageDir, options.targetPath);
+    if (decision) return { ...decision, packageId: item.packageId, scope: item.scope };
+  }
+  return null;
+}
+
 function doctorDiagnostics(result) {
+  if (result.hung) return [hungMessage("package-cli doctor", result)];
   if (result.error) return [String(result.error.message)];
   let report = null;
   try { report = JSON.parse(String(result.stdout || "")); } catch { /* not JSON */ }
@@ -438,18 +687,23 @@ function doctorDiagnostics(result) {
 
 // Files a written bundle as planned: bundle present, no package.ref, no record.
 // Nothing is prepared under .unlazy/<scope>; starting stays a separate step.
-function plan(options) {
-  const record = find(options);
+//
+// doctor has no time limit of its own (P15, C13): it runs through the silence watcher and counts as hung only
+// when it is silent and its process tree does no work, so a slow doctor no longer makes the package "not ready".
+// plan is async for that reason. The repository is asked once per run (runSnapshots).
+async function plan(options) {
+  const snapshotOf = runSnapshots();
+  const record = find(options, snapshotOf);
   if (packageActive(record.repoRoot, record.packageId)) {
     fail("package " + record.packageId + " is active", "PACKAGE_ACTIVE", { next: ACTIVE_NEXT });
   }
-  const { prunedRecords, invalidRecords } = pruneOrphanedRecords({ harnessRoot: record.harnessRoot });
+  const { prunedRecords, invalidRecords } = pruneOrphanedRecords({ harnessRoot: record.harnessRoot, snapshotOf });
   const unlazy = bootstrapRuntime(record.repoRoot, options.unlazyRoot);
-  const result = spawnSync(process.execPath, [path.join(unlazy, "scripts", "package-cli.mjs"), "doctor",
+  const result = await runWatchedChild(process.execPath, [path.join(unlazy, "scripts", "package-cli.mjs"), "doctor",
     "--root", record.repoRoot, "--package", record.packageId, "--json"],
-  { windowsHide: true, timeout: 60000, encoding: "utf8" });
+  { unlazyRoot: unlazy });
   const diagnostics = doctorDiagnostics(result);
-  if (result.status !== 0 || result.error || diagnostics.length) {
+  if (result.status !== 0 || result.error || result.hung || diagnostics.length) {
     fail("package " + record.packageId + " is not ready to be filed as planned", "PLAN_DOCTOR",
       { exitCode: 1, diagnostics });
   }
@@ -465,7 +719,17 @@ function active(record) {
 }
 
 function authorizeWrite(record, targetPath) {
-  if (active(record)) return { allowed: false, code: "BOOTSTRAP_ENDED", next: "use the active package leaf binding" };
+  if (active(record)) {
+    // The planning binding no longer writes the contract, but its session still keeps the proof and the
+    // design notes of its own package (D1): evidence/** and design/** below docs/packages/<packageId>/.
+    const report = reportTarget(record.packageDir, targetPath);
+    if (report) return report.allowed ? { ...report, packageId: record.packageId, scope: record.scope } : report;
+    return { allowed: false, code: "BOOTSTRAP_ENDED",
+      detail: "the planning binding ended when the package started; the planning session may still write docs/packages/" +
+        record.packageId + "/evidence/** and design/** directly",
+      next: "use the active package leaf binding; the planning session may still write docs/packages/" + record.packageId +
+        "/evidence/** and design/** directly" };
+  }
   const target = path.resolve(targetPath);
   if (!repository.isPathInside(record.packageDir, target)) {
     return { allowed: false, code: "OUTSIDE_BOOTSTRAP_PACKAGE", next: "write only the exact package contract bundle" };
@@ -491,4 +755,6 @@ function finish(options) {
   return { packageId: record.packageId, scope: record.scope, sessionId: record.sessionId, finished: true };
 }
 
-module.exports = { authorizeWrite, begin, find, finish, plan, pruneOrphanedRecords, recordPath, renameWithRetry, scaffoldStatus };
+module.exports = { TRANSCRIPT_HEAD_BYTES, adoptByTranscript, authorizeOrchestratorWrite, authorizeWrite, begin, find, finish,
+  noteHookActivity: hookActivity.noteHookActivity, plan, planningHolders, pruneOrphanedRecords, recordPath, renameWithRetry, scaffoldStatus,
+  transcriptOriginSessionId, transcriptSessionIds };

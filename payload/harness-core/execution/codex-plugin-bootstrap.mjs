@@ -15,6 +15,8 @@ import { CODEX_MODEL, CODEX_EFFORT } from "./codex-pin.mjs";
 
 const require = createRequire(import.meta.url);
 const repository = require("../binding/repository.cjs");
+const gitBinary = require("../git/git-binary.cjs");
+const watchedChild = require("../binding/watched-child.cjs");
 const scriptHarnessRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 const MARKETPLACE = "openai/codex-plugin-cc";
@@ -87,12 +89,16 @@ export function contract(repoRoot, harnessRoot) {
   };
 }
 
-function run(executable, args, cwd, timeout = 120_000, missingCode = "CLAUDE_CLI_MISSING") {
-  const result = spawnSync(executable, args, { cwd, encoding: "utf8", windowsHide: true, timeout });
+// No total duration and no turn cap (Owner 05.10.2026 15:17): a child ends by itself or is declared hung by the
+// Unlazy silence watcher (nothing written and no work in its process tree for KEEL_SILENCE_MS). Git does not run
+// here; it has its own call in gitStatus().
+async function run(executable, args, cwd, missingCode = "CLAUDE_CLI_MISSING") {
+  const result = await watchedChild.runWatchedChild(executable, args, { cwd });
   if (result.error) {
-    const missing = result.error.code === "ENOENT";
+    const missing = result.error.code === "ENOENT" || /ENOENT/u.test(String(result.error.message));
     fail(result.error.message, 1, missing ? missingCode : "CODEX_ROUTE_PROCESS");
   }
+  if (result.hung) fail(watchedChild.hungMessage(path.basename(String(executable)), result), 1, "CODEX_ROUTE_HUNG");
   return result;
 }
 
@@ -179,12 +185,12 @@ export function officialCodexPluginInstalled(plugins) {
     entry.id === PLUGIN && entry.scope === "project" && entry.enabled === true);
 }
 
-export function runtime(root, options) {
+export async function runtime(root, options) {
   const codexCommand = resolveCodexCommand(options.codex);
-  const codex = run(codexCommand.command, [...codexCommand.prefixArgs, "--version"], root, 120_000, "CODEX_CLI_MISSING");
+  const codex = await run(codexCommand.command, [...codexCommand.prefixArgs, "--version"], root, "CODEX_CLI_MISSING");
   if (codex.status !== 0) fail("Codex CLI is not runnable: " + String(codex.stderr || codex.stdout).trim(), 1, "CODEX_CLI_UNAVAILABLE");
   const claudeExecutable = resolveClaudeExecutable(options.claude);
-  const claude = run(claudeExecutable, ["plugin", "list", "--json"], root);
+  const claude = await run(claudeExecutable, ["plugin", "list", "--json"], root);
   if (claude.status !== 0) fail("Claude Code CLI is not runnable or plugin list failed: " +
     String(claude.stderr || claude.stdout).trim(), 1, "CLAUDE_PLUGIN_LIST_FAILED");
   let plugins;
@@ -196,8 +202,12 @@ export function runtime(root, options) {
   return { codexVersion: String(codex.stdout).trim(), pluginInstalled: true, plugin: PLUGIN };
 }
 
+// The one Git call of this file, a single read of the fixture's state, kept apart from run(): the Git helper (P20,
+// D14) owns this call. Its time limit protects one Git query (Konzept 3.6 "Bleiben") and stops no work.
 function gitStatus(root) {
-  const result = run("git", ["-C", root, "status", "--porcelain=v1", "--untracked-files=all"], root, 30_000);
+  const result = gitBinary.gitSync(["-C", root, "status", "--porcelain=v1", "--untracked-files=all"],
+    { cwd: root, encoding: "utf8", windowsHide: true, timeout: 30_000 });
+  if (result.error) fail(result.error.message, 1, "CODEX_ROUTE_PROCESS");
   if (result.status !== 0) fail("isolated route local reverify could not read Git status", 2, "CODEX_ROUTE_REVERIFY");
   return String(result.stdout || "");
 }
@@ -212,14 +222,14 @@ function routeFailure(output) {
   return ["CODEX_PLUGIN_ROUTE_FAILED", String(output).trim().slice(0, 2_000) || "official Codex plugin route returned no result"];
 }
 
-export function probeRoute(root, options = {}) {
-  const available = runtime(root, options);
+export async function probeRoute(root, options = {}) {
+  const available = await runtime(root, options);
   const before = gitStatus(root);
   const token = "CODEX_PLUGIN_ROUTE_" + crypto.randomBytes(12).toString("hex");
   const prompt = `/codex:rescue --wait --fresh --model ${CODEX_MODEL} --effort ${CODEX_EFFORT} ` +
     `Read-only capability probe. Do not modify files. Reply exactly with ${token}`;
-  const result = run(resolveClaudeExecutable(options.claude), ["-p", "--output-format", "json", "--max-turns", "8",
-    "--permission-mode", "plan", prompt], root, 10 * 60_000);
+  const result = await run(resolveClaudeExecutable(options.claude), ["-p", "--output-format", "json",
+    "--permission-mode", "plan", prompt], root);
   const combined = String(result.stdout || "") + "\n" + String(result.stderr || "");
   if (result.status !== 0) {
     const [code, message] = routeFailure(combined);
@@ -247,7 +257,7 @@ export function probeRoute(root, options = {}) {
   };
 }
 
-function apply(root, harnessRoot, options) {
+async function apply(root, harnessRoot, options) {
   if (!options.yes) fail("apply requires --yes because it downloads and installs a project-scoped plugin");
   if (!repository.samePath(root, harnessRoot)) {
     fail("apply is allowed only after the Harness artifact is installed at the actual project root");
@@ -255,7 +265,7 @@ function apply(root, harnessRoot, options) {
   const executable = resolveClaudeExecutable(options.claude);
   const outputs = [];
   for (const args of commands()) {
-    const result = run(executable, args, root);
+    const result = await run(executable, args, root);
     if (result.status !== 0) fail("Claude plugin command failed: " + String(result.stderr || result.stdout).trim(), 1);
     outputs.push(String(result.stdout).trim());
   }
@@ -270,9 +280,9 @@ async function main() {
       (fs.existsSync(path.join(scriptHarnessRoot, ".claude", "settings.json")) ? scriptHarnessRoot : root));
     const declared = contract(root, harnessRoot);
     let result = declared;
-    if (options.command === "runtime") result = { ...declared, runtime: runtime(root, options) };
-    else if (options.command === "probe") result = { ...declared, probe: probeRoute(root, options) };
-    else if (options.command === "apply") result = { ...declared, installation: apply(root, harnessRoot, options) };
+    if (options.command === "runtime") result = { ...declared, runtime: await runtime(root, options) };
+    else if (options.command === "probe") result = { ...declared, probe: await probeRoute(root, options) };
+    else if (options.command === "apply") result = { ...declared, installation: await apply(root, harnessRoot, options) };
     if (options.json || options.command === "plan" || options.command === "probe") {
       process.stdout.write(JSON.stringify(result, null, 2) + "\n");
     } else console.log(options.command === "contract" ? "CODEX_PLUGIN_CONTRACT_OK" : "CODEX_PLUGIN_RUNTIME_OK");

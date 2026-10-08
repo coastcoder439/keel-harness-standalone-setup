@@ -176,7 +176,8 @@ test("package evidence is portable and byte-identical across clone paths", () =>
     assert.equal(checked.status, 0, checked.stderr + checked.stdout);
     const lines = evidenceLines(root, "portable");
     assert.equal(lines.length, 1);
-    assert.match(lines[0], /schema=2; exit=0; shellId=(?:win32|linux|darwin):[^;]+; cwd=\.; oracleDigest=sha256:[a-f0-9]{64}/);
+    assert.match(lines[0], /schema=2; exit=0; shellId=(?:win32|linux|darwin):[^;]+; cwd=\.; EXPECT=matched; output-sha256=[a-f0-9]{64}/);
+    assert.doesNotMatch(lines[0], /oracleDigest/);
     assert.equal(lines[0].toLowerCase().includes(root.toLowerCase()), false);
     assert.doesNotMatch(lines[0], /; shell=[A-Za-z]:|; cwd=[A-Za-z]:/i);
     evidences.push(lines[0]);

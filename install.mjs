@@ -76,6 +76,7 @@ function render(result) {
     Number.isInteger(result.managedFiles) ? `managed=${result.managedFiles}` : null,
     result.doctor ? `doctor=${result.doctor}` : null,
     result.rollback ? `rollback=${result.rollback}` : null,
+    result.onboardingPackage ? `onboarding-package=${result.onboardingPackage.state}` : null,
     result.accountabilityData ? `accountability-data=${result.accountabilityData.directory}` : null,
     result.accountabilityData ? (result.accountabilityData.purged
       ? `accountability-data-purged=${result.accountabilityData.removedFiles.length}-files revoke=${result.accountabilityData.revoke}`
@@ -111,6 +112,18 @@ if (process.argv[1] && resolve(fileURLToPath(import.meta.url)) === resolve(proce
     if (data && !data.purged && data.credentialFiles?.length) {
       console.error("keel harness installer: Google credentials of this installation remain outside the repository: " +
         data.directory + " (" + data.credentialFiles.join(", ") + "). Disconnect in the Dashboard first, or rerun uninstall with --purge-accountability-data.");
+    }
+    if (result.claudeCode?.warning) console.error("keel harness installer: WARNING " + result.claudeCode.warning + ".");
+    // The earlier installation's onboarding package (installers before the profile moved to the session): retired by the
+    // upgrade; a package that could not be retired is named so nothing stays open unnoticed.
+    const onboardingPackage = result.onboardingPackage;
+    if (onboardingPackage?.state === "retired") {
+      console.error("keel harness installer: retired the open onboarding package docs/packages/harness-onboarding" +
+        (onboardingPackage.scopes.length ? " (runtime moved to " + onboardingPackage.scopes.map((item) => item.movedTo).join(", ") + ")" : "") +
+        "; the profile docs/harness-instance.md is unchanged. Onboarding now runs in the session (/onboarding).");
+    } else if (onboardingPackage?.state === "left-busy" || onboardingPackage?.state === "failed") {
+      console.error("keel harness installer: WARNING the earlier onboarding package was not retired (" +
+        (onboardingPackage.reason || onboardingPackage.error) + "); rerun the installer once its work has ended.");
     }
     const activation = result.runtimeActivation;
     if (activation && activation.cleared.length) {

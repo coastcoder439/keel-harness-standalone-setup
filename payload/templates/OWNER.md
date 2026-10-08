@@ -7,6 +7,7 @@ Captured: <YYYY-MM-DD>
 ## Original request
 
 <Copy the Owner request here without replacing it with the implementation plan.>
+<!-- owner-end -->
 
 ## Requirements
 

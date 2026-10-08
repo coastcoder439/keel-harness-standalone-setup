@@ -41,10 +41,10 @@ removes the archive files, stale lease and all materialized Dashboard caches.
 
 ## Owned deprecations
 
-There is currently **no open deprecation**. The previously listed removal of the vendored
-Unlazy explicit `--legacy` diagnostic mode is complete: the surface no longer exists in the
-vendored tree, so its dated contract was retired with version 1.1.1 (it would otherwise
-have failed every recipient's verification from 2026-11-01).
+There is currently **no open deprecation**. The vendored Unlazy explicit `--legacy`
+diagnostic mode still exists and stays explicitly callable without a removal date; its
+dated contract (removal on 2026-10-31) was retired with version 1.1.1 and is not planned
+again.
 
 The mechanism stays: `manifest.maintenance.deprecations` lists owned, dated removals, and
 artifact verification refuses an expired entry fail-closed. Any future deprecation must

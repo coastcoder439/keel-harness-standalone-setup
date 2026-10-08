@@ -19,10 +19,11 @@ description: Sichert genau den verifizierten Stand des gebundenen Arbeitspakets 
    `node <HARNESS_ROOT>/harness-core/git/git-intent.mjs checkpoint --root <REPO> --package <ID> --message "<TEXT>"`.
    Er sichert nur OWNER.md, PACKAGE.md, GATES.md und gates/*.md; ein gestartetes Paket
    sichern der Leaf-Checkpoint oder integrate.
-6. Veroeffentlichen ist nach Package-Close ein Schritt: der Owner sagt im Chat OK, dann
-   laeuft `package-executor.mjs publish --closure-receipt <RECEIPT> --owner-ok "<WORTLAUT>"`.
-   Der Befehl zeigt Repo, Branch, HEAD und Remote und legt die Owner-OK-Zeile im
-   Publish-Beleg ab; ohne `--owner-ok` bricht er ab.
+6. Veroeffentlichen ist nach Package-Close ein Schritt: der Owner sagt im Chat OK (aus dem
+   Gespraech gelesen, nie eine Satzform erfragt), dann laeuft
+   `package-executor.mjs publish --closure-receipt <RECEIPT> --owner-ok "<WORTLAUT>"` (Mehrzeiliges:
+   `--owner-ok-file <DATEI>`). Der Befehl zeigt Repo, Branch, HEAD und Remote und legt den
+   Owner-OK-Eintrag im Publish-Beleg ab; ohne `--owner-ok` oder `--owner-ok-file` bricht er ab.
 7. Berichte Receipts und lokalen Reverify-Stand. Commit und Provider-Erfolg sind keine
    Fulfillment-Evidence.
 

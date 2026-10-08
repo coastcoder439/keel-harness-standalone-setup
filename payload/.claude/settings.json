@@ -72,7 +72,7 @@
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/dod-guard.js\"",
             "timeout": 10,
-            "statusMessage": "dod-guard (Abschluss-Format bei geleisteter Arbeit)"
+            "statusMessage": "dod-guard (Abschluss-Format beim Fertig-Anspruch)"
           },
           {
             "type": "command",
@@ -90,21 +90,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/git-intent-guard.js\"",
-            "timeout": 10,
-            "statusMessage": "Git-Intent statt Befehlsroulette"
-          },
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/shell-mutation-guard.js\"",
-            "timeout": 10,
-            "statusMessage": "Endliche Shell-Mutationsgrenze"
-          },
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/danger-guard.js\"",
-            "timeout": 10,
-            "statusMessage": "danger-guard (nicht-Git-Zerstoerung)"
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/pretool-guards.js",
+              "shell"
+            ],
+            "timeout": 20,
+            "statusMessage": "Waechter: Git-Intent, Shell-Mutationsgrenze, danger-guard (ein Prozess)"
           }
         ]
       },
@@ -113,31 +105,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/write-guard.js\"",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/pretool-guards.js",
+              "write"
+            ],
             "timeout": 10,
-            "statusMessage": "write-guard (Schreibziel, Zugaenge, gitignore-Reihenfolge)"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__ccd_session_mgmt__(send_message|list_sessions)",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/sessionpost-guard.js\"",
-            "timeout": 10,
-            "statusMessage": "sessionpost-guard (knappe Inter-Session-Nachrichten)"
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/paket-gate.js\"",
-            "timeout": 10,
-            "statusMessage": "Repo- und Bundle-Zuordnung"
+            "statusMessage": "Waechter: write-guard und Paket-Leaf-Zuordnung (ein Prozess)"
           }
         ]
       },
@@ -146,9 +120,13 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/mcp-write-guard.js\"",
+            "command": "node",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/pretool-guards.js",
+              "mcp"
+            ],
             "timeout": 10,
-            "statusMessage": "mcp-write-guard (MCP-Schreibgrenze bei aktivem Paket)"
+            "statusMessage": "Waechter: MCP-Schreibgrenze und Sessionpost-Regel (ein Prozess)"
           }
         ]
       }

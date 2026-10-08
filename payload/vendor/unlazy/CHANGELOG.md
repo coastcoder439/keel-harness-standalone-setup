@@ -4,6 +4,13 @@
 
 This section describes the current source tree. It does not claim that `2.1.0` has a Git tag or GitHub Release.
 
+### Legacy diagnostics stay (supersedes the removal date below)
+
+- Explicit `--legacy` diagnostics are kept and no longer carry a removal date. The date
+  2026-10-31 named in the bundle/cutover entry below is withdrawn; the entry stays as written
+  because it records what was announced at the time. `--legacy` is still explicit, read-only
+  inspection and never an automatic fallback.
+
 ### Repository-owned package bundles and cutover
 
 - Make `docs/packages/<packageId>/{PACKAGE.md,GATES.md,gates/}` the only
@@ -20,6 +27,13 @@ This section describes the current source tree. It does not claim that `2.1.0` h
 ### Gate authoring
 
 - Add `scripts/gate-lint.mjs`, a non-executing advisory audit of ledger quality. Warn on whole fixed-output commands, weak success vocabulary, shared-parser path ambiguity, activity titles, unmeasured manual numbers, and mostly manual ledgers without pretending to shell-parse chains or argv. Default warnings retain a `LINT OK` marker and exit `0`; `--strict` makes them fail. Reject unknown short and long options.
+
+### Checks without time and output limits
+
+- A CHECK has no time limit and no output limit. It is started through `scripts/lib/silence-watch.mjs` and stopped only when hung (no output and no CPU or I/O activity in its process tree for `KEEL_SILENCE_MS`, default 30 minutes); the result is red with `HUNG`. `--timeout` is still accepted, ignored, and says so on stderr.
+- Check output goes to files in a private work directory outside the repository (removed at the end of the run). EXPECT is checked on those files: text block by block with overlap, a regular expression on the whole content; the result keeps length and SHA-256 instead of the text. The 250 ms regex budget stays (larger outputs get proportionally more).
+- The approval key no longer contains the time limit or an output cap (`schema` 2). Approvals written with them (`schema` 1) stay valid.
+- Before the first check of a run, an open package amendment (`<harness root>/.unlazy/.amend/*.json`) stops the run with `AMEND_OPEN` and the commands that finish or undo it; nothing is run or written. Repository and package id are taken from each ledger file, not from the working directory or `--root`; an amend record that cannot be assigned safely (broken JSON, not a regular file, unknown `schemaVersion`) stops the run with `AMEND_UNCLEAR` and names the file. A failed Git probe (git not on `PATH`, a timeout, `safe.directory`, any exit other than "not a git repository" / 128) is not read as "no repository": a file below `docs/packages/<id>/`, or below a directory holding `.unlazy/.amend` records, then stops the run with `AMEND_UNCLEAR` (file and reason named, nothing written); any other file goes on with a warning. The write of each ledger repeats the check for exactly that file under the file lock and refuses the write when an amendment has opened since. The `--timeout` notice is printed only when the option was passed and `KEEL_GATE_QUIET_TIMEOUT` is not set.
 
 ### Correctness and fail-closed behavior
 

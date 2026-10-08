@@ -34,7 +34,12 @@ const SCRIPTS = [
   "scripts/lib/project-roadmap.mjs",
   "scripts/lib/check-supervisor.mjs",
   "scripts/lib/process-tree.mjs",
+  "scripts/lib/silence-watch.mjs",
   "scripts/lib/regex-worker.mjs",
+  "scripts/lib/output-scan.mjs",
+  "scripts/lib/open-amend.mjs",
+  "scripts/lib/ledger-normalize.cjs",
+  "scripts/lib/proof-store.mjs",
   "tests/run-tests.mjs",
   "tests/dispatch-tests.mjs",
   "tests/hardening-tests.mjs",
@@ -51,6 +56,9 @@ const SCRIPTS = [
   "tests/package-migrate-tests.mjs",
   "tests/package-standard-tests.mjs",
   "tests/project-roadmap-tests.mjs",
+  "tests/silence-watch-tests.mjs",
+  "tests/gate-check-limits-tests.mjs",
+  "tests/proof-store-tests.mjs",
   "tests/self-check.mjs",
 ];
 
@@ -94,22 +102,29 @@ check("gate files are written atomically", () => {
   return null;
 });
 
-check("checks wait for close and cap output", () => {
+check("checks are watched for a hang, wait for close, and have no time or output limit", () => {
   const src = read("scripts/gate-check.mjs");
-  if (!src.includes('child.once("close"')) return "gate runner does not settle on stdio close";
-  if (src.includes('child.once("exit"')) return "gate runner settles on exit before stdio close";
-  if (!src.includes("MAX_OUTPUT_BYTES")) return "gate runner has no explicit output cap";
+  const watch = read("scripts/lib/silence-watch.mjs");
+  if (!src.includes("runWatched(")) return "gate runner does not start CHECKs through runWatched";
+  if (/\bspawn\(/.test(src)) return "gate runner starts a process on its own, past the silence watcher";
+  if (!watch.includes('child.once("close"')) return "silence watcher does not settle on stdio close";
+  const limits = src.match(/MAX_OUTPUT_BYTES|timeoutSeconds|DEFAULT_TIMEOUT/g);
+  if (limits) return "gate runner still has a time or output limit: " + [...new Set(limits)].join(", ");
+  if (!src.includes("outputFile")) return "gate runner does not write CHECK output to a file";
   return null;
 });
 
-check("approval identity binds execution semantics", () => {
+check("approval identity binds execution semantics but no time or output limit", () => {
   const src = read("scripts/gate-check.mjs");
   const required = [
-    "check:", "expect:", "cwd", "shell", "timeoutMs", "maxOutputBytes",
+    "check:", "expect:", "cwd", "shell",
     "regexTimeoutMs", "regexStartupTimeoutMs", "maxRegexWorkers", "platform", "path:",
   ];
   const missing = required.filter(token => !src.includes(token));
-  return missing.length ? "approval oracle missing source tokens: " + missing.join(", ") : null;
+  if (missing.length) return "approval oracle missing source tokens: " + missing.join(", ");
+  const oracleSource = src.slice(src.indexOf("function oracle("), src.indexOf("function signature("));
+  if (/timeoutMs:|maxOutputBytes:/.test(oracleSource)) return "approval oracle binds a time or output limit again";
+  return null;
 });
 
 check("the hook uses the package resolver and keeps legacy explicit", () => {
@@ -169,7 +184,7 @@ check("productive docs bootstrap bundles and keep legacy diagnostic-only", () =>
   for (const pattern of activeLegacy) {
     if (pattern.test(readme) || pattern.test(skill)) return "active legacy bootstrap remains: " + pattern;
   }
-  for (const token of ["package-cli.mjs create", "docs/packages/<packageId>", "package-migrate.mjs", "2026-10-31"]) {
+  for (const token of ["package-cli.mjs create", "docs/packages/<packageId>", "package-migrate.mjs", "--legacy"]) {
     if (!readme.includes(token)) return "README bundle/cutover contract missing " + token;
   }
   if (!skill.includes("package-cli.mjs close")) return "SKILL.md does not require lifecycle close";

@@ -7,11 +7,17 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const packageBindings = require("../harness-core/binding/package-binding.cjs");
+const sessionRecords = require("../harness-core/binding/session-records.cjs");
+const hookActivity = require("../harness-core/binding/hook-activity.cjs");
 
 const ORDER_ALL_MINUTES = 10;
 
+// A16: the binding search costs 1-4 Git calls. A session without a leaf binding record cannot pass it, so
+// that question is answered from the file system first; only a bound session pays for Git. A test that
+// injects its own search keeps it (deps.findSessionBinding).
 function currentPackageBinding(projectRoot, sessionId, deps = {}) {
   const find = deps.findSessionBinding || packageBindings.findSessionBinding;
+  if (!deps.findSessionBinding && !sessionRecords.hasLeafRecord(projectRoot, sessionId, projectRoot)) return null;
   try {
     const value = find(projectRoot, sessionId);
     const displayRoot = fs.existsSync(projectRoot) ? (fs.realpathSync.native || fs.realpathSync)(projectRoot) : path.resolve(projectRoot);
@@ -27,6 +33,19 @@ function currentPackageBinding(projectRoot, sessionId, deps = {}) {
   } catch { return null; }
 }
 
+// A prompt is a sign of life of the planning session (D15). A resumed conversation arrives with a new session
+// id and no record: its transcript names the old session, and the planning binding moves over before the first
+// tool call. Nothing here can fail the hook, and the package module loads only when there is something to adopt.
+function resumeAndNoteActivity(projectRoot, sessionId, transcriptPath) {
+  try {
+    hookActivity.noteHookActivity(projectRoot, sessionId);
+    if (!transcriptPath || sessionRecords.sessionRecords(projectRoot, sessionId, projectRoot).any) return null;
+    if (!fs.existsSync(path.join(projectRoot, ".unlazy", ".bootstrap"))) return null;
+    return require("../harness-core/binding/package-bootstrap.cjs").adoptByTranscript({ harnessRoot: projectRoot, sessionId,
+      transcriptPath: String(transcriptPath) });
+  } catch { return null; }
+}
+
 function shortForm(binding) {
   const packageRule = binding
     ? "Paketkontext: " + binding.repoKey + "::" + binding.packageId + " in " + binding.packageFile +
@@ -37,10 +56,11 @@ function shortForm(binding) {
     packageRule +
     "Der naechste Git-Root des Schreibziels besitzt das Bundle; es gibt keine zentrale Werkbank-Paketsuche. " +
     "<repo>/.unlazy/<scope>/ ist ignorierter, loeschbarer Runtimezustand und nie fachliche Wahrheit. " +
-    "Bei Datei- oder Commit-Arbeit endet die Meldung mit `Geprueft gegen:` und `Offen:`; dieses Format ist kein Package-Close-Receipt. " +
+    "Behauptet eine Meldung Fertigsein, endet sie mit `Geprueft gegen:` und `Offen:`; dieses Format ist kein Package-Close-Receipt. " +
     "Nichttriviale Arbeit braucht vor dem Bau Owner-Vertrag, PIG, Depth Tree und Gates. Recherche braucht zwei unabhaengige Quellen. " +
     "Listen haben hoechstens fuenf Punkte und stehen ab zwei Punkten untereinander. Nenne das Ergebnis, nicht die Arbeitschronik. " +
     "Jede Antwort nennt den naechsten Arbeitsauftrag samt Besitzer; entschiedene eigene Arbeit wird ausgefuehrt. " +
+    "Ist die Nachricht eine Frage, beantworte sie; ändere dabei keine Dateien, außer der Owner verlangt es ausdrücklich. " +
     "Abruf-Werkzeuge: completeness = Abschlussaudit; save-work = kontextbezogen sichern; repo-status = Repo-Abgleich; " +
     "session-map/tell-session = Sitzungskoordination; gauntlet-loop = Qualitaetsschleife; onboarding = Frischinstallation.";
 }
@@ -128,6 +148,7 @@ if (require.main === module) {
     try { payload = JSON.parse(inputText || "{}"); } catch { /* base context still emitted */ }
     const projectRoot = process.env.CLAUDE_PROJECT_DIR;
     const sessionId = payload.session_id;
+    if (projectRoot && sessionId) resumeAndNoteActivity(projectRoot, sessionId, payload.transcript_path);
     const binding = projectRoot && sessionId ? currentPackageBinding(projectRoot, sessionId) : null;
     let orders = [];
     try {
@@ -151,4 +172,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { currentPackageBinding, ordersFor, output, shortForm };
+module.exports = { currentPackageBinding, ordersFor, output, resumeAndNoteActivity, shortForm };

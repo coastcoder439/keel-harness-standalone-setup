@@ -1,27 +1,48 @@
 #!/usr/bin/env node
 // Execute gate oracles, update evidence, coordinate scopes, and manage leases.
 // Zero dependencies. Node 16+.
+//
+// A CHECK has no time limit and no output limit. It is started through
+// lib/silence-watch.mjs (runWatched) and is stopped only when it is hung: a long
+// stretch with no output and no CPU or I/O activity anywhere in its process tree
+// (KEEL_SILENCE_MS, default 30 min). A hung CHECK is red with the message HUNG.
+// Its output goes to files in a private work directory outside the repository
+// (removed at the end of the run), and EXPECT is checked on those files: plain
+// text block by block with overlap (lib/output-scan.mjs), a regular expression
+// on the whole content in a disposable worker. The 250 ms budget of that worker
+// and its 5 s startup limit, the four-worker cap and the 1000-character pattern
+// limit are inherited from the Unlazy original (they guard against catastrophic
+// patterns, not against slow checks); only the budget for very large outputs
+// grows with their size (see regexBudgetMs).
 
 import {
   closeSync, constants as fsConstants, existsSync, fstatSync, lstatSync,
-  mkdirSync, openSync, readdirSync, readFileSync, realpathSync, statSync, unlinkSync,
-  writeFileSync,
+  mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, realpathSync, rmSync,
+  statSync, unlinkSync, writeFileSync,
 } from "node:fs";
-import { spawn } from "node:child_process";
 import { Worker } from "node:worker_threads";
 import { randomBytes } from "node:crypto";
 import { delimiter, dirname, basename, isAbsolute, join, relative, resolve, sep } from "node:path";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import {
   UNLAZY_DIR, appendStatus, claimLeases, formatDocument, gateState,
   hookStatePath, listScopes, parseGates, releaseLeases, resolveTarget,
   scopeRoot, sha256, sleep, validateScopeId, withFileLock, writeAtomic,
 } from "./lib/gates.mjs";
-import { terminateProcessTree } from "./lib/process-tree.mjs";
 import { dispatchStatus } from "./lib/dispatch.mjs";
 import { listActiveScopes, resolvePackageTarget, resolveRepository } from "./lib/packages.mjs";
 import { hardenWindowsPrivateDirectory, verifyWindowsPrivateDirectory } from "./lib/windows-acl.mjs";
+import { runWatched } from "./lib/silence-watch.mjs";
+import {
+  fingerprintOutput, includesText, outputSegments, readWindows, segmentsBytes,
+} from "./lib/output-scan.mjs";
+import { AMEND_OPEN, AMEND_UNCLEAR, findOpenAmendmentsForFiles } from "./lib/open-amend.mjs";
+import {
+  cacheable, checkerVersion, codeStateKey, findProof, gitTopLevel, locateGitIntent, makeNoteWriter,
+  nodeModulesWorkspaceLinks, proofKeyFor,
+  resolveCommit, withCleanCheckout, writeProof,
+} from "./lib/proof-store.mjs";
 
 const HELP = `usage: gate-check.mjs [options] [file ...]
 
@@ -31,9 +52,21 @@ run modes:
   --reverify            re-run every runnable gate and demote stale failures
   --approve             approve each exact pending oracle, then run it
   --jobs N              rolling concurrency, integer 1..64 (default 1)
-  --timeout S           per-check timeout, integer seconds 1..86400 (default 120)
+  --timeout S           accepted and ignored: a check has no time limit and is
+                        stopped only when hung (no output and no CPU/I-O activity
+                        for KEEL_SILENCE_MS, default 30 min)
   --shell PATH          command shell (UNLAZY_SHELL, then platform default)
   --cwd DIR             default CHECK directory (explicit: file dir; discovered: --root)
+  --at COMMIT           package runs only: check the code state of COMMIT, not the working
+                        copy. The CHECKs run in one clean copy of that commit (git
+                        worktree), shared by all gates of the run. A green result
+                        is stored on the commit (Git note keel-proof, written through the
+                        Harness's git-intent only) and reused, with PROOF_REUSED and no
+                        run, wherever the same command meets the same code state again.
+                        Implies --reverify: a tick in the ledger is never a proof
+  --tree PATHS          with --at: the subtree(s) a result depends on, comma separated,
+                        relative to the repository, each naming something in the commit
+                        in its exact spelling (default: the whole repository)
 
 pipeline actions:
   --claim --scope ID [--leaf NAME]   atomically claim the leaf's OWNS paths
@@ -51,7 +84,11 @@ targeting:
   file ...               explicit regular ledger files; all are honored
 
 CHECK execution requires prior approval keyed to the exact CHECK, EXPECT,
-resolved CWD, resolved shell, timeout, output/regex limits, platform, and PATH.
+resolved CWD, resolved shell, regex limits, platform, and PATH (no time or
+output limit is part of the key; approvals made with one stay valid). In a
+package run the key uses the ledger's and the CWD's path inside the repository,
+so an approval also holds in another checkout of the repository; approvals made
+with the absolute path stay valid.
 Approvals live outside the repository under ~/.unlazy/approved by default.
 
 exit codes: 0 all met/action succeeded; 1 unmet; 2 usage/parse/infrastructure;
@@ -62,15 +99,22 @@ const FLAG_OPTIONS = new Set([
   "--list-scopes", "--legacy", "--help", "-h",
 ]);
 const VALUE_OPTIONS = new Set([
-  "--package", "--scope", "--leaf", "--timeout", "--jobs", "--cwd", "--root",
+  "--package", "--scope", "--leaf", "--timeout", "--jobs", "--cwd", "--root", "--at", "--tree",
   "--log", "--bind", "--shell",
 ]);
-const MAX_OUTPUT_BYTES = 1024 * 1024;
 const MAX_APPROVAL_BYTES = 256 * 1024;
+// Unlazy original: guard against catastrophic regular expressions (F1).
 const REGEX_TIMEOUT_MS = 250;
 const REGEX_STARTUP_TIMEOUT_MS = 5000;
 const MAX_REGEX_WORKERS = 4;
-const DEFAULT_TIMEOUT_SECONDS = 120;
+// Output of this size and up gets proportionally more regex budget (see regexBudgetMs).
+const REGEX_BUDGET_STEP_BYTES = 8 * 1024 * 1024;
+const REGEX_BUDGET_CAP_MS = 60000;
+// Keys of an approval oracle that older versions bound and this one does not.
+const RETIRED_ORACLE_KEYS = ["timeoutMs", "maxOutputBytes"];
+// The first characters of a proof key, in messages and in EVIDENCE (--at).
+const PROOF_PREFIX = 16;
+const PROOF_EVIDENCE_RE = /(?:^|;\s*)proof=([0-9a-f]{16})@[0-9a-f]+/;
 const CHECK_SUPERVISOR = fileURLToPath(new URL("./lib/check-supervisor.mjs", import.meta.url));
 
 // Repository-controlled titles, paths, commands, and output must not be able
@@ -129,13 +173,18 @@ function asDirectory(path, label) {
   }
 }
 
-function timeoutValue(value) {
-  if (value === undefined) return DEFAULT_TIMEOUT_SECONDS;
+// --timeout is still validated so that a bad call keeps failing the way it did,
+// but its value is not used: a CHECK has no time limit (it is stopped only when hung).
+function acceptIgnoredTimeout(value) {
+  if (value === undefined) return;
   const number = Number(value);
   if (!Number.isFinite(number) || !Number.isInteger(number) || number < 1 || number > 86400) {
     failUsage("--timeout needs an integer from 1 through 86400, got " + JSON.stringify(value));
   }
-  return number;
+  // P12 removes the --timeout the executor still passes through; until then it
+  // sets KEEL_GATE_QUIET_TIMEOUT so the notice does not push the cause of a failure off stderr.
+  if (process.env.KEEL_GATE_QUIET_TIMEOUT) return;
+  console.error("gate-check: --timeout is ignored; checks stop only when hung (silence-watch)");
 }
 
 function jobCount(value) {
@@ -176,10 +225,15 @@ if (opt.leaf && !opt.package && !opt.claim && !opt.release) {
 if ((opt.timeout || opt.jobs || opt.shell || opt.cwd) && (action || opt.status)) {
   failUsage("--timeout, --jobs, --shell, and --cwd are execution options only");
 }
+if ((opt.at || opt.tree) && (action || opt.status)) failUsage("--at and --tree are execution options only");
+if (opt.tree && !opt.at) failUsage("--tree needs --at COMMIT");
+// A tick in the ledger is never a proof for a commit (A21): with --at every runnable gate is
+// checked, either by a stored result of the same key or by a run in the clean copy.
+if (opt.at) opt.reverify = true;
 
 let root = resolve(opt.root || process.cwd());
 asDirectory(root, "--root");
-const timeoutSeconds = timeoutValue(opt.timeout);
+acceptIgnoredTimeout(opt.timeout);
 const jobs = jobCount(opt.jobs);
 
 if (action === "--list-scopes") {
@@ -422,6 +476,61 @@ function resolveShell(raw) {
 
 const shell = opt.status ? "(not used: status mode)" : resolveShell(opt.shell);
 const shellId = opt.status ? "unused" : process.platform + ":" + basename(shell).toLowerCase();
+const CHECKER_DIR = dirname(fileURLToPath(import.meta.url));
+
+// --at COMMIT: the commit, the subtree its results depend on, and the way to store a
+// result. The way to store is the Harness's git-intent next to this checker; without
+// one (plain Unlazy) results are produced in the clean copy but never stored or reused.
+// The long, real spelling of a path (Windows 8.3 short names expanded), for comparing with what Git reports.
+const nativeRealpath = (value) => (realpathSync.native || realpathSync)(value);
+
+function proofContext() {
+  if (!opt.at) return null;
+  // --at writes back package ledgers only; outside a package run there is no ledger the proof
+  // key could leave unchanged (it would rewrite itself on every run).
+  if (target.mode !== "package") failUsage("--at works only in a package run (--package ID)");
+  const top = gitTopLevel(root);
+  if (!top) failUsage("--at needs a Git repository at " + root);
+  const commit = resolveCommit(top, opt.at);
+  if (!commit) failUsage("--at: not a commit of this repository: " + opt.at);
+  let scope = ["."];
+  if (opt.tree) {
+    scope = opt.tree.split(",").map((item) => item.trim()).filter(Boolean);
+    if (!scope.length) failUsage("--tree needs at least one path");
+  }
+  // Every --tree entry must name something in the commit, in its exact spelling; a key over
+  // nothing would hold for any code.
+  try {
+    for (const item of scope) codeStateKey(top, commit, { scope: [item] });
+    codeStateKey(top, commit, { scope });
+  } catch (error) { failUsage("--at/--tree: " + error.message); }
+  const notes = [];
+  // The version of the checker is that of the bytes that run. A checker inside the repository
+  // that differs from the commit's (changed, not committed) makes results nobody can attribute
+  // to the commit: they are neither stored nor reused.
+  let checker;
+  try { checker = checkerVersion(top, commit, { checkerDir: CHECKER_DIR }); }
+  catch (error) { failUsage("--at: cannot read the running checker: " + error.message); }
+  if (checker.inRepository && !checker.matchesCommit) {
+    notes.push("the running checker (" + checker.directory + ") differs from the one in commit " + commit.slice(0, 8));
+  }
+  // A workspace or file: dependency linked in node_modules points into the working tree: the
+  // clean copy would read uncommitted code through it.
+  const workspace = nodeModulesWorkspaceLinks(top, commit);
+  if (workspace.length) {
+    notes.push("node_modules links into the working tree (workspace or file: dependency): " +
+      workspace.slice(0, 3).map((item) => relative(top, item.link).replaceAll("\\", "/")).join(", ") +
+      (workspace.length > 3 ? " and " + (workspace.length - 3) + " more" : ""));
+  }
+  for (const note of notes) console.error("gate-check: PROOF_NOT_CACHEABLE: " + note + "; results are neither stored nor reused");
+  const intent = locateGitIntent(top, { checkerDir: CHECKER_DIR });
+  return {
+    top, canonicalTop: nativeRealpath(top), commit, scope, checker, cacheOff: notes.length > 0,
+    noteWriter: intent ? makeNoteWriter(top, intent) : null,
+  };
+}
+const proofCtx = opt.status ? null : proofContext();
+
 const pathValue = String(process.env.PATH || "");
 const normalizedPath = normalizePathValue(pathValue);
 const pathHash = sha256(pathValue).slice(0, 12);
@@ -468,22 +577,62 @@ function normalizePathEntry(raw) {
   return entry;
 }
 
-function oracle(file, gate) {
-  const cwd = resolvedGateCwd(gate, file);
+// The approval key. Schema 1 also bound timeoutMs and maxOutputBytes; neither
+// exists any more (a CHECK has no time or output limit), so a limit that changes
+// can no longer invalidate an approval. Records written under schema 1 are still
+// found by legacyApprovalExists.
+//
+// In a package run the key does not hold the absolute paths of the ledger and of the
+// CWD but their paths inside the repository (schema 3), so an approval also holds in
+// another checkout of the repository, for instance the clean copy of a commit.
+// Approvals made with the absolute path (schema 2) stay valid: the current key is
+// asked for first, the old one second. Legacy, scoped and explicit runs keep the
+// absolute key, because their root is the directory the checker was started in.
+function oracleWith(gate, cwd, schema) {
   return {
-    schema: 1,
+    schema,
     check: gate.check,
     expect: gate.expect,
     cwd,
     shell,
-    timeoutMs: timeoutSeconds * 1000,
-    maxOutputBytes: MAX_OUTPUT_BYTES,
     regexTimeoutMs: REGEX_TIMEOUT_MS,
     regexStartupTimeoutMs: REGEX_STARTUP_TIMEOUT_MS,
     maxRegexWorkers: MAX_REGEX_WORKERS,
     platform: process.platform,
     path: normalizedPath,
   };
+}
+
+function oracleAbsolute(file, gate) {
+  return oracleWith(gate, resolvedGateCwd(gate, file), 2);
+}
+
+// The path of `value` inside the repository (posix, "." for the root), or null outside.
+function repoRelative(value) {
+  for (const base of [root, canonicalRoot]) {
+    const rel = relative(base, value);
+    if (rel === "") return ".";
+    if (rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel)) return rel.replaceAll("\\", "/");
+  }
+  return null;
+}
+
+function portableApproval(file, gate) {
+  if (target.mode !== "package") return null;
+  const ledger = repoRelative(resolve(file));
+  const cwd = repoRelative(resolvedGateCwd(gate, file));
+  if (ledger === null || ledger === "." || cwd === null) return null;
+  return { ledger, cwd };
+}
+
+function oraclePortable(file, gate) {
+  const portable = portableApproval(file, gate);
+  return portable ? oracleWith(gate, portable.cwd, 3) : null;
+}
+
+// What a new approval records.
+function oracle(file, gate) {
+  return oraclePortable(file, gate) || oracleAbsolute(file, gate);
 }
 
 function signature(file, gate) {
@@ -504,32 +653,29 @@ function portablePath(value) {
   return rel.replaceAll("\\", "/");
 }
 
-function portableOracleDigest(file, gate) {
-  return "sha256:" + sha256(JSON.stringify({
-    schema: 1,
-    ledger: relative(root, resolve(file)).replaceAll("\\", "/"),
-    gateId: gate.id,
-    check: gate.check,
-    expect: gate.expect,
-    cwd: portablePath(resolvedGateCwd(gate, file)),
-    shellId,
-    timeoutMs: timeoutSeconds * 1000,
-    maxOutputBytes: MAX_OUTPUT_BYTES,
-    regexTimeoutMs: REGEX_TIMEOUT_MS,
-    regexStartupTimeoutMs: REGEX_STARTUP_TIMEOUT_MS,
-    maxRegexWorkers: MAX_REGEX_WORKERS,
-    platform: process.platform,
-  }));
-}
-
 const approvalDir = resolve(process.env.UNLAZY_APPROVAL_DIR || join(homedir(), ".unlazy", "approved"));
 const canonicalRoot = realpathSync(root);
 const windowsAclCache = new Map();
 if (!opt.status && pathIsInside(root, approvalDir)) failUsage("UNLAZY_APPROVAL_DIR must be outside the repository root");
 
+// The identity of an approval record: ledger path inside the repository when the key
+// is portable, the absolute path otherwise.
+function approvalIdentity(file, gate) {
+  const portable = portableApproval(file, gate);
+  const value = oracle(file, gate);
+  const signed = sha256(JSON.stringify(value));
+  if (portable) return { portable: true, ledger: portable.ledger, signature: signed, name: sha256(portable.ledger + "\0" + gate.id + "\0" + signed) };
+  return { portable: false, signature: signed, name: sha256(resolve(file) + "\0" + gate.id + "\0" + signed) };
+}
+
+// The record of the key before schema 3: absolute ledger path, absolute CWD.
+function absoluteIdentity(file, gate) {
+  const signed = sha256(JSON.stringify(oracleAbsolute(file, gate)));
+  return { signature: signed, name: sha256(resolve(file) + "\0" + gate.id + "\0" + signed) };
+}
+
 function approvalPath(file, gate, directory = approvalDir) {
-  const identity = resolve(file) + "\0" + gate.id + "\0" + signature(file, gate);
-  return join(directory, sha256(identity) + ".json");
+  return join(directory, approvalIdentity(file, gate).name + ".json");
 }
 
 function assertPrivateApprovalEntry(path, info, kind) {
@@ -607,44 +753,94 @@ function readApprovalFile(path) {
   }
 }
 
-function approvalExists(file, gate) {
-  const store = validatedApprovalDir();
-  if (!store) return false;
-  const path = approvalPath(file, gate, store.path);
+// Reads the record filed under `name`: null when there is none, otherwise whether it
+// is intact and `matches(value)` holds.
+function checkApprovalRecord(store, name, matches) {
   let text;
-  try { text = readApprovalFile(path); }
+  try { text = readApprovalFile(join(store.path, name + ".json")); }
   catch (error) {
-    if (error.code === "ENOENT") return legacyApprovalExists(store, file, gate);
+    if (error.code === "ENOENT") return null;
     throw error;
   }
   let value;
   try { value = JSON.parse(text); }
   catch { return false; }
   assertApprovalDirUnchanged(store);
-  return value && value.file === resolve(file) && value.gate === gate.id && value.signature === signature(file, gate);
+  return Boolean(value && matches(value));
 }
 
-// Records written before PATH normalization are filed under a signature of the
-// raw PATH. They stay valid when their normalized PATH equals the current one.
-function legacyApprovalExists(store, file, gate) {
+// The current key first (portable in a package run), then the key made with the
+// absolute path (schema 2), then the records of schema 1.
+function approvalExists(file, gate) {
+  const store = validatedApprovalDir();
+  if (!store) return false;
+  const current = approvalIdentity(file, gate);
+  const found = checkApprovalRecord(store, current.name, current.portable
+    ? (value) => value.ledger === current.ledger && value.gate === gate.id && value.signature === current.signature
+    : (value) => value.file === resolve(file) && value.gate === gate.id && value.signature === current.signature);
+  if (found === true) return true;
+  if (!current.portable) return found === null ? legacyApprovalExists(store, file, gate) : false;
+  const old = absoluteIdentity(file, gate);
+  const older = checkApprovalRecord(store, old.name,
+    (value) => value.file === resolve(file) && value.gate === gate.id && value.signature === old.signature);
+  if (older === true) return true;
+  return older === null ? legacyApprovalExists(store, file, gate) : false;
+}
+
+// Approvals written by earlier versions are filed under a signature of the oracle
+// as it was then: schema 1, with the time limit and the output cap in it and,
+// before PATH normalization, the raw PATH. They stay valid, so no approval has to
+// be given again. The old filename cannot be rebuilt (the time limit that was
+// current when the owner approved is only stored inside the record), so the
+// records of this ledger and gate are read and compared field by field: the stored
+// oracle, without the two retired limits and with its PATH normalized, must equal
+// the current oracle in every other field, and the record must be intact (its
+// signature is the hash of its own oracle). Anything else (another CHECK, EXPECT,
+// CWD, shell, regex limit, platform or PATH, or an unknown extra field) does not match.
+let legacyApprovals = null;
+
+function legacyApprovalIndex(store) {
+  if (legacyApprovals) return legacyApprovals;
+  legacyApprovals = new Map();
   let names;
   try { names = readdirSync(store.path); }
-  catch { return false; }
-  const wanted = signature(file, gate);
+  catch { return legacyApprovals; }
   for (const name of names) {
     if (!/^[0-9a-f]{64}\.json$/.test(name)) continue;
     let value;
     try { value = JSON.parse(readApprovalFile(join(store.path, name))); }
     catch { continue; }
-    if (!value || value.file !== resolve(file) || value.gate !== gate.id) continue;
-    const old = value.oracle;
-    if (!old || typeof old !== "object" || typeof old.path !== "string") continue;
-    if (value.signature !== sha256(JSON.stringify(old))) continue;
-    if (sha256(JSON.stringify({ ...old, path: normalizePathValue(old.path) })) !== wanted) continue;
-    assertApprovalDirUnchanged(store);
-    return true;
+    if (!value || typeof value.file !== "string" || typeof value.gate !== "string") continue;
+    const key = value.file + "\0" + value.gate;
+    if (!legacyApprovals.has(key)) legacyApprovals.set(key, []);
+    legacyApprovals.get(key).push(value);
   }
-  return false;
+  return legacyApprovals;
+}
+
+function legacyMatches(record, current) {
+  const old = record.oracle;
+  if (!old || typeof old !== "object" || Array.isArray(old) || typeof old.path !== "string") return false;
+  if (old.schema !== 1) return false;
+  if (record.signature !== sha256(JSON.stringify(old))) return false;
+  const known = new Set([...Object.keys(current), ...RETIRED_ORACLE_KEYS]);
+  if (Object.keys(old).some((key) => !known.has(key))) return false;
+  const rebuilt = {};
+  for (const key of Object.keys(current)) {
+    if (key === "schema") rebuilt.schema = current.schema;
+    else if (key === "path") rebuilt.path = normalizePathValue(old.path);
+    else rebuilt[key] = old[key];
+  }
+  return JSON.stringify(rebuilt) === JSON.stringify(current);
+}
+
+function legacyApprovalExists(store, file, gate) {
+  const records = legacyApprovalIndex(store).get(resolve(file) + "\0" + gate.id);
+  if (!records) return false;
+  const current = oracleAbsolute(file, gate);
+  if (!records.some((record) => legacyMatches(record, current))) return false;
+  assertApprovalDirUnchanged(store);
+  return true;
 }
 
 async function recordApproval(file, gate) {
@@ -670,10 +866,12 @@ async function recordApproval(file, gate) {
   }
   try {
     writeFileSync(fd, JSON.stringify({ owner, pid: process.pid, at: Date.now() }));
-    const value = {
-      schema: 1, file: resolve(file), gate: gate.id, signature: signature(file, gate),
-      oracle: oracle(file, gate), approvedAt: new Date().toISOString(),
-    };
+    const identity = approvalIdentity(file, gate);
+    const value = identity.portable
+      ? { schema: 2, ledger: identity.ledger, gate: gate.id, signature: identity.signature,
+        oracle: oracle(file, gate), approvedAt: new Date().toISOString() }
+      : { schema: 1, file: resolve(file), gate: gate.id, signature: identity.signature,
+        oracle: oracle(file, gate), approvedAt: new Date().toISOString() };
     writeAtomic(token, JSON.stringify(value, null, 2) + "\n");
     assertApprovalDirUnchanged(store);
   } finally {
@@ -686,7 +884,7 @@ async function recordApproval(file, gate) {
 }
 
 function printOracle(file, gate, prefix) {
-  const value = oracle(file, gate);
+  const value = oracleAbsolute(file, gate);
   console.log(prefix + " " + qualified(file, gate.id));
   console.log("    CHECK: " + value.check);
   console.log("    EXPECT: " + value.expect);
@@ -712,8 +910,22 @@ function releaseRegexWorker() {
   else activeRegexWorkers--;
 }
 
-async function safeRegexMatch(expectation, output) {
-  if (expectation.kind === "text") return { matched: output.includes(expectation.value) };
+// The 250 ms budget is the Unlazy original's. It protects against catastrophic
+// patterns and normally stays exactly 250 ms. A pattern that is merely linear
+// still needs time in proportion to the text it scans, so an output of
+// REGEX_BUDGET_STEP_BYTES or more gets another 250 ms per full step (capped), or
+// a long, correct output would turn red for its size alone.
+function regexBudgetMs(bytes) {
+  return Math.min(REGEX_BUDGET_CAP_MS, REGEX_TIMEOUT_MS * (1 + Math.floor(bytes / REGEX_BUDGET_STEP_BYTES)));
+}
+
+// EXPECT on the captured output (segments of files, see lib/output-scan.mjs).
+async function safeExpectMatch(expectation, segments) {
+  if (expectation.kind === "text") {
+    try { return { matched: await includesText(segments, expectation.value) }; }
+    catch (error) { return { matched: false, error: "cannot read the check output: " + error.message }; }
+  }
+  const budgetMs = regexBudgetMs(segmentsBytes(segments));
   await acquireRegexWorker();
   try {
     return await new Promise((done) => {
@@ -742,16 +954,25 @@ async function safeRegexMatch(expectation, output) {
         if (settled) return;
         clearTimeout(startupTimer);
         startupTimer = null;
-        // The catastrophic-backtracking budget starts only after the worker is
-        // online; process startup and a busy --jobs queue are not regex time.
-        matchTimer = setTimeout(() => finish({
-          matched: false,
-          error: "EXPECT regex exceeded " + REGEX_TIMEOUT_MS + "ms",
-        }), REGEX_TIMEOUT_MS);
-        try { worker.postMessage({ source: expectation.source, flags: expectation.flags, output }); }
+        // The worker reads the output file(s) itself and answers { ready }. The
+        // catastrophic-backtracking budget starts only then: process startup, a
+        // busy --jobs queue and reading a large output are not regex time.
+        try { worker.postMessage({ source: expectation.source, flags: expectation.flags, segments }); }
         catch (error) { finish({ matched: false, error: error.message }); }
       });
-      worker.once("message", (message) => finish(message));
+      worker.on("message", (message) => {
+        if (settled) return;
+        if (message && message.ready === true) {
+          matchTimer = setTimeout(() => finish({
+            matched: false,
+            error: "EXPECT regex exceeded " + budgetMs + "ms",
+          }), budgetMs);
+          try { worker.postMessage({ go: true }); }
+          catch (error) { finish({ matched: false, error: error.message }); }
+          return;
+        }
+        finish(message);
+      });
       worker.once("error", (error) => finish({ matched: false, error: error.message }));
       worker.once("exit", (code) => {
         finish({ matched: false, error: "EXPECT worker exited " + code + " without a result" });
@@ -762,114 +983,149 @@ async function safeRegexMatch(expectation, output) {
   }
 }
 
-function runCheck(task) {
-  return new Promise((done) => {
-    const chunks = { stdout: [], stderr: [] };
-    let bytes = 0;
-    let overflow = false;
-    let timedOut = false;
-    let spawnError = null;
-    let closed = false;
-    let closeStreamsTimer = null;
-    let forceSettleTimer = null;
-    let hardStopTimer = null;
-    let timeoutTimer = null;
-    let stopRequested = false;
-    let cleanupDiagnostic = null;
-    let child;
+// Check output lives in files inside a private work directory that is never
+// inside the repository, and is removed when the run ends (also on exit and on
+// SIGINT/SIGTERM). A relocated TMPDIR that points into the repository is not used.
+let workDir = null;
+let workCleanupRegistered = false;
 
-    const settle = async (exitCode, signal) => {
-      if (closed) return;
-      closed = true;
-      if (timeoutTimer) clearTimeout(timeoutTimer);
-      if (closeStreamsTimer) clearTimeout(closeStreamsTimer);
-      if (forceSettleTimer) clearTimeout(forceSettleTimer);
-      if (hardStopTimer) clearTimeout(hardStopTimer);
-      const stdout = Buffer.concat(chunks.stdout).toString("utf8");
-      const stderr = Buffer.concat(chunks.stderr).toString("utf8");
-      const output = stdout + (stdout && stderr ? "\n" : "") + stderr;
-      const match = timedOut || overflow || spawnError
-        ? { matched: false }
-        : await safeRegexMatch(task.gate.expectation, output);
-      const cleanupSuffix = cleanupDiagnostic ? "; cleanup: " + cleanupDiagnostic : "";
-      const error = timedOut ? "timed out after " + timeoutSeconds + "s" + cleanupSuffix
-        : overflow ? "output exceeded " + MAX_OUTPUT_BYTES + " bytes" + cleanupSuffix
-          : spawnError ? spawnError.message
-            : match.error || null;
-      done({
-        ...task, output, exitCode, signal, matched: Boolean(match.matched), error,
-        ok: !error && exitCode === 0 && Boolean(match.matched),
-      });
-    };
+function removeWorkDirectory() {
+  if (!workDir) return;
+  const directory = workDir;
+  workDir = null;
+  try { rmSync(directory, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 }); }
+  catch (error) {
+    console.error("gate-check: warning: could not remove work directory " + directory + ": " + error.message);
+  }
+}
 
-    const stopChild = () => {
-      if (stopRequested) return;
-      stopRequested = true;
-      const hardStop = () => {
-        if (closed) return;
-        const cleanup = terminateProcessTree(child);
-        cleanupDiagnostic = cleanup.diagnostic;
-        // A descendant that escaped the shell can otherwise keep inherited pipes
-        // open forever. We still settle through the child's close event, after
-        // giving stdio a short grace period to drain.
-        closeStreamsTimer = setTimeout(() => {
-          try { child.stdout.destroy(); } catch { /* closed */ }
-          try { child.stderr.destroy(); } catch { /* closed */ }
-        }, 1000);
-      };
-      if (child.connected) {
-        cleanupDiagnostic = "cooperative supervisor stop requested";
-        try { child.send({ type: "terminate" }); }
-        catch { hardStop(); }
-        hardStopTimer = setTimeout(hardStop, 500);
-      } else {
-        hardStop();
-      }
-      // A successful signal request is not proof that a child closed or that
-      // every pipe-holding descendant exited. Settle independently after the
-      // bounded helper attempt for every cleanup outcome, while retaining any
-      // explicit cleanup failure in the result.
-      forceSettleTimer = setTimeout(() => {
-        try { child.stdout.destroy(); } catch { /* closed */ }
-        try { child.stderr.destroy(); } catch { /* closed */ }
-        try { child.unref(); } catch { /* unavailable */ }
-        settle(null, null);
-      }, 2500);
-    };
+// A run killed hard (SIGKILL, power loss) cannot clean up after itself. Work
+// directories of this tool that nobody touched for a week are removed by the next run.
+const STALE_WORK_DIR_MS = 7 * 24 * 60 * 60 * 1000;
+const WORK_DIR_PREFIX = "unlazy-gate-";
 
-    const capture = (stream, chunk) => {
-      const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-      const remaining = MAX_OUTPUT_BYTES - bytes;
-      if (remaining > 0) chunks[stream].push(buffer.subarray(0, remaining));
-      bytes += buffer.length;
-      if (bytes > MAX_OUTPUT_BYTES && !overflow) {
-        overflow = true;
-        stopChild();
-      }
-    };
-
+function sweepStaleWorkDirectories(base) {
+  let names;
+  try { names = readdirSync(base); } catch { return; }
+  for (const name of names) {
+    if (!name.startsWith(WORK_DIR_PREFIX)) continue;
+    const path = join(base, name);
     try {
-      child = spawn(process.execPath, [CHECK_SUPERVISOR, shell, task.gate.check], {
-        cwd: task.cwd,
-        shell: false,
-        windowsHide: true,
-        detached: process.platform !== "win32",
-        env: process.env,
-        stdio: ["ignore", "pipe", "pipe", "ipc"],
+      const info = lstatSync(path);
+      if (!info.isDirectory() || Date.now() - info.mtimeMs < STALE_WORK_DIR_MS) continue;
+      rmSync(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
+    } catch { /* in use or not ours to remove: leave it */ }
+  }
+}
+
+function workDirectory() {
+  if (workDir) return workDir;
+  const bases = [tmpdir(), join(homedir(), ".unlazy", "work")];
+  let lastError = null;
+  for (const base of bases) {
+    try {
+      mkdirSync(base, { recursive: true, mode: 0o700 });
+      if (pathIsInside(canonicalRoot, realpathSync(base))) continue;
+      sweepStaleWorkDirectories(base);
+      workDir = mkdtempSync(join(base, WORK_DIR_PREFIX));
+      break;
+    } catch (error) { lastError = error; }
+  }
+  if (!workDir) {
+    throw new Error("no work directory outside the repository for check output" + (lastError ? ": " + lastError.message : ""));
+  }
+  if (!workCleanupRegistered) {
+    workCleanupRegistered = true;
+    process.on("exit", removeWorkDirectory);
+    for (const [name, code] of [["SIGINT", 130], ["SIGTERM", 143]]) process.once(name, () => process.exit(code));
+  }
+  return workDir;
+}
+
+const forgetFile = (path) => { try { unlinkSync(path); } catch { /* the directory removal retries */ } };
+let checkCounter = 0;
+
+const failedResult = (task, error, extra = {}) => ({
+  ...task, ok: false, exitCode: null, signal: null, matched: false, error,
+  outputBytes: 0, outputSha256: sha256(""), outputDisplay: "", ...extra,
+});
+
+// A green result found in the proof store: nothing runs.
+function reusedResult(task) {
+  const { entry, commit } = task.reuse;
+  return {
+    ...task, ok: true, reused: true, exitCode: 0, signal: null, matched: true, error: null,
+    outputBytes: entry.outputBytes, outputSha256: entry.outputSha256, outputDisplay: "", provedAt: commit,
+  };
+}
+
+// With --at the CHECK runs in the clean copy of the commit (one per run, shared by all gates
+// of the run, see below), never in the working copy.
+let cleanCopy = null;
+
+async function runCheck(task) {
+  if (task.reuse) return reusedResult(task);
+  if (!proofCtx) return runCheckIn(task, task.cwd);
+  if (!cleanCopy) return failedResult(task, "clean copy of " + proofCtx.commit.slice(0, 8) + " is missing");
+  const parts = task.proof.relCwd === "." ? [] : task.proof.relCwd.split("/");
+  return { ...await runCheckIn(task, join(cleanCopy, ...parts)), cleanCopy: true };
+}
+
+// All gates of one --at run share one clean copy of the commit; it is made once, before the
+// first CHECK, and removed once, after the last one.
+async function runAll(tasks) {
+  if (!proofCtx || !tasks.some((task) => !task.reuse)) return runRolling(tasks, jobs);
+  try {
+    return await withCleanCheckout(proofCtx.top, proofCtx.commit, async (directory) => {
+      cleanCopy = directory;
+      try { return await runRolling(tasks, jobs); }
+      finally { cleanCopy = null; }
+    });
+  } catch (error) {
+    const message = "clean copy of " + proofCtx.commit.slice(0, 8) + ": " + error.message;
+    return tasks.map((task) => (task.reuse ? reusedResult(task) : failedResult(task, message)));
+  }
+}
+
+async function runCheckIn(task, cwd) {
+  const failed = (error, extra = {}) => failedResult(task, error, extra);
+  let outFile;
+  try { outFile = join(workDirectory(), "check-" + (++checkCounter) + ".out"); }
+  catch (error) { return failed(error.message); }
+  const errFile = outFile + ".stderr";
+  try {
+    let watched;
+    try {
+      // The supervisor keeps the process group alive until the shell and every
+      // inherited stdout/stderr descriptor close; runWatched starts it like
+      // spawn did, and ends the whole tree only if it is hung.
+      watched = await runWatched(process.execPath, [CHECK_SUPERVISOR, shell, task.gate.check], {
+        cwd, outputFile: outFile,
       });
+    } catch (error) { return failed(error.message); }
+    const segments = outputSegments(outFile, errFile);
+    let fingerprint;
+    let display;
+    try {
+      fingerprint = await fingerprintOutput(segments);
+      display = (await readWindows(segments)).text;
     } catch (error) {
-      done({ ...task, ok: false, output: "", exitCode: null, signal: null, matched: false, error: error.message });
-      return;
+      return failed("cannot read the check output: " + error.message, { exitCode: watched.code, signal: watched.signal });
     }
-    child.stdout.on("data", (chunk) => capture("stdout", chunk));
-    child.stderr.on("data", (chunk) => capture("stderr", chunk));
-    child.once("error", (error) => { spawnError = error; });
-    timeoutTimer = setTimeout(() => {
-      timedOut = true;
-      stopChild();
-    }, timeoutSeconds * 1000);
-    child.once("close", settle);
-  });
+    const runFault = watched.hung ? "HUNG: " + watched.hungReason
+      : watched.spawnError ? String(watched.spawnError) : null;
+    // A hung, unspawned or truncated run is red whatever the output says.
+    const match = runFault ? { matched: false } : await safeExpectMatch(task.gate.expectation, segments);
+    const error = runFault || match.error || null;
+    return {
+      ...task, exitCode: watched.code, signal: watched.signal, matched: Boolean(match.matched), error,
+      outputBytes: fingerprint.bytes, outputSha256: fingerprint.sha256, outputDisplay: display,
+      ok: !error && watched.code === 0 && Boolean(match.matched),
+    };
+  } finally {
+    forgetFile(outFile);
+    forgetFile(errFile);
+  }
 }
 
 async function runRolling(tasks, limit) {
@@ -886,6 +1142,18 @@ async function runRolling(tasks, limit) {
   for (let index = 0; index < Math.min(limit, tasks.length); index++) workers.push(worker());
   await Promise.all(workers);
   return results;
+}
+
+// The path of `value` inside the repository --at looks at (posix, "." for its top), or null.
+function topRelative(value) {
+  let real = value;
+  try { real = nativeRealpath(value); } catch { /* compare as given */ }
+  for (const base of [proofCtx.top, proofCtx.canonicalTop]) {
+    const rel = relative(base, real);
+    if (rel === "") return ".";
+    if (rel !== ".." && !rel.startsWith(".." + sep) && !isAbsolute(rel)) return rel.replaceAll("\\", "/");
+  }
+  return null;
 }
 
 const pending = [];
@@ -905,8 +1173,70 @@ for (const ledger of ledgers) {
     if (target.mode === "package" && !pathIsInside(root, cwd)) {
       failUsage("gate " + qualified(ledger.file, gate.id) + " CWD escapes repository: " + cwd);
     }
-    pending.push({ file: ledger.file, gate, cwd, wasMet: state === "met", approveOnly, signature: signature(ledger.file, gate) });
+    let proofCwd = null;
+    if (proofCtx && !approveOnly) {
+      proofCwd = topRelative(cwd);
+      if (proofCwd === null) {
+        failUsage("gate " + qualified(ledger.file, gate.id) + " CWD is outside the Git repository, --at cannot check it: " + cwd);
+      }
+    }
+    pending.push({ file: ledger.file, gate, cwd, proofCwd, wasMet: state === "met", approveOnly, signature: signature(ledger.file, gate) });
   }
+}
+
+// An open package amendment (<harnessRoot>/.unlazy/.amend/*.json) must be
+// finished before any gate runs: this run would tick boxes and write EVIDENCE
+// into the package, and `finish` would then fail with AMEND_EVIDENCE_CHANGED.
+// The test comes before the first approval or check, writes nothing, and names
+// the way out. A run that would not write (--status, a run with nothing to run,
+// --approve of already met gates) is not affected.
+//
+// Prints why the run (or one write) must stop and returns true; false when
+// nothing stands in the way. `late` names the single ledger whose write is
+// refused after its checks ran (the repeat under the file lock); without it
+// nothing has run yet.
+function reportAmendStop(amendments, late = null) {
+  // The warnings were printed by the test before the run; the repeat does not say them again.
+  if (!late) for (const warning of amendments.warnings) console.error("gate-check: warning: " + warning);
+  const outcome = late ? late + " was not written." : "Nothing was run or written.";
+  if (amendments.unclear.length) {
+    for (const item of amendments.unclear) {
+      if (item.kind === "file") {
+        console.error("gate-check: " + AMEND_UNCLEAR + ": cannot tell whether " + item.record + " belongs to an amended package: " +
+          item.reason + ". " + outcome);
+      } else {
+        console.error("gate-check: " + AMEND_UNCLEAR + ": cannot tell whether " + item.record + " is an open amendment of" +
+          " this package (" + item.reason + "). " + outcome);
+      }
+    }
+    if (amendments.unclear.some((item) => item.kind === "file")) {
+      console.error("NEXT: make git usable for the named file (git on PATH, the repository readable and trusted: safe.directory), then run gate-check again.");
+    }
+    if (amendments.unclear.some((item) => item.kind !== "file")) {
+      console.error("NEXT: repair or remove the named file (package-amend.cjs deletes a record when its amendment is closed), then run gate-check again.");
+    }
+    return true;
+  }
+  if (amendments.open.length) {
+    for (const amend of amendments.open) {
+      console.error("gate-check: " + AMEND_OPEN + ": package " + amend.packageId + " has an open amendment" +
+        " (session " + amend.sessionId + (amend.createdAt ? ", opened " + amend.createdAt : "") + ")." +
+        " A run now would write checkboxes and EVIDENCE into the package and the amendment could no longer be finished" +
+        " (AMEND_EVIDENCE_CHANGED). " + outcome);
+      console.error("NEXT: finish the amendment: " + amend.finish);
+      if (amend.undo) console.error("  or abort it and restore the package: " + amend.undo);
+    }
+    console.error("NEXT: then run gate-check again.");
+    return true;
+  }
+  return false;
+}
+
+if (!opt.status && pending.some((task) => !task.approveOnly)) {
+  // Repository and package id come from the ledger files themselves, never from
+  // the working directory or --root: an absolute path from outside, or a foreign
+  // --root, writes into the very same package.
+  if (reportAmendStop(findOpenAmendmentsForFiles(target.files))) process.exit(2);
 }
 
 const runnable = [];
@@ -954,19 +1284,43 @@ if (process.platform === "win32" && runnable.length) {
   }
 }
 
-for (const task of runnable) {
-  console.log("  RUN  " + qualified(task.file, task.gate.id) + " shell=" + shell + " cwd=" + task.cwd + " PATH=" + pathTranscript);
+// With --at: the key of each result, and a green result already stored for it.
+function attachProof(task) {
+  const parts = proofKeyFor(proofCtx.top, proofCtx.commit,
+    { check: task.gate.check, expect: task.gate.expect, cwd: task.proofCwd, shell: shellId },
+    { scope: proofCtx.scope, checker: proofCtx.checker });
+  task.proof = {
+    key: parts.key, relCwd: task.proofCwd, cacheable: cacheable(task.gate) && !proofCtx.cacheOff, checker: parts.checker.digest,
+  };
+  // A gate that is not cacheable (CACHE: no, a model, the network, a run whose checker or
+  // node_modules the commit does not pin) never reuses a result, whatever is stored.
+  if (task.proof.cacheable) {
+    const found = findProof(proofCtx.top, proofCtx.commit, parts.key);
+    if (found) task.reuse = found;
+  }
 }
-const results = opt.status ? [] : await runRolling(runnable, jobs);
-const outputFingerprint = (output) => ({
-  sha256: sha256(String(output)),
-  bytes: Buffer.byteLength(String(output), "utf8"),
-});
+
+if (proofCtx && !opt.status) {
+  try { for (const task of runnable) attachProof(task); }
+  catch (error) {
+    console.error("gate-check: cannot compute the code state of " + proofCtx.commit + ": " + error.message);
+    process.exit(2);
+  }
+}
+
+for (const task of runnable) {
+  if (task.reuse) continue;
+  console.log("  RUN  " + qualified(task.file, task.gate.id) + " shell=" + shell + " cwd=" + task.cwd +
+    (proofCtx ? " at=" + proofCtx.commit.slice(0, 8) + " (clean copy)" : "") + " PATH=" + pathTranscript);
+}
+const results = opt.status ? [] : await runAll(runnable);
+removeWorkDirectory();
 for (const result of results) {
-  const fingerprint = outputFingerprint(result.output);
+  // Length and SHA-256 stand in for the output text; the shortened display text
+  // is for the message only and never takes part in a verdict.
   const outputSummary = result.ok
-    ? "sha256=" + fingerprint.sha256 + "; bytes=" + fingerprint.bytes
-    : failureOutput(result.output);
+    ? "sha256=" + result.outputSha256 + "; bytes=" + result.outputBytes
+    : failureOutput(result.outputDisplay) + "; sha256=" + result.outputSha256 + "; bytes=" + result.outputBytes;
   const outcome = "exit=" + (result.exitCode === null ? "none" : result.exitCode) +
     (result.signal ? " signal=" + result.signal : "") +
     "; EXPECT=" + (result.matched ? "matched" : "not matched") +
@@ -974,6 +1328,9 @@ for (const result of results) {
   if (result.ok) {
     console.log("  PASS " + qualified(result.file, result.gate.id) + ": " + result.gate.title);
     console.log("       " + outcome);
+    if (result.reused) {
+      console.log("       PROOF_REUSED " + result.proof.key.slice(0, PROOF_PREFIX) + " (proved on " + result.provedAt.slice(0, 8) + ", nothing ran)");
+    }
   } else {
     console.log("  FAIL " + qualified(result.file, result.gate.id) + ": " + result.gate.title);
     console.log("       " + (result.error ? result.error + "; " : "") + outcome);
@@ -987,18 +1344,25 @@ function failureOutput(output, max = 480) {
   return summary.slice(0, max);
 }
 
+// With --at the result carries the key of the code state it was made for, and the commit
+// it was proved on (this one, or the earlier one a reused result hangs on).
+function proofEvidence(result) {
+  if (!result.proof) return "";
+  const commit = result.reused ? result.provedAt : proofCtx.commit;
+  return "; proof=" + result.proof.key.slice(0, PROOF_PREFIX) + "@" + commit.slice(0, 8);
+}
+
 function evidenceFor(result) {
   const clean = (value) => terminalSafe(value).replace(/[\r\n\t]+/g, " ");
-  const fingerprint = outputFingerprint(result.output);
+  const fingerprint = { sha256: result.outputSha256, bytes: result.outputBytes };
   if (target.mode === "package") {
     return ("schema=2; exit=0; shellId=" + clean(shellId) + "; cwd=" + portablePath(result.cwd) +
-      "; oracleDigest=" + portableOracleDigest(result.file, result.gate) +
       "; EXPECT=matched; output-sha256=" + fingerprint.sha256 +
-      "; output-bytes=" + fingerprint.bytes).slice(0, 900);
+      "; output-bytes=" + fingerprint.bytes).slice(0, 900) + proofEvidence(result);
   }
   return ("exit=0; shell=" + clean(shell) + "; cwd=" + clean(result.cwd) +
     "; path=" + pathEvidence + "; EXPECT=matched; output-sha256=" + fingerprint.sha256 +
-    "; output-bytes=" + fingerprint.bytes).slice(0, 900);
+    "; output-bytes=" + fingerprint.bytes).slice(0, 900) + proofEvidence(result);
 }
 
 function insertOrUpdateEvidence(doc, gate, value) {
@@ -1008,7 +1372,7 @@ function insertOrUpdateEvidence(doc, gate, value) {
     return;
   }
   let line = gate.line + 1;
-  while (line < doc.lines.length && /^\s+(CHECK|EXPECT|EVIDENCE|CWD):/.test(doc.lines[line])) line++;
+  while (line < doc.lines.length && /^\s+(CHECK|EXPECT|EVIDENCE|CWD|CACHE):/.test(doc.lines[line])) line++;
   doc.lines.splice(line, 0, "  EVIDENCE: " + value);
 }
 
@@ -1018,6 +1382,13 @@ for (const result of results) {
   if (!result.ok && !(opt.reverify && result.wasMet)) continue;
   try {
     await withFileLock(root, result.file, () => {
+      // The checks of this run took time: an amendment may have been opened since the
+      // test before them. Repeat it for exactly this file, now that nobody else can
+      // write it, and write nothing if it no longer passes.
+      if (reportAmendStop(findOpenAmendmentsForFiles([result.file]), result.file)) {
+        process.exitCode = 2;
+        return;
+      }
       let doc = parseGates(readFileSync(result.file, "utf8"));
       if (doc.errors.length) throw new Error("fresh ledger became invalid: " + doc.errors.join("; "));
       const fresh = doc.gates.find((gate) => gate.id === result.gate.id);
@@ -1027,6 +1398,13 @@ for (const result of results) {
         return;
       }
       if (result.ok) {
+        // The output hash changes with every run and is no reason to write the package again:
+        // when the gate is already met under the same key, the file stays as it is (B10).
+        const recorded = fresh.evidence ? PROOF_EVIDENCE_RE.exec(fresh.evidence) : null;
+        if (result.proof && fresh.checked && recorded && recorded[1] === result.proof.key.slice(0, PROOF_PREFIX)) {
+          console.log("  UNCHANGED " + qualified(result.file, result.gate.id) + ": same proof key, ledger not rewritten");
+          return;
+        }
         doc.lines[fresh.line] = doc.lines[fresh.line].replace(/^- \[( |x|X)\]/, "- [x]");
         insertOrUpdateEvidence(doc, fresh, evidenceFor(result));
       } else {
@@ -1041,6 +1419,33 @@ for (const result of results) {
   }
 }
 if (process.exitCode === 2) process.exit(2);
+
+// Green results made in a clean copy go onto the commit, through the Harness's git-intent only.
+// Red never, nothing that is not cacheable, and nothing that was only reused.
+if (proofCtx) {
+  const seen = new Set();
+  const storable = results.filter((result) => {
+    if (!result.ok || result.reused || !result.cleanCopy || !result.proof || !result.proof.cacheable) return false;
+    if (seen.has(result.proof.key)) return false;
+    seen.add(result.proof.key);
+    return true;
+  });
+  if (storable.length && !proofCtx.noteWriter) {
+    console.error("gate-check: note: " + storable.length + " green result(s) not stored, no Harness git-intent next to this" +
+      " checker (plain Unlazy); they are not reused");
+  } else if (storable.length) {
+    const at = new Date().toISOString();
+    const stored = writeProof(proofCtx.top, proofCtx.commit, storable.map((result) => ({
+      key: result.proof.key, result: "green", outputSha256: result.outputSha256, outputBytes: result.outputBytes,
+      checker: result.proof.checker, at, gate: { package: target.packageId || null, id: result.gate.id },
+    })), { noteWriter: proofCtx.noteWriter });
+    if (stored.written) {
+      console.log("  PROOF_STORED " + stored.written + " result(s) on " + proofCtx.commit.slice(0, 8));
+    } else {
+      console.error("gate-check: PROOF_NOT_STORED: " + (stored.error || stored.reason));
+    }
+  }
+}
 
 ledgers = target.files.map(loadLedger);
 let totalMet = 0;

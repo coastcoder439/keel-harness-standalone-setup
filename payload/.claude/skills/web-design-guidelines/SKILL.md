@@ -34,7 +34,7 @@ Review files for compliance with Web Interface Guidelines.
   UI-Verify heisst echter Screenshot im Browser gegen die genehmigten Entwuerfe
   (working-method.md).
 - German display texts: apply the English copy rules (Title Case, second
-  person, "&") only in spirit; CLAUDE.md sets display language German.
+  person, "&") only in spirit; AGENTS.md sets display language German.
 
 ## Updating the frozen rules (manual, never automatic)
 

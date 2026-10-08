@@ -330,7 +330,24 @@ export async function updateDispatch(root, spec) {
     } else {
       const current = state.waves[waveId];
       if (!current) fail("unknown wave " + waveId);
-      if (spec.action === "abandon") {
+      if (spec.action === "discard") {
+        // A wave in which no leaf ever started holds no work: it is removed, so its id is free again at once and
+        // nothing of it remains as a handoff. A wave with a start keeps its record and ends through abandon and recover.
+        if (current.state !== "open" && current.state !== "abandoned") {
+          fail("wave " + waveId + " is " + current.state + "; discard requires an open or abandoned wave without any start");
+        }
+        if (count(current.started) || hasOwn(current, "restarts")) {
+          fail("wave " + waveId + " has started leaves; discard only removes a wave in which no leaf started. " +
+            "Abandon it and end it with recover (through a complete replacement wave or the existing returns)");
+        }
+        const reason = validReason(spec.reason);
+        const removed = current;
+        delete state.waves[waveId];
+        event = "dispatch " + waveId + " discarded: " + reason;
+        validateState(state, { scope, packageId });
+        writeAtomic(path, JSON.stringify(state, null, 2) + "\n", { root });
+        return { ...removed, state: "discarded", discardedAt: now, reason };
+      } else if (spec.action === "abandon") {
         if (!new Set(["open", "sealed"]).has(current.state)) {
           fail("wave " + waveId + " is " + current.state + "; abandon requires an open or sealed wave");
         }

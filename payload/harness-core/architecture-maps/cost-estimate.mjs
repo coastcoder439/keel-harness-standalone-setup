@@ -16,7 +16,7 @@
 // Diese Datei nennt bewusst kein Modell: Welches Modell der Job nutzt und was es kostet, kommt aus den
 // Einstellungen je Prozess (new-harness-process-model-settings) und wird hier als `pricing` übergeben.
 
-import { spawnSync } from "node:child_process";
+import gitBinary from "../git/git-binary.cjs";
 import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -157,7 +157,7 @@ export function projectIgnorePatterns(projectRoot) {
 }
 
 function listViaGit(projectRoot) {
-  const result = spawnSync("git", ["ls-files", "-z", "-co", "--exclude-standard"], {
+  const result = gitBinary.gitSync(["ls-files", "-z", "-co", "--exclude-standard"], {
     cwd: projectRoot, encoding: "utf8", maxBuffer: 256 * 1024 * 1024, windowsHide: true,
   });
   if (result.status !== 0 || typeof result.stdout !== "string" || !result.stdout) return null;
