@@ -57,8 +57,10 @@ the same package. Scope names in different repositories do not collide.
 Approvals live outside the repository under `~/.unlazy/approved/` or a verified
 `UNLAZY_APPROVAL_DIR`. Approval identity is machine-bound. Evidence written to
 a ledger is portable: it contains only a repository-relative `cwd`, a stable
-`shellId`, an `oracleDigest`, exit/match facts, and an output digest. It MUST
+`shellId`, exit/match facts, and an output digest. It MUST
 NOT contain an absolute repository, home, shell, or approval-store path.
+Evidence lines written by earlier versions may still carry an `oracleDigest=sha256:...`
+field. It is no longer written and is ignored when read; those lines stay valid.
 
 ## Resolver precedence
 

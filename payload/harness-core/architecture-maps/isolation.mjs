@@ -21,6 +21,7 @@
 // Rückfrage.
 
 import { spawnSync } from "node:child_process";
+import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { existsSync, lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import os from "node:os";
@@ -29,6 +30,9 @@ import process from "node:process";
 import { fileURLToPath } from "node:url";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+// The step runner is loaded when a step runs, not here: this file is also imported by the build and from an installed
+// layout with only Node building blocks (test/architecture-maps-delivery.test.js), so it keeps no import of its own.
+const watchedChild = () => createRequire(import.meta.url)("../binding/watched-child.cjs");
 export const VENDOR_DIR = path.resolve(HERE, "..", "..", "vendor");
 export const PLUGIN_DIR = path.join(VENDOR_DIR, "understand-anything-plugin");
 export const LOCK_FILE = path.join(VENDOR_DIR, "understand-anything.lock.json");
@@ -142,7 +146,6 @@ export function checkPnpmVersion({ lockFile = LOCK_FILE, run } = {}) {
 
 const PREBUILD_ARGUMENT = /^[A-Za-z0-9@._/=:-]+$/u;
 const PREBUILD_LOCKFILE = "pnpm-lock.yaml";
-const PREBUILD_STEP_TIMEOUT_MS = 15 * 60 * 1000;
 
 /**
  * Rezept des Vorbaus aus der Lock-Datei: jede `npx …`-Zeile aus `pnpm.prebuild` wird ein Schritt; jede
@@ -188,13 +191,15 @@ export function resolveNpxCommand({ execPath = process.execPath, platform = proc
   return platform === "win32" ? { command: "npx.cmd", prefix: [], shell: true } : { command: "npx", prefix: [], shell: false };
 }
 
-/** Echter Ausführer eines Vorbau-Schritts (`npx <args>` im Plugin-Ordner); in Tests immer ersetzt. */
-export function defaultPrebuildExec(args, { cwd, env = process.env, timeoutMs = PREBUILD_STEP_TIMEOUT_MS } = {}) {
-  const npx = resolveNpxCommand();
-  return spawnSync(npx.command, [...npx.prefix, ...args], {
-    cwd, env, shell: npx.shell, encoding: "utf8", windowsHide: true, timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+/**
+ * Echter Ausführer eines Vorbau-Schritts (`npx <args>` im Plugin-Ordner); in Tests ersetzt. Keine feste Zeit und
+ * kein Ausgabe-Deckel mehr (P15, C13; vorher 15 Minuten und 64 MiB): der Schritt läuft unter dem Stille-Wächter
+ * (vendor/unlazy/scripts/lib/silence-watch.mjs) und gilt nur als hängend, wenn er KEEL_SILENCE_MS lang nichts
+ * ausgibt UND sein Prozessbaum nicht arbeitet. Ein langsames Netz mit laufendem pnpm bricht damit nicht mehr ab.
+ * `npx` ist für Tests ersetzbar ({ command, prefix, shell }).
+ */
+export async function defaultPrebuildExec(args, { cwd, env = process.env, npx = resolveNpxCommand() } = {}) {
+  return watchedChild().runWatchedChild(npx.command, [...npx.prefix, ...args], { cwd, env, shell: npx.shell });
 }
 
 function outputTail(text, max = 400) {
@@ -205,10 +210,11 @@ function outputTail(text, max = 400) {
 /** Ein Satz zum Fehlschlag eines Schritts: npx fehlt, kein Netz oder Exit-Code mit dem Ende der Ausgabe. */
 export function prebuildStepError(step, result) {
   if (!result) return `${step.label}: kein Ergebnis vom Aufruf.`;
+  if (result.hung) return `${step.label}: ${watchedChild().hungMessage("npx", result)}.`;
   if (result.error) {
     const code = result.error.code || "";
-    if (code === "ENOENT") return `${step.label}: npx wurde nicht gefunden; die Einrichtung braucht Node.js mit npm (npx).`;
-    if (code === "ETIMEDOUT") return `${step.label}: nach ${Math.round(PREBUILD_STEP_TIMEOUT_MS / 60000)} Minuten abgebrochen.`;
+    const text = String(result.error.message || "");
+    if (code === "ENOENT" || /\bENOENT\b/u.test(text)) return `${step.label}: npx wurde nicht gefunden; die Einrichtung braucht Node.js mit npm (npx).`;
     return `${step.label}: startete nicht (${result.error.message || code || String(result.error)}).`;
   }
   if (result.status === 0) return null;
@@ -219,7 +225,8 @@ export function prebuildStepError(step, result) {
 }
 
 /**
- * Der Vorbau selbst (synchron; `exec` ist injizierbar, in Tests nie ein echter Download):
+ * Der Vorbau selbst (asynchron, weil der Schritt unter dem Stille-Wächter läuft; `exec` ist injizierbar, in Tests nie
+ * ein echter Download, und darf auch synchron antworten):
  * 1. Prüfsumme vor dem Vorbau (Gate J1: kein pnpm auf einem veränderten Quellstand),
  * 2. die npx-Schritte aus der Lock-Datei im Plugin-Ordner,
  * 3. Wiederherstellung der pnpm-lock.yaml (immer, auch nach einem Fehlschlag),
@@ -227,7 +234,7 @@ export function prebuildStepError(step, result) {
  * `onStep({ index, total, label })` meldet jeden Schritt vor seinem Beginn. Wirft nie; das Ergebnis sagt
  * `ok` und im Fehlerfall `error` als ganzen Satz für die Karte.
  */
-export function runPluginPrebuild({ pluginDir = PLUGIN_DIR, lockFile = LOCK_FILE, exec = defaultPrebuildExec, env = process.env, onStep = () => {}, log = () => {} } = {}) {
+export async function runPluginPrebuild({ pluginDir = PLUGIN_DIR, lockFile = LOCK_FILE, exec = defaultPrebuildExec, env = process.env, onStep = () => {}, log = () => {} } = {}) {
   let recipe;
   try { recipe = prebuildRecipe({ lockFile }); }
   catch (error) { return { ok: false, error: error.message, steps: [] }; }
@@ -249,7 +256,7 @@ export function runPluginPrebuild({ pluginDir = PLUGIN_DIR, lockFile = LOCK_FILE
       report(offset + 1);
       log(`$ npx ${step.args.join(" ")}\n`);
       let result;
-      try { result = exec(step.args, { cwd: pluginDir, env }); }
+      try { result = await exec(step.args, { cwd: pluginDir, env }); }
       catch (error) { result = { error }; }
       if (result?.stdout) log(String(result.stdout));
       if (result?.stderr) log(String(result.stderr));

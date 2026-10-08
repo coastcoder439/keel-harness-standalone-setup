@@ -7,14 +7,13 @@ import {
   openSync,
   readFileSync,
   realpathSync,
-  renameSync,
   rmSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import packageContext from "./package-context.cjs";
-import { assertRuntimeIgnored } from "./package-lifecycle.mjs";
+import { assertRuntimeIgnored, renameWithRetry } from "./package-lifecycle.mjs";
 import { inspectPackageBundle, parsePackageDocument } from "./package-schema.mjs";
 import { writeAtomic } from "./gates.mjs";
 import { resolveRepository } from "./packages.mjs";
@@ -612,7 +611,8 @@ export function applyLegacyMigration(options) {
     }
     journal.stage = "cutover";
     writeJournal(paths.journal, journal);
-    renameSync(temporary, paths.target);
+    // Cutover of the prepared directory: a scanner or indexer may hold it for a moment on Windows, retry.
+    renameWithRetry(temporary, paths.target);
     journal.stage = "target-visible";
     writeJournal(paths.journal, journal);
     reach(options, "after-target");
@@ -660,7 +660,7 @@ export function resumeLegacyMigration(options) {
     if (!sourceExists || !temporaryExists) conflict("resume cannot find a coherent legacy source and prepared bundle");
     if (gitIndexFingerprint(root) !== journal.indexFingerprint) conflict("git index changed; resume requires rollback or index restoration");
     verifyPrepared(root, packageId, journal.temporary, journal.report);
-    renameSync(journal.temporary, paths.target);
+    renameWithRetry(journal.temporary, paths.target);
     journal.stage = "target-visible";
     writeJournal(paths.journal, journal);
     rmSync(paths.source);

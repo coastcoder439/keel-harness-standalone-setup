@@ -5,6 +5,12 @@
 //   Owner-Start: <YYYY-MM-DD> "<Wortlaut>"     im Paket selbst
 //   Owner-Go: <YYYY-MM-DD> "<Wortlaut>"        im Lauf-Paket
 //
+// Der Wortlaut ist das wortgetreue Zitat der Owner-Nachricht (D16): keine Laengengrenze, Zeilenumbrueche und
+// Anfuehrungszeichen sind erlaubt, nur ein leerer Wortlaut nicht. Passt er nicht in die Kurzform (eine Zeile,
+// 1..500 Zeichen, ohne Anfuehrungszeichen), steht er als Zitatblock unter dem Kopf `Owner-Start: <YYYY-MM-DD>`,
+// jede Zeile mit vier Leerzeichen und ">" davor (dieselbe Form wie bei Owner-OK in owner-ok.mjs). Eine Satzform
+// wird nie verlangt: der Agent liest den Startwunsch aus dem Gespraech und legt die Nachricht als Zitat ab.
+//
 // Das Modul prueft nur und schreibt nie eine Zeile. Es gibt keine Commit-Bindung, weil
 // HEAD in jeder Welle weiterlaeuft. Eingeschaltet wird die Pruefung je Installation
 // ueber packageContract.ownerStartRequired in .keel-harness.json.
@@ -12,10 +18,13 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { packageSection, todayLocal, validCalendarDate } from "./owner-ok.mjs";
+import { packageSection, readQuoteBlock, todayLocal, validCalendarDate, wordingProblem } from "./owner-ok.mjs";
 
 export const OWNER_START_LINE = /^Owner-Start:\s+(\d{4}-\d{2}-\d{2})\s+"([^"\r\n]{1,500})"\s*$/u;
 export const OWNER_GO_LINE = /^Owner-Go:\s+(\d{4}-\d{2}-\d{2})\s+"([^"\r\n]{1,500})"\s*$/u;
+// Die Blockform: der Kopf ohne Wortlaut, das Zitat folgt als Zitatblock.
+export const OWNER_START_HEAD = /^Owner-Start:\s+(\d{4}-\d{2}-\d{2})\s*$/u;
+export const OWNER_GO_HEAD = /^Owner-Go:\s+(\d{4}-\d{2}-\d{2})\s*$/u;
 
 const PACKAGE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 const INSTALLER_SOURCE = /^Source:\s*Keel Harness installer\s*$/mu;
@@ -54,25 +63,35 @@ export function ownerStartRequired(harnessRoot) {
 }
 
 // Jede Status-Zeile mit dem Praefix ist eine Kandidatin. Keine ergibt null; mehrere
-// sind mehrdeutig; genau eine muss die exakte Form und einen echten, nicht kuenftigen
-// Kalendertag tragen.
-function statusLine(packageText, prefix, pattern, today) {
-  const candidates = packageSection(packageText, "Status").split("\n")
-    .filter((line) => line.trimStart().startsWith(prefix));
+// sind mehrdeutig; genau eine muss die Kurz- oder die Blockform und einen echten, nicht
+// kuenftigen Kalendertag tragen und ein nicht leeres Zitat. Die Zitatzeilen der Blockform
+// beginnen mit vier Leerzeichen und ">", sind also nie selbst eine Kandidatin.
+function statusLine(packageText, prefix, shortPattern, headPattern, today) {
+  const lines = packageSection(packageText, "Status").split("\n");
+  const candidates = [];
+  lines.forEach((line, index) => { if (line.trimStart().startsWith(prefix)) candidates.push(index); });
   if (candidates.length === 0) return null;
   if (candidates.length > 1) {
     throw startError("OWNER_START_AMBIGUOUS",
       "## Status carries " + candidates.length + " '" + prefix + "' lines; exactly one is allowed", 1);
   }
-  const raw = candidates[0];
-  const match = pattern.exec(raw);
-  if (!match) {
+  const raw = lines[candidates[0]];
+  const short = shortPattern.exec(raw);
+  const head = short ? null : headPattern.exec(raw);
+  if (!short && !head) {
     throw startError("OWNER_START_INVALID",
-      "'" + prefix + "' line must read `" + prefix + " YYYY-MM-DD \"<Owner wording>\"` with 1..500 characters without quotes", 2);
+      "'" + prefix + "' line must read `" + prefix + " YYYY-MM-DD \"<Owner wording>\"` or `" + prefix +
+      " YYYY-MM-DD` followed by the Owner's words as lines that start with four spaces and '>'", 2);
   }
-  if (!validCalendarDate(match[1])) throw startError("OWNER_START_INVALID", "'" + prefix + "' date is not a real day", 2);
-  if (match[1] > today) throw startError("OWNER_START_INVALID", "'" + prefix + "' date " + match[1] + " is in the future", 2);
-  return { date: match[1], wording: match[2], lineDigest: sha256(raw) };
+  const quote = head ? readQuoteBlock(lines, candidates[0] + 1) : null;
+  const date = (short || head)[1];
+  const wording = short ? short[2] : (quote ? quote.wording : "");
+  const block = short ? raw : [raw, ...lines.slice(candidates[0] + 1, quote ? quote.next : candidates[0] + 1)].join("\n");
+  if (!validCalendarDate(date)) throw startError("OWNER_START_INVALID", "'" + prefix + "' date is not a real day", 2);
+  if (date > today) throw startError("OWNER_START_INVALID", "'" + prefix + "' date " + date + " is in the future", 2);
+  const problem = wordingProblem(wording);
+  if (problem) throw startError("OWNER_START_INVALID", "'" + prefix + "' line: " + problem, 2);
+  return { date, wording, lineDigest: sha256(block) };
 }
 
 function escapeRegExp(value) {
@@ -110,10 +129,11 @@ export function verifyOwnerStart({ harnessRoot, repoRoot, packageId, runPackageI
   if (run !== null) {
     const relative = "docs/packages/" + run + "/PACKAGE.md";
     const text = readText(path.join(String(repoRoot), "docs", "packages", run, "PACKAGE.md"));
-    const go = text === null ? null : statusLine(text, "Owner-Go:", OWNER_GO_LINE, day);
+    const go = text === null ? null : statusLine(text, "Owner-Go:", OWNER_GO_LINE, OWNER_GO_HEAD, day);
     if (!go) {
       throw startError("OWNER_GO_MISSING",
-        "run " + run + " has no Owner go sentence: " + relative + " needs `Owner-Go: YYYY-MM-DD \"<Owner wording>\"` in ## Status", 1);
+        "run " + run + " has no Owner go quote: record the Owner's message from the chat in ## Status of " + relative +
+        " as `Owner-Go: YYYY-MM-DD \"<Owner wording>\"` (his own words; no sentence form is asked for)", 1);
     }
     if (!namesPackage(text, id)) {
       throw startError("OWNER_GO_NOT_MEMBER", "run " + run + " does not name package " + id + " in " + relative, 1);
@@ -122,10 +142,10 @@ export function verifyOwnerStart({ harnessRoot, repoRoot, packageId, runPackageI
   }
 
   const text = readText(path.join(String(repoRoot), "docs", "packages", id, "PACKAGE.md"));
-  const start = text === null ? null : statusLine(text, "Owner-Start:", OWNER_START_LINE, day);
+  const start = text === null ? null : statusLine(text, "Owner-Start:", OWNER_START_LINE, OWNER_START_HEAD, day);
   if (!start) {
     throw startError("OWNER_START_MISSING",
-      "package " + id + " has no Owner start sentence: add `Owner-Start: YYYY-MM-DD \"<Owner wording>\"` to ## Status of " +
+      "package " + id + " has no Owner start quote: record the Owner's message from the chat as `Owner-Start: YYYY-MM-DD \"<Owner wording>\"` in ## Status of " +
       "docs/packages/" + id + "/PACKAGE.md, or start it under a run with --run <run package> whose ## Status carries " +
       "`Owner-Go: ...` and names " + id + ".", 1);
   }

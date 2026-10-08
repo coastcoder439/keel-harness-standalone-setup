@@ -143,12 +143,43 @@ test("an approval does not hold once a foreign PATH entry is added", async () =>
     assert(denied.out.includes("APPROVAL REQUIRED"), "missing approval request\n" + denied.out);
     assert(denied.out.includes("NOT RUN"), "the CHECK must not run\n" + denied.out);
     assert(!existsSync(s.path("ran.txt")), "CHECK ran under an unapproved PATH");
-    // A PATH that loses a real entry is foreign too.
-    const shorter = REAL_PATH.split(delimiter).filter(Boolean).slice(1).join(delimiter);
-    if (shorter) {
-      const lost = await gateCheck(s, [], shorter);
-      assert(lost.code !== 0 && !existsSync(s.path("ran.txt")), "a reduced PATH must not reuse the approval");
-    }
+  } finally { s.cleanup(); }
+});
+
+// The approval is granted under REAL_PATH plus an extra entry and then checked
+// under REAL_PATH, which has lost that entry. This does not depend on which entry
+// the shell puts first: a Git Bash PATH repeats entries and carries its own
+// runtime directories, and normalization (correctly) makes those irrelevant, so
+// dropping "the first raw entry" of the real PATH is not a reliable way to make
+// a PATH foreign. An entry that exists in no shell's PATH is.
+test("an approval does not hold once a PATH entry is lost", async () => {
+  const s = sandbox();
+  try {
+    s.write("check.mjs", CHECK);
+    s.write("GATES.md", UNMET);
+    const probe = WINDOWS ? "C:\\keel-approval-probe\\bin" : "/keel-approval-probe/bin";
+    assert((await gateCheck(s, ["--approve"], REAL_PATH + delimiter + probe)).code === 0, "approval failed");
+    rmSync(s.path("ran.txt"), { force: true });
+    s.write("GATES.md", UNMET);
+    const lost = await gateCheck(s, [], REAL_PATH);
+    assert(lost.code !== 0 && !existsSync(s.path("ran.txt")), "a PATH that lost an entry must not reuse the approval\n" + lost.out);
+    assert(lost.out.includes("APPROVAL REQUIRED"), "missing approval request\n" + lost.out);
+  } finally { s.cleanup(); }
+});
+
+test("a PATH with a duplicate at the front keeps the approval", async () => {
+  const s = sandbox();
+  try {
+    s.write("check.mjs", CHECK);
+    s.write("GATES.md", UNMET);
+    assert((await gateCheck(s, ["--approve"], REAL_PATH)).code === 0, "approval failed");
+    rmSync(s.path("ran.txt"), { force: true });
+    s.write("GATES.md", UNMET);
+    const first = REAL_PATH.split(delimiter).filter(Boolean)[0];
+    const duplicated = [first, REAL_PATH].join(delimiter);
+    const replay = await gateCheck(s, [], duplicated);
+    assert(replay.code === 0 && !replay.out.includes("APPROVAL REQUIRED"), "a duplicated first entry needed a new approval\n" + replay.out);
+    assert(existsSync(s.path("ran.txt")), "approved CHECK did not run");
   } finally { s.cleanup(); }
 });
 
@@ -158,14 +189,9 @@ test("an approval written with the old raw-PATH signature still holds when the n
     s.write("check.mjs", CHECK);
     s.write("GATES.md", UNMET);
     assert((await gateCheck(s, ["--approve"], powershellPath())).code === 0, "approval failed");
-    const [name] = tokens(s);
-    const record = JSON.parse(readFileSync(join(s.approvals, name), "utf8"));
-    // Rewrite it the way the previous version filed it: raw Git Bash PATH.
-    record.oracle.path = bashPath();
-    record.signature = sha256(JSON.stringify(record.oracle));
-    rmSync(join(s.approvals, name));
-    const legacyName = sha256(resolve(record.file) + "\0" + record.gate + "\0" + record.signature) + ".json";
-    writeFileSync(join(s.approvals, legacyName), JSON.stringify(record, null, 2) + "\n", { mode: 0o600 });
+    // Rewrite it the way the previous version filed it: schema 1 with the
+    // 120 s time limit and the raw Git Bash PATH.
+    refileAsOld(s, 120000, (oracle) => ({ ...oracle, path: bashPath() }));
     s.write("GATES.md", UNMET);
     const replay = await gateCheck(s, [], powershellPath());
     assert(replay.code === 0 && !replay.out.includes("APPROVAL REQUIRED"), "legacy approval was not honored\n" + replay.out);
@@ -175,6 +201,147 @@ test("an approval written with the old raw-PATH signature still holds when the n
     const denied = await gateCheck(s, [], foreignPath());
     assert(denied.code === 1 && !existsSync(s.path("ran.txt")), "legacy approval leaked to a foreign PATH\n" + denied.out);
   } finally { s.cleanup(); }
+});
+
+// ---- the time limit is not part of the approval key any more (B11) ----------
+
+const OLD_KEY_ORDER = [
+  "schema", "check", "expect", "cwd", "shell", "timeoutMs", "maxOutputBytes",
+  "regexTimeoutMs", "regexStartupTimeoutMs", "maxRegexWorkers", "platform", "path",
+];
+
+// Files the single current approval the way version 2 and earlier did: schema 1,
+// the time limit and the output cap inside the oracle, the signature over that.
+function refileAsOld(s, timeoutMs, mutate = (oracle) => oracle) {
+  const [name] = tokens(s);
+  const record = JSON.parse(readFileSync(join(s.approvals, name), "utf8"));
+  const current = record.oracle;
+  const old = {};
+  for (const key of OLD_KEY_ORDER) {
+    if (key === "schema") old.schema = 1;
+    else if (key === "timeoutMs") old.timeoutMs = timeoutMs;
+    else if (key === "maxOutputBytes") old.maxOutputBytes = 1048576;
+    else old[key] = current[key];
+  }
+  const oracle = mutate(old);
+  record.oracle = oracle;
+  record.signature = sha256(JSON.stringify(oracle));
+  rmSync(join(s.approvals, name));
+  const legacyName = sha256(resolve(record.file) + "\0" + record.gate + "\0" + record.signature) + ".json";
+  writeFileSync(join(s.approvals, legacyName), JSON.stringify(record, null, 2) + "\n", { mode: 0o600 });
+  return legacyName;
+}
+
+test("a new approval carries no time limit and no output cap, and --timeout does not change it", async () => {
+  const s = sandbox();
+  try {
+    s.write("check.mjs", CHECK);
+    s.write("GATES.md", UNMET);
+    assert((await gateCheck(s, ["--approve", "--timeout", "900"], powershellPath())).code === 0, "approval failed");
+    const [name] = tokens(s);
+    const record = JSON.parse(readFileSync(join(s.approvals, name), "utf8"));
+    assert(!("timeoutMs" in record.oracle) && !("maxOutputBytes" in record.oracle), "the key still holds a limit: " + JSON.stringify(record.oracle));
+    assert(record.oracle.schema === 2, "new approvals are schema 2");
+    rmSync(s.path("ran.txt"), { force: true });
+    s.write("GATES.md", UNMET);
+    // Another --timeout value, or none, must not ask for a new approval.
+    for (const extra of [[], ["--timeout", "1500"], ["--timeout", "5"]]) {
+      rmSync(s.path("ran.txt"), { force: true });
+      s.write("GATES.md", UNMET);
+      const replay = await gateCheck(s, extra, powershellPath());
+      assert(replay.code === 0 && !replay.out.includes("APPROVAL REQUIRED"), "--timeout changed the approval key\n" + replay.out);
+      assert(existsSync(s.path("ran.txt")), "approved CHECK did not run");
+    }
+    assert(tokens(s).length === 1, "no second approval token may appear");
+  } finally { s.cleanup(); }
+});
+
+test("an approval filed with the old time-limit key still holds, whatever limit it stored", async () => {
+  for (const timeoutMs of [120000, 900000, 1500000]) {
+    const s = sandbox();
+    try {
+      s.write("check.mjs", CHECK);
+      s.write("GATES.md", UNMET);
+      assert((await gateCheck(s, ["--approve"], powershellPath())).code === 0, "approval failed");
+      const legacyName = refileAsOld(s, timeoutMs);
+      assert(tokens(s).length === 1 && tokens(s)[0] === legacyName, "setup: one old-key record expected");
+      s.write("GATES.md", UNMET);
+      const replay = await gateCheck(s, [], powershellPath());
+      assert(replay.code === 0 && !replay.out.includes("APPROVAL REQUIRED"),
+        "old approval with timeoutMs " + timeoutMs + " was not honored\n" + replay.out);
+      assert(existsSync(s.path("ran.txt")), "the CHECK did not run under the old approval");
+      assert(tokens(s).length === 1 && tokens(s)[0] === legacyName, "the old record must stay as it was, no new token");
+      // --status never needs it, and an old approval also allows a plain --reverify.
+      const reverify = await gateCheck(s, ["--reverify"], powershellPath());
+      assert(reverify.code === 0 && !reverify.out.includes("APPROVAL REQUIRED"), "reverify under the old approval\n" + reverify.out);
+    } finally { s.cleanup(); }
+  }
+});
+
+test("an old approval holds under the Git Bash PATH as well (old key and raw PATH together)", async () => {
+  const s = sandbox();
+  try {
+    s.write("check.mjs", CHECK);
+    s.write("GATES.md", UNMET);
+    assert((await gateCheck(s, ["--approve"], powershellPath())).code === 0, "approval failed");
+    refileAsOld(s, 900000, (oracle) => ({ ...oracle, path: bashPath() }));
+    s.write("GATES.md", UNMET);
+    const replay = await gateCheck(s, [], powershellPath());
+    assert(replay.code === 0 && !replay.out.includes("APPROVAL REQUIRED"), "old key plus raw PATH was not honored\n" + replay.out);
+  } finally { s.cleanup(); }
+});
+
+test("an old approval is never taken for another command, expectation, directory or PATH", async () => {
+  const s = sandbox();
+  try {
+    s.write("check.mjs", CHECK);
+    s.write("other.mjs", CHECK);
+    s.write("GATES.md", UNMET);
+    assert((await gateCheck(s, ["--approve"], powershellPath())).code === 0, "approval failed");
+    refileAsOld(s, 900000);
+    const variants = [
+      ["another CHECK", "- [ ] G1: approval path\n  CHECK: node other.mjs\n  EXPECT: OK\n  EVIDENCE: pending\n", powershellPath()],
+      ["another EXPECT", "- [ ] G1: approval path\n  CHECK: node check.mjs\n  EXPECT: /OK|FINE/\n  EVIDENCE: pending\n", powershellPath()],
+      ["another CWD", "- [ ] G1: approval path\n  CHECK: node check.mjs\n  EXPECT: OK\n  CWD: sub\n  EVIDENCE: pending\n", powershellPath()],
+      ["another PATH", UNMET, foreignPath()],
+    ];
+    s.write("sub/check.mjs", CHECK);
+    for (const [label, ledger, pathValue] of variants) {
+      rmSync(s.path("ran.txt"), { force: true });
+      s.write("GATES.md", ledger);
+      const denied = await gateCheck(s, [], pathValue);
+      assert(denied.code === 1 && denied.out.includes("APPROVAL REQUIRED") && denied.out.includes("NOT RUN"),
+        label + " reused an old approval\n" + denied.out);
+      assert(!existsSync(s.path("ran.txt")), label + ": the CHECK ran");
+    }
+  } finally { s.cleanup(); }
+});
+
+test("a damaged or altered old approval does not count", async () => {
+  const cases = [
+    ["oracle edited, signature kept", (oracle) => oracle, (record) => { record.oracle.check = "node other.mjs"; }],
+    ["unknown extra field", (oracle) => ({ ...oracle, extra: true }), () => {}],
+    ["unknown schema", (oracle) => ({ ...oracle, schema: 7 }), () => {}],
+    ["signature does not belong to the oracle", (oracle) => oracle, (record) => { record.signature = "0".repeat(64); }],
+  ];
+  for (const [label, mutate, tamper] of cases) {
+    const s = sandbox();
+    try {
+      s.write("check.mjs", CHECK);
+      s.write("GATES.md", UNMET);
+      assert((await gateCheck(s, ["--approve"], powershellPath())).code === 0, "approval failed");
+      const legacyName = refileAsOld(s, 900000, mutate);
+      const file = join(s.approvals, legacyName);
+      const record = JSON.parse(readFileSync(file, "utf8"));
+      tamper(record);
+      writeFileSync(file, JSON.stringify(record, null, 2) + "\n", { mode: 0o600 });
+      rmSync(s.path("ran.txt"), { force: true });
+      s.write("GATES.md", UNMET);
+      const denied = await gateCheck(s, [], powershellPath());
+      assert(denied.code === 1 && denied.out.includes("APPROVAL REQUIRED") && !existsSync(s.path("ran.txt")),
+        label + " was honored\n" + denied.out);
+    } finally { s.cleanup(); }
+  }
 });
 
 test("--approve records an approval for an already met gate without running it", async () => {

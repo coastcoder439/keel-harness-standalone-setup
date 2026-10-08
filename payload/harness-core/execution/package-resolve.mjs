@@ -5,7 +5,7 @@
 //
 //   resolve      --harness-root H --root REPO --package SRC [--step N ...]
 //                [--merge-into T | --update T | --withdraw --reason TEXT]
-//                [--apply --owner-ok "<Wortlaut>"] [--unlazy-root DIR] [--json]
+//                [--apply (--owner-ok "<Wortlaut>" | --owner-ok-file FILE)] [--unlazy-root DIR] [--json]
 //   resolve-undo --harness-root H --root REPO --receipt FILE [--json]
 //
 // Without --apply every call is a preview and writes nothing, not even a receipt. With --apply
@@ -22,17 +22,28 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { replaceFileSync } from "./atomic-file.mjs";
-import { formatOwnerOkLine, packageSection, parseOwnerOkLines, todayLocal, validateOwnerOk } from "./owner-ok.mjs";
+import {
+  formatOwnerOkLine,
+  ownerWordingFolders,
+  packageSection,
+  parseOwnerOkLines,
+  readOwnerWordingFile,
+  todayLocal,
+  validateOwnerOk,
+  wordingProblem,
+} from "./owner-ok.mjs";
+import { holderLives, lockTimeMs } from "../system/process-identity.mjs";
 
 const require = createRequire(import.meta.url);
 const repository = require("../binding/repository.cjs");
 const ownership = require("../binding/package-ownership.cjs");
 const runtimeScopes = require("../binding/runtime-scopes.cjs");
 const { locateUnlazy } = require("../binding/unlazy-runtime.cjs");
+const { renameWithRetry } = require("../binding/rename-retry.cjs");
+const { hungMessage, runWatchedChild } = require("../binding/watched-child.cjs");
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 const SENTENCE_MIN_LENGTH = 30;
@@ -66,8 +77,9 @@ function stamp(now) {
 
 // ---------------------------------------------------------------------------------------------
 // Dormant runtime set-aside. Same behaviour as the executor's suspendDormantOverlaps: a scope
-// whose runtime has not changed for DORMANT_DAYS and has no wave deadline ahead is moved
-// unchanged to .unlazy/.suspended/; its package bundle stays untouched.
+// whose runtime has not changed for DORMANT_DAYS, has no wave deadline ahead and has no living
+// holder process (P13, C10: quiet time alone proves nothing) is moved unchanged to
+// .unlazy/.suspended/; its package bundle stays untouched.
 
 export const DORMANT_DAYS = 7;
 export const DORMANT_MS = DORMANT_DAYS * 24 * 60 * 60 * 1000;
@@ -107,12 +119,48 @@ export function waveDeadlineAhead(directory, now) {
   return deadlines.some((deadline) => Number.isFinite(deadline) && deadline > now);
 }
 
+// Provider run states in which the worker is gone for good (as in provider-runtime.mjs).
+const ENDED_RUN_STATES = new Set(["provider-start-failed", "provider-returned", "provider-failed", "aborted", "timed-out",
+  "vanished", "hung", "budget-reached", "repeated-block"]);
+
+function readJsonFile(file) {
+  try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return null; }
+}
+
+// The living holder process of a package scope, or null (P13, C10). A scope has a holder while the executor lock names a
+// process that still runs (pid and start time, never a fixed time) or a provider run that has not ended has a worker or
+// provider process that still runs. Quiet files do not matter: a worker without a deadline may think for hours.
+export function livingHolderOfScope(directory, probes = {}) {
+  const lock = readJsonFile(path.join(directory, "executor.lock"));
+  if (lock && Number.isSafeInteger(lock.pid) && holderLives(lock.pid, lockTimeMs(lock), probes)) {
+    return "executor.lock held by process " + lock.pid;
+  }
+  const runs = path.join(directory, "executor", "runs");
+  let names = [];
+  try { names = fs.readdirSync(runs); } catch { names = []; }
+  for (const name of names) {
+    const run = readJsonFile(path.join(runs, name, "state.json"));
+    if (!run || typeof run !== "object" || ENDED_RUN_STATES.has(run.state)) continue;
+    // The worker started before the run was recorded; the provider process only after it, so its proof is the last
+    // heartbeat (written after the provider started), never the start of the run: a provider that started a few
+    // seconds later is no reused process number.
+    const started = Date.parse(run.startedAt || "");
+    const heartbeat = Date.parse(run.lastHeartbeatAt || "");
+    const candidates = [[run.workerPid, started],
+      [run.providerPid, Number.isFinite(heartbeat) ? Math.max(heartbeat, started || 0) : Number.NaN]];
+    for (const [pid, since] of candidates) {
+      if (Number.isSafeInteger(pid) && holderLives(pid, since, probes)) return "provider run " + name + " has process " + pid;
+    }
+  }
+  return null;
+}
+
 export function moveScopeAside(repoRoot, scope, now, rootName = ".suspended") {
   const directory = path.join(repoRoot, ".unlazy", scope);
   const root = path.join(repoRoot, ".unlazy", rootName);
   fs.mkdirSync(root, { recursive: true });
   const destination = path.join(root, scope + "-" + stamp(now));
-  fs.renameSync(directory, destination);
+  renameWithRetry(directory, destination);
   return { scope, movedTo: slash(path.relative(repoRoot, destination)) };
 }
 
@@ -123,7 +171,7 @@ export function setAsideScope(repoRoot, scope, now = Date.now()) {
   try { info = fs.lstatSync(directory); } catch { return null; }
   if (info.isSymbolicLink() || !info.isDirectory()) return null;
   const lastChange = newestRuntimeChange(directory);
-  if (now - lastChange < DORMANT_MS || waveDeadlineAhead(directory, now)) return null;
+  if (now - lastChange < DORMANT_MS || waveDeadlineAhead(directory, now) || livingHolderOfScope(directory)) return null;
   const moved = moveScopeAside(repoRoot, scope, now);
   return { scope, lastChange: new Date(lastChange).toISOString(), movedTo: moved.movedTo };
 }
@@ -155,7 +203,14 @@ function parseArgs(argv) {
     else if (command === "resolve" && key === "--withdraw") options.modes.push({ mode: "withdraw", target: null });
     else if (command === "resolve" && key === "--reason") options.reason = take();
     else if (command === "resolve" && key === "--apply") options.apply = true;
-    else if (command === "resolve" && key === "--owner-ok") options.ownerOk = take();
+    else if (command === "resolve" && key === "--owner-ok") {
+      // The Owner's own words (D13, D16): any length, line breaks and quotation marks allowed; a text may start with "--".
+      const value = rest[index + 1];
+      if (value === undefined || value === "" || /^--[a-z][a-z-]*$/u.test(value)) usage("--owner-ok needs a value");
+      index += 1;
+      options.ownerOk = value;
+    }
+    else if (command === "resolve" && key === "--owner-ok-file") options.ownerOkFile = take();
     else usage("unknown option for " + command + ": " + key);
   }
   if (command === "resolve-undo") {
@@ -180,15 +235,14 @@ function parseArgs(argv) {
     return Number(value);
   });
   if (new Set(options.steps).size !== options.steps.length) usage("--step names a step twice");
+  if (options.ownerOk !== undefined && options.ownerOkFile !== undefined) usage("use either --owner-ok or --owner-ok-file, not both");
   if (options.ownerOk !== undefined) {
-    const wording = options.ownerOk;
-    if (wording.length < 1 || wording.length > 500 || /["\r\n]/u.test(wording)) {
-      usage("--owner-ok must be 1..500 characters on one line without ASCII quotes");
-    }
+    const problem = wordingProblem(options.ownerOk);
+    if (problem) usage("--owner-ok: " + problem);
   }
   if (options.apply) {
     if (!options.mode) usage("--apply needs exactly one of --merge-into, --update and --withdraw");
-    if (options.ownerOk === undefined) usage("--apply needs --owner-ok with the Owner's wording");
+    if (options.ownerOk === undefined && options.ownerOkFile === undefined) usage("--apply needs --owner-ok or --owner-ok-file with the Owner's wording");
   }
   return options;
 }
@@ -218,7 +272,7 @@ function readOwner(repoRoot, packageId) {
   if (!inspected.present) return { present: true, readable: false, originalRequest: "", requirements: [], source: "", captured: "" };
   const parsed = ownerContract.parseOwnerContract(inspected.text, { packageId });
   return { present: true, readable: Boolean(parsed.originalRequest) && parsed.requirements.length > 0,
-    originalRequest: parsed.originalRequest, requirements: parsed.requirements, source: parsed.source, captured: parsed.captured };
+    originalRequest: parsed.requestText || parsed.originalRequest, requirements: parsed.requirements, source: parsed.source, captured: parsed.captured };
 }
 
 async function inventory(context) {
@@ -338,9 +392,11 @@ function splitText(text) {
   return { eol: /\r\n/u.test(text) ? "\r\n" : "\n", lines: String(text).split(/\r?\n/u) };
 }
 
-function sectionBounds(lines, heading, file) {
+// `from`: the heading is looked for only after this line. OWNER.md needs it: the Owner's request may hold a
+// "## Requirements" line of its own, so the real requirements section is the one behind the owner-end marker.
+function sectionBounds(lines, heading, file, from = -1) {
   const pattern = headingPattern(heading);
-  const start = lines.findIndex((line) => pattern.test(line));
+  const start = lines.findIndex((line, index) => index > from && pattern.test(line));
   if (start === -1) fail("RESOLVE_SHAPE", file + " has no '## " + heading + "' section");
   let end = lines.length;
   for (let index = start + 1; index < lines.length; index += 1) {
@@ -350,9 +406,9 @@ function sectionBounds(lines, heading, file) {
 }
 
 // Append lines after the last non-blank line of a section.
-function appendToSection(text, heading, added, file, blankBefore = false) {
+function appendToSection(text, heading, added, file, blankBefore = false, from = -1) {
   const { eol, lines } = splitText(text);
-  const { start, end } = sectionBounds(lines, heading, file);
+  const { start, end } = sectionBounds(lines, heading, file, from);
   let at = end;
   while (at > start + 1 && lines[at - 1].trim() === "") at -= 1;
   const insert = [...(blankBefore && at > start + 1 ? [""] : []), ...added];
@@ -360,6 +416,38 @@ function appendToSection(text, heading, added, file, blankBefore = false) {
   if (after.length && after[0].trim() !== "" ) insert.push("");
   else if (at === end && end < lines.length) insert.push("");
   return [...lines.slice(0, at), ...insert, ...after].join(eol);
+}
+
+// Append lines to the Original request of an OWNER.md. The request ends at the owner-end marker (C7), so the lines go in
+// front of the marker; a file of the older format (no marker) gets the marker at the end of the request, in front of
+// '## Requirements', so the appended text -- which may hold "##" lines of the source request -- stays part of the request.
+function appendToOwnerRequest(text, added, file) {
+  const { eol, lines } = splitText(text);
+  const start = lines.findIndex((line) => /^## Original request\s*$/u.test(line));
+  if (start === -1) fail("RESOLVE_TARGET_REFUSED", file + " has no '## Original request' section");
+  let marker = -1;
+  for (let index = lines.length - 1; index > start; index -= 1) {
+    if (/^<!-- owner-end -->[ \t]*$/u.test(lines[index])) { marker = index; break; }
+  }
+  let at = marker;
+  const insert = [...added];
+  if (marker === -1) {
+    at = lines.findIndex((line, index) => index > start && /^## Requirements\s*$/u.test(line));
+    if (at === -1) fail("RESOLVE_TARGET_REFUSED", file + " has no '## Requirements' section after its Original request");
+    insert.push("<!-- owner-end -->");
+  }
+  while (at > start + 1 && lines[at - 1].trim() === "") at -= 1;
+  return [...lines.slice(0, at), ...insert, ...lines.slice(at)].join(eol);
+}
+
+// Append lines to the Requirements of an OWNER.md: the section behind the owner-end marker, if there is one.
+function appendToOwnerRequirements(text, added, file) {
+  const { lines } = splitText(text);
+  let marker = -1;
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    if (/^<!-- owner-end -->[ \t]*$/u.test(lines[index])) { marker = index; break; }
+  }
+  return appendToSection(text, "Requirements", added, file, false, marker);
 }
 
 // The newest status entry stands directly under '## Status', one blank line before and after.
@@ -428,7 +516,9 @@ function planSteps(sourceId, steps, target) {
 
 function buildPlan(context, options, source, target, wording, now) {
   const date = todayLocal(new Date(now));
-  const quote = "Owner: „" + wording + "“";
+  // A status entry is one line: line breaks in the Owner's words become a visible mark, nothing is cut. The full wording
+  // (line breaks and quotation marks as they are) lives in the Owner-OK entry of the receipt.
+  const quote = "Owner: „" + String(wording).replace(/\r\n?|\n/gu, " ⏎ ") + "“";
   const receiptRelative = ".unlazy/.resolve/" + source.packageId + "-" + stamp(now) + ".json";
   const undo = "Rückgängig: package-resolve.mjs resolve-undo --receipt " + receiptRelative;
   const edits = new Map();
@@ -493,8 +583,8 @@ function buildPlan(context, options, source, target, wording, now) {
         "  Manuell: übernommen aus " + source.packageId + " " + (sourceMapping.get(item.contractId) || "ohne Gate"),
         "  EVIDENCE: pending");
     });
-    edit(targetOwner, (text) => ({ text: appendToSection(text, "Original request", request, targetOwner), inserted: request }));
-    edit(targetOwner, (text) => ({ text: appendToSection(text, "Requirements", requirements, targetOwner), inserted: requirements }));
+    edit(targetOwner, (text) => ({ text: appendToOwnerRequest(text, request, targetOwner), inserted: request }));
+    edit(targetOwner, (text) => ({ text: appendToOwnerRequirements(text, requirements, targetOwner), inserted: requirements }));
     edit(targetPackage, (text) => ({ text: appendToSection(text, "Abnahme", contracts, targetPackage), inserted: contracts }));
     edit(targetGates, (text) => ({ text: appendToFile(text, gates), inserted: gates }));
     const added = planSteps(source.packageId, steps, target);
@@ -518,15 +608,19 @@ function buildPlan(context, options, source, target, wording, now) {
 // ---------------------------------------------------------------------------------------------
 // doctor, receipt, apply, rollback and undo.
 
-function doctor(context, packageId) {
-  const result = spawnSync(process.execPath, [path.join(context.unlazyRoot, "scripts", "package-cli.mjs"), "doctor",
+// doctor has no time limit of its own (P15, C13): it runs through the silence watcher and counts as hung only when
+// it is silent and its process tree does no work. A hung doctor is a DOCTOR_OUTPUT diagnostic, so applyPlan's
+// before/after comparison never mistakes it for a clean bundle.
+async function doctor(context, packageId) {
+  const result = await runWatchedChild(process.execPath, [path.join(context.unlazyRoot, "scripts", "package-cli.mjs"), "doctor",
     "--root", context.repoRoot, "--package", packageId, "--json"],
-  { cwd: context.repoRoot, encoding: "utf8", windowsHide: true, timeout: 120_000 });
+  { cwd: context.repoRoot, unlazyRoot: context.unlazyRoot });
   let parsed = null;
   try { parsed = JSON.parse(result.stdout); } catch { /* reported below */ }
-  const diagnostics = parsed?.packages?.[0]?.diagnostics ??
+  const diagnostics = result.hung ? [{ code: "DOCTOR_OUTPUT", message: hungMessage("package-cli doctor", result) }] :
+    parsed?.packages?.[0]?.diagnostics ??
     [{ code: "DOCTOR_OUTPUT", message: String(result.stderr || result.stdout || result.error?.message || "").trim() }];
-  return { ok: result.status === 0 && diagnostics.length === 0, diagnostics };
+  return { ok: result.status === 0 && diagnostics.length === 0, diagnostics, hung: result.hung };
 }
 
 function diagnosticCounts(diagnostics) {
@@ -563,13 +657,13 @@ function restoreFromReceipt(repoRoot, receipt) {
   }
   if (receipt.runtime && receipt.runtime.moved) {
     const back = path.join(repoRoot, ".unlazy", receipt.runtime.scope);
-    fs.renameSync(path.join(repoRoot, ...receipt.runtime.movedTo.split("/")), back);
+    renameWithRetry(path.join(repoRoot, ...receipt.runtime.movedTo.split("/")), back);
   }
 }
 
 function renameReceipt(file, suffix) {
   const destination = file.replace(/\.json$/u, suffix);
-  fs.renameSync(file, destination);
+  renameWithRetry(file, destination);
   return destination;
 }
 
@@ -593,7 +687,11 @@ async function applyPlan(context, plan, source, target, wording, now) {
     }
   }
   const checked = [source.packageId, ...(target ? [target.packageId] : [])];
-  const baseline = new Map(checked.map((id) => [id, doctor(context, id)]));
+  const baseline = new Map();
+  for (const id of checked) baseline.set(id, await doctor(context, id));
+  // A hung doctor proves nothing: the same hang before and after a change would look like "no new diagnostic".
+  const hungBefore = checked.find((id) => baseline.get(id).hung);
+  if (hungBefore) fail("RESOLVE_DOCTOR", "package doctor of " + hungBefore + " hung before the change; nothing was written: " + baseline.get(hungBefore).diagnostics[0].message, 2);
 
   const receiptFile = path.join(context.repoRoot, ...plan.receiptRelative.split("/"));
   const receipt = {
@@ -633,8 +731,21 @@ async function applyPlan(context, plan, source, target, wording, now) {
   }
 
   const added = [];
+  let hungAfter = null;
   for (const id of checked) {
-    for (const item of newDiagnostics(baseline.get(id), doctor(context, id))) added.push({ packageId: id, ...item });
+    const after = await doctor(context, id);
+    if (after.hung && !hungAfter) hungAfter = { packageId: id, message: after.diagnostics[0].message };
+    for (const item of newDiagnostics(baseline.get(id), after)) added.push({ packageId: id, ...item });
+  }
+  if (hungAfter) {
+    // The change cannot be proven clean: roll it back like a new diagnostic.
+    restoreFromReceipt(context.repoRoot, receipt);
+    const rolledBack = renameReceipt(receiptFile, ".rolledback.json");
+    const error = new Error("package doctor of " + hungAfter.packageId + " hung after the change; it was rolled back (" +
+      slash(path.relative(context.repoRoot, rolledBack)) + "): " + hungAfter.message);
+    error.code = "RESOLVE_DOCTOR";
+    error.exitCode = 2;
+    throw error;
   }
   if (added.length) {
     restoreFromReceipt(context.repoRoot, receipt);
@@ -668,7 +779,12 @@ async function resolve(options) {
   };
   if (!options.mode) return report;
   const now = Date.now();
-  const wording = options.ownerOk ?? "<Owner-Wortlaut>";
+  let given = options.ownerOk;
+  if (given === undefined && options.ownerOkFile !== undefined) {
+    try { given = readOwnerWordingFile(options.ownerOkFile, ownerWordingFolders(context.repoRoot, context.harnessRoot)); }
+    catch (error) { fail(error.code || "RESOLVE_OWNER_OK_FILE", error.message); }
+  }
+  const wording = given ?? "<Owner-Wortlaut>";
   const plan = buildPlan(context, options, source, target, wording, now);
   report.mode = plan.mode;
   report.target = plan.target;
@@ -677,7 +793,7 @@ async function resolve(options) {
     report.preview = { files: plan.files.map((entry) => ({ path: entry.relative, insert: entry.inserted })), runtime: plan.runtime };
     return report;
   }
-  const result = await applyPlan(context, plan, source, target, options.ownerOk, now);
+  const result = await applyPlan(context, plan, source, target, given, now);
   return { ...report, applied: true, ...result };
 }
 

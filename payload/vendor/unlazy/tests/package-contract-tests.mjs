@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -66,7 +67,13 @@ function validateAdapterMessage(value) {
 test("release source is the durable versioned vendor checkout", () => {
   assert.equal(manifest.name, "unlazy-skill");
   assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
-  if (!embeddedStandalone) assert.doesNotMatch(root, /(?:^|[\\/])(?:temp|tmp|scratchpad)(?:[\\/]|$)/i);
+  // A loose copy in a temp or scratchpad folder is no release source. A Git checkout there is: the clean copy of a
+  // commit (test-matrix --at under %TEMP%\keel-proof) and the release clone both hold the versioned vendor tree.
+  if (!embeddedStandalone && /(?:^|[\\/])(?:temp|tmp|scratchpad)(?:[\\/]|$)/i.test(root)) {
+    const tracked = spawnSync("git", ["-C", root, "ls-files", "--error-unmatch", "--", "package.json", "references/package-bundles.md"],
+      { encoding: "utf8", windowsHide: true });
+    assert.equal(tracked.status, 0, "vendor tree in a temp folder is not a versioned Git checkout: " + root + " " + String(tracked.stderr).trim());
+  }
   assert.match(contract, /schema version `1`/);
 });
 
@@ -88,7 +95,6 @@ test("contract fixes bundle, runtime, legacy, evidence, and approval boundaries"
     "only with `--legacy`",
     "repository-relative `cwd`",
     "stable `shellId`",
-    "`oracleDigest`",
     "MUST NOT contain an absolute repository",
   ]) assert.ok(normalizedContract.includes(phrase), "missing boundary: " + phrase);
 });
@@ -139,7 +145,7 @@ test("harness template is a bundle PACKAGE and has no non-plan checkbox", () => 
 });
 
 test("harness permanent rules preserve bundles and delegate closure to the CLI", () => {
-  const claude = harnessRead("CLAUDE.md");
+  const claude = harnessRead("AGENTS.md");
   const method = harnessRead(".claude", "rules", "keel", "working-method.md");
   for (const text of [claude, method]) {
     assert.match(text, /docs\/packages\/<packageId>\/PACKAGE\.md/);

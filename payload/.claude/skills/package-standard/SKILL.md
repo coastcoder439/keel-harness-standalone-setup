@@ -24,7 +24,8 @@ Datumsfelder prueft es immer.
 
 Das Werkzeug liegt neben dieser Datei: `node <HARNESS_ROOT>/.claude/skills/package-standard/package-standard.mjs`.
 Es baut auf `package-cli create` auf (Standardformat samt `OWNER.md`) und prueft jedes Ergebnis
-mit `package-cli doctor`.
+mit `package-cli doctor`. Jeder `package-cli`-Aufruf laeuft ohne feste Zeit unter dem Stille-Wächter
+(`KEEL_SILENCE_MS`): ein langsamer `doctor` bricht nicht mehr nach 60 s ab, nur ein Aufruf ohne Ausgabe und ohne Arbeit.
 
 ## Neues Paket
 
@@ -34,22 +35,48 @@ Derselbe eine Weg wie `/package-create`, in denselben fuenf Schritten:
    --problem "…" --intent "…" --goal "…" --scope-in "…" --scope-out "…" --context "…"
    --step "…" [--step "…"] --requirement "…" --requirement "…" [--requirement "…"]
    [--leaf leaf-<id>=<glob>[,<glob>] ...] [--planned-start JJJJ-MM-TT --planned-end JJJJ-MM-TT]
-   [--owner-request-file <DATEI> | --owner-request "…"] [--harness-root <HARNESS_ROOT>] [--takeover]`.
+   [--owner-request-file <DATEI> | --owner-request "…"] [--harness-root <HARNESS_ROOT>] [--takeover [--reason "…"]]`.
    Der Originalauftrag des Owners steht woertlich in `OWNER.md` oder kommt ueber
-   `--owner-request-file` (nie umformulieren). Der Aufruf oeffnet die Planungsbindung der
+   `--owner-request-file` (nie umformulieren, nie kuerzen: der Auftrag wird vollstaendig
+   uebernommen und endet am Marker `<!-- owner-end -->` in `OWNER.md`, nie an einer
+   Ueberschrift `##` in seinem Text; es gibt keine Mindestlaenge, nur leer ist verboten).
+   Der Aufruf oeffnet die Planungsbindung der
    eigenen Sitzung ueber `package-bootstrap begin`; jedes Leaf braucht eine Anforderung,
-   die Wurzel eine weitere. Fehlt ein Feld, meldet das Werkzeug es unter `missing` und
-   legt nichts an; Ueberschneidungen mit aktiven Paketen stehen unter `overlaps`.
+   die Wurzel nimmt die letzte, sonst wiederholt sie die letzte als Gesamtabnahme: ein Schritt
+   und eine Anforderung sind ein vollstaendiges Paket. Fehlt ein Feld, meldet das Werkzeug es unter `missing` und
+   legt nichts an; Ueberschneidungen mit aktiven Paketen stehen unter `overlaps`, Hinweise unter
+   `warnings`.
+   Zuschnitt: Arbeitsschritte (`--leaf`) werden nach zusammenhaengenden Dateien geschnitten, nicht
+   nach Bereichen; ein Leaf sind die Dateien, die zusammen geaendert und geprueft werden (eine
+   Komponente samt Test), nie "frontend" oder "backend" (Warnung `LEAF_BY_AREA`). Eine
+   Kleinstaenderung (eine Kennung, ein Text) ist ein Schritt oder geht den leichten Weg: der
+   Orchestrator schreibt `evidence/` und `design/` seines Pakets selbst.
+   Titel: der Titel ist der Paketname `<ID>`. Er muss aus Woertern des Owner-Auftrags stammen oder ein
+   vom Owner genannter Name sein; ein allgemeiner wie `offene-pakete` ergibt die Warnung
+   `TITLE_NOT_FROM_ORDER` mit einem Vorschlag aus den ersten Woertern des Auftrags (keine Sperre).
+   Wird dieselbe Unterhaltung wieder aufgenommen (neue Sitzungskennung), geht die Planungsbindung
+   von selbst auf die neue Kennung ueber, wenn das Transkript die alte nennt. Von Hand: `--takeover
+   --reason "…"`; nur, wenn die alte Sitzung seit `silenceMs` (30 Minuten) keinen Hook ausgeloest
+   hat, ob das Paket aktiv ist oder nicht.
 2. Unter der Bindung verfeinern: Requirements, Abnahme, Depth Tree, Leaf-Ledger mit
    disjunkten OWNS, Gates mit CHECK, CWD und EXPECT oder manuell, optional eine Zeile
    `MODEL: <provider> <model id> <effort>` (Codex: `MODEL: codex`). Erlaubt sind nur
    `OWNER.md`, `PACKAGE.md`, `GATES.md` und unmittelbare `gates/*.md`.
 3. `package-cli.mjs doctor --root <REPO> --package <ID>`.
-4. `package-bootstrap.mjs plan --harness-root <HARNESS_ROOT> --session <PLANER_SESSION> --json`
-   legt das Paket als geplant ab und beendet die Bindung; danach das Buendel sichern mit
-   `git-intent.mjs checkpoint --root <REPO> --package <ID> --message "<TEXT>"`.
+4. Vor `plan` die Zeile `Owner-Start: YYYY-MM-DD "<Owner-Wortlaut>"` in `## Status` der PACKAGE.md
+   eintragen, sobald die Startnachricht des Owners vorliegt (nach `plan` ist die PACKAGE.md nicht mehr
+   beschreibbar, `start` und `next` endeten in `OWNER_START_MISSING`); liegt sie noch nicht vor, bleibt die
+   Bindung offen, bis sie da ist. Dann `package-bootstrap.mjs plan --harness-root <HARNESS_ROOT>
+   --session <PLANER_SESSION> --json` legt das Paket als geplant ab und beendet die Bindung; danach das
+   Buendel sichern mit `git-intent.mjs checkpoint --root <REPO> --package <ID> --message "<TEXT>"`.
 5. Gestartet wird nur auf das Startsignal des Owners (Zeile `Owner-Start:` im Status oder
-   `--run` mit der `Owner-Go:`-Zeile eines Lauf-Pakets), mit `package-executor.mjs start`.
+   `--run` mit der `Owner-Go:`-Zeile eines Lauf-Pakets), mit `package-executor.mjs start`. Du liest
+   das Startsignal aus dem Gespraech und legst die Nachricht des Owners als woertliches Zitat ab;
+   eine Satzform fragst du nie ab. Ein langes, mehrzeiliges oder Anfuehrungszeichen enthaltendes Zitat
+   steht als Block: die Zeile ohne Wortlaut, darunter jede Zitatzeile mit vier Leerzeichen und `>`.
+   Belege und Berichte des Pakets (`docs/packages/<ID>/evidence/**` und `design/**`) schreibt die
+   Planungs- oder Orchestrator-Sitzung auch nach dem Start direkt, ohne Arbeitsagent; Vertrag,
+   Gates und `OWNER.md` bleiben gesperrt.
 
 ## Bestehendes Projekt uebernehmen
 

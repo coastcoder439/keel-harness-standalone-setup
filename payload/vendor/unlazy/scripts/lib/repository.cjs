@@ -7,8 +7,9 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const { gitSync } = require("./git-binary.cjs");
 
-const DEFAULT_TIMEOUT_MS = 5_000;
+const DEFAULT_TIMEOUT_MS = 30_000;
 const realpath = fs.realpathSync.native || fs.realpathSync;
 
 function fail(message, details = {}) {
@@ -86,13 +87,14 @@ function cleanGitEnv(extra = {}) {
 }
 
 function runGit(cwd, args, options = {}) {
-  const result = (options.runner || spawnSync)(options.gitExecutable || "git", ["-C", cwd, ...args], {
+  // The real git.exe without the cmd\git.exe wrapper process, --no-optional-locks on reading calls (P20, D14).
+  const result = gitSync(["-C", cwd, ...args], {
     cwd,
     encoding: "utf8",
     windowsHide: true,
     timeout: options.timeoutMs || DEFAULT_TIMEOUT_MS,
     env: cleanGitEnv(options.env),
-  });
+  }, { spawnSync: options.runner, executable: options.gitExecutable });
   if (result.error) fail("git repository probe failed: " + result.error.message, { cause: result.error });
   return result;
 }

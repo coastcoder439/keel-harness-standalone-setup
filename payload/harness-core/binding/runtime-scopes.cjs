@@ -5,20 +5,30 @@
 // counts as active, so cleanup only ever touches unambiguous remnants.
 // Owner finding this module serves: „Alte .unlazy-Reste täuschen ein aktives
 // Paket vor“. Guard hooks load this file: node:fs and node:path only, no Git
-// process and no require of repository.cjs. Linked paths are never followed.
+// process and no require of repository.cjs (rename-retry.cjs is the same kind: node:fs only). Linked paths are
+// never followed.
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { renameWithRetry } = require("./rename-retry.cjs");
 
-// Exactly the busy set of leafForNext in the package executor.
+// Exactly the busy set of leafForNext in the package executor. hung, budget-reached and repeated-block (P12) are
+// runs that ended without an answer and wait for the orchestrator's decision (resume, retry, abort): their lease and
+// binding stay.
 const WORKING_STATES = Object.freeze([
   "prepared", "starting", "running", "provider-returned", "abort-requested", "timeout-requested",
+  "hung", "budget-reached", "repeated-block",
+  // P13: queued waits in a wave for free memory, start-failed waits for retry, returned-unchanged waits for the
+  // Orchestrator; all three keep their lease and binding.
+  "queued", "start-failed", "returned-unchanged",
 ]);
 // These states wait for the orchestrator and hold without a process check.
-const WAITING_STATES = new Set(["prepared", "provider-returned", "verified"]);
+const WAITING_STATES = new Set(["prepared", "provider-returned", "verified", "hung", "budget-reached", "repeated-block",
+  "queued", "start-failed", "returned-unchanged"]);
 // Terminal provider run states, as in provider-runtime.mjs.
 const TERMINAL_RUN_STATES = new Set([
   "provider-start-failed", "provider-returned", "provider-failed", "aborted", "timed-out", "vanished",
+  "hung", "budget-reached", "repeated-block",
 ]);
 const OPEN_WAVE_STATES = new Set(["open", "sealed"]);
 const IDENTIFIER_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
@@ -317,7 +327,8 @@ function cleanupRuntime(options = {}) {
       const source = path.join(dir, ".unlazy", record.scope);
       const destination = path.join(retiredRoot, retiredName(record.scope, now));
       if (lstat(destination)) throw new Error("retired destination already exists: " + destination);
-      fs.renameSync(source, destination);
+      // A scanner or indexer may hold the scope directory for a moment (Windows EPERM/EBUSY/EACCES): retry (P15, E4d).
+      renameWithRetry(source, destination);
     }
   }
   for (const record of stale) {

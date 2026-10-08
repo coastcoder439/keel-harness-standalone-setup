@@ -16,6 +16,7 @@ import {
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import packageContext from "./package-context.cjs";
+import gitBinary from "./git-binary.cjs";
 import {
   appendStatus,
   releaseLeases,
@@ -308,25 +309,63 @@ function assertDutiesClosable(duties) {
   return duties;
 }
 
-// Owner-OK-Zeile: derselbe Wortlaut wie im Harness-Kern, hier lokal, weil vendor/ nicht importiert.
+// Owner-OK-Eintrag: dieselbe Form wie im Harness-Kern (owner-ok.mjs), hier lokal, weil vendor/ nicht
+// importiert. Kurzform `Owner-OK: <Aktion> <Datum> <SHA> "<Wortlaut>"` fuer einen kurzen Wortlaut in einer Zeile;
+// jeder andere Wortlaut steht als Zitatblock (vier Leerzeichen, `>`) unter dem Kopf `Owner-OK: <Aktion> <Datum> <SHA>`.
+// Ein Test haelt beide Kopien gleich (test-harness/test/owner-ok.test.js).
 const OWNER_OK_LINE =
   /^Owner-OK:\s+(close|publish|waive-duty:[A-Za-z0-9][A-Za-z0-9._-]{0,63})\s+(\d{4}-\d{2}-\d{2})\s+([0-9a-f]{40})\s+"([^"\r\n]{1,500})"\s*$/u;
+const OWNER_OK_HEAD =
+  /^Owner-OK:\s+(close|publish|waive-duty:[A-Za-z0-9][A-Za-z0-9._-]{0,63})\s+(\d{4}-\d{2}-\d{2})\s+([0-9a-f]{40})\s*$/u;
+const OWNER_QUOTE_LINE = /^ {4}>(?: ([^\r\n]*))?$/u;
+const SHORT_WORDING = /^[^"\r\n]{1,500}$/u;
+
+function wordingProblem(value) {
+  if (typeof value !== "string") return "the Owner wording must be text";
+  if (!value.trim()) return "the Owner wording must not be empty";
+  if (value.includes("\0")) return "the Owner wording must not contain a NUL character";
+  if (typeof value.isWellFormed === "function" && !value.isWellFormed()) return "the Owner wording must be valid Unicode text";
+  return null;
+}
+
+// Gehoert die Zeile zu einem Eintrag (Kurzform, Kopf oder Zitatzeile)? Fuer "nur Freigabezeilen hinzugefuegt".
+function isOwnerOkRecordLine(line) {
+  const text = String(line);
+  return OWNER_OK_LINE.test(text) || OWNER_OK_HEAD.test(text) || OWNER_QUOTE_LINE.test(text);
+}
 
 function parseOwnerOkLines(text) {
   const records = [];
-  for (const line of String(text ?? "").split(/\r?\n/)) {
-    const match = OWNER_OK_LINE.exec(line);
+  const source = String(text ?? "").split(/\r?\n/);
+  for (let index = 0; index < source.length; index += 1) {
+    const line = source[index];
+    const short = OWNER_OK_LINE.exec(line);
+    const head = short ? null : OWNER_OK_HEAD.exec(line);
+    const match = short || head;
     if (!match) continue;
+    let end = index + 1;
+    const quoted = [];
+    if (head) {
+      for (; end < source.length; end += 1) {
+        const quote = OWNER_QUOTE_LINE.exec(source[end]);
+        if (!quote) break;
+        quoted.push(quote[1] ?? "");
+      }
+    }
+    const lines = source.slice(index, end);
+    const block = lines.join("\n");
     const separator = match[1].indexOf(":");
     records.push({
       action: separator === -1 ? match[1] : match[1].slice(0, separator),
       target: separator === -1 ? null : match[1].slice(separator + 1),
       date: match[2],
       commit: match[3],
-      wording: match[4],
-      line,
-      lineDigest: digestBytes(line),
+      wording: short ? short[4] : quoted.join("\n"),
+      line: block,
+      lines,
+      lineDigest: digestBytes(block),
     });
+    index = end - 1;
   }
   return records;
 }
@@ -342,8 +381,13 @@ function findOwnerOk(text, action, target = null) {
 
 function formatOwnerOkLine(record) {
   const label = record.target ? record.action + ":" + record.target : record.action;
-  const line = "Owner-OK: " + label + " " + record.date + " " + record.commit + ' "' + record.wording + '"';
-  if (!OWNER_OK_LINE.test(line)) throw lifecycleError("Owner-OK line is invalid: " + JSON.stringify(line));
+  const wording = String(record.wording ?? "").replace(/\r\n?/g, "\n");
+  const problem = wordingProblem(wording);
+  if (problem) throw lifecycleError("Owner-OK wording is invalid: " + problem);
+  const head = "Owner-OK: " + label + " " + record.date + " " + record.commit;
+  const line = SHORT_WORDING.test(wording) ? head + ' "' + wording + '"'
+    : [head, ...wording.split("\n").map((item) => (item === "" ? "    >" : "    > " + item))].join("\n");
+  if (!parseOwnerOkLines(line).length) throw lifecycleError("Owner-OK line is invalid: " + JSON.stringify(line));
   return line;
 }
 
@@ -353,7 +397,7 @@ function todayLocal(now = new Date()) {
 }
 
 function currentHead(repoRoot) {
-  const head = spawnSync("git", ["-C", repoRoot, "rev-parse", "--verify", "HEAD"], {
+  const head = gitBinary.gitSync(["-C", repoRoot, "rev-parse", "--verify", "HEAD"], {
     encoding: "utf8", windowsHide: true, timeout: 30_000,
   });
   if (head.status !== 0) throw lifecycleError("cannot read the current Git HEAD");
@@ -377,40 +421,11 @@ function packageOwnerOk(target, action) {
   return findOwnerOk(abschlussSection(readFileSync(target.packageFile, "utf8")), action);
 }
 
-// --reuse-integration darf nur den Baum wiederverwenden, den die Integration gemessen
-// hat: kein veraenderter, geloeschter oder neuer Pfad ausser der PACKAGE.md des Pakets,
-// und deren einzige Aenderung sind hinzugefuegte Owner-OK-Zeilen. Diese Pruefung lebt
-// hier ein zweites Mal, weil der Executor-Zustand agent-schreibbar ist und der
-// Lifecycle die Bedingung selbst kennen muss.
-function assertTreeReusable(repoRoot, packageFile) {
-  const packageRelative = relative(repoRoot, packageFile).replaceAll("\\", "/");
-  const status = spawnSync("git", ["-C", repoRoot, "status", "--porcelain", "--untracked-files=all"], {
-    encoding: "utf8", windowsHide: true, timeout: 30_000,
-  });
-  if (status.error || status.status !== 0) conflict("--reuse-integration could not read the Git working tree state");
-  const entries = String(status.stdout ?? "").split(/\r?\n/).filter(Boolean);
-  for (const entry of entries) {
-    const path = entry.slice(3).replace(/^"|"$/g, "").replaceAll("\\", "/");
-    if (path !== packageRelative) {
-      conflict("--reuse-integration requires an unchanged working tree; changed: " + path + "; rerun close without it");
-    }
-  }
-  if (!entries.length) return;
-  const diff = spawnSync("git", ["-C", repoRoot, "diff", "HEAD", "--", packageRelative], {
-    encoding: "utf8", windowsHide: true, timeout: 30_000,
-  });
-  if (diff.error || diff.status !== 0) conflict("--reuse-integration could not diff PACKAGE.md against HEAD");
-  for (const line of String(diff.stdout ?? "").split(/\r?\n/)) {
-    if (line.startsWith("+++") || line.startsWith("---")) continue;
-    if (line.startsWith("-") || (line.startsWith("+") && !OWNER_OK_LINE.test(line.slice(1)))) {
-      conflict("--reuse-integration allows only added Owner-OK lines in PACKAGE.md; rerun close without it");
-    }
-  }
-}
-
 function ownerOkWaiver(repoRoot, dutyId, wording) {
-  const text = String(wording ?? "");
-  if (!text) throw lifecycleError("duty-waive requires --owner-ok TEXT");
+  const text = String(wording ?? "").replace(/\r\n?/g, "\n");
+  if (!text) throw lifecycleError("duty-waive requires --owner-ok TEXT or --owner-ok-file FILE");
+  const problem = wordingProblem(text);
+  if (problem) throw lifecycleError("duty-waive: " + problem);
   const date = todayLocal();
   const head = currentHead(repoRoot);
   const line = formatOwnerOkLine({ action: "waive-duty", target: dutyId, date, commit: head, wording: text });
@@ -733,31 +748,18 @@ function assertPreclose(status, target, options = {}, duties = null) {
   }
 }
 
-// Nachpruefung wiederverwenden: kein Gate-Runner, nur die lesende Statuspruefung des Bundles.
-function assertReusableIntegration(status) {
-  if (status.gates.total === 0 || status.gates.met !== status.gates.total || status.gates.handoff !== 0 ||
-      status.status !== "closable") {
-    conflict("--reuse-integration requires every gate to be locally met; rerun close without it");
-  }
-  return status;
-}
-
-// Der Abschlusstext sagt, was wirklich lief: der volle Gate-Lauf dieses close oder die
-// wiederverwendete Integrations-Nachpruefung. Ein "reverified every gate" auf dem
-// Reuse-Pfad waere eine versionierte Falschaussage (Review 08.09.2026).
-function finalizePackageText(status, duties, reusedIntegration = null) {
+// Der Abschlusstext sagt, was wirklich lief (Review 08.09.2026): P8 (B3) prueft jedes ausfuehrbare Gate am Commit
+// HEAD in einer sauberen Kopie; ein gespeichertes Pruefergebnis desselben Code-Stands gilt (PROOF_REUSED), jedes
+// andere Gate laeuft dort neu. Fremde ungesicherte Dateien der Arbeitskopie spielen keine Rolle.
+function finalizePackageText(status, duties, head) {
   assertDutiesClosable(duties);
   let text = status._internal.parsed.text;
   const replacements = {
     Coverage: status.contract.covered + "/" + status.contract.required + " contract outcomes mapped; " +
       status.gates.met + "/" + status.gates.total + " met.",
-    Fulfillment: reusedIntegration
-      ? "erfuellt - package-cli close reused the integration re-verification committed as " + reusedIntegration +
-        " (working tree unchanged, every gate read as met; no gate was re-executed by this close) and validated all closure dimensions."
-      : "erfuellt - package-cli close reverified every executable gate and validated all closure dimensions.",
-    "Geprueft gegen": (reusedIntegration
-      ? "package-cli close --reuse-integration " + reusedIntegration + " (read-only gate status)"
-      : "package-cli close --reverify") + "; package schema version " + status.schemaVersion + ".",
+    Fulfillment: "erfuellt - package-cli close verified every executable gate at commit " + head +
+      " in a clean copy (a stored result of the same code state counts) and validated all closure dimensions.",
+    "Geprueft gegen": "package-cli close --reverify --at " + head + "; package schema version " + status.schemaVersion + ".",
     Offen: "nichts",
   };
   for (const [name, value] of Object.entries(replacements)) {
@@ -773,9 +775,12 @@ async function withOrderedLocks(repoRoot, paths, fn, index = 0) {
   return withFileLock(repoRoot, paths[index], () => withOrderedLocks(repoRoot, paths, fn, index + 1));
 }
 
+// P8 (B3): the close checks the commit HEAD in a clean copy (gate-check --at), never the working tree. Files of other
+// sessions that are not committed change nothing, and a gate proved for the same code state is not run again.
 function defaultGateRunner(options) {
   const args = [GATE_CHECK, "--root", options.root, "--package", options.packageId,
     "--scope", options.scope, "--reverify"];
+  if (options.at) args.push("--at", String(options.at));
   if (options.timeoutSeconds !== undefined) args.push("--timeout", String(options.timeoutSeconds));
   if (options.jobs !== undefined) args.push("--jobs", String(options.jobs));
   if (options.shell !== undefined) args.push("--shell", String(options.shell));
@@ -783,8 +788,9 @@ function defaultGateRunner(options) {
     cwd: options.root,
     encoding: "utf8",
     windowsHide: true,
-    timeout: options.runnerTimeoutMs || 24 * 60 * 60 * 1000,
-    maxBuffer: 16 * 1024 * 1024,
+    // No time limit and no output limit (Owner 05.10.2026 15:17, P21): a close can take as long as its checks take; the
+    // checks run through the silence watcher inside gate-check, which ends them only when they are hung.
+    maxBuffer: Infinity,
     env: {
       ...process.env,
       ...(options.env || {}),
@@ -878,10 +884,11 @@ export async function closePackage(options) {
     if (!ownerOk || ownerOk.commit !== head) {
       throw lifecycleError("Owner-OK for close is missing or stale", 1);
     }
+    // --reuse-integration is accepted for older callers and changes nothing any more: every close checks HEAD in a
+    // clean copy, and a stored result of the same code state is reused there by the gate runner itself (P8, B3).
     if (reuseIntegration !== null && reuseIntegration !== head) {
       throw lifecycleError("--reuse-integration must name the current Git HEAD", 1);
     }
-    if (reuseIntegration !== null) assertTreeReusable(repoRoot, target.packageFile);
     const startDutiesDigest = dutyDigest(duties);
     const ownerOkRecord = { line: ownerOk.line, lineDigest: ownerOk.lineDigest };
     const before = snapshots(target);
@@ -897,16 +904,16 @@ export async function closePackage(options) {
     reach(options, "close-after-journal");
 
     let gateResult = null;
-    if (reuseIntegration === null) {
+    {
       const runner = options.gateRunner || defaultGateRunner;
       gateResult = await runner({
         root: repoRoot,
         packageId,
         scope: record.scope,
+        at: head,
         timeoutSeconds: options.timeoutSeconds,
         jobs: options.jobs,
         shell: options.shell,
-        runnerTimeoutMs: options.runnerTimeoutMs,
         env: options.env,
       });
       if (!gateResult || !Number.isInteger(gateResult.status)) {
@@ -925,8 +932,6 @@ export async function closePackage(options) {
         });
         throw gateFailure(gateResult);
       }
-    } else {
-      assertReusableIntegration(status);
     }
     reach(options, "close-after-reverify");
 
@@ -978,7 +983,7 @@ export async function closePackage(options) {
         conflict("follow-up duties changed after the Owner-OK line; close refused stale writeback");
       }
       assertPreclose(finalStatus, finalTarget, { afterReverify: true }, finalDuties);
-      writeAtomic(finalTarget.packageFile, finalizePackageText(finalStatus, finalDuties, reuseIntegration));
+      writeAtomic(finalTarget.packageFile, finalizePackageText(finalStatus, finalDuties, head));
       closedStatus = inspectPackageBundle(finalTarget);
       if (closedStatus.status !== "closed" || closedStatus.diagnostics.length) {
         throw lifecycleError("internal close validation did not produce a valid closed package");
@@ -1000,8 +1005,9 @@ export async function closePackage(options) {
       action: "close",
       closed: true,
       recovered: false,
-      reverified: reuseIntegration === null,
-      reusedIntegration: reuseIntegration,
+      reverified: true,
+      reusedIntegration: null,
+      checkedAt: head,
       ownerOk,
       releasedLeases,
       repoRoot,
@@ -1014,3 +1020,7 @@ export async function closePackage(options) {
     };
   });
 }
+
+// The Owner-OK entry form is kept here a second time (vendor/ imports nothing from the Harness core). Exported so that a
+// test of the Harness core can hold both copies to the same behaviour (test-harness/test/owner-ok.test.js).
+export const ownerOkEntryForm = Object.freeze({ parseOwnerOkLines, formatOwnerOkLine, findOwnerOk, isOwnerOkRecordLine });

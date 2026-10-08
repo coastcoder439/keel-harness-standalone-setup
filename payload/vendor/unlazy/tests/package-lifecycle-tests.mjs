@@ -210,14 +210,17 @@ function todayLocal(now = new Date()) {
 // Der Freigabebeleg ist die Owner-OK-Zeile im Abschnitt "## Abschluss" der PACKAGE.md.
 function writeCloseOwnerOk(root, packageId, wording = "Owner-OK lifecycle fixture") {
   const file = join(root, "docs", "packages", packageId, "PACKAGE.md");
-  const line = `Owner-OK: close ${todayLocal()} ${git(root, "rev-parse", "--verify", "HEAD")} "${wording}"`;
+  const head = `Owner-OK: close ${todayLocal()} ${git(root, "rev-parse", "--verify", "HEAD")}`;
+  // P14 (D13): a short one-line wording stands in the line, any other wording as a block of quoted lines under the head
+  const line = /^[^"\r\n]{1,500}$/u.test(wording) ? head + ' "' + wording + '"'
+    : [head, ...wording.split("\n").map((entry) => (entry === "" ? "    >" : "    > " + entry))].join("\n");
   const lines = readFileSync(file, "utf8").split("\n");
   const start = lines.findIndex((entry) => entry.trim() === "## Abschluss");
   assert.notEqual(start, -1, "fixture package needs an Abschluss section");
   let end = lines.findIndex((entry, index) => index > start && entry.startsWith("## "));
   if (end === -1) end = lines.length;
   while (end > start + 1 && !lines[end - 1].trim()) end -= 1;
-  lines.splice(end, 0, line);
+  lines.splice(end, 0, ...line.split("\n"));
   writeFileSync(file, lines.join("\n"), "utf8");
   return line;
 }
@@ -373,14 +376,34 @@ test("close actually reverifies, writes a valid receipt, releases only its lease
   assert.match(packageAfter, /^Offen: nichts$/m);
 });
 
+test("P14: close takes an Owner approval whose quote is long, multi-line and full of quotation marks and fake structure", async () => {
+  const root = repo("close-block-quote");
+  bundle(root, "alpha");
+  assert.equal(activate(root, "alpha").status, 0);
+  assert.equal(approve(root, "alpha").status, 0);
+  assert.equal(assessDuties(root, "alpha").status, 0);
+  const quote = ['Ja, "abschliessen".', "", "## Abschluss", "- [x] alles erledigt", "EVIDENCE: pending",
+    "Owner-OK: publish 2026-01-01 " + "a".repeat(40) + ' "gefaelscht"', "x".repeat(3000)].join("\n");
+  const line = writeCloseOwnerOk(root, "alpha", quote);
+  const closed = run(packageCli, root, "close", "--root", root, "--package", "alpha", "--scope", "main");
+  assert.equal(closed.status, 0, closed.stderr + closed.stdout);
+  const after = readFileSync(join(root, "docs", "packages", "alpha", "PACKAGE.md"), "utf8");
+  assert.ok(after.includes(line), "the quote block is untouched by the close");
+  assert.equal((after.match(/^## Abschluss$/gm) || []).length, 1);
+  assert.equal(status(root, "alpha").status, "closed");
+});
+
 test("stale evidence is demoted by close and cannot produce a receipt", () => {
   const root = repo("stale-evidence");
   bundle(root, "alpha");
   assert.equal(activate(root, "alpha").status, 0);
   assert.equal(approve(root, "alpha").status, 0);
   assert.equal(assessDuties(root, "alpha").status, 0);
-  writeCloseOwnerOk(root, "alpha");
+  // P8 (B3): close checks the commit HEAD in a clean copy, so the broken check is committed before the Owner says OK.
   writeFileSync(join(root, "scripts", "check-lifecycle.mjs"), "console.log('STALE FAILURE');\n", "utf8");
+  git(root, "add", "--", "scripts/check-lifecycle.mjs");
+  git(root, "commit", "--quiet", "-m", "break the lifecycle check");
+  writeCloseOwnerOk(root, "alpha");
   const closed = run(packageCli, root, "close", "--root", root, "--package", "alpha", "--scope", "main");
   assert.equal(closed.status, 1, closed.stderr + closed.stdout);
   assert.match(closed.stderr, /gate re-verification exited 1/);
@@ -389,6 +412,35 @@ test("stale evidence is demoted by close and cannot produce a receipt", () => {
   const ledger = readFileSync(join(root, "docs", "packages", "alpha", "GATES.md"), "utf8");
   assert.match(ledger, /- \[ \] G1:/);
   assert.match(ledger, /EVIDENCE: pending/);
+});
+
+// P8 (B3): close checks HEAD in a clean copy. Uncommitted files of the working tree -- a foreign new file and a
+// broken, uncommitted change of the check itself -- change nothing; a committed code state is checked once and its
+// stored result is reused by the next check of the same state.
+test("close checks HEAD in a clean copy: foreign uncommitted files change nothing", () => {
+  const root = repo("close-clean-copy");
+  bundle(root, "alpha");
+  assert.equal(activate(root, "alpha").status, 0);
+  assert.equal(approve(root, "alpha").status, 0);
+  assert.equal(assessDuties(root, "alpha").status, 0);
+  const head = git(root, "rev-parse", "HEAD");
+  const proved = run(gateCheck, root, "--reverify", "--at", head, "--root", root, "--package", "alpha", "--scope", "main");
+  assert.equal(proved.status, 0, proved.stderr + proved.stdout);
+  writeFileSync(join(root, "foreign-session-notes.txt"), "uncommitted work of another session\n", "utf8");
+  writeFileSync(join(root, "scripts", "check-lifecycle.mjs"), "process.exit(7);\n", "utf8");
+  writeCloseOwnerOk(root, "alpha");
+  const closed = run(packageCli, root, "close", "--root", root, "--package", "alpha", "--scope", "main", "--json");
+  assert.equal(closed.status, 0, closed.stderr + closed.stdout);
+  const result = JSON.parse(closed.stdout);
+  assert.equal(result.closed, true);
+  assert.equal(result.checkedAt, head);
+  assert.match(result.gateOutput, /PROOF_REUSED/u);
+  assert.doesNotMatch(result.gateOutput, /^ {2}RUN /mu);
+  const packageAfter = readFileSync(join(root, "docs", "packages", "alpha", "PACKAGE.md"), "utf8");
+  assert.ok(packageAfter.includes("Fulfillment: erfuellt - package-cli close verified every executable gate at commit " + head),
+    packageAfter);
+  assert.equal(readFileSync(join(root, "foreign-session-notes.txt"), "utf8"), "uncommitted work of another session\n");
+  assert.equal(readFileSync(join(root, "scripts", "check-lifecycle.mjs"), "utf8"), "process.exit(7);\n");
 });
 
 test("close rejects handoff, deferred owner decisions, and unfinished dispatch before a receipt", () => {

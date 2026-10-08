@@ -17,15 +17,25 @@
 //
 // danger-guard.js stays an independent second check; an allow here does not bypass it.
 //
+// Second allowed target (package shell-grants, A5): the temp folder of the calling session,
+// <os.tmpdir()>/claude/<any one folder name>/<session id>/ and everything below it. Writes,
+// copies into it, deletes and moves inside it need no package binding and no OWNS: the folder
+// is the session's own scratch space, which the Write tool may use as well. The path is
+// compared in its resolved form (8.3 short names, junctions and symbolic links followed from
+// the longest existing part), so a link or a short name cannot lead out. Without a session id
+// there is no such folder. Running a program or script from it stays outside this module.
+//
 // Result: null when the command is not covered (the caller keeps DIRECT_SHELL_WRITE),
 // { allowed: true, code: "OWNED_SHELL_WRITE", paths } or
 // { allowed: false, code: "DIRECT_SHELL_WRITE", detail }. Never throws.
 
 const fs = require("node:fs");
+const os = require("node:os");
 const path = require("node:path");
 const packageBinding = require("../binding/package-binding.cjs");
 const repository = require("../binding/repository.cjs");
 const { msysPath } = require("./hook-context.cjs");
+const sessionScope = require("./session-scope.cjs");
 
 const MAX_TREE_ENTRIES = 10000;
 
@@ -34,6 +44,23 @@ const BASH_COMMANDS = {
   rmdir: { kind: "delete", options: ["-f", "-r", "-R", "-rf", "-fr"] },
   mv: { kind: "move", options: ["-f", "-n"] },
   mkdir: { kind: "create", options: ["-p"] },
+};
+
+// Commands that write only into the session temp folder (never into the OWNS): copying into it
+// and the content writers. options: single-letter switches in one cluster (-rf) or long names.
+const BASH_TEMP_COMMANDS = {
+  cp: { kind: "copy", letters: "rRfnpv", longs: ["recursive", "force", "no-clobber", "verbose"] },
+  tee: { kind: "write", letters: "a", longs: ["append"] },
+};
+
+const POWERSHELL_TEMP_COMMANDS = {
+  copy: { names: ["cp", "copy-item", "cpi", "copy"], values: ["path", "literalpath", "destination"],
+    switches: ["recurse", "force"] },
+  content: { names: ["set-content", "sc", "add-content", "ac"], values: ["path", "literalpath", "value", "encoding"],
+    switches: ["nonewline", "force"] },
+  file: { names: ["out-file"], values: ["filepath", "path", "literalpath", "encoding", "width"],
+    switches: ["append", "force", "noclobber", "nonewline"] },
+  item: { names: ["new-item", "ni"], values: ["path", "itemtype", "name", "value"], switches: ["force"] },
 };
 
 const POWERSHELL_COMMANDS = {
@@ -46,6 +73,52 @@ const POWERSHELL_COMMANDS = {
   create: { names: ["mkdir", "md", "new-item"],
     values: ["path", "itemtype"], switches: ["force"] },
 };
+
+const SESSION_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u;
+
+// The resolved form of a path: the longest existing part is resolved by the file system (8.3
+// short names, junctions, symbolic links), parts that do not exist yet are joined back unchanged.
+function resolvedPath(value) {
+  const full = path.resolve(msysPath(String(value)));
+  const rest = [];
+  let current = full;
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync.native(current), ...rest.reverse());
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) return full;
+      rest.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+function sameName(left, right) {
+  return process.platform === "win32" ? left.toLowerCase() === right.toLowerCase() : left === right;
+}
+
+// True when absolute lies in <tmpdir>/claude/<one folder>/<sessionId>/ or is that folder itself.
+function insideSessionTemp(absolute, sessionId, tmpdir = os.tmpdir()) {
+  const id = String(sessionId || "");
+  if (!SESSION_ID.test(id) || id.includes("..")) return false;
+  const relative = path.relative(resolvedPath(path.join(tmpdir, "claude")), resolvedPath(absolute));
+  if (!relative || path.isAbsolute(relative)) return false;
+  const parts = relative.split(path.sep);
+  if (parts.length < 2 || parts.some((part) => part === ".." || part === "")) return false;
+  return sameName(parts[1], id);
+}
+
+// A write must not go through a link or into a file with other names (hard link): both lead out
+// of the folder although the path looks inside.
+function assertPlainWriteTarget(absolute) {
+  const stat = fs.lstatSync(absolute, { throwIfNoEntry: false });
+  if (!stat) return;
+  if (stat.isSymbolicLink()) refuse("path " + JSON.stringify(absolute) + " is a symbolic link or junction");
+  if (stat.isFile() && typeof stat.nlink === "number" && stat.nlink > 1) {
+    refuse("path " + JSON.stringify(absolute) + " is a file with more than one name");
+  }
+}
 
 class Refusal extends Error {}
 
@@ -96,7 +169,9 @@ function powerShellArguments(spec, args) {
 function literalPath(arg, dialect) {
   const shown = JSON.stringify(arg);
   if (!arg) refuse("empty path operand");
-  if (/[*?[\]$`~%\u0000-\u001f\u007f]/u.test(arg)) refuse("path " + shown + " is not literal (wildcard, variable or control character)");
+  // A tilde expands only at the start of a word; inside a name it is literal (8.3 short names
+  // such as LONSIN~1 carry one).
+  if (/[*?[\]$`%\u0000-\u001f\u007f]/u.test(arg) || arg.startsWith("~")) refuse("path " + shown + " is not literal (wildcard, variable or control character)");
   if (arg.startsWith("-")) refuse("path " + shown + " starts with a dash");
   if (dialect !== "powershell" && /[\\{}"']/u.test(arg)) refuse("path " + shown + " carries a Bash escape, brace or quote");
   if (arg.split(/[\\/]/u).includes("..")) refuse("path " + shown + " contains a .. segment");
@@ -165,6 +240,14 @@ function authorize(binding, cwd, arg) {
   return { absolute, relative: decision.relative };
 }
 
+function orchestratorAuthorize(projectRoot, sessionId, target, unbound) {
+  const fix = sessionScope.orchestratorFix({ harnessRoot: projectRoot, sessionId, target });
+  if (!fix) throw unbound;
+  if (!fix.allowed) refuse("LEAF_RUNNING: path " + JSON.stringify(target) + " lies in the OWNS of a leaf a worker works on: " + fix.running);
+  assertNoLinkUpward(target, fix.repoRoot);
+  return { absolute: target, relative: fix.relative };
+}
+
 // Operands in command order, sources before the target: { kind, sources, target, newName }.
 function bashPlan(name, args) {
   const spec = BASH_COMMANDS[name];
@@ -213,26 +296,132 @@ function powerShellPlan(name, args) {
   return { kind, sources: source, target: path.join(path.dirname(source[0]), newName) };
 }
 
+// cp and tee: a plan that is only ever allowed below the session temp folder.
+// { kind, sources, target, writes }: writes are the operands the command writes.
+function bashTempPlan(name, args) {
+  const spec = BASH_TEMP_COMMANDS[name];
+  if (!spec) return null;
+  const operands = [];
+  let afterDashDash = false;
+  for (const arg of args) {
+    if (!afterDashDash && arg === "--") afterDashDash = true;
+    else if (!afterDashDash && arg.startsWith("--")) {
+      if (!spec.longs.includes(arg.slice(2))) refuse("option " + JSON.stringify(arg) + " is not covered for session temp writes");
+    } else if (!afterDashDash && /^-[^-]/u.test(arg)) {
+      if (![...arg.slice(1)].every((letter) => spec.letters.includes(letter))) {
+        refuse("option " + JSON.stringify(arg) + " is not covered for session temp writes");
+      }
+    } else operands.push(arg);
+  }
+  if (operands.length === 0) refuse(name + " without a path operand");
+  if (spec.kind === "copy") {
+    if (operands.length < 2) refuse("cp needs at least one source and a target");
+    return { kind: "copy", sources: operands.slice(0, -1), target: operands[operands.length - 1], writes: [operands[operands.length - 1]] };
+  }
+  return { kind: "write", sources: [], target: null, writes: operands };
+}
+
+// Copy-Item, Set-Content, Add-Content, Out-File and New-Item for files: PowerShell parameters
+// by full name; the plan names the operands the command writes.
+function powerShellTempPlan(name, args) {
+  const entry = Object.entries(POWERSHELL_TEMP_COMMANDS).find(([, spec]) => spec.names.includes(name));
+  if (!entry) return null;
+  const [kind, spec] = entry;
+  const items = powerShellArguments(spec, args);
+  const named = (...parameters) => items.filter((item) => parameters.includes(item.parameter)).map((item) => item.value);
+  const positional = items.filter((item) => item.parameter === null).map((item) => item.value);
+  const pathNames = kind === "file" ? ["filepath", "path", "literalpath"] : ["path", "literalpath"];
+  const paths = named(...pathNames);
+  if (paths.length === 0 && positional.length > 0) paths.push(positional.shift());
+  if (paths.length !== 1) refuse(name + " needs exactly one path");
+  if (kind === "copy") {
+    const destinations = named("destination").concat(positional);
+    if (destinations.length !== 1) refuse(name + " needs exactly one source and one destination");
+    return { kind: "copy", sources: paths, target: destinations[0], writes: [destinations[0]] };
+  }
+  if (kind === "content" || kind === "file") {
+    if (positional.length > 1) refuse(name + " takes at most one value after the path");
+    return { kind: "write", sources: [], target: null, writes: paths };
+  }
+  // New-Item: a file or a directory; links and junctions (-ItemType SymbolicLink, Junction,
+  // HardLink) are not covered.
+  const types = named("itemtype");
+  if (types.length > 1 || (types.length === 1 && !["file", "directory"].includes(String(types[0]).toLowerCase()))) {
+    refuse(name + " covers only -ItemType File or Directory");
+  }
+  if (positional.length > 0) refuse(name + " takes the path as -Path or first argument only");
+  const names = named("name");
+  if (names.length > 1) refuse(name + " takes at most one -Name");
+  if (names.length === 1) {
+    if (/[\\/:]/u.test(names[0])) refuse("name " + JSON.stringify(names[0]) + " must not contain a slash, backslash or colon");
+    literalPath(names[0], "powershell");
+    return { kind: "write", sources: [], target: null, writes: [path.join(paths[0], names[0])] };
+  }
+  return { kind: "write", sources: [], target: null, writes: paths };
+}
+
+// A decision for a plan that writes only below the session temp folder: null when any written
+// place lies elsewhere (the caller keeps DIRECT_SHELL_WRITE), a refusal for a link or a file
+// with several names, { allowed: true, code: "SESSION_TEMP_WRITE", paths } otherwise.
+function decideTempPlan(plan, { dialect, staticArguments, cwd, sessionId, command }) {
+  if (dialect === "powershell" && staticArguments === false) refuse(command + " has arguments that are not static");
+  for (const operand of [...plan.sources, ...(plan.target ? [plan.target] : []), ...plan.writes]) literalPath(operand, dialect);
+  if (!sessionId) return null;
+  const absolute = (operand) => path.resolve(cwd, msysPath(operand));
+  let written = plan.writes.map(absolute);
+  if (plan.kind === "copy") {
+    const stat = fs.lstatSync(written[0], { throwIfNoEntry: false });
+    // A copy into an existing directory lands below it, under the name of each source.
+    if (stat && stat.isDirectory()) written = plan.sources.map((source) => path.join(written[0], path.basename(absolute(source))));
+  }
+  if (!written.every((place) => insideSessionTemp(place, sessionId))) return null;
+  for (const place of written) assertPlainWriteTarget(place);
+  return { allowed: true, code: "SESSION_TEMP_WRITE", paths: written };
+}
+
 function decide({ name, words, staticArguments, dialect, cwd, projectRoot, sessionId }) {
   const command = String(name || "").toLowerCase();
   const args = Array.from(words || [], String).slice(1);
   const powerShell = dialect === "powershell";
   const plan = powerShell ? powerShellPlan(command, args) : bashPlan(command, args);
-  if (!plan) return null;
+  if (!plan) {
+    const tempPlan = powerShell ? powerShellTempPlan(command, args) : bashTempPlan(command, args);
+    return tempPlan ? decideTempPlan(tempPlan, { dialect, staticArguments, cwd, sessionId, command }) : null;
+  }
   if (powerShell && staticArguments === false) refuse(command + " has arguments that are not static");
-  for (const operand of [...plan.sources, ...(plan.target ? [plan.target] : [])]) literalPath(operand, dialect);
+  const operands = [...plan.sources, ...(plan.target ? [plan.target] : [])];
+  for (const operand of operands) literalPath(operand, dialect);
 
-  const binding = sessionBinding(cwd, projectRoot, sessionId);
+  const absolute = (operand) => path.resolve(cwd, msysPath(operand));
+  const inTemp = (operand) => Boolean(sessionId) && insideSessionTemp(absolute(operand), sessionId);
+  // Every operand in the session's own temp folder: no binding and no OWNS needed.
+  if (operands.every(inTemp)) {
+    for (const operand of plan.kind === "delete" ? plan.sources : []) {
+      const stat = fs.lstatSync(absolute(operand), { throwIfNoEntry: false });
+      if (stat && stat.isDirectory()) assertPlainTree(absolute(operand));
+    }
+    if (plan.target) assertPlainWriteTarget(absolute(plan.target));
+    return { allowed: true, code: "SESSION_TEMP_WRITE", paths: operands.map(absolute) };
+  }
+
+  // Without a leaf binding the session that orchestrates a package may change files in the OWNS of a leaf of it
+  // at rest (Fix zwischendurch, the same rule as paket-gate); every other session keeps the binding refusal.
+  let binding = null;
+  let unbound = null;
+  try { binding = sessionBinding(cwd, projectRoot, sessionId); }
+  catch (error) { if (!(error instanceof Refusal)) throw error; unbound = error; }
+  const own = (operand) => (inTemp(operand) ? { absolute: absolute(operand), relative: null }
+    : binding ? authorize(binding, cwd, operand) : orchestratorAuthorize(projectRoot, sessionId, absolute(operand), unbound));
   const paths = [];
-  const sources = plan.sources.map((operand) => authorize(binding, cwd, operand));
-  paths.push(...sources.map((item) => item.relative));
+  const sources = plan.sources.map(own);
+  paths.push(...sources.map((item) => item.relative).filter(Boolean));
   if (plan.target) {
-    const target = authorize(binding, cwd, plan.target);
-    paths.push(target.relative);
+    const target = own(plan.target);
+    if (target.relative) paths.push(target.relative);
     // A move into an existing directory lands below it; that place must be owned as well.
     const stat = fs.lstatSync(target.absolute, { throwIfNoEntry: false });
     if (plan.kind === "move" && stat && stat.isDirectory()) {
-      for (const source of sources) authorize(binding, cwd, path.join(target.absolute, path.basename(source.absolute)));
+      for (const source of sources) own(path.join(target.absolute, path.basename(source.absolute)));
     }
   }
   if (plan.kind === "delete") {
@@ -244,6 +433,24 @@ function decide({ name, words, staticArguments, dialect, cwd, projectRoot, sessi
   return { allowed: true, code: "OWNED_SHELL_WRITE", paths };
 }
 
+// One output target (a redirection, a reporter destination) below the session temp folder:
+// { allowed: true, absolute } or { allowed: false, detail }. A relative target needs the
+// directory the command really starts in, so changesDirectory refuses it.
+function decideSessionTempTarget({ target, dialect, cwd, sessionId, changesDirectory } = {}) {
+  try {
+    if (!sessionId) refuse("no session id; the session temp folder is unknown");
+    literalPath(String(target ?? ""), dialect === "powershell" ? "powershell" : "bash");
+    const text = msysPath(String(target));
+    if (changesDirectory && !path.isAbsolute(text)) refuse("the command changes directory; a relative target is checked against the starting directory only");
+    const absolute = path.resolve(cwd || process.cwd(), text);
+    if (!insideSessionTemp(absolute, sessionId)) refuse("path " + JSON.stringify(String(target)) + " is outside the temp folder of this session");
+    assertPlainWriteTarget(absolute);
+    return { allowed: true, absolute };
+  } catch (error) {
+    return { allowed: false, detail: error instanceof Refusal ? error.message : "session temp check failed: " + String(error && error.message || error) };
+  }
+}
+
 function decideOwnedWrite(input = {}) {
   try {
     return decide(input || {});
@@ -253,4 +460,4 @@ function decideOwnedWrite(input = {}) {
   }
 }
 
-module.exports = { decideOwnedWrite };
+module.exports = { decideOwnedWrite, decideSessionTempTarget, insideSessionTemp };

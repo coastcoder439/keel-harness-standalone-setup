@@ -40,7 +40,12 @@ discard/recover, letzter eigener Checkpoint-Revert, Integration und
 Owner-freigegebener Publish haben je genau einen getesteten Intent.
 
 UI-Verifikation braucht einen echten Browser-Screenshot gegen den vereinbarten
-Maßstab. DOM-Text allein erfüllt kein visuelles Gate.
+Maßstab. DOM-Text allein erfüllt kein visuelles Gate. Das Gate nennt die Zustände
+(Datei mit id, Pfad, Fenstergröße, Thema); fotografiert wird mit dem einen festen Skript
+`node checks/ui-shots.mjs --states <Datei> --out <Ordner> --base-url http://127.0.0.1:<Port> (--code-root <Ordner der Quellen> | --harness-dashboard)`
+nach dem Vorschau-Start (`preview_start` ist für Agenten frei, ebenso `node dashboard/serve.mjs`),
+nie mit einem eigenen Skript je Paket. Jedes Bild hängt am Code-Stand der Oberfläche; `--verify`
+lehnt Bilder eines älteren Stands ab, ein neuer Lauf fotografiert nur die genannten Zustände neu.
 
 Portabilität wird beim Schreiben entschieden, nicht nachträglich: Windows ist
 die erste Zielplattform, deshalb setzt jeder neue Code Pfade über `path.join`

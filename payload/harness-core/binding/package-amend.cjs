@@ -16,12 +16,12 @@
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
 const repository = require("./repository.cjs");
 const bundleFiles = require("./bundle-files.cjs");
 const packageOwnership = require("./package-ownership.cjs");
 const runtimeScopes = require("./runtime-scopes.cjs");
 const unlazyRuntime = require("./unlazy-runtime.cjs");
+const { hungMessage, runWatchedChild } = require("./watched-child.cjs");
 
 // The only codes this module returns as a write denial; every other refusal is a
 // thrown command error with error.code.
@@ -392,10 +392,13 @@ function leavesInUse(record, snapshotValue, packageText, state) {
   return missing;
 }
 
-function runDoctor(record, unlazyRoot) {
+// doctor has no time limit of its own (P15, C13): it runs through the silence watcher and counts as hung only when
+// it is silent and its process tree does no work, so a slow doctor no longer refuses a correct amendment.
+async function runDoctor(record, unlazyRoot) {
   const cli = path.join(unlazyRoot, "scripts", "package-cli.mjs");
-  const result = spawnSync(process.execPath, [cli, "doctor", "--root", record.repoRoot, "--package", record.packageId, "--json"],
-    { cwd: record.repoRoot, encoding: "utf8", windowsHide: true, timeout: 120_000 });
+  const result = await runWatchedChild(process.execPath, [cli, "doctor", "--root", record.repoRoot, "--package", record.packageId, "--json"],
+    { cwd: record.repoRoot, unlazyRoot });
+  if (result.hung) return hungMessage("package-cli doctor", result);
   if (result.status === 0) return null;
   let findings = [];
   try {
@@ -406,7 +409,7 @@ function runDoctor(record, unlazyRoot) {
     String(result.stderr || result.stdout || (result.error && result.error.message) || "doctor exited " + result.status).trim();
 }
 
-function finish(options) {
+async function finish(options) {
   const record = find(options);
   const undo = undoCommand(record.harnessRoot, record.repoRoot, record.snapshot);
   const snapshotValue = readSnapshot(record.snapshot, "amend snapshot");
@@ -455,7 +458,7 @@ function finish(options) {
     fail("AMEND_LEAF_IN_USE", "the executor history names " + inUse.join(", ") + "; its ledger and Depth Tree line stay",
       { next: "restore " + inUse.join(", ") + ", then " + finishCommand(record.harnessRoot, record.sessionId) });
   }
-  const doctor = runDoctor(record, unlazyRoot);
+  const doctor = await runDoctor(record, unlazyRoot);
   if (doctor) {
     fail("AMEND_DOCTOR", "package doctor refused the amended bundle: " + doctor,
       { next: "fix the findings, then " + finishCommand(record.harnessRoot, record.sessionId) });

@@ -16,8 +16,9 @@
 // Alle Außenwelt-Schritte sind einsetzbar (deps): der Test ersetzt Klonen, Beenden, Neustart und Bereitschaft und lässt
 // den echten Installer laufen.
 
-import { spawn, spawnSync } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, realpathSync, rmSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { closeSync, existsSync, mkdirSync, mkdtempSync, openSync, realpathSync, rmSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import http from "node:http";
 import net from "node:net";
 import { tmpdir } from "node:os";
@@ -28,10 +29,14 @@ import {
   processAlive, readInstalledState, readJson, updateDirectory, writeJsonAtomic,
 } from "./update-core.mjs";
 
+// Keine festen Abbruchzeiten mehr (P15, C13; vorher Klonen 5 Minuten, Installer 20 Minuten, Bereitschaft 180 s): die
+// Kindprozesse laufen unter dem Stille-Wächter (vendor/unlazy/scripts/lib/silence-watch.mjs über
+// binding/watched-child.cjs), und das Warten auf das Dashboard endet, wenn es stirbt oder KEEL_SILENCE_MS lang nichts
+// mehr in dashboard.log schreibt. Ein langsamer Klon oder ein großes Upgrade bricht damit nicht mehr nach dem Zeitlimit ab.
+const { hungMessage, loadSilenceWatch, runWatchedChild } = createRequire(import.meta.url)("../binding/watched-child.cjs");
+const { gitExecutable } = createRequire(import.meta.url)("../git/git-binary.cjs");
+
 const TEMPORARY_PREFIX = "keel-harness-update-";
-const CLONE_TIMEOUT_MS = 5 * 60 * 1000;
-const INSTALL_TIMEOUT_MS = 20 * 60 * 1000;
-const READY_TIMEOUT_MS = 180 * 1000;
 
 /** Umgebung für den Installer: ohne die Laufzeit-Variablen des Web-Prozesses. */
 export function installerEnvironment(env) {
@@ -51,20 +56,22 @@ export function restartEnvironment(env) {
 
 const tail = (text, lines = 12) => String(text || "").trim().split(/\r?\n/u).slice(-lines).join("\n");
 
-function defaultFetchSetup({ url, branch, directory, env }) {
-  const result = spawnSync("git", ["clone", "--quiet", "--depth", "1", "--branch", branch, url, directory], {
-    encoding: "utf8", windowsHide: true, timeout: CLONE_TIMEOUT_MS, env: { ...env, GIT_TERMINAL_PROMPT: "0" },
+// `git` ist für Tests ersetzbar ({ command, prefix }): der Test setzt ein Node-Skript statt Git ein.
+async function defaultFetchSetup({ url, branch, directory, env, git = { command: gitExecutable(), prefix: [] } }) {
+  const result = await runWatchedChild(git.command, [...git.prefix, "clone", "--quiet", "--depth", "1", "--branch", branch, url, directory], {
+    env: { ...env, GIT_TERMINAL_PROMPT: "0" },
   });
+  if (result.hung) throw new Error(`Das Setup-Repo ließ sich nicht laden: ${hungMessage("git clone", result)}`);
   if (result.error || result.status !== 0) {
     throw new Error(`Das Setup-Repo ließ sich nicht laden: ${tail(result.stderr || result.error?.message || "unbekannter Fehler", 3)}`);
   }
 }
 
-function defaultRunNode(args, { cwd, env }) {
-  const result = spawnSync(process.execPath, args, {
-    cwd, env, encoding: "utf8", windowsHide: true, timeout: INSTALL_TIMEOUT_MS, maxBuffer: 64 * 1024 * 1024,
-  });
-  return { status: result.status ?? 1, stdout: result.stdout || "", stderr: result.stderr || result.error?.message || "" };
+async function defaultRunNode(args, { cwd, env }) {
+  const result = await runWatchedChild(process.execPath, args, { cwd, env });
+  if (result.hung) return { status: 1, stdout: result.stdout, stderr: `${hungMessage(`node ${path.basename(String(args[0]))}`, result)}
+${result.stderr}`.trim() };
+  return { status: result.status ?? 1, stdout: result.stdout, stderr: result.stderr || result.error?.message || "" };
 }
 
 const validPid = (pid) => Number.isSafeInteger(pid) && pid > 1;
@@ -141,14 +148,27 @@ export function dashboardAnswers(port, { timeoutMs = 3_000 } = {}) {
   });
 }
 
-async function defaultWaitReady(job, { sleep, handle }) {
-  const deadline = Date.now() + READY_TIMEOUT_MS;
-  while (Date.now() < deadline) {
+function dashboardLogSize(job) {
+  try { return statSync(path.join(job.updateDirectory, "dashboard.log")).size; } catch { return 0; }
+}
+
+/**
+ * Wartet, bis das Dashboard antwortet. Keine feste Frist (vorher 180 s): das Warten endet, wenn der Startprozess stirbt
+ * oder wenn das Dashboard KEEL_SILENCE_MS (Vorgabe 30 Minuten) lang nichts in dashboard.log geschrieben hat, ohne zu
+ * antworten. Jede neue Ausgabe setzt die Stille zurück; ein Dashboard, das lange startet, aber meldet, wird erwartet.
+ */
+async function defaultWaitReady(job, { sleep, handle, now = () => Date.now(), env = process.env }) {
+  const limit = (await loadSilenceWatch()).silenceMs(env);
+  let lastSize = dashboardLogSize(job);
+  let lastProgressAt = now();
+  for (;;) {
     if (handle && !handle.alive()) return false;
     if (await dashboardAnswers(job.port)) return true;
+    const size = dashboardLogSize(job);
+    if (size !== lastSize) { lastSize = size; lastProgressAt = now(); }
+    if (now() - lastProgressAt >= limit) return false;
     await sleep(1_000);
   }
-  return false;
 }
 
 function defaultRemove(directory) {
@@ -220,7 +240,7 @@ export async function runUpdateJob(job, overrides = {}) {
     }
 
     phase("prüfen", `Fassung ${remoteVersion} und Zustand der Installation ${installed.version} mit dem Installer prüfen`);
-    const check = deps.runNode([installerFile, "status", "--target", job.root, "--json"], { cwd: setup, env: installerEnvironment(deps.env) });
+    const check = await deps.runNode([installerFile, "status", "--target", job.root, "--json"], { cwd: setup, env: installerEnvironment(deps.env) });
     const checked = parseJson(check.stdout);
     if (check.status !== 0 || !checked) {
       return finish("failed", `Die Prüfung durch den Installer schlug fehl: ${tail(check.stderr || check.stdout, 3)}`, { installer: { step: "status", exitCode: check.status, output: tail(check.stderr || check.stdout) } });
@@ -236,7 +256,7 @@ export async function runUpdateJob(job, overrides = {}) {
     dashboardStopped = true;
 
     phase("installieren", `install --upgrade auf ${remoteVersion}`);
-    const install = deps.runNode([installerFile, "install", "--target", job.root, "--upgrade", "--json"], { cwd: setup, env: installerEnvironment(deps.env) });
+    const install = await deps.runNode([installerFile, "install", "--target", job.root, "--upgrade", "--json"], { cwd: setup, env: installerEnvironment(deps.env) });
     const installResult = parseJson(install.stdout);
     const installerOk = install.status === 0 && installResult?.state === "installed";
     const installerInfo = { step: "install", exitCode: install.status, output: tail(installerOk ? install.stdout : install.stderr || install.stdout) };
@@ -309,4 +329,7 @@ if (invokedDirectly) {
 }
 
 // Die Standard-Schritte, einzeln erreichbar für den Test mit echten Prozessen.
-export { defaultStopDashboard as stopDashboard, defaultStartDashboard as startDashboard, defaultWaitReady as waitReady };
+export {
+  defaultStopDashboard as stopDashboard, defaultStartDashboard as startDashboard, defaultWaitReady as waitReady,
+  defaultRunNode as runNode, defaultFetchSetup as fetchSetup,
+};

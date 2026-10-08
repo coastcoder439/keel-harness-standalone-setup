@@ -9,15 +9,18 @@
 // (Gate J5); die Voreinstellung (Stufe low, Owner 26.09.2026) steht im Prozess-Register
 // harness-core/process-models/registry.mjs, der einzigen Stelle für Modellnamen.
 
-import { spawn, spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { closeSync, mkdirSync, openSync, readFileSync, realpathSync, statSync, unlinkSync, writeFileSync, writeSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { replaceFileSync } from "../execution/atomic-file.mjs";
+import gitBinary from "../git/git-binary.cjs";
 import { resolveClaudeExecutable } from "../execution/codex-plugin-bootstrap.mjs";
 import { resolveProcessModelForRun } from "../process-models/index.mjs";
+import { holderLives, lockTimeMs } from "../system/process-identity.mjs";
+import { DEFAULT_FLOOR_GB, ramFloorBytes } from "../system/ram-floor.mjs";
 import { IGNORE_FILE_NAME, buildUnderstandIgnore } from "./ignore-proposal.mjs";
 import { createHash } from "node:crypto";
 import { LOCK_FILE, PLUGIN_DIR, assertIsolated, buildUaConfig, gitExcludeEntry, pluginBuildStatus, pluginDirArguments, resolveDataDirectoryName, runPluginPrebuild } from "./isolation.mjs";
@@ -25,7 +28,9 @@ import { LOCK_FILE, PLUGIN_DIR, assertIsolated, buildUaConfig, gitExcludeEntry, 
 export const PROCESS_ID = "architecture-maps";
 export const COOLDOWN_MS = 10 * 60 * 1000; // Beruhigungszeit (design/decisions.md F1)
 export const TRIGGER_INTERVAL_MS = 10 * 60 * 1000; // Auslöser alle 10 Minuten (Gate A6)
-export const MEMORY_MINIMUM_BYTES = 4 * 1024 ** 3; // Speichergrenze (Werkbank-Regel „RAM-Grenze: Klick-Abnahmen seriell“)
+// Die Speichergrenze ist die eine Untergrenze für freien Arbeitsspeicher (harness-core/system/ram-floor.mjs, Vorgabe 4 GB,
+// einstellbar von 2 bis 4 GB); diese Konstante ist nur noch die Vorgabe (P13, C2).
+export const MEMORY_MINIMUM_BYTES = DEFAULT_FLOOR_GB * 1024 ** 3;
 export const SUPPORTED_PROVIDERS = Object.freeze(["claude"]);
 export const RUN_SCRIPT = path.join(path.dirname(fileURLToPath(import.meta.url)), "run.mjs");
 
@@ -193,7 +198,7 @@ export function readGraphMeta(projectRoot) {
 }
 
 function git(args, projectRoot) {
-  const result = spawnSync("git", args, { cwd: projectRoot, encoding: "utf8", windowsHide: true });
+  const result = gitBinary.gitSync(args, { cwd: projectRoot, encoding: "utf8", windowsHide: true });
   if (result.status !== 0) throw new ArchitectureMapsJobError(`git ${args.join(" ")} schlug fehl: ${result.stderr || result.status}`);
   return result.stdout.trim();
 }
@@ -235,10 +240,12 @@ export function shouldRun({ graphMeta, head, now = new Date(), cooldownMs = COOL
 
 // --- Speichergrenze -----------------------------------------------------------------------------
 
-export function assertMemoryAvailable({ freeBytes, minimumBytes = MEMORY_MINIMUM_BYTES }) {
+const gigabytes = (bytes) => String(Math.round((bytes / 1024 ** 3) * 10) / 10);
+
+export function assertMemoryAvailable({ freeBytes, harnessRoot, env = process.env, minimumBytes = ramFloorBytes(harnessRoot, env) }) {
   if (!Number.isFinite(freeBytes)) throw new ArchitectureMapsJobError("Freier Speicher ist nicht gemessen; kein Start ohne Messung.");
   if (freeBytes < minimumBytes) {
-    throw new ArchitectureMapsJobError(`Zu wenig freier Speicher (${Math.round(freeBytes / 1024 ** 3)} GB < ${Math.round(minimumBytes / 1024 ** 3)} GB); kein Start unter der Speichergrenze.`,
+    throw new ArchitectureMapsJobError(`Zu wenig freier Speicher (${gigabytes(freeBytes)} GB < ${gigabytes(minimumBytes)} GB); kein Start unter der Speichergrenze.`,
       { code: "memory_below_limit", freeBytes, minimumBytes });
   }
 }
@@ -258,15 +265,18 @@ export function acquireJobLock(dataDir, { now = new Date(), isAlive = defaultIsA
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   try {
     const handle = openSync(lock, "wx", 0o600);
-    writeSync(handle, JSON.stringify({ pid: process.pid, startedAt: now.toISOString() }));
+    // acquiredAt is the real time of this process (startedAt may be an injected clock): with the process number it
+    // proves who holds the lock (P13, C10).
+    writeSync(handle, JSON.stringify({ pid: process.pid, startedAt: now.toISOString(), acquiredAt: new Date().toISOString() }));
     return { release: () => { try { closeSync(handle); } catch { /* schon geschlossen */ } try { unlinkSync(lock); } catch { /* schon entfernt */ } } };
   } catch (error) {
     if (error?.code !== "EEXIST") throw error;
   }
   let owner = null;
   try { owner = JSON.parse(readFileSync(lock, "utf8")); } catch { /* unlesbar: als verwaist behandeln */ }
-  const stale = !owner || !Number.isSafeInteger(owner.pid) || !isAlive(owner.pid)
-    || (statSync(lock, { throwIfNoEntry: false })?.mtimeMs ?? 0) < now.getTime() - 6 * 60 * 60 * 1000;
+  // Verwaist ist die Sperre nur, wenn ihr Halter tot ist (Prozessnummer und Startzeit, keine feste Zeit: ein Lauf darf
+  // beliebig lange dauern; P13, C10). Eine unlesbare Sperre oder eine ohne Prozessnummer (älteres Format) gilt wie bisher als verwaist.
+  const stale = !owner || !Number.isSafeInteger(owner.pid) || !holderLives(owner.pid, lockTimeMs(owner), { alive: isAlive });
   if (!stale) {
     throw new ArchitectureMapsJobError("Es läuft schon ein Architekturbild-Job; höchstens ein Lauf gleichzeitig.", { code: "job_already_running", owner });
   }
@@ -469,6 +479,7 @@ function tail(text, max = 600) {
 /** Fehlertext eines CLI-Ergebnisses (Startfehler, Exit-Code, Fehlerergebnis der CLI), sonst null. */
 export function cliResultError(result) {
   if (!result) return "Kein Ergebnis vom Aufruf.";
+  if (result.hung) return `CLI hing (keine Ausgabe und keine Arbeit, kein Zeitlimit erreicht): ${tail(result.hungReason)}`;
   if (result.error) return `CLI startete nicht: ${result.error.message || result.error.code || String(result.error)}`;
   if (result.status !== 0) return `CLI endete mit Exit-Code ${result.status ?? "unbekannt"}${result.stderr ? `: ${tail(result.stderr)}` : ""}`;
   const usage = parseCliUsage(result.stdout);
@@ -478,14 +489,15 @@ export function cliResultError(result) {
 
 /**
  * Ein vollständiger Lauf (Gates J3, J5): Isolation, Speichergrenze, Sperre, Auslöser, Vorbau, Modellwahl,
- * Auftrag, Aufruf über `cliRunner` (nie die echte CLI in einem Test), Protokoll mit Fehler und Tokens.
+ * Auftrag, Aufruf über `cliRunner` (nie die echte CLI in einem Test; er darf auch asynchron antworten, die echte läuft
+ * unter dem Stille-Wächter, P15), Protokoll mit Fehler und Tokens.
  * `pluginStatus` ist injizierbar (Tests); ohne Angabe wird der Vorbau im Plugin-Ordner geprüft.
  */
-export function runArchitectureMapsJob({
+export async function runArchitectureMapsJob({
   projectRoot, dataDir, harnessRoot, env = process.env, now = new Date(), freeMemoryBytes,
   forced = false, cliRunner, owns = [], settingsFile, pluginStatus,
 }) {
-  assertMemoryAvailable({ freeBytes: freeMemoryBytes });
+  assertMemoryAvailable({ freeBytes: freeMemoryBytes, harnessRoot, env });
   assertIsolated({ projectRoot });
   if (!isProjectEnabled(dataDir, projectRoot)) return { started: false, reason: "not_enabled" };
 
@@ -535,7 +547,7 @@ export function runArchitectureMapsJob({
     const startedAt = new Date();
     // Arbeitsordner als echte Langform (Gate A5): mit einem 8.3-Kurznamen wie C:\Users\LONSIN~1 vergleicht Claude Code
     // die Pfadregel Edit(./.ua/**) gegen die andere Schreibweise und lehnt jedes Schreiben ab (gemessen 28.09.2026).
-    const result = cliRunner(invocation, { cwd: realProjectRoot(projectRoot) });
+    const result = await cliRunner(invocation, { cwd: realProjectRoot(projectRoot) });
     const finishedAt = new Date();
     const usage = parseCliUsage(result?.stdout);
     const error = cliResultError(result) ?? graphWrittenError(projectRoot, head.commit, usage);
@@ -681,7 +693,7 @@ export function startPluginPrebuild({ dataDir, pluginDir = PLUGIN_DIR, env = pro
  * Die Einrichtung im Kindprozess (run.mjs --prebuild): Sperre je Plugin-Ordner, dann runPluginPrebuild mit
  * Schritt-Meldungen in die Statusdatei; Ergebnis `done` oder `failed` mit Grund. `exec` ist injizierbar.
  */
-export function runPluginPrebuildJob({ dataDir, pluginDir = PLUGIN_DIR, lockFile = LOCK_FILE, exec, env = process.env, now = new Date(), log = () => {} } = {}) {
+export async function runPluginPrebuildJob({ dataDir, pluginDir = PLUGIN_DIR, lockFile = LOCK_FILE, exec, env = process.env, now = new Date(), log = () => {} } = {}) {
   let lock;
   try {
     lock = acquireJobLock(dataDir, { now, lock: prebuildLockFile(dataDir, pluginDir) });
@@ -695,7 +707,7 @@ export function runPluginPrebuildJob({ dataDir, pluginDir = PLUGIN_DIR, lockFile
       writePrebuildRecord(dataDir, pluginDir, { state: "done", pid: process.pid, startedAt, finishedAt: new Date().toISOString(), error: null, step: null });
       return { ok: true, skipped: true, reason: "already_built" };
     }
-    const result = runPluginPrebuild({
+    const result = await runPluginPrebuild({
       pluginDir, lockFile, env, log, ...(exec ? { exec } : {}),
       onStep: (step) => writePrebuildRecord(dataDir, pluginDir, { state: "running", pid: process.pid, startedAt, finishedAt: null, error: null, step }),
     });
@@ -715,13 +727,13 @@ export function runPluginPrebuildJob({ dataDir, pluginDir = PLUGIN_DIR, lockFile
  * läuft; dann den Lauf abgelöst starten. Höchstens ein Start je Durchgang. Läuft die Einrichtung des
  * Werkzeugs noch oder schlug sie fehl, startet kein Lauf (das Projekt bleibt ohne Lauf, die Karte nennt den Grund).
  */
-export function architectureMapsTriggerTick({ dataDir, env = process.env, now = new Date(), freeMemoryBytes = os.freemem(), startRun, isAlive } = {}) {
+export function architectureMapsTriggerTick({ dataDir, env = process.env, now = new Date(), freeMemoryBytes = os.freemem(), startRun, isAlive, harnessRoot } = {}) {
   if (isJobRunning(dataDir, { isAlive })) return [{ project: null, started: false, reason: "job_already_running" }];
   if (readPrebuildRecord(dataDir, PLUGIN_DIR)) {
     const prebuild = readPluginPrebuildState({ dataDir, now, ...(isAlive ? { isAlive } : {}) });
     if (prebuildBlocksRun(prebuild)) return [{ project: null, started: false, reason: `prebuild_${prebuild.state}` }];
   }
-  if (!Number.isFinite(freeMemoryBytes) || freeMemoryBytes < MEMORY_MINIMUM_BYTES) {
+  if (!Number.isFinite(freeMemoryBytes) || freeMemoryBytes < ramFloorBytes(harnessRoot, env)) {
     return [{ project: null, started: false, reason: "memory_below_limit" }];
   }
   const start = startRun ?? ((projectRoot) => spawnDetachedRun({ projectRoot, dataDir, env }));

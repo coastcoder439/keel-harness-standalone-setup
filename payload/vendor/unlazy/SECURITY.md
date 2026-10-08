@@ -17,7 +17,7 @@ Before using an inherited ledger:
 3. Determine the shell from `--shell`, `UNLAZY_SHELL`, or the platform default, and inspect the inherited `PATH`. For a new oracle with no exact approval, normal mode prints the resolved values without running it. Normal mode is not a universal dry run because an existing exact approval permits execution.
 4. Run with `--approve` only when the complete resolved oracle is expected and understood.
 
-Approval records live under `~/.unlazy/approved` by default. `UNLAZY_APPROVAL_DIR` may select another directory only when it is a real, owner-private directory whose canonical target is outside the canonical repository root. The checker rejects symlinked stores and accepts a record only through a no-follow descriptor that still names the same owner-private, single-link regular file after reading. An approval is specific to the absolute ledger and gate, exact command and expectation, resolved working directory and shell, timeout, output and regex limits, regex startup/concurrency limits, platform, and full inherited `PATH`. A change to any bound input requires review and approval again. An approval is consent to execute; it is not evidence that the command matches the English gate title.
+Approval records live under `~/.unlazy/approved` by default. `UNLAZY_APPROVAL_DIR` may select another directory only when it is a real, owner-private directory whose canonical target is outside the canonical repository root. The checker rejects symlinked stores and accepts a record only through a no-follow descriptor that still names the same owner-private, single-link regular file after reading. An approval is specific to the absolute ledger and gate, exact command and expectation, resolved working directory and shell, regex limits (a time or output limit is not part of the key, and approvals made with one stay valid), regex startup/concurrency limits, platform, and full inherited `PATH`. In a package run (`--package`) the ledger and `CWD:` are bound by their path inside the repository instead, so an approval also holds in another checkout of the same repository (for example the clean copy of `--at`); approvals recorded earlier with the absolute path stay valid. A change to any bound input requires review and approval again. An approval is consent to execute; it is not evidence that the command matches the English gate title.
 
 On Windows, every executable approval path additionally passes a DACL check via
 the absolute System32 Windows PowerShell helper selected from consistent host
@@ -40,9 +40,15 @@ Shell resolution follows `--shell`, then `UNLAZY_SHELL`, then Node's platform de
 Prefer repository-owned Node scripts and explicit `CWD:` values. A shell override does not install missing utilities, clean the environment, or restrict command access. The execution transcript shows the resolved `PATH`, capped for display. Persisted evidence includes resolved shell, working directory, exit status, a short `PATH` fingerprint, the match result, and a SHA-256/byte-count fingerprint of successful output. Raw successful output is not echoed or written to the ledger. Failure diagnostics remain console-only, bounded, and stripped of terminal control and bidirectional-override characters.
 
 In a versioned package bundle, persisted evidence instead uses a stable
-`shellId`, repository-relative `cwd`, `oracleDigest`, exit/match facts, and the
-output digest/byte count. Absolute paths remain only in local approval identity
-and the terminal transcript.
+`shellId`, repository-relative `cwd`, exit/match facts, and the
+output digest/byte count. Absolute paths remain only in the terminal transcript
+and in approvals of explicit or scoped runs; a package-run approval binds
+repository-relative paths.
+
+Results of `--at` are reused by key from Git notes of ref `keel-proof`. Anyone
+with write access to the repository's notes can forge such a note; the Harness
+blocks plain `git notes` writes and stores proofs only through its git-intent,
+but a check script that calls that intent itself is the documented limit.
 
 Regular-expression expectations run in at most four disposable workers. A separate five-second worker-startup limit applies before the 250ms match budget begins, so high `--jobs` concurrency cannot consume the backtracking budget merely by delaying worker startup. A timed-out worker is terminated and cannot certify a gate.
 
@@ -60,7 +66,7 @@ The optional Claude Code Stop hook scans ledgers and dispatch state, then writes
 
 Runtime, binding, dispatch, and append-only audit files live under `.unlazy/` in scoped mode. Legacy mode may use `.unlazy-hook-state.json`. State writes reject symlink directories and targets; status append also rejects multi-link files and verifies that its opened descriptor still names the same single-link regular file before writing. Keep both paths in the project's ignore rules. Session ids in bindings and native agent ids in dispatch waves are routing values, not secrets or authentication tokens.
 
-Each check runs beneath a detached Node supervisor that remains the process-group leader until the shell and every inherited stdout/stderr descriptor close. POSIX group cleanup is attempted only while that exact supervisor is still observed live; after exit, its numeric PID/PGID is never signalled because it may have been reused. On Windows timeout cleanup, unlazy accepts only the drive-root `<drive>:\Windows\System32\taskkill.exe` when `SystemRoot` and `SystemDrive` agree; an explicitly supplied `WINDIR` must identify the same root, while a missing historical alias falls back to `SystemRoot`. Arbitrary or inconsistent roots are rejected, and the helper never searches the check's current directory or `PATH`. These launcher environment values are a consistency boundary, not cryptographic proof of OS identity. If the location cannot be established, cleanup falls back to the already-held child handle and the checker still settles on its own bounded timer. A successful signal request is not treated as proof of process exit.
+Each check runs beneath a detached Node supervisor that remains the process-group leader until the shell and every inherited stdout/stderr descriptor close. POSIX group cleanup is attempted only while that exact supervisor is still observed live; after exit, its numeric PID/PGID is never signalled because it may have been reused. On Windows cleanup of a hung check (a check has no time limit and is stopped only when it is hung; see `references/gates.md`), unlazy accepts only the drive-root `<drive>:\Windows\System32\taskkill.exe` when `SystemRoot` and `SystemDrive` agree; an explicitly supplied `WINDIR` must identify the same root, while a missing historical alias falls back to `SystemRoot`. Arbitrary or inconsistent roots are rejected, and the helper never searches the check's current directory or `PATH`. These launcher environment values are a consistency boundary, not cryptographic proof of OS identity. If the location cannot be established, cleanup falls back to the already-held child handle and the silence watcher still settles on its own after a short grace period. A successful signal request is not treated as proof of process exit.
 
 ## Installer targets and privacy
 

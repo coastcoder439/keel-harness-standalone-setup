@@ -115,7 +115,32 @@ export function orchestratorReason({ harnessRoot, sessionId, env = process.env, 
   return null;
 }
 
-export function recordOrchestrator({ harnessRoot, sessionId, via, now = new Date() }) {
+// The packages a session orchestrates (P4 D1): the session that planned or runs a package writes the evidence
+// and design notes of exactly that package directly (paket-gate, package-bootstrap.cjs
+// authorizeOrchestratorWrite reads this list). Bounded; the oldest entries leave first.
+const MAX_PACKAGES = 64;
+
+function packageEntry(packageRef) {
+  if (!packageRef) return null;
+  const repoRoot = String(packageRef.repoRoot ?? "");
+  const packageId = String(packageRef.packageId ?? "");
+  if (!repoRoot || !path.isAbsolute(repoRoot) || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(packageId)) return null;
+  const scope = String(packageRef.scope ?? "");
+  return { repoRoot, packageId, ...(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u.test(scope) ? { scope } : {}) };
+}
+
+function samePackageRef(left, right) {
+  const key = (item) => (process.platform === "win32" ? (item.repoRoot + "\n" + item.packageId).toLowerCase() : item.repoRoot + "\n" + item.packageId);
+  return key(left) === key(right);
+}
+
+function mergePackages(existing, entry) {
+  const list = Array.isArray(existing) ? existing.map(packageEntry).filter(Boolean) : [];
+  if (!entry) return list;
+  return [...list.filter((item) => !samePackageRef(item, entry)), entry].slice(-MAX_PACKAGES);
+}
+
+export function recordOrchestrator({ harnessRoot, sessionId, via, packageRef = null, now = new Date() }) {
   const root = harnessControlRoot(harnessRoot);
   const session = validSession(sessionId);
   const route = String(via ?? "");
@@ -123,10 +148,11 @@ export function recordOrchestrator({ harnessRoot, sessionId, via, now = new Date
   const at = now.toISOString();
   const file = orchestratorRecordPath(root, session);
   const existing = readRecord(file, session);
+  const packages = mergePackages(existing?.packages, packageEntry(packageRef));
   const value = existing
     ? { schemaVersion: 1, sessionId: session, via: existing.via.includes(route) ? [...existing.via] : [...existing.via, route],
-      firstAt: existing.firstAt, lastAt: at }
-    : { schemaVersion: 1, sessionId: session, via: [route], firstAt: at, lastAt: at };
+      firstAt: existing.firstAt, lastAt: at, ...(packages.length ? { packages } : {}) }
+    : { schemaVersion: 1, sessionId: session, via: [route], firstAt: at, lastAt: at, ...(packages.length ? { packages } : {}) };
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const temporary = file + "." + process.pid + "." + crypto.randomBytes(8).toString("hex") + ".tmp";
   fs.writeFileSync(temporary, JSON.stringify(value, null, 2) + "\n", { encoding: "utf8", flag: "wx" });

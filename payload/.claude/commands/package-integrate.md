@@ -8,10 +8,13 @@ description: Integriert alle lokal verifizierten Leaves genau einmal und prueft 
    `node harness-core/execution/package-executor.mjs integrate --harness-root <HARNESS_ROOT> --root <REPO> --package <ID> --scope <ID> --message "<TEXT>" --approve-checks --json`
    aus. `--approve-checks` ist die ausdrueckliche Erlaubnis, nur die im Ledger sichtbaren
    pending CHECK-Orakel jetzt auszufuehren; manuelle Gates bleiben Owner-Gates.
-3. Der Executor prueft zuerst Leaf -> Branch -> Root bottom-up, leitet Plan-Haken
-   ausschliesslich aus Evidence ab und erstellt danach hoechstens einen gemeinsamen
-   Integrations-Checkpoint. Ein zweiter Aufruf fuehrt dieselbe Reverify erneut aus und
-   liefert denselben Checkpoint statt eines zweiten. `--timeout S` ist das Budget je
-   CHECK; die Wanduhr deckt alle CHECKs der adressierten Ledger ab.
+3. Der Executor baut den Integrations-Commit, ohne den Branch zu bewegen, prueft daran
+   Leaf -> Branch -> Root in einer sauberen Kopie (`gate-check --at`), leitet Plan-Haken
+   ausschliesslich aus Evidence ab und zieht den Branch nur bei Gruen vor (hoechstens ein
+   gemeinsamer Integrations-Checkpoint). Rot laesst Branch, Index und Arbeitskopie
+   unveraendert. Ein zweiter Aufruf auf demselben Stand liefert denselben Checkpoint und
+   startet keinen Pruefbefehl (gespeicherte Ergebnisse, `checksRun: 0`). `--timeout S` wird angenommen und
+   ignoriert (gate-check kennt keine Zeit je CHECK mehr); der Executor setzt keine Wanduhr, ein Kindprozess endet nur bei einem Hänger
+   (CHILD_HUNG).
 4. Scheitert ein Gate, bleibt das Paket offen. Probiere keinen anderen Git-Befehl und
    hake nichts im Chat ab.

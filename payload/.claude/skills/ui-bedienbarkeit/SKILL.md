@@ -25,7 +25,7 @@ Argument, "13 px, 4,5:1, 44 px" sind Argumente.
    (Progressive Disclosure), nicht alles auf einmal.
 6. **Messen, nicht ansehen:** Messskript auf jeder Ansicht laufen lassen; Ziel: hoechstens
    3 Groessen + Titel, kein Text unter 12 px, kein Bedienelement unter 24 px, keine Grossbuchstaben,
-   unter 30 Woerter bis zur ersten Handlung. Screenshot je Ansicht ansehen, wie ein Nutzer.
+   unter 30 Woerter bis zur ersten Handlung. Screenshot je Ansicht ansehen, wie ein Nutzer (festes Skript `checks/ui-shots.mjs`, Zustaende aus dem Gate, kein eigenes Skript je Paket).
 7. **Owner klickt live.** Screenshots sind Beleg fuer den Agenten, nicht Abnahme.
 
 ## Die 12 Regeln mit Zahl

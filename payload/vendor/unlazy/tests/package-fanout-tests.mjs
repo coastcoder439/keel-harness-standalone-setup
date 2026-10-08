@@ -366,6 +366,26 @@ test("dispatch persists scope/package identity through every transition and Pack
   assert.deepEqual(status.dispatch, { state: "idle", unfinished: 0 });
 });
 
+// D2 (P14): dispatch open no longer demands two ledgers. A bundle with ONE ledger (the root, with its Depth Tree) is not refused
+// for its ledger count any more; what stops a dispatch there is the real reason, the leaf has no ledger of its own.
+test("D2: dispatch open has no minimum ledger count; one ledger is refused only for the leaf that has no ledger", () => {
+  const root = repo("dispatch-one-ledger");
+  const directory = join(root, "docs", "packages", "solo");
+  mkdirSync(join(directory, "gates"), { recursive: true });
+  const text = packageText("solo")
+    .replace("- C2 -> gates/leaf-shared.md:LEAF: The addressed leaf owns only its declared paths.\n- C3 -> gates/node-integrate.md:NODE: Node integration runs after the leaf.\n", "")
+    .replace("Coverage: 3/3 contract outcomes mapped; 0/3 met.", "Coverage: 1/1 contract outcomes mapped; 0/1 met.")
+    .replace("- LEAF gates/leaf-shared.md <- GATES.md: Independent leaf outcome.\n- NODE gates/node-integrate.md <- gates/leaf-shared.md: Bottom-up integration outcome.\n", "");
+  writeFileSync(join(directory, "PACKAGE.md"), text, "utf8");
+  writeFileSync(join(directory, "GATES.md"), ledger("root"), "utf8");
+  writeFileSync(join(directory, "gates", ".gitkeep"), "", "utf8");
+  activate(root, "solo", "solo-scope");
+  const refused = dispatch(root, "open", "solo", "solo-scope", "--leaf", "leaf-shared");
+  assert.equal(refused.status, 2, refused.stderr + refused.stdout);
+  assert.match(refused.stderr, /no owning Depth Tree leaf ledger: leaf-shared/);
+  assert.doesNotMatch(refused.stderr, /requires a fan-out bundle|requires a bundle with a complete Depth Tree/);
+});
+
 test("dispatch refuses inactive packages and PackageStatus fails closed on identity tampering", () => {
   const inactive = repo("dispatch-inactive");
   bundle(inactive, "alpha");

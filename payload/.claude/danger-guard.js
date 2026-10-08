@@ -36,6 +36,11 @@ const GUARD_TARGET = ".claude/danger-guard.js";
 // Inline deny transport (identical in every PreToolUse guard; guard-parity E5): a missing
 // sibling module must never turn a denial into an allow. Under the Codex hook runner a
 // JSON deny with exit 0 survives Windows PowerShell, which maps a native exit 2 to 1.
+// Every other error of the hook process denies the same way (guard-parity A9, fail closed): the
+// two handlers are armed here, before any helper module loads, so a failure while loading, a throw
+// inside the decision and an unhandled rejection all end in block(). Only the hook main program is
+// armed; a library require and --self-test are not. KEEL_GUARD_TEST_THROW forces an error for the
+// tests: "1" throws at load, "reject" leaves an unhandled rejection, "late" throws after the input ended.
 function block(message) {
   const reason = String(message).trim() || GUARD_TARGET + ": tool denied";
   if (process.env.KEEL_HARNESS_ROOT && process.env.KEEL_HOOK_TARGET === GUARD_TARGET) {
@@ -47,15 +52,32 @@ function block(message) {
   fs.writeSync(2, reason + "\n");
   process.exit(2);
 }
+if (require.main === module && !process.argv.some((arg) => arg === "--self-test" || arg === "--selbsttest")) {
+  const failClosed = (error) => {
+    try {
+      block(GUARD_TARGET.replace(/^.*\//u, "").replace(/\.c?js$/u, "") + ": internal error; tool blocked: " +
+        ((error && error.message) || error));
+    } catch { process.exit(2); }
+  };
+  process.on("uncaughtException", failClosed);
+  process.on("unhandledRejection", failClosed);
+  const forced = process.env.KEEL_GUARD_TEST_THROW;
+  if (forced === "reject") Promise.reject(new Error("forced test error"));
+  if (forced === "late") process.stdin.once("end", () => { throw new Error("forced test error"); });
+  if (forced === "1") throw new Error("forced test error");
+}
+// End inline deny transport
 
 // Befehle zerlegt das gemeinsame Befehlsmodell (guard-parity E1): Bash mit dem einen
 // Zerleger des Harness, PowerShell mit PowerShells eigenem Parser.
 let commandModel;
 let ownerHandoff;
+let guardRoutes;
 let hookContext;
 try {
   commandModel = require("../harness-core/guards/command-model.cjs");
   ownerHandoff = require("../harness-core/guards/owner-handoff.cjs");
+  guardRoutes = require("../harness-core/guards/guard-routes.cjs");
   hookContext = require("../harness-core/guards/hook-context.cjs");
 } catch (error) {
   if (require.main === module) block("danger-guard: dependency load failed; command blocked: " + error.message);
@@ -82,11 +104,20 @@ function normPfad(p) {
   }
   return n;
 }
-/** Liegt p unter der Wurzel w, oder IST es w? Separatorneutral. */
+/** Die Schreibweisen eines Pfads: wie geschrieben und, fuer einen Windows-Laufwerkspfad, die vom Dateisystem
+ *  aufgeloeste (8.3-Kurznamen wie C:/Users/ABCDEF~1 ausgeschrieben, Verbindungspunkte verfolgt). Sonst gilt
+ *  derselbe Temp-Ordner in Kurzform als erlaubt und in Langform als fremd (gemessen 07.10.2026). */
+function formen(p) {
+  const roh = normPfad(p);
+  if (!IST_WIN || !/^[A-Za-z]:[\\/]/u.test(hookContext.msysPath(String(p)))) return [roh];
+  let kanonisch = roh;
+  try { kanonisch = normPfad(hookContext.canonicalPath(p)); } catch { /* bleibt die geschriebene Form */ }
+  return kanonisch === roh ? [roh] : [roh, kanonisch];
+}
+
+/** Liegt p unter der Wurzel w, oder IST es w? Separatorneutral, in jeder Schreibweise beider Pfade. */
 function unter(p, w) {
-  const np = normPfad(p);
-  const nw = normPfad(w);
-  return np === nw || np.startsWith(nw.endsWith("/") ? nw : nw + "/");
+  return formen(p).some((np) => formen(w).some((nw) => np === nw || np.startsWith(nw.endsWith("/") ? nw : nw + "/")));
 }
 
 /** Verzeichnisse, in die geschrieben werden darf. Alles andere unter $HOME ist tabu. */
@@ -285,7 +316,7 @@ const REGELN = [
 ];
 
 // ---------------------------------------------------------------------------
-// SELBSTPRUEFUNG  ->  node .claude/hooks/danger-guard.js --selbsttest
+// SELBSTPRUEFUNG  ->  node .claude/danger-guard.js --self-test   (alt: --selbsttest)
 //
 // Anlass (02.08.2026, Abnahmelauf der Nachbau-Anleitung): Die Anleitung liess den
 // Menschen zum Pruefen Zeilen wie   pruefe 'echo "x" > ~/Desktop/f'   tippen.
@@ -356,7 +387,7 @@ function pruefe(roh, dialekt = "bash", verletzt = new Map(), tiefe = 0) {
   return verletzt;
 }
 
-if (require.main === module && process.argv.includes("--selbsttest")) {
+if (require.main === module && (process.argv.includes("--self-test") || process.argv.includes("--selbsttest"))) {
   let schlecht = 0;
   let geprueft = 0;
   for (const f of SELBSTTEST) {
@@ -374,6 +405,45 @@ if (require.main === module && process.argv.includes("--selbsttest")) {
   process.exit(schlecht ? 1 : 0);
 }
 
+// Every hook of a session is a sign of life of its planning binding (P4 D15); the touch never decides
+// anything and never fails the hook.
+function noteActivity(payload) {
+  try { require("../harness-core/binding/hook-activity.cjs").noteHookInput(payload); } catch { /* a record, not a decision */ }
+}
+
+// The decision of one hook call (package P5, A1): null lets the command pass, a string is the denial text. The hook main
+// program and the one guard process (.claude/pretool-guards.js) both use it.
+function hookDecision(daten) {
+  const roh = daten?.tool_input?.command || "";
+  if (!roh) return null;
+  let dialekt;
+  let verletzt;
+  try {
+    dialekt = commandModel.dialectFor(daten);
+    verletzt = pruefe(roh, dialekt);
+  } catch (error) {
+    return "danger-guard: policy evaluation failed; command blocked: " + error.message;
+  }
+  if (!verletzt.size) return null;
+  // The denial itself must not depend on the Owner template: a template that cannot be built
+  // leaves the plain reason (guard-parity A9).
+  let vorlage;
+  try {
+    vorlage = ownerHandoff.handoffText({
+      what: [...verletzt.keys()].join("; "),
+      warning: "ACHTUNG: zerstoerend oder ausserhalb des Arbeitsbereichs, im Satz an den Owner ausdruecklich sagen.",
+      command: roh, dialect: dialekt, cwd: daten.cwd || hookContext.ruleRoot(), ownerOnly: true,
+    });
+  } catch (error) {
+    vorlage = "\n(Owner-Vorlage nicht erzeugbar: " + error.message + ")";
+  }
+  return "danger-guard hat den Befehl NICHT ausgefuehrt.\n\n" +
+    [...verletzt.values()].map(({ r, seg }) => `  - ${r.name}\n    ${r.rat}\n    -> ${seg.slice(0, 160)}`).join("\n") +
+    "\n\n  Der Waechter ist deterministisch und nicht ueberredbar. Wenn das wirklich gewollt\n" +
+    "  ist, fuehrt der Mensch den Befehl selbst im Terminal aus.\n" +
+    guardRoutes.referenceLine("danger-guard", [...verletzt.keys()][0]) + "\n" + vorlage;
+}
+
 if (require.main === module) {
   let eingabe = "";
   process.stdin.on("data", (c) => (eingabe += c));
@@ -384,28 +454,10 @@ if (require.main === module) {
     } catch {
       return block("danger-guard: invalid hook input; command blocked");
     }
-    const roh = daten?.tool_input?.command || "";
-    if (!roh) return process.exit(0);
-    const dialekt = commandModel.dialectFor(daten);
-    let verletzt;
-    try {
-      verletzt = pruefe(roh, dialekt);
-    } catch (error) {
-      return block("danger-guard: policy evaluation failed; command blocked: " + error.message);
-    }
-    if (!verletzt.size) return process.exit(0);
-    block(
-      "danger-guard hat den Befehl NICHT ausgefuehrt.\n\n" +
-        [...verletzt.values()].map(({ r, seg }) => `  - ${r.name}\n    ${r.rat}\n    -> ${seg.slice(0, 160)}`).join("\n") +
-        "\n\n  Der Waechter ist deterministisch und nicht ueberredbar. Wenn das wirklich gewollt\n" +
-        "  ist, fuehrt der Mensch den Befehl selbst im Terminal aus.\n" +
-        ownerHandoff.handoffText({
-          what: [...verletzt.keys()].join("; "),
-          warning: "ACHTUNG: zerstoerend oder ausserhalb des Arbeitsbereichs, im Satz an den Owner ausdruecklich sagen.",
-          command: roh, dialect: dialekt, cwd: daten.cwd || hookContext.ruleRoot(), ownerOnly: true,
-        })
-    );
+    noteActivity(daten); // sign of life of the planning session (D15), before anything is judged
+    const denial = hookDecision(daten);
+    return denial === null ? process.exit(0) : block(denial);
   });
 }
 
-module.exports = { pruefe, kopf };
+module.exports = { hookDecision, pruefe, kopf };

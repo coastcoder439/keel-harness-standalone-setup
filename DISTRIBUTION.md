@@ -42,7 +42,7 @@ each changed file on the target volume. Promotion uses a Windows-compatible
 pair of renames: live file to transaction quarantine, then staged file to the
 live path. The durable journal records each boundary.
 
-Any caught payload, onboarding, or project-scoped plugin failure restores and
+Any caught payload or project-scoped plugin failure restores and
 verifies every pre-install file before returning an error. A process crash
 leaves the journal and quarantine intact; `rollback` completes the same
 recovery explicitly. Successful installation retains only the first originals

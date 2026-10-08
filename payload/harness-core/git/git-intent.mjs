@@ -2,8 +2,16 @@
 
 // Finite Git operation surface. Agents choose an intent, never a raw mutating
 // Git command. Every mutation is bound to one session leaf and emits a receipt.
+//
+// Package P3 added: release-stale-lock (an orphaned, empty, old index.lock of an own repository),
+// publish for the project repositories the Owner lists in publishProjects (no closed package, only the
+// current branch to origin as a fast-forward), proof-note-write and proof-notes-sync (review notes of ref
+// keel-proof). Commit texts travel in a file and have no length limit. Short Git questions keep their
+// 30 s protection; long Git operations (commit, revert, commit-tree, push, fetch, notes merge) run through
+// the Unlazy silence watcher and end only when they are really hung, never after a fixed time.
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 import { createRequire } from "node:module";
@@ -11,13 +19,26 @@ import { spawnSync } from "node:child_process";
 import { createHash, randomBytes } from "node:crypto";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { readExecutionReceipt, validateImmutableRecord } from "../execution/execution-receipts.mjs";
-import { findOwnerOk, formatOwnerOkLine, todayLocal, validateOwnerOk } from "../execution/owner-ok.mjs";
+import {
+  findOwnerOk,
+  formatOwnerOkLine,
+  ownerWordingFolders,
+  readOwnerWordingFile,
+  readTextFromFolders,
+  todayLocal,
+  validateOwnerOk,
+} from "../execution/owner-ok.mjs";
 
 const require = createRequire(import.meta.url);
+// P20, D14: the real git.exe (no cmd\git.exe wrapper process) and --no-optional-locks on reading calls.
+const gitBinary = require("./git-binary.cjs");
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repository = require("../binding/repository.cjs");
 const packageBinding = require("../binding/package-binding.cjs");
 const ownerContract = require("../binding/owner-contract.cjs");
+const hookContext = require("../guards/hook-context.cjs");
+const publishProjects = require("../guards/publish-projects.cjs");
+const sessionScope = require("../guards/session-scope.cjs");
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 
 // ONE resolver for the Unlazy tree lives in harness-core/binding/unlazy-runtime.cjs
@@ -68,34 +89,233 @@ function fail(code, message, exitCode = 2) {
   throw error;
 }
 
+// Inherited repository redirections are always dropped; a caller may set one on purpose (P8: the held integration
+// commit is built in a temporary GIT_INDEX_FILE, so the shared index is never touched).
 function cleanGitEnv(extra = {}) {
-  const env = { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0", ...extra };
+  const env = { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" };
   for (const name of ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_INDEX_FILE", "GIT_OBJECT_DIRECTORY"]) {
     delete env[name];
   }
-  return env;
+  return { ...env, ...extra };
 }
 
+// Short queries keep their protection: one Git question must not hang the caller (concept 3.6,
+// "Schutz einzelner Git-Abfragen"; it ends no work). Long operations never use this function, they
+// go through gitWatched below, which has no fixed time.
 function git(repoRoot, args, options = {}) {
-  const result = spawnSync(options.gitExecutable || "git", ["-C", repoRoot, ...args], {
+  const result = gitBinary.gitSync(["-C", repoRoot, ...args], {
     cwd: repoRoot,
     encoding: "utf8",
     windowsHide: true,
     timeout: options.timeoutMs || 30_000,
     env: cleanGitEnv(options.env),
-  });
+  }, { executable: options.gitExecutable });
   if (result.error) fail("GIT_EXECUTION_FAILED", result.error.message);
+  result.repoRoot = repoRoot;
   return result;
 }
 
+// The silence watcher of the vendored Unlazy tree (P01), loaded lazily like the gate parser: a
+// top-level import would break every intent when the tree sits somewhere unusual. The Harness
+// tree's own runtime is the single candidate (harnessRuntime); an Unlazy tree without the module
+// is an installation error, never a reason to fall back to a fixed time.
+let silenceWatchModule = null;
+
+export async function loadSilenceWatch() {
+  if (silenceWatchModule) return silenceWatchModule;
+  const runtime = unlazyRuntime.harnessRuntime();
+  const file = runtime ? path.join(runtime, "scripts", "lib", "silence-watch.mjs") : null;
+  if (!file || !fs.existsSync(file)) {
+    fail("SILENCE_WATCH_MISSING", "the Unlazy silence watcher (scripts/lib/silence-watch.mjs) is not installed next to the Harness; update the Harness");
+  }
+  const module = await import(pathToFileURL(fs.realpathSync(file)).href);
+  if (typeof module.runWatched !== "function") fail("SILENCE_WATCH_MISSING", "silence-watch.mjs exports no runWatched");
+  silenceWatchModule = module;
+  return module;
+}
+
+// A long Git operation (commit, revert, commit-tree, push, fetch, notes merge): no fixed time, no
+// output cap. It is declared hung only by silence (silence-watch.mjs). The result has the shape of a
+// spawnSync result, so commandResult and the callers read it unchanged.
+async function gitWatched(repoRoot, args, options = {}) {
+  const { runWatched } = await loadSilenceWatch();
+  const startedAt = Date.now();
+  const watched = () => runWatched(options.gitExecutable || gitBinary.gitExecutable(), gitBinary.readGitArgs(["-C", repoRoot, ...args]), {
+    cwd: repoRoot,
+    env: cleanGitEnv(options.env),
+    ...(options.silenceMs !== undefined ? { silenceMs: options.silenceMs } : {}),
+    ...(options.sampleMs !== undefined ? { sampleMs: options.sampleMs } : {}),
+  });
+  let result = await watched();
+  // A found git.exe that cannot be started at all (removed meanwhile): plain "git" once, never a failure for that reason alone.
+  if (result.spawnError && !options.gitExecutable && gitBinary.gitExecutable() !== "git") {
+    gitBinary.forgetGitExecutable();
+    result = await watched();
+  }
+  if (result.spawnError) fail("GIT_EXECUTION_FAILED", String(result.spawnError));
+  if (result.hung) {
+    const lockRelease = releaseLockOfHungOperation(repoRoot, startedAt, options);
+    const error = new Error("git " + String(args[0] || "") + " made no progress (" + String(result.hungReason || "silent") +
+      "); it was stopped as hung, not for taking long; " + lockRelease.message +
+      (lockRelease.lockRemains ? staleLockHint({ repoRoot, stderr: "index.lock" }) : ""));
+    error.code = "GIT_HUNG";
+    error.exitCode = 1;
+    error.lockRelease = lockRelease;
+    throw error;
+  }
+  return { status: result.code === null ? 1 : result.code, signal: result.signal, stdout: result.stdout,
+    stderr: result.stderr, repoRoot };
+}
+
+// Who works in a repository right now? Used only to decide whether the index.lock of a stopped
+// operation may be removed. { checked, blocking, unknown }: blocking = Git processes whose working
+// folder is the repository or lies in it; unknown = Git processes whose working folder cannot be
+// read. Whatever cannot be read counts against removal.
+const GIT_PROCESS_NAME = /^git(?:-[\w.-]+)?(?:\.exe)?$/iu;
+
+// Windows has no call for the working folder of another process; it is read from the process
+// environment block (PEB) of each Git process of the same user. 64-bit targets only; every failure
+// yields "?" (unknown), which keeps the lock.
+const WINDOWS_CWD_SCRIPT = [
+  "$ErrorActionPreference = 'Stop'",
+  "Add-Type -TypeDefinition @'",
+  "using System; using System.Runtime.InteropServices; using System.Text;",
+  "public static class KeelProcCwd {",
+  "  [StructLayout(LayoutKind.Sequential)] struct PBI { public IntPtr Exit; public IntPtr Peb; public IntPtr Aff; public IntPtr Prio; public IntPtr Pid; public IntPtr Parent; }",
+  "  [DllImport(\"ntdll.dll\")] static extern int NtQueryInformationProcess(IntPtr h, int cls, ref PBI info, int len, out int ret);",
+  "  [DllImport(\"kernel32.dll\")] static extern IntPtr OpenProcess(int access, bool inherit, int pid);",
+  "  [DllImport(\"kernel32.dll\")] static extern bool ReadProcessMemory(IntPtr h, IntPtr addr, byte[] buf, int size, out IntPtr read);",
+  "  [DllImport(\"kernel32.dll\")] static extern bool IsWow64Process(IntPtr h, out bool wow);",
+  "  [DllImport(\"kernel32.dll\")] static extern bool CloseHandle(IntPtr h);",
+  "  public static string Get(int pid) {",
+  "    if (IntPtr.Size != 8) return null;",
+  "    IntPtr h = OpenProcess(0x0410, false, pid);",
+  "    if (h == IntPtr.Zero) return null;",
+  "    try {",
+  "      bool wow; if (!IsWow64Process(h, out wow) || wow) return null;",
+  "      PBI pbi = new PBI(); int ret; IntPtr n;",
+  "      if (NtQueryInformationProcess(h, 0, ref pbi, Marshal.SizeOf(pbi), out ret) != 0) return null;",
+  "      byte[] b = new byte[8];",
+  "      if (!ReadProcessMemory(h, IntPtr.Add(pbi.Peb, 0x20), b, 8, out n)) return null;",
+  "      IntPtr pp = (IntPtr)BitConverter.ToInt64(b, 0);",
+  "      byte[] us = new byte[16];",
+  "      if (!ReadProcessMemory(h, IntPtr.Add(pp, 0x38), us, 16, out n)) return null;",
+  "      int len = BitConverter.ToUInt16(us, 0); IntPtr buf = (IntPtr)BitConverter.ToInt64(us, 8);",
+  "      if (len <= 0) return null;",
+  "      byte[] str = new byte[len];",
+  "      if (!ReadProcessMemory(h, buf, str, len, out n)) return null;",
+  "      return Encoding.Unicode.GetString(str);",
+  "    } finally { CloseHandle(h); }",
+  "  }",
+  "}",
+  "'@",
+  "foreach ($p in [System.Diagnostics.Process]::GetProcesses()) {",
+  "  if ($p.ProcessName -like 'git*') {",
+  "    $c = [KeelProcCwd]::Get($p.Id)",
+  "    if ($c) { '' + $p.Id + [char]9 + $c; continue }",
+  "    $ended = $false; try { $p.Refresh(); $ended = $p.HasExited } catch { $ended = $false }",
+  "    if (-not $ended) { '' + $p.Id + [char]9 + '?' }",
+  "  }",
+  "}",
+].join("\n");
+
+function gitProcessWorkingFolders() {
+  if (process.platform === "win32") {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "keel-git-cwd-"));
+    try {
+      const script = path.join(directory, "git-working-folders.ps1");
+      fs.writeFileSync(script, WINDOWS_CWD_SCRIPT, "utf8");
+      const run = spawnSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", script], {
+        encoding: "utf8", windowsHide: true, timeout: 30_000 });
+      if (run.error || run.status !== 0) return null;
+      return String(run.stdout || "").split(/\r?\n/u).filter(Boolean).map((line) => {
+        const [pid, folder] = line.split("\t");
+        return { pid: Number(pid), folder: folder === "?" ? null : folder };
+      });
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+    }
+  }
+  const listing = spawnSync("ps", ["-A", "-o", "pid=,comm="], { encoding: "utf8", timeout: 30_000 });
+  if (listing.error || listing.status !== 0) return null;
+  const found = [];
+  for (const line of String(listing.stdout || "").split(/\r?\n/u)) {
+    const match = /^\s*(\d+)\s+(.+)$/u.exec(line);
+    if (!match || !GIT_PROCESS_NAME.test(path.basename(match[2].trim()))) continue;
+    const pid = Number(match[1]);
+    let folder = null;
+    if (process.platform === "linux") {
+      try { folder = fs.readlinkSync("/proc/" + pid + "/cwd"); } catch { folder = null; }
+    } else if (process.platform === "darwin") {
+      const probe = spawnSync("lsof", ["-a", "-d", "cwd", "-p", String(pid), "-Fn"], { encoding: "utf8", timeout: 30_000 });
+      const hit = probe.status === 0 ? /^n(.+)$/mu.exec(String(probe.stdout || "")) : null;
+      folder = hit ? hit[1] : null;
+    }
+    found.push({ pid, folder });
+  }
+  return found;
+}
+
+export function gitProcessesInRepository(repoRoot, options = {}) {
+  const listed = (options.listGitProcesses || gitProcessWorkingFolders)();
+  if (!Array.isArray(listed)) return { checked: false, blocking: [], unknown: [] };
+  const blocking = [];
+  const unknown = [];
+  for (const entry of listed) {
+    if (!entry.folder) unknown.push(entry.pid);
+    else if (repository.samePath(entry.folder, repoRoot) || repository.isPathInside(repoRoot, entry.folder)) blocking.push(entry.pid);
+  }
+  return { checked: true, blocking, unknown };
+}
+
+// Decision of the Orchestrator (review of P3): when git-intent stopped its own Git operation as hung,
+// the index.lock it leaves behind is removed again if (1) the lock was written after this operation
+// started (so it is the operation's own, not an older orphan) and (2) no other Git process works in this
+// repository, as far as that can be read. When in doubt it stays and the result says why. The intent
+// release-stale-lock keeps its own, stricter rule (0 bytes, older than five minutes).
+const LOCK_CLOCK_TOLERANCE_MS = 50; // coarse file-time resolution: a lock may look a few ms older than the start
+
+export function releaseLockOfHungOperation(repoRoot, startedAt, options = {}) {
+  const stays = (message, lockRemains = true) => ({ removed: false, lockRemains, message });
+  let lockFile;
+  try { lockFile = path.join(repository.repositorySnapshot(repoRoot).gitDir, "index.lock"); }
+  catch (error) { return stays("index.lock not checked (" + error.message + ")", false); }
+  let info;
+  try { info = fs.lstatSync(lockFile); }
+  catch { return stays("no index.lock remained", false); }
+  if (info.isSymbolicLink() || !info.isFile()) return stays("index.lock stays: it is not a regular file");
+  if (info.mtimeMs < startedAt - LOCK_CLOCK_TOLERANCE_MS) {
+    return stays("index.lock stays: it is older than this operation and does not come from it");
+  }
+  let processes;
+  try { processes = gitProcessesInRepository(repoRoot, options); }
+  catch { processes = { checked: false, blocking: [], unknown: [] }; }
+  if (!processes.checked) return stays("index.lock stays: the running Git processes could not be listed");
+  if (processes.blocking.length) {
+    return stays("index.lock stays: another Git process works in this repository (pid " + processes.blocking.join(", ") + ")");
+  }
+  if (processes.unknown.length) {
+    return stays("index.lock stays: the working folder of Git process " + processes.unknown.join(", ") + " cannot be read");
+  }
+  try {
+    const again = fs.lstatSync(lockFile);
+    if (again.ino !== info.ino || again.mtimeMs !== info.mtimeMs || again.size !== info.size) {
+      return stays("index.lock stays: it changed while it was checked");
+    }
+    fs.unlinkSync(lockFile);
+  } catch (error) { return stays("index.lock stays: " + error.message); }
+  return { removed: true, lockRemains: false, lock: lockFile,
+    message: "the index.lock it left behind (" + info.size + " bytes, written after the operation started, no other Git process in this repository) was removed" };
+}
+
 function gitBytes(repoRoot, args, options = {}) {
-  const result = spawnSync(options.gitExecutable || "git", ["-C", repoRoot, ...args], {
+  const result = gitBinary.gitSync(["-C", repoRoot, ...args], {
     cwd: repoRoot,
     encoding: null,
     windowsHide: true,
     timeout: options.timeoutMs || 30_000,
     env: cleanGitEnv(options.env),
-  });
+  }, { executable: options.gitExecutable });
   if (result.error) fail("GIT_EXECUTION_FAILED", result.error.message);
   if (result.status !== 0) {
     const detail = String(result.stderr || result.stdout || "").trim().split(/\r?\n/u)[0] || "exit " + result.status;
@@ -120,6 +340,8 @@ function parseArgs(argv) {
     }
     else if (option === "--scope") values.scope = args.shift();
     else if (option === "--message") values.message = args.shift();
+    else if (option === "--message-file") values.messageFile = args.shift();
+    else if (option === "--owner-ok-file") values.ownerOkFile = args.shift();
     else if (option === "--expected-result-file") values.expectedResultFile = args.shift();
     else if (option === "--expected-result-digest") values.expectedResultDigest = args.shift();
     else if (option === "--path") values.paths.push(args.shift());
@@ -128,8 +350,12 @@ function parseArgs(argv) {
     else if (option === "--receipt") values.receipt = args.shift();
     else if (option === "--owner-ok") values.ownerOk = args.shift();
     else if (option === "--unlazy-root") values.unlazyRoot = args.shift();
+    else if (option === "--commit") values.commit = args.shift();
+    else if (option === "--file") values.file = args.shift();
     else if (option === "--writeback-receipt") values.writebackReceipts.push(args.shift());
     else if (option === "--json") values.json = true;
+    else if (option === "--hold") values.hold = true;
+    else if (option === "--advance") values.advance = args.shift();
     else fail("USAGE", "unknown option " + option);
   }
   return values;
@@ -160,10 +386,18 @@ function authorizedPaths(binding, requested) {
   return unique;
 }
 
+// A failure on index.lock names the one agent route for an orphaned lock (A12): the lock of a
+// running Git process is never removed, an empty old lock of an own repository is.
+function staleLockHint(result) {
+  if (!result || !result.repoRoot || !/index\.lock/u.test(String(result.stderr || ""))) return "";
+  return "; if no Git process is running, release the orphaned lock: node " +
+    path.join(here, "git-intent.mjs") + " release-stale-lock --root " + result.repoRoot;
+}
+
 function commandResult(result, operation) {
   if (result.status !== 0) {
     const detail = String(result.stderr || result.stdout || "").trim().split(/\r?\n/u)[0] || "exit " + result.status;
-    fail("GIT_" + operation.toUpperCase() + "_FAILED", detail, 1);
+    fail("GIT_" + operation.toUpperCase() + "_FAILED", detail + staleLockHint(result), 1);
   }
   return String(result.stdout || "");
 }
@@ -310,12 +544,12 @@ function inspect(options) {
     leaf: binding.leaf, head: binding.headOid, rev: base || null, paths, output: output.split(/\r?\n/u) };
 }
 
-function unstage(options) {
+async function unstage(options) {
   const binding = exactBinding(options);
   const paths = authorizedPaths(binding, options.paths);
-  let result = git(binding.repoRoot, ["restore", "--staged", "--", ...paths]);
+  let result = await gitWatched(binding.repoRoot, ["restore", "--staged", "--", ...paths]);
   if (result.status !== 0 && binding.headOid === null) {
-    result = git(binding.repoRoot, ["rm", "--cached", "-r", "--ignore-unmatch", "--", ...paths]);
+    result = await gitWatched(binding.repoRoot, ["rm", "--cached", "-r", "--ignore-unmatch", "--", ...paths]);
   }
   commandResult(result, "unstage");
   const receiptPath = writeReceipt(binding, { operation: "unstage", head: binding.headOid || "unborn", paths });
@@ -376,7 +610,7 @@ function liveSessionOwners(repoRoot) {
   return owners;
 }
 
-function recoverIndex(options) {
+async function recoverIndex(options) {
   const snapshot = repository.repositorySnapshot(options.root || process.cwd());
   const packageId = identifier(options.packageId, "package");
   const scope = identifier(options.scope || packageId, "scope");
@@ -407,9 +641,9 @@ function recoverIndex(options) {
       held.join(", "), 1);
   }
   recoverable.sort((left, right) => left.localeCompare(right, "en"));
-  let result = git(snapshot.repoRoot, ["restore", "--staged", "--", ...recoverable]);
+  let result = await gitWatched(snapshot.repoRoot, ["restore", "--staged", "--", ...recoverable]);
   if (result.status !== 0 && snapshot.headOid === null) {
-    result = git(snapshot.repoRoot, ["rm", "--cached", "-r", "--ignore-unmatch", "--", ...recoverable]);
+    result = await gitWatched(snapshot.repoRoot, ["rm", "--cached", "-r", "--ignore-unmatch", "--", ...recoverable]);
   }
   commandResult(result, "recover-index");
   const binding = { repoRoot: snapshot.repoRoot, packageId, scope, sessionId: "recovery", leaf: "recovery",
@@ -453,7 +687,56 @@ function assertLeafOutsideWave(binding) {
     " (" + wave.state + "); leaf agents do not commit mid-wave -- return to the parent, which integrates every verified disjoint path once", 1);
 }
 
-function checkpoint(options) {
+// D13: a commit text has no length limit. It must not be empty and must not contain a NUL character;
+// several lines are fine. It always travels in a file (git commit -F, git commit-tree -F), never in
+// -m, so neither its length, nor a line break, nor the Windows command line limit can bend it, and
+// --cleanup=verbatim keeps every byte (no comment stripping, no blank line folding).
+function commitMessage(value) {
+  const message = String(value === undefined || value === null ? "" : value).trim();
+  if (!message || message.includes("\0")) fail("USAGE", "--message must not be empty and must not contain a NUL character");
+  return message;
+}
+
+async function withMessageFile(message, run) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "keel-commit-message-"));
+  const file = path.join(directory, "message.txt");
+  try {
+    fs.writeFileSync(file, message + "\n", { encoding: "utf8", flag: "wx" });
+    return await run(file);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+}
+
+// Commits the staged paths. Whatever ends the commit -- a failed Git run or a stop of a hung one -- puts
+// exactly those paths back out of the index, so a refused checkpoint never leaves the shared index dirty.
+async function commitPaths(repoRoot, message, paths) {
+  let committed;
+  try {
+    committed = await withMessageFile(message, (file) =>
+      gitWatched(repoRoot, ["commit", "-F", file, "--cleanup=verbatim", "--", ...paths]));
+  } catch (error) {
+    // The paths go back out of the index. When that is not possible (a lock that stays, a failed reset) the
+    // error says so, so nobody finds staged paths without being told.
+    let unstaged = "";
+    try {
+      const reset = git(repoRoot, ["reset", "--", ...paths]);
+      if (reset.status !== 0) unstaged = String(reset.stderr || reset.stdout || "git reset failed").trim().split(/\r?\n/u)[0];
+    } catch (resetError) { unstaged = resetError.message; }
+    if (unstaged) {
+      error.message += "; the paths are STILL STAGED (" + unstaged + "); run the unstage intent for them once the lock is gone";
+      error.pathsStillStaged = true;
+    }
+    throw error;
+  }
+  if (committed.status !== 0) {
+    git(repoRoot, ["reset", "--", ...paths]);
+    commandResult(committed, "commit");
+  }
+  return committed;
+}
+
+async function checkpoint(options) {
   const packageIds = requestedPackageIds(options);
   if (packageIds.length && (options.sessionId || (options.paths && options.paths.length))) {
     fail("USAGE", "checkpoint takes either --session <sessionId> --path <ownedPath> (leaf checkpoint) or --root <repo> --package <packageId> (bundle checkpoint), never both");
@@ -465,8 +748,7 @@ function checkpoint(options) {
   const binding = exactBinding(options);
   assertLeafOutsideWave(binding);
   const paths = authorizedPaths(binding, options.paths);
-  const message = String(options.message || "").trim();
-  if (!message || message.length > 200 || /[\r\n\0]/u.test(message)) fail("USAGE", "--message must be one line of 1..200 characters");
+  const message = commitMessage(options.message);
 
   const staged = commandResult(git(binding.repoRoot, ["diff", "--cached", "--name-only", "-z"]), "preflight");
   if (staged.length) {
@@ -475,7 +757,7 @@ function checkpoint(options) {
   const changed = commandResult(git(binding.repoRoot, ["status", "--porcelain=v1", "-z", "--", ...paths]), "preflight");
   if (!changed.length) fail("NOTHING_TO_CHECKPOINT", "none of the bound paths changed", 1);
 
-  commandResult(git(binding.repoRoot, ["add", "--", ...paths]), "stage");
+  commandResult(await gitWatched(binding.repoRoot, ["add", "--", ...paths]), "stage");
   const stagedTarget = git(binding.repoRoot, ["diff", "--cached", "--quiet", "--", ...paths]);
   if (stagedTarget.status === 0) {
     git(binding.repoRoot, ["reset", "--", ...paths]);
@@ -494,11 +776,7 @@ function checkpoint(options) {
   authorizedPaths(binding, committedPaths);
 
   const before = binding.headOid;
-  const committed = git(binding.repoRoot, ["commit", "-m", message, "--", ...paths], { timeoutMs: 120_000 });
-  if (committed.status !== 0) {
-    git(binding.repoRoot, ["reset", "--", ...paths]);
-    commandResult(committed, "commit");
-  }
+  await commitPaths(binding.repoRoot, message, paths);
   const after = commandResult(git(binding.repoRoot, ["rev-parse", "--verify", "HEAD"]), "head").trim();
   if (!after || after === before) fail("GIT_COMMIT_FAILED", "checkpoint did not advance HEAD");
   const refreshed = packageBinding.createBinding({ root: binding.repoRoot, packageId: binding.packageId,
@@ -597,11 +875,10 @@ function bundlePaths(repoRoot, packageId, headOid) {
   return [...paths];
 }
 
-function bundleCheckpoint(options, requested) {
+async function bundleCheckpoint(options, requested) {
   const packages = requested.map((value) => identifier(value, "package"));
   if (new Set(packages).size !== packages.length) fail("USAGE", "each --package may be named only once");
-  const message = String(options.message || "").trim();
-  if (!message || message.length > 200 || /[\r\n\0]/u.test(message)) fail("USAGE", "--message must be one line of 1..200 characters");
+  const message = commitMessage(options.message);
   const snapshot = repository.repositorySnapshot(options.root || process.cwd());
   const repoRoot = snapshot.repoRoot;
   const headBefore = snapshot.headOid || null;
@@ -622,7 +899,7 @@ function bundleCheckpoint(options, requested) {
   const changed = commandResult(git(repoRoot, ["status", "--porcelain=v1", "-z", "--", ...paths]), "preflight");
   if (!changed.length) fail("NOTHING_TO_CHECKPOINT", "none of the package bundle files changed", 1);
 
-  commandResult(git(repoRoot, ["add", "--", ...paths]), "stage");
+  commandResult(await gitWatched(repoRoot, ["add", "--", ...paths]), "stage");
   const committedPaths = parseZeroList(commandResult(git(repoRoot,
     ["diff", "--cached", "--name-only", "-z", "--", ...paths]), "checkpoint-paths"))
     .sort((left, right) => left.localeCompare(right, "en"));
@@ -636,11 +913,7 @@ function bundleCheckpoint(options, requested) {
     fail("BUNDLE_SCOPE", "staged paths are outside the package bundle files: " + outside.join(", "));
   }
 
-  const committed = git(repoRoot, ["commit", "-m", message, "--", ...paths], { timeoutMs: 120_000 });
-  if (committed.status !== 0) {
-    git(repoRoot, ["reset", "--", ...paths]);
-    commandResult(committed, "commit");
-  }
+  await commitPaths(repoRoot, message, paths);
   const head = commandResult(git(repoRoot, ["rev-parse", "--verify", "HEAD"]), "head").trim();
   if (!head || head === headBefore) fail("GIT_COMMIT_FAILED", "checkpoint did not advance HEAD");
   const receipt = writeGlobalReceipt(repoRoot, { operation: "bundle-checkpoint", packages,
@@ -718,7 +991,7 @@ function sealDiscardState(binding, backup) {
   fs.writeFileSync(path.join(backup.directory, "manifest.json"), JSON.stringify(backup.manifest, null, 2) + "\n", "utf8");
 }
 
-function discardWorking(options) {
+async function discardWorking(options) {
   const binding = exactBinding(options);
   const paths = authorizedPaths(binding, options.paths);
   const records = paths.map((relative) => changedPathKind(binding, relative));
@@ -732,7 +1005,7 @@ function discardWorking(options) {
   const backup = backupForDiscard(binding, records);
   try {
     for (const record of records) {
-      if (record.tracked) commandResult(git(binding.repoRoot,
+      if (record.tracked) commandResult(await gitWatched(binding.repoRoot,
         ["restore", "--source=HEAD", "--worktree", "--", record.relative]), "discard-working");
       else fs.unlinkSync(record.absolute);
     }
@@ -788,7 +1061,7 @@ function recoverDiscard(options) {
   return { operation: "recover-discard", paths, receipt: receiptPath };
 }
 
-function revertCheckpoint(options) {
+async function revertCheckpoint(options) {
   const binding = exactBinding(options);
   const source = receiptRecord(binding, options.receipt, "checkpoint").value;
   if (!source.commit || source.head !== source.commit || binding.headOid !== source.commit || currentHead(binding) !== source.commit) {
@@ -800,7 +1073,7 @@ function revertCheckpoint(options) {
   if (index.status !== 0) commandResult(index, "revert-preflight");
   const changed = commandResult(git(binding.repoRoot, ["status", "--porcelain=v1", "-z", "--", ...paths]), "revert-preflight");
   if (changed.length) fail("REVERT_WORKTREE_DIRTY", "checkpoint paths changed after commit; revert refused", 1);
-  const reverted = git(binding.repoRoot, ["revert", "--no-edit", source.commit], { timeoutMs: 120_000 });
+  const reverted = await gitWatched(binding.repoRoot, ["revert", "--no-edit", source.commit]);
   if (reverted.status !== 0) {
     git(binding.repoRoot, ["revert", "--abort"]);
     commandResult(reverted, "revert");
@@ -814,7 +1087,49 @@ function revertCheckpoint(options) {
   return { operation: "revert-checkpoint", revertedCommit: source.commit, commit: after, paths, receipt: receiptPath };
 }
 
-function integrationContext(options) {
+// The sessions an integration counts. A session that was replaced (reassigned or reopened) and has a successor is
+// history, not open work: the executor moves it there itself, and an older state that still holds it in `sessions` is
+// read the same way here, as a second safeguard (P13, E4c). Without a recorded successor it still counts as open.
+export function integrationSessions(state) {
+  const known = (sessionId) => Boolean(sessionId && (state.sessions?.[sessionId] || state.history?.sessions?.[sessionId]));
+  return Object.values(state.sessions || {}).filter((entry) =>
+    !(["reassigned", "reopened"].includes(entry?.state) && known(entry.replacedBy)));
+}
+
+// A leaf session that was prepared and never ran an agent (no run, no wave, no earlier attempt that ran one): the calling
+// session built the leaf itself, or nobody did yet. It is no open execution (Owner 07.10.2026: close judges the result, not
+// the way). The executor uses the same definition for its close.
+export function neverRan(entry) {
+  return entry?.state === "prepared" && !entry.runId && !entry.wave && !entry.failedRunId &&
+    !(Array.isArray(entry.attempts) && entry.attempts.some((attempt) => attempt?.runId));
+}
+
+// The calling session of integrate, close and plan-close: the bound package session of a worker, else the host session.
+export function callingSession(env = process.env) {
+  const value = String(env?.KEEL_PACKAGE_SESSION || env?.CLAUDE_CODE_SESSION_ID || "").trim();
+  return value || null;
+}
+
+// Nachpruefung 07.10.2026 (6): a never-run session is idle only while no session other than the calling one holds a living
+// binding on its leaf; such a binding (the step prepared by start --session included) is somebody who may still be
+// building, so the session counts as open execution. The one rule of session-scope.cjs livingBinding decides, the same the
+// guards use for the orchestrator's fix right and for Git maintenance. where: { repoRoot, harnessRoot, scope, caller }.
+export function heldByOtherSession(entry, where) {
+  const leaf = String(entry?.leaf || "").replace(/^gates\//u, "").replace(/\.md$/u, "");
+  if (!leaf || !where?.repoRoot) return null;
+  return sessionScope.livingBinding(where.repoRoot, { harnessRoot: where.harnessRoot || null,
+    exceptSession: where.caller || null, scope: where.scope || null, leaf });
+}
+
+export function idleSession(entry, where) {
+  return neverRan(entry) && !heldByOtherSession(entry, where);
+}
+
+// `allowIdle` (plan-close only): a package whose sessions all never ran an agent and that has no integration is judged by
+// its gates at HEAD alone; there is no integration checkpoint to wait for. Mixed leaves (Pruefung 07.10.2026): a session
+// that never ran is no open execution in integrate and plan-close either, exactly like in the executor's assertCloseReady;
+// it is neither required to be verified nor counted in the integration's OWNS, and close proves its gates at HEAD.
+function integrationContext(options, { allowIdle = false } = {}) {
   const snapshot = repository.repositorySnapshot(options.root || process.cwd());
   const packageId = identifier(options.packageId, "package");
   const scope = identifier(options.scope || packageId, "scope");
@@ -838,9 +1153,15 @@ function integrationContext(options) {
       owner.requestDigest !== state.originalOwnerRequestDigest || goals[0][1].trim() !== state.originalGoal) {
     fail("INTEGRATION_CONTRACT_CHANGED", "Owner contract or derived Goal changed before integration");
   }
-  const sessions = Object.values(state.sessions);
-  if (!sessions.length || sessions.some((entry) => entry.state !== "verified")) {
-    fail("INTEGRATION_SESSIONS", "all bound leaf sessions must be locally verified before integration", 1);
+  const counted = integrationSessions(state);
+  const where = { repoRoot: snapshot.repoRoot, harnessRoot: state.harnessRoot || null, scope, caller: callingSession() };
+  const sessions = counted.filter((entry) => !idleSession(entry, where));
+  const idle = allowIdle && counted.length > 0 && !state.integration && !sessions.length;
+  if (!idle && (!sessions.length || sessions.some((entry) => entry.state !== "verified"))) {
+    const held = sessions.filter((entry) => neverRan(entry)).map((entry) => entry.sessionId + " (living binding of " +
+      (heldByOtherSession(entry, where)?.sessionId || "?") + ")");
+    fail("INTEGRATION_SESSIONS", "all bound leaf sessions must be locally verified before integration" +
+      (held.length ? "; never ran but bound by another session than the calling one: " + held.join(", ") : ""), 1);
   }
   if (Object.values(state.waves).some((entry) => entry.state !== "complete")) {
     fail("INTEGRATION_WAVES", "all dispatch waves must be complete before integration", 1);
@@ -852,7 +1173,7 @@ function integrationContext(options) {
   if (!patterns.length) fail("INTEGRATION_OWNS", "verified sessions contain no OWNS paths");
   const binding = { repoRoot: snapshot.repoRoot, packageId, scope, sessionId: "integration", leaf: "integration",
     headOid: snapshot.headOid, owns: patterns };
-  return { snapshot, packageId, scope, stateFile, state, patterns, binding };
+  return { snapshot, packageId, scope, stateFile, state, patterns, binding, idle };
 }
 
 function integrationChangedPaths(context) {
@@ -972,9 +1293,10 @@ function assertIntegrationTree(context, tree, paths, constraint, commit = null) 
   }
 }
 
-export function integrationCommitTreeArgs(tree, headBefore, message) {
+// The commit text comes from a file (-F), never from the command line (D13).
+export function integrationCommitTreeArgs(tree, headBefore, messageFile) {
   const parentArgs = headBefore ? ["-p", headBefore] : [];
-  return ["commit-tree", tree, ...parentArgs, "-m", message];
+  return ["commit-tree", tree, ...parentArgs, "-F", messageFile];
 }
 
 export function integrationUpdateRefArgs(commit, headBefore) {
@@ -982,12 +1304,97 @@ export function integrationUpdateRefArgs(commit, headBefore) {
   return ["update-ref", "HEAD", commit, expectedOld];
 }
 
-function integrationCheckpoint(options) {
+// P8 (B2): the integration commit exists before the branch moves. --hold builds the commit object of the exact
+// integration path set in a temporary index (write-tree, commit-tree) and records it as a HELD prepared integration:
+// no branch, no shared index and no working-tree file changes. The executor checks that object (gate-check --at) and
+// only a green result moves the branch, through --advance <commit>. A held commit is advanced by nothing else: any
+// other call drops it and starts over, so a red check never leaves an integrated-looking branch behind.
+async function holdIntegrationCommit(context, resultConstraint, message, paths) {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "keel-integration-index-"));
+  const env = { GIT_INDEX_FILE: path.join(directory, "index") };
+  try {
+    const headBefore = context.snapshot.headOid || null;
+    commandResult(git(context.snapshot.repoRoot, headBefore ? ["read-tree", headBefore] : ["read-tree", "--empty"], { env }),
+      "integration-hold-index");
+    context.state.integration = { state: "prepared", held: true, headBefore: context.snapshot.headOid, message, paths,
+      preparedAt: new Date().toISOString(), expectedResultFile: resultConstraint?.file,
+      expectedResultDigest: resultConstraint?.digest };
+    atomicJson(context.stateFile, context.state);
+    commandResult(await gitWatched(context.snapshot.repoRoot, ["add", "--", ...paths], { env }), "integration-hold-stage");
+    if (resultConstraint) {
+      context.state.integration.expectedResultBlob = commandResult(git(context.snapshot.repoRoot,
+        ["rev-parse", "--verify", ":" + resultConstraint.file], { env }), "accepted-result-stage").trim();
+      const stagedDigest = sha256(gitBytes(context.snapshot.repoRoot,
+        ["cat-file", "blob", context.state.integration.expectedResultBlob]));
+      if (stagedDigest !== resultConstraint.digest) {
+        fail("ACCEPTED_RESULT_CHANGED", "staged result blob differs from the semantically accepted result", 1);
+      }
+    }
+    const tree = commandResult(git(context.snapshot.repoRoot, ["write-tree"], { env }), "integration-tree").trim();
+    assertIntegrationTree(context, tree, paths, resultConstraint);
+    context.state.integration.expectedTree = tree;
+    atomicJson(context.stateFile, context.state);
+    const commit = commandResult(await withMessageFile(message, (file) => gitWatched(context.snapshot.repoRoot,
+      integrationCommitTreeArgs(tree, context.state.integration.headBefore, file))), "integration-commit").trim();
+    context.state.integration.expectedCommit = commit;
+    atomicJson(context.stateFile, context.state);
+    return { operation: "integration-checkpoint", held: true, commit, tree, paths,
+      headBefore: context.state.integration.headBefore, acceptedResultDigest: resultConstraint?.digest };
+  } catch (error) {
+    context.state.integration = null;
+    atomicJson(context.stateFile, context.state);
+    throw error;
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 });
+  }
+}
+
+// --advance <commit>: the one way a held integration commit reaches the branch, after its check was green. HEAD must
+// still be the base the commit was built on, and the commit must still be exactly the recorded tree and path set.
+// The shared index then follows the new HEAD for exactly the integrated paths (their working-tree bytes are the
+// committed ones), and no working-tree file is written.
+function advanceHeldIntegration(context, options, resultConstraint) {
+  const integration = context.state.integration;
+  const wanted = String(options.advance || "");
+  if (!integration || integration.state !== "prepared" || integration.held !== true || !integration.expectedCommit ||
+      integration.expectedCommit !== wanted) {
+    fail("INTEGRATION_ADVANCE", "--advance names no held integration commit of this scope; integrate again", 1);
+  }
+  if (currentHead(context.binding) !== integration.headBefore) {
+    fail("INTEGRATION_STALE", "HEAD moved while the held integration commit was checked; the branch was not moved, integrate again", 1);
+  }
+  const tree = commandResult(git(context.snapshot.repoRoot,
+    ["rev-parse", "--verify", wanted + "^{tree}"]), "integration-advance").trim();
+  if (tree !== integration.expectedTree) fail("INTEGRATION_RECOVERY", "held integration commit no longer resolves to its exact tree", 1);
+  assertIntegrationTree(context, tree, integration.paths, resultConstraint, wanted);
+  assertCommittedResultBlob(context, wanted, resultConstraint);
+  const index = git(context.snapshot.repoRoot, ["diff", "--cached", "--quiet"]);
+  if (index.status === 1) fail("SHARED_INDEX_DIRTY", "integration refused: Git index contains staged paths");
+  if (index.status !== 0) commandResult(index, "integration-advance");
+  commandResult(git(context.snapshot.repoRoot, integrationUpdateRefArgs(wanted, integration.headBefore)), "integration-head");
+  const { held, ...rest } = integration;
+  context.state.integration = { ...rest, state: "committed", commit: wanted, committedAt: new Date().toISOString(),
+    recovered: false };
+  atomicJson(context.stateFile, context.state);
+  // The branch is moved and recorded; a failing index refresh leaves the integrated paths looking staged-backwards in
+  // `git status`, never a second commit, and the receipt says so.
+  const synced = git(context.snapshot.repoRoot, ["reset", "-q", "--", ...integration.paths]);
+  const receipt = integrationReceipt(context, wanted, integration.paths, false);
+  return synced.status === 0 ? receipt : { ...receipt, indexSynced: false };
+}
+
+async function integrationCheckpoint(options) {
   const context = integrationContext(options);
   let resultConstraint = boundIntegrationResult(context, options);
-  const message = String(options.message || "").trim();
-  if (!message || message.length > 200 || /[\r\n\0]/u.test(message)) {
-    fail("USAGE", "--message must be one line of 1..200 characters");
+  const message = commitMessage(options.message);
+  if (options.hold && options.advance) fail("USAGE", "--hold and --advance are mutually exclusive");
+  if (options.advance) return advanceHeldIntegration(context, options, resultConstraint);
+  // A held commit never moves the branch except through --advance: any other call drops it. Nothing of it was
+  // staged in the shared index, so dropping is only forgetting the record.
+  if (context.state.integration?.state === "prepared" && context.state.integration.held === true) {
+    context.state.integration = null;
+    atomicJson(context.stateFile, context.state);
+    resultConstraint = boundIntegrationResult(context, options);
   }
   if (context.state.integration?.state === "committed") {
     const committed = context.state.integration.commit;
@@ -1029,7 +1436,9 @@ function integrationCheckpoint(options) {
       atomicJson(context.stateFile, context.state);
       return integrationReceipt(context, head, context.state.integration.paths, true);
     }
-    if (context.state.integration.expectedCommit && context.state.integration.expectedTree) {
+    // With --hold an older prepared commit on the unchanged base is never advanced unchecked: it is dropped below
+    // (its staged paths leave the shared index) and the held commit is built anew.
+    if (!options.hold && context.state.integration.expectedCommit && context.state.integration.expectedTree) {
       const preparedTree = commandResult(git(context.snapshot.repoRoot,
         ["rev-parse", "--verify", context.state.integration.expectedCommit + "^{tree}"]), "integration-recovery").trim();
       if (preparedTree !== context.state.integration.expectedTree) {
@@ -1065,11 +1474,12 @@ function integrationCheckpoint(options) {
   if (resultConstraint && !paths.includes(resultConstraint.file)) {
     fail("ACCEPTED_RESULT_SCOPE", "accepted result file is not part of the exact integration paths", 1);
   }
+  if (options.hold) return holdIntegrationCommit(context, resultConstraint, message, paths);
   context.state.integration = { state: "prepared", headBefore: context.snapshot.headOid, message, paths,
     preparedAt: new Date().toISOString(), expectedResultFile: resultConstraint?.file,
     expectedResultDigest: resultConstraint?.digest };
   atomicJson(context.stateFile, context.state);
-  commandResult(git(context.snapshot.repoRoot, ["add", "--", ...paths]), "integration-stage");
+  commandResult(await gitWatched(context.snapshot.repoRoot, ["add", "--", ...paths]), "integration-stage");
   try {
     resultConstraint = boundIntegrationResult(context, options);
     if (resultConstraint) {
@@ -1092,8 +1502,8 @@ function integrationCheckpoint(options) {
   assertIntegrationTree(context, tree, paths, resultConstraint);
   context.state.integration.expectedTree = tree;
   atomicJson(context.stateFile, context.state);
-  const commit = commandResult(git(context.snapshot.repoRoot,
-    integrationCommitTreeArgs(tree, context.state.integration.headBefore, message), { timeoutMs: 120_000 }),
+  const commit = commandResult(await withMessageFile(message, (file) => gitWatched(context.snapshot.repoRoot,
+    integrationCommitTreeArgs(tree, context.state.integration.headBefore, file))),
   "integration-commit").trim();
   context.state.integration.expectedCommit = commit;
   atomicJson(context.stateFile, context.state);
@@ -1123,11 +1533,33 @@ function ledgerPathPattern(packageId) {
 // an empty EVIDENCE line swallow the following line, which masks a tampered gate
 // title. Proven by "ledger normalization stays line-local so an empty EVIDENCE
 // cannot mask the next contract line" in test/git-intent.test.js.
+//
+// There is exactly one such normalization: normalizeLedgerText of the vendored Unlazy
+// (scripts/lib/ledger-normalize.cjs), which the proof store (scripts/lib/proof-store.mjs)
+// imports to key the stored check results (P7b). It is loaded lazily, like the gate parser,
+// from the runtime next to this Harness tree. It is CommonJS, so the plain require of
+// createRequire loads it on every supported Node (a synchronous require of an ES module
+// would need Node 20.19 or 22.12).
+let ledgerNormalizeModule = null;
+
+export function loadLedgerNormalize() {
+  if (ledgerNormalizeModule) return ledgerNormalizeModule;
+  const runtime = unlazyRuntime.harnessRuntime();
+  const file = runtime ? path.join(runtime, "scripts", "lib", "ledger-normalize.cjs") : null;
+  if (!file || !fs.existsSync(file)) {
+    fail("LEDGER_NORMALIZE_MISSING", "the Unlazy ledger normalization (scripts/lib/ledger-normalize.cjs) is not installed next to the Harness; update the Harness");
+  }
+  const module = require(fs.realpathSync(file));
+  if (typeof module.normalizeLedgerText !== "function" || typeof module.PROOF_ENTRY_SCHEMA !== "string" ||
+    typeof module.PROOF_SCHEMA !== "string") {
+    fail("LEDGER_NORMALIZE_MISSING", "ledger-normalize.cjs exports no normalizeLedgerText or proof schema names");
+  }
+  ledgerNormalizeModule = module;
+  return module;
+}
+
 export function normalizedLedger(value) {
-  return String(value)
-    .replace(/\r\n?/gu, "\n")
-    .replace(/^([ \t]*-[ \t]+)\[[ xX]\]([ \t]+[^\n]+)$/gmu, "$1[ ]$2")
-    .replace(/^([^\S\n]*EVIDENCE:)[^\n]*$/gmu, "$1 <runtime-evidence>");
+  return loadLedgerNormalize().normalizeLedgerText(value);
 }
 
 function packageFiles(repoRoot, packageId) {
@@ -1391,13 +1823,14 @@ function publishedCommitsSinceIntegration(context, integrationCommit, head) {
 }
 
 function planClose(options) {
-  const context = integrationContext(options);
-  if (context.state.integration?.state !== "committed") {
+  const context = integrationContext(options, { allowIdle: true });
+  if (!context.idle && context.state.integration?.state !== "committed") {
     fail("INTEGRATION_REQUIRED", "package close requires a committed integration checkpoint", 1);
   }
-  const integrationCommit = context.state.integration.commit;
+  const integrationCommit = context.idle ? null : context.state.integration.commit;
   const head = currentHead(context.binding);
-  const publishedSince = head === integrationCommit ? [] : publishedCommitsSinceIntegration(context, integrationCommit, head);
+  const publishedSince = integrationCommit === null || head === integrationCommit ? []
+    : publishedCommitsSinceIntegration(context, integrationCommit, head);
   const packageFile = path.join(context.snapshot.repoRoot, "docs", "packages", context.packageId, "PACKAGE.md");
   const packageText = fs.readFileSync(packageFile, "utf8");
   const files = packageFiles(context.snapshot.repoRoot, context.packageId);
@@ -1506,10 +1939,7 @@ async function closureCheckpoint(options) {
   catch (error) { fail(error.code || "OWNER_OK_INVALID", error.message, error.exitCode || 2); }
   try { validateOwnerOk(ownerOk, { action: "close", target: null, head: source.head, today: todayLocal() }); }
   catch (error) { fail(error.code || "OWNER_OK_INVALID", error.message, error.exitCode || 2); }
-  const message = String(options.message || "").trim();
-  if (!message || message.length > 200 || /[\r\n\0]/u.test(message)) {
-    fail("USAGE", "--message must be one line of 1..200 characters");
-  }
+  const message = commitMessage(options.message);
   if (!/^Fulfillment:\s*(?:erfuellt|fulfilled)\b/imu.test(packageText) ||
       !/^Offen:\s*(?:nichts|nothing|none)\s*$/imu.test(packageText)) {
     fail("CLOSE_NOT_FINAL", "PACKAGE.md does not carry a closed Fulfillment/Offen claim", 1);
@@ -1612,7 +2042,7 @@ async function closureCheckpoint(options) {
   // outside the approved closure path set. write-tree/diff-tree/commit-tree/
   // update-ref writes the same commit without ever handing control to a hook,
   // and the diff-tree assertion binds the committed tree to those exact paths.
-  commandResult(git(snapshot.repoRoot, ["add", "--", ...paths]), "closure-stage");
+  commandResult(await gitWatched(snapshot.repoRoot, ["add", "--", ...paths]), "closure-stage");
   let commit;
   try {
     const tree = commandResult(git(snapshot.repoRoot, ["write-tree"]), "closure-tree").trim();
@@ -1621,8 +2051,8 @@ async function closureCheckpoint(options) {
     if (!samePathSet(changed, paths)) {
       fail("CLOSE_PATHS_CHANGED", "closure tree contains paths outside the exact package metadata set", 1);
     }
-    commit = commandResult(git(snapshot.repoRoot,
-      integrationCommitTreeArgs(tree, snapshot.headOid, message), { timeoutMs: 120_000 }), "closure-commit").trim();
+    commit = commandResult(await withMessageFile(message, (file) => gitWatched(snapshot.repoRoot,
+      integrationCommitTreeArgs(tree, snapshot.headOid, file))), "closure-commit").trim();
     commandResult(git(snapshot.repoRoot, integrationUpdateRefArgs(commit, snapshot.headOid)), "closure-head");
   } catch (error) {
     git(snapshot.repoRoot, ["reset", "--", ...paths]);
@@ -1646,12 +2076,86 @@ function explain(options) {
   };
 }
 
+// The rule root of this session: the Harness root whose rules apply (KEEL_HARNESS_ROOT, then
+// CLAUDE_PROJECT_DIR, as every guard reads it) and, without both, the Harness tree this file ships
+// in -- never the working directory, which for a worker is the very repository to be judged. An
+// agent cannot move it: KEEL_* and CLAUDE_* overrides are blocked in front of every command
+// (shell-mutation-guard ENVIRONMENT_OVERRIDE). options.ruleRoot exists for in-process callers.
+const harnessTree = path.resolve(here, "..", "..");
+
+function sessionRuleRoot(options = {}) {
+  const explicit = options && options.ruleRoot ? String(options.ruleRoot) : null;
+  return path.resolve(explicit || hookContext.ruleRoot(process.env, harnessTree));
+}
+
+// A repository is the session's own when it is the rule root itself or lies below it, the same test
+// package-amend applies to its --root (package-amend.cjs begin).
+function ownRepository(repoRoot, options) {
+  const root = sessionRuleRoot(options);
+  return repository.samePath(root, repoRoot) || repository.isPathInside(root, repoRoot);
+}
+
+// A12: release an orphaned index.lock of an own repository. Three conditions, all of them: the file
+// is 0 bytes, it is older than five minutes (mtime), and the repository is the session's own. A lock
+// with content, a younger lock or a foreign repository is refused with the reasons and nothing is
+// deleted: the lock of a running Git process must never be taken away.
+const STALE_LOCK_MIN_AGE_MS = 5 * 60 * 1000;
+
+function releaseStaleLock(options) {
+  if (!options.root) fail("USAGE", "release-stale-lock requires --root <repo>");
+  const snapshot = repository.repositorySnapshot(options.root);
+  const lockFile = path.join(snapshot.gitDir, "index.lock");
+  let info;
+  try { info = fs.lstatSync(lockFile); }
+  catch { fail("NO_STALE_LOCK", "there is no index.lock in " + snapshot.gitDir + "; nothing to release", 1); }
+  const reasons = [];
+  if (info.isSymbolicLink() || !info.isFile()) reasons.push("index.lock is not a regular file");
+  if (info.size !== 0) reasons.push("index.lock has content (" + info.size + " bytes): a running Git process holds it");
+  const ageMs = Date.now() - info.mtimeMs;
+  if (ageMs <= STALE_LOCK_MIN_AGE_MS) {
+    reasons.push("index.lock is younger than 5 minutes (" + Math.max(0, Math.round(ageMs / 1000)) + " s): a Git process may still be running");
+  }
+  if (!ownRepository(snapshot.repoRoot, options)) {
+    reasons.push("repository " + snapshot.repoRoot + " is not the session's own (rule root " + sessionRuleRoot(options) + ")");
+  }
+  if (reasons.length) fail("STALE_LOCK_REFUSED", "index.lock is not released: " + reasons.join("; "), 1);
+  // The file may have been replaced by a live holder between the check and now: the same file or none.
+  const again = fs.lstatSync(lockFile);
+  if (again.size !== 0 || again.mtimeMs !== info.mtimeMs || again.ino !== info.ino) {
+    fail("STALE_LOCK_REFUSED", "index.lock changed while it was checked; a Git process is working", 1);
+  }
+  fs.unlinkSync(lockFile);
+  return { operation: "release-stale-lock", repoRoot: snapshot.repoRoot, lock: lockFile, ageSeconds: Math.round(ageMs / 1000),
+    released: true };
+}
+
+// E1: the Owner's general OK for a project is one entry of publishProjects in
+// .claude/mutation-policy.json (agents never write that file, write-guard W4). Returns the entry as a
+// relative path when repoRoot is listed, else null; an invalid policy is fail-closed.
+function listedPublishProject(repoRoot, options) {
+  const root = sessionRuleRoot(options);
+  const loaded = publishProjects.loadPublishProjects(root);
+  if (loaded.error) {
+    fail("PUBLISH_POLICY_INVALID", ".claude/mutation-policy.json is invalid: " + loaded.error +
+      "; only the Owner repairs the policy file", 1);
+  }
+  const hit = loaded.projects.find((project) => repository.samePath(project, repoRoot));
+  return hit ? path.relative(root, hit).split(path.sep).join("/") : null;
+}
+
+function notListedMessage(repoRoot) {
+  return "repository " + repoRoot + " is not in publishProjects of .claude/mutation-policy.json (the Owner's list of projects that may be " +
+    "published without a closed package). Publish it the package way: close the package, let the Owner say OK in the chat, then " +
+    "package-executor publish --root <repo> --package <packageId> --scope <scope> --closure-receipt <closureReceipt> --owner-ok <ownerWording>";
+}
+
 function planPublish(options) {
   let repoRoot;
   let head;
   let binding = null;
-  let packageId;
-  let scope;
+  let packageId = null;
+  let scope = null;
+  let project = null;
   if (options.receipt) {
     const snapshot = repository.repositorySnapshot(options.root || process.cwd());
     const closure = globalReceiptRecord(snapshot.repoRoot, options.receipt, "closure-checkpoint").value;
@@ -1663,35 +2167,119 @@ function planPublish(options) {
     if (!scope && closure.planReceipt) {
       scope = globalReceiptRecord(snapshot.repoRoot, closure.planReceipt, "plan-close").value.scope;
     }
-  } else {
+  } else if (options.sessionId) {
     binding = exactBinding(options);
     repoRoot = binding.repoRoot;
     head = binding.headOid;
     packageId = binding.packageId;
     scope = binding.scope;
+  } else {
+    // E1: no session and no closure receipt -- allowed for a project the Owner listed.
+    const snapshot = repository.repositorySnapshot(options.root || process.cwd());
+    project = listedPublishProject(snapshot.repoRoot, options);
+    if (!project) fail("PUBLISH_PROJECT_NOT_LISTED", notListedMessage(snapshot.repoRoot), 1);
+    repoRoot = snapshot.repoRoot;
+    head = snapshot.headOid;
+    if (!head) fail("PUBLISH_NOT_CONFIGURED", "the repository has no commit to publish", 1);
   }
   const branch = commandResult(git(repoRoot, ["branch", "--show-current"]), "branch").trim();
   const remote = git(repoRoot, ["remote", "get-url", "origin"]);
   if (!branch || remote.status !== 0) fail("PUBLISH_NOT_CONFIGURED", "current branch or origin remote is missing", 1);
   commandResult(git(repoRoot, ["check-ref-format", "--branch", branch]), "branch");
   const remoteValue = String(remote.stdout).trim();
+  // The push goes to the push URL when one is configured: it is part of the plan, so a later
+  // redirection of the push target makes the plan stale.
+  const pushRemote = git(repoRoot, ["remote", "get-url", "--push", "origin"]);
+  const pushValue = pushRemote.status === 0 ? String(pushRemote.stdout).trim() : null;
   const value = { operation: "plan-publish", head, branch, remoteDigest: sha256(remoteValue),
-    packageId, scope, closureReceipt: options.receipt || null, paths: [] };
+    ...(pushValue !== null ? { pushDigest: sha256(pushValue) } : {}),
+    packageId, scope, closureReceipt: options.receipt || null, ...(project ? { projectPublish: project } : {}), paths: [] };
   const receiptPath = binding ? writeReceipt(binding, value) : writeGlobalReceipt(repoRoot, value);
+  const shown = remoteValue.replace(/:\/\/[^/@\s]+@/u, "://[credential]@");
+  if (project) {
+    return {
+      operation: "plan-publish",
+      code: "PUBLISH_READY",
+      project,
+      branch,
+      remote: shown,
+      head,
+      receipt: receiptPath,
+      next: "No Owner-OK is needed: " + project + " is in publishProjects. Publish with: node " + path.join(here, "git-intent.mjs") +
+        " publish --root " + repoRoot + " --receipt " + receiptPath +
+        ". Only the current branch goes to origin, as a fast-forward; never a force push.",
+    };
+  }
   return {
     operation: "plan-publish",
     code: "OWNER_OK_REQUIRED",
     branch,
-    remote: remoteValue.replace(/:\/\/[^/@\s]+@/u, "://[credential]@"),
+    remote: shown,
     head,
     receipt: receiptPath,
     next: "Show this exact plan to the Owner. Publish only through the package executor once the Owner says OK in the chat, whose words become the Owner-OK line; raw git push remains blocked.",
   };
 }
 
-function publish(options) {
+// The one push of this Harness: the current branch to origin, nothing else, never forced. Git itself
+// refuses a push that is not a fast-forward; that refusal is named, with the way out. The user's push
+// settings must not widen it: push.followTags would send tags and push.recurseSubmodules would push
+// submodule repositories, so both are switched off on the command line (the command line wins).
+async function pushCurrentBranch(repoRoot, branch) {
+  const result = await gitWatched(repoRoot, ["push", "--porcelain", "--no-follow-tags", "--recurse-submodules=no",
+    "origin", "HEAD:refs/heads/" + branch]);
+  if (result.status !== 0) {
+    const text = String(result.stdout || "") + "\n" + String(result.stderr || "");
+    if (/\[rejected\]|non-fast-forward|fetch first|stale info/iu.test(text)) {
+      fail("PUBLISH_NOT_FAST_FORWARD", "origin has commits that " + branch + " does not contain, so this push would not be a fast-forward and " +
+        "this Harness never forces. Fetch and merge origin/" + branch + " into " + branch + " first (the Owner can do it with git pull in the project, " +
+        "or report it under Offen:), then run plan-publish again", 1);
+    }
+    commandResult(result, "publish");
+  }
+  return result;
+}
+
+// A project plan (E1) read from the global receipts, or null. Never throws: whatever is not a valid
+// project plan falls through to the Owner-OK path with its own errors.
+function projectPublishPlan(options) {
+  try {
+    const snapshot = repository.repositorySnapshot(options.root || process.cwd());
+    const resolved = path.resolve(snapshot.repoRoot, options.receipt || "");
+    if (!options.receipt || !repository.isPathInside(globalReceiptDirectory(snapshot.repoRoot), resolved)) return null;
+    const source = globalReceiptRecord(snapshot.repoRoot, options.receipt, "plan-publish").value;
+    return source.projectPublish ? { snapshot, source } : null;
+  } catch { return null; }
+}
+
+async function publishProject(options, plan) {
+  const { snapshot, source } = plan;
+  const repoRoot = snapshot.repoRoot;
+  const project = listedPublishProject(repoRoot, options);
+  if (!project || project !== source.projectPublish) {
+    fail("PUBLISH_PROJECT_NOT_LISTED", notListedMessage(repoRoot), 1);
+  }
+  const head = commandResult(git(repoRoot, ["rev-parse", "--verify", "HEAD"]), "head").trim();
+  const branch = commandResult(git(repoRoot, ["branch", "--show-current"]), "branch").trim();
+  const remote = commandResult(git(repoRoot, ["remote", "get-url", "origin"]), "remote").trim();
+  const pushRemote = git(repoRoot, ["remote", "get-url", "--push", "origin"]);
+  const pushDigest = pushRemote.status === 0 ? sha256(String(pushRemote.stdout).trim()) : null;
+  if (source.head !== head || source.branch !== branch || source.remoteDigest !== sha256(remote) ||
+      (source.pushDigest || null) !== pushDigest) {
+    fail("PUBLISH_PLAN_STALE", "HEAD, branch or origin changed after the publish plan; run plan-publish again", 1);
+  }
+  commandResult(git(repoRoot, ["check-ref-format", "--branch", branch]), "branch");
+  await pushCurrentBranch(repoRoot, branch);
+  const receiptPath = writeGlobalReceipt(repoRoot, { operation: "publish", head, branch, packageId: null, scope: null,
+    planReceipt: options.receipt, projectPublish: project, ownerOk: null, remoteDigest: source.remoteDigest, paths: [] });
+  return { operation: "publish", project, branch, head, receipt: receiptPath, published: true };
+}
+
+async function publish(options) {
+  const projectPlan = projectPublishPlan(options);
+  if (projectPlan) return publishProject(options, projectPlan);
   if (!options.ownerOk) {
-    fail("OWNER_OK_REQUIRED", "publish requires the Owner-OK wording of this exact publish plan (--owner-ok TEXT)", 1);
+    fail("OWNER_OK_REQUIRED", "publish requires the Owner-OK wording of this exact publish plan (--owner-ok TEXT or --owner-ok-file FILE)", 1);
   }
   const snapshot = repository.repositorySnapshot(options.root || process.cwd());
   const resolvedReceipt = path.resolve(snapshot.repoRoot, options.receipt || "");
@@ -1722,9 +2310,7 @@ function publish(options) {
       source.remoteDigest !== sha256(remote)) {
     fail("PUBLISH_PLAN_STALE", "HEAD, branch or origin changed after the approved publish plan", 1);
   }
-  const result = git(repoRoot, ["push", "--porcelain", "origin", "HEAD:refs/heads/" + branch],
-    { timeoutMs: 120_000 });
-  commandResult(result, "publish");
+  await pushCurrentBranch(repoRoot, branch);
   const receiptValue = { operation: "publish", head, branch, packageId: source.packageId,
     scope: expectedScope, planReceipt: options.receipt,
     ownerOk: { action: ownerOk.action, target: ownerOk.target, date: ownerOk.date, commit: ownerOk.commit,
@@ -1732,6 +2318,113 @@ function publish(options) {
     remoteDigest: source.remoteDigest, paths: [] };
   const receiptPath = global ? writeGlobalReceipt(repoRoot, receiptValue) : writeReceipt(binding, receiptValue);
   return { operation: "publish", branch, head, receipt: receiptPath, published: true };
+}
+
+// Review notes (package P7b): results of verified checks live as Git notes of ref keel-proof, written
+// only through these two intents. The honest limit (concept 3.1): agents run under the Owner's
+// Windows account, so someone who writes check code on purpose can forge a note; the shell guard
+// therefore does not additionally close proof-note-write, it only says that the Harness itself calls it.
+const PROOF_NOTES_REF = "keel-proof";
+
+// The JSON of a note may come only from the Harness's own temp or run folders: a run folder
+// .unlazy of the repository or of the rule root, or the proof temp folder of the system temp folder.
+function proofFolders(repoRoot, options) {
+  return [path.join(repoRoot, ".unlazy"), path.join(sessionRuleRoot(options), ".unlazy"), path.join(os.tmpdir(), "keel-proof")];
+}
+
+function proofNoteSource(repoRoot, options) {
+  if (!options.file) fail("USAGE", "proof-note-write requires --file <json>");
+  const file = path.resolve(String(options.file));
+  let info;
+  try { info = fs.lstatSync(file); }
+  catch { fail("PROOF_NOTE_FILE", "note file does not exist: " + file, 1); }
+  if (info.isSymbolicLink() || !info.isFile() || (typeof info.nlink === "number" && info.nlink !== 1)) {
+    fail("PROOF_NOTE_FILE", "note file must be a single-link regular file", 1);
+  }
+  const folders = proofFolders(repoRoot, options);
+  if (!folders.some((folder) => repository.isPathInside(folder, fs.realpathSync(file)))) {
+    fail("PROOF_NOTE_LOCATION", "note file must lie in the Harness temp or run folder (" + folders.join(", ") + ")", 1);
+  }
+  const text = fs.readFileSync(file, "utf8");
+  // Two forms: one JSON document of schema keel-proof.v1 (old), or one compact JSON entry per
+  // line, each of schema keel-proof.v2-entry (what the proof store writes; lines survive the
+  // cat_sort_uniq merge of proof-notes-sync). Both schema names are the proof store's own.
+  const { PROOF_SCHEMA, PROOF_ENTRY_SCHEMA: entrySchema } = loadLedgerNormalize();
+  const objectWith = (value, schema) => value && typeof value === "object" && !Array.isArray(value) && value.schema === schema;
+  let value;
+  try { value = JSON.parse(text); }
+  catch {
+    const lines = text.split(/\r?\n/u).filter((line) => line.trim());
+    const parsed = lines.map((line) => { try { return JSON.parse(line); } catch { return undefined; } });
+    if (!lines.length || parsed.some((item) => item === undefined)) fail("PROOF_NOTE_JSON", "note file is not valid JSON", 1);
+    if (!parsed.every((item) => objectWith(item, entrySchema))) {
+      fail("PROOF_NOTE_SCHEMA", "every line of the note must be an object with schema \"" + entrySchema + "\"", 1);
+    }
+    return text;
+  }
+  if (!objectWith(value, PROOF_SCHEMA) && !objectWith(value, entrySchema)) {
+    fail("PROOF_NOTE_SCHEMA", "note JSON must be an object with schema \"" + PROOF_SCHEMA + "\" or lines of \"" + entrySchema + "\"", 1);
+  }
+  return text;
+}
+
+async function proofNoteWrite(options) {
+  if (!options.root) fail("USAGE", "proof-note-write requires --root <repo>");
+  const commit = String(options.commit || "");
+  if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/u.test(commit)) fail("USAGE", "--commit must be a full commit id");
+  const snapshot = repository.repositorySnapshot(options.root);
+  const resolved = git(snapshot.repoRoot, ["rev-parse", "--verify", "--quiet", commit + "^{commit}"]);
+  if (resolved.status !== 0 || String(resolved.stdout).trim() !== commit) {
+    fail("PROOF_NOTE_COMMIT", "--commit is not a commit of this repository: " + commit, 1);
+  }
+  const text = proofNoteSource(snapshot.repoRoot, options);
+  // The bytes that were validated are the bytes Git stores: they go through a private copy.
+  await withMessageFile(text.replace(/\n+$/u, ""), async (copy) => {
+    const result = await gitWatched(snapshot.repoRoot, ["notes", "--ref", PROOF_NOTES_REF, "add", "-f", "-F", copy, commit]);
+    commandResult(result, "proof-note-write");
+  });
+  return { operation: "proof-note-write", commit, notesRef: "refs/notes/" + PROOF_NOTES_REF, bytes: Buffer.byteLength(text) };
+}
+
+// Fetch the notes of origin into a private ref, merge them with cat_sort_uniq (no note of either
+// side is lost), push the merged ref without force. A missing ref on origin is no error.
+async function proofNotesSync(options) {
+  if (!options.root) fail("USAGE", "proof-notes-sync requires --root <repo>");
+  const snapshot = repository.repositorySnapshot(options.root);
+  const repoRoot = snapshot.repoRoot;
+  const local = "refs/notes/" + PROOF_NOTES_REF;
+  const remoteRef = "refs/notes/" + PROOF_NOTES_REF + "-remote";
+  if (git(repoRoot, ["remote", "get-url", "origin"]).status !== 0) {
+    fail("PROOF_NOTES_NO_ORIGIN", "the repository has no origin remote; nothing to synchronize", 1);
+  }
+  let fetched = true;
+  const fetchResult = await gitWatched(repoRoot, ["fetch", "origin", "+" + local + ":" + remoteRef]);
+  if (fetchResult.status !== 0) {
+    if (/couldn't find remote ref/iu.test(String(fetchResult.stderr || ""))) fetched = false;
+    else commandResult(fetchResult, "proof-notes-fetch");
+  }
+  let merged = false;
+  if (fetched) {
+    const mergeResult = await gitWatched(repoRoot, ["notes", "--ref", PROOF_NOTES_REF, "merge", "-s", "cat_sort_uniq", remoteRef]);
+    if (mergeResult.status !== 0) {
+      await gitWatched(repoRoot, ["notes", "--ref", PROOF_NOTES_REF, "merge", "--abort"]);
+      commandResult(mergeResult, "proof-notes-merge");
+    }
+    merged = true;
+  }
+  let pushed = false;
+  if (git(repoRoot, ["rev-parse", "--verify", "--quiet", local]).status === 0) {
+    const pushResult = await gitWatched(repoRoot, ["push", "--porcelain", "origin", local]);
+    if (pushResult.status !== 0) {
+      const text = String(pushResult.stdout || "") + "\n" + String(pushResult.stderr || "");
+      if (/\[rejected\]|non-fast-forward|fetch first|stale info/iu.test(text)) {
+        fail("PROOF_NOTES_PUSH_REJECTED", "origin changed its notes while they were merged; run proof-notes-sync again", 1);
+      }
+      commandResult(pushResult, "proof-notes-push");
+    }
+    pushed = true;
+  }
+  return { operation: "proof-notes-sync", notesRef: local, fetched, merged, pushed };
 }
 
 export const CANONICAL_INTENTS = Object.freeze([
@@ -1750,15 +2443,21 @@ export const CANONICAL_INTENTS = Object.freeze([
   { name: "revert-checkpoint", mutates: true,
     syntax: "revert-checkpoint --session <sessionId> --receipt <checkpointReceipt>" },
   { name: "integration-checkpoint", mutates: true,
-    syntax: "integration-checkpoint --root <repo> --package <packageId> --scope <scope> --message <message> [--expected-result-file <path> --expected-result-digest <sha256>]" },
+    syntax: "integration-checkpoint --root <repo> --package <packageId> --scope <scope> --message <message> [--expected-result-file <path> --expected-result-digest <sha256>] [--hold | --advance <heldCommit>]" },
   { name: "plan-close", mutates: true,
     syntax: "plan-close --root <repo> --package <packageId> --scope <scope>" },
   { name: "closure-checkpoint", mutates: true,
     syntax: "closure-checkpoint --root <repo> --package <packageId> --receipt <closePlanReceipt> --message <message> [--unlazy-root <dir>] [--writeback-receipt <witnessReceipt> ...]" },
   { name: "plan-publish", mutates: true,
-    syntax: "plan-publish --root <repo> (--session <sessionId> | --receipt <closureReceipt>)" },
+    syntax: "plan-publish --root <repo> [--session <sessionId> | --receipt <closureReceipt>]" },
   { name: "publish", mutates: true,
-    syntax: "publish --root <repo> --receipt <publishPlanReceipt> --owner-ok <ownerWording> [--session <sessionId>]" },
+    syntax: "publish --root <repo> --receipt <publishPlanReceipt> [--owner-ok <ownerWording> | --owner-ok-file <file>] [--session <sessionId>]" },
+  { name: "release-stale-lock", mutates: true,
+    syntax: "release-stale-lock --root <repo>" },
+  { name: "proof-note-write", mutates: true,
+    syntax: "proof-note-write --root <repo> --commit <sha> --file <json>" },
+  { name: "proof-notes-sync", mutates: true,
+    syntax: "proof-notes-sync --root <repo>" },
   { name: "explain", mutates: false,
     syntax: "explain --operation <unsupportedGitOperation>" },
 ]);
@@ -1772,7 +2471,30 @@ export function canonicalHelp() {
   ].join("\n") + "\n";
 }
 
-export async function runIntent(options) {
+// D13: a commit text and an Owner quote may be any length and carry line breaks and quotation marks; they
+// reach this tool as a file (--message-file, --owner-ok-file) so no command line limit bends them. The file must
+// lie in the session temp folder or in a run folder (.unlazy) of the repository or of the rule root; a file of the
+// working tree is never read as a commit text or an Owner quote.
+function withTextFiles(options) {
+  if (options.messageFile === undefined && options.ownerOkFile === undefined) return options;
+  const resolved = { ...options };
+  const root = options.root || process.cwd();
+  const folders = ownerWordingFolders(root, sessionRuleRoot(options));
+  try {
+    if (options.messageFile !== undefined) {
+      if (options.message !== undefined) fail("USAGE", "use either --message or --message-file, not both");
+      resolved.message = readTextFromFolders(options.messageFile, folders, "--message-file");
+    }
+    if (options.ownerOkFile !== undefined) {
+      if (options.ownerOk !== undefined) fail("USAGE", "use either --owner-ok or --owner-ok-file, not both");
+      resolved.ownerOk = readOwnerWordingFile(options.ownerOkFile, folders);
+    }
+  } catch (error) { fail(error.code || "USAGE", error.message, error.exitCode || 2); }
+  return resolved;
+}
+
+export async function runIntent(input) {
+  const options = withTextFiles(input);
   if (options.intent !== "checkpoint" && Array.isArray(options.packageIds) && options.packageIds.length > 1) {
     fail("USAGE", "only the checkpoint bundle mode accepts more than one --package");
   }
@@ -1788,8 +2510,11 @@ export async function runIntent(options) {
   if (options.intent === "closure-checkpoint") return closureCheckpoint(options);
   if (options.intent === "plan-publish") return planPublish(options);
   if (options.intent === "publish") return publish(options);
+  if (options.intent === "release-stale-lock") return releaseStaleLock(options);
+  if (options.intent === "proof-note-write") return proofNoteWrite(options);
+  if (options.intent === "proof-notes-sync") return proofNotesSync(options);
   if (options.intent === "explain") return explain(options);
-  fail("USAGE", "intent must be inspect, checkpoint, unstage, recover-index, discard-working, recover-discard, revert-checkpoint, integration-checkpoint, plan-close, closure-checkpoint, plan-publish, publish, or explain");
+  fail("USAGE", "intent must be inspect, checkpoint, unstage, recover-index, discard-working, recover-discard, revert-checkpoint, integration-checkpoint, plan-close, closure-checkpoint, plan-publish, publish, release-stale-lock, proof-note-write, proof-notes-sync, or explain");
 }
 
 async function main() {

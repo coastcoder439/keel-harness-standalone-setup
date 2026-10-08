@@ -14,6 +14,11 @@ const GUARD_TARGET = ".codex/apply-patch-guard.cjs";
 // Inline deny transport (identical in every PreToolUse guard; guard-parity E5): a missing
 // sibling module must never turn a denial into an allow. Under the Codex hook runner a
 // JSON deny with exit 0 survives Windows PowerShell, which maps a native exit 2 to 1.
+// Every other error of the hook process denies the same way (guard-parity A9, fail closed): the
+// two handlers are armed here, before any helper module loads, so a failure while loading, a throw
+// inside the decision and an unhandled rejection all end in block(). Only the hook main program is
+// armed; a library require and --self-test are not. KEEL_GUARD_TEST_THROW forces an error for the
+// tests: "1" throws at load, "reject" leaves an unhandled rejection, "late" throws after the input ended.
 function block(message) {
   const reason = String(message).trim() || GUARD_TARGET + ": tool denied";
   if (process.env.KEEL_HARNESS_ROOT && process.env.KEEL_HOOK_TARGET === GUARD_TARGET) {
@@ -25,16 +30,33 @@ function block(message) {
   fs.writeSync(2, reason + "\n");
   process.exit(2);
 }
+if (require.main === module && !process.argv.some((arg) => arg === "--self-test" || arg === "--selbsttest")) {
+  const failClosed = (error) => {
+    try {
+      block(GUARD_TARGET.replace(/^.*\//u, "").replace(/\.c?js$/u, "") + ": internal error; tool blocked: " +
+        ((error && error.message) || error));
+    } catch { process.exit(2); }
+  };
+  process.on("uncaughtException", failClosed);
+  process.on("unhandledRejection", failClosed);
+  const forced = process.env.KEEL_GUARD_TEST_THROW;
+  if (forced === "reject") Promise.reject(new Error("forced test error"));
+  if (forced === "late") process.stdin.once("end", () => { throw new Error("forced test error"); });
+  if (forced === "1") throw new Error("forced test error");
+}
+// End inline deny transport
 
 let writeGuard;
 let packageGate;
 let hookContext;
 let ownerHandoff;
+let guardRoutes;
 try {
   writeGuard = require("../.claude/write-guard.js");
   packageGate = require("../.claude/paket-gate.js");
   hookContext = require("../harness-core/guards/hook-context.cjs");
   ownerHandoff = require("../harness-core/guards/owner-handoff.cjs");
+  guardRoutes = require("../harness-core/guards/guard-routes.cjs");
 } catch (error) {
   if (require.main === module) block("codex-apply-patch-guard: dependency load failed; patch blocked: " + error.message);
   throw error;
@@ -134,7 +156,10 @@ function inspect(payload, projectRoot, dependencies = {}) {
   try { entries = parsePatch(payload?.tool_input?.command); }
   catch (error) { return { allowed: false, code: "INVALID_PATCH", detail: error.message }; }
 
-  const deps = dependencies.writeDeps || writeGuard.echteDeps(projectRoot);
+  // The transcript of the session (transcript_path of the hook input) is the host's alone (HOST_TRANSCRIPT_WRITE).
+  const transcriptPath = payload?.transcript_path ? hookContext.msysPath(String(payload.transcript_path)) : "";
+  const baseDeps = dependencies.writeDeps || writeGuard.echteDeps(projectRoot, { transcriptPath });
+  const deps = transcriptPath ? { ...baseDeps, transkriptPfad: transcriptPath } : baseDeps;
   const inspected = [];
   // Codex writes relative patch paths from its session directory, which is the leaf's own
   // repository for a package worker, not the Harness root (guard-parity E8).
@@ -162,6 +187,34 @@ function inspect(payload, projectRoot, dependencies = {}) {
   return { allowed: true, code: "PATCH_AUTHORIZED", targets: inspected };
 }
 
+// The decision of one hook call (package P5, C12): null lets the patch pass, a string is the denial text. The hook main
+// program and the Codex hook runner (in its own process, no second Node) both use it.
+function hookDecision(payload) {
+  let root;
+  let decision;
+  try { root = hookContext.ruleRoot(); decision = inspect(payload, root); }
+  catch (error) { return "codex-apply-patch-guard: policy evaluation failed; patch blocked: " + error.message; }
+  if (decision.allowed) return null;
+  let template;
+  try {
+    // The write policy decides per W rule; outside OWNS is agent work, so it names the
+    // package route and carries no command.
+    if (decision.code === "WRITE_POLICY") {
+      const base = payload?.cwd ? path.resolve(String(payload.cwd)) : root;
+      template = writeGuard.vorlage(decision.detail, patchOperations(payload?.tool_input?.command, base), writeGuard.echteDeps(root));
+    } else {
+      template = ownerHandoff.handoffText({ what: "Codex-Patch ausserhalb des gebundenen Paket-Leaf (" + decision.code + ")",
+        route: (decision.next || packageGate.exactNextStep(root)) + "; Leaf-Bindung ueber package-executor next/start" });
+    }
+  } catch (error) {
+    template = "\n(Owner-Vorlage nicht erzeugbar: " + error.message + ")";
+  }
+  return "codex-apply-patch-guard: " + decision.code + ": " + decision.detail +
+    (decision.target ? "\nTARGET: " + decision.target : "") +
+    (decision.next ? "\nNEXT: " + decision.next : "") + "\n" +
+    guardRoutes.referenceLine("apply-patch-guard", decision.code) + "\n" + template;
+}
+
 function main() {
   let input = "";
   process.stdin.setEncoding("utf8");
@@ -172,31 +225,11 @@ function main() {
     catch {
       return block("codex-apply-patch-guard: invalid hook JSON");
     }
-    const root = hookContext.ruleRoot();
-    let decision;
-    try { decision = inspect(payload, root); }
-    catch (error) { return block("codex-apply-patch-guard: policy evaluation failed; patch blocked: " + error.message); }
-    if (decision.allowed) return process.exit(0);
-    let template;
-    try {
-      // The write policy decides per W rule; outside OWNS is agent work, so it names the
-      // package route and carries no command.
-      if (decision.code === "WRITE_POLICY") {
-        const base = payload?.cwd ? path.resolve(String(payload.cwd)) : root;
-        template = writeGuard.vorlage(decision.detail, patchOperations(payload?.tool_input?.command, base), writeGuard.echteDeps(root));
-      } else {
-        template = ownerHandoff.handoffText({ what: "Codex-Patch ausserhalb des gebundenen Paket-Leaf (" + decision.code + ")",
-          route: (decision.next || packageGate.exactNextStep(root)) + "; Leaf-Bindung ueber package-executor next/start" });
-      }
-    } catch (error) {
-      template = "\n(Owner-Vorlage nicht erzeugbar: " + error.message + ")";
-    }
-    return block("codex-apply-patch-guard: " + decision.code + ": " + decision.detail +
-      (decision.target ? "\nTARGET: " + decision.target : "") +
-      (decision.next ? "\nNEXT: " + decision.next : "") + "\n" + template);
+    const denial = hookDecision(payload);
+    return denial === null ? process.exit(0) : block(denial);
   });
 }
 
 if (require.main === module) main();
-module.exports = { inspect, parsePatch, patchOperations };
+module.exports = { hookDecision, inspect, parsePatch, patchOperations };
 

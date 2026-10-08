@@ -7,7 +7,7 @@
 // zwei Ebenen tief (user-projects/<projekt>/<feature>). Eine flache Suche
 // uebersieht sie und meldet "alles gesichert", waehrend dort ungepushte
 // Arbeit liegt -- gemessen am 01.08.2026: flach 5 Repos, rekursiv 7.
-const { execSync } = require('child_process');
+const { spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -56,9 +56,16 @@ function leseSchreibwurzeln(projektWurzel) {
 // Ohne Netz bleibt der Sync-Stand ehrlich unbekannt -- er wird NICHT geraten.
 const NUR_LOKAL = process.argv.includes('--lokal');
 
-function sh(cmd, cwd) {
-  try { return execSync(cmd, { cwd, encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim(); }
-  catch (e) { return null; }
+// P20, D14: jeder Git-Aufruf ohne Shell (vorher execSync: cmd.exe, dann Wrapper cmd\git.exe, dann git.exe = drei Prozesse),
+// mit dem echten git.exe und --no-optional-locks bei lesenden Aufrufen (der Helfer entscheidet beides). Ohne Helfer: "git".
+let gitBinary = null;
+try { gitBinary = require('../harness-core/git/git-binary.cjs'); } catch (e) { /* einfaches git */ }
+
+function git(args, cwd) {
+  const optionen = { cwd, encoding: 'utf8', shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] };
+  const antwort = gitBinary ? gitBinary.gitSync(args, optionen) : spawnSync('git', args, optionen);
+  if (antwort.error || antwort.status !== 0) return null;
+  return String(antwort.stdout || '').trim();
 }
 
 function isRepo(dir) {
@@ -89,8 +96,8 @@ function repoInfo(dir, label) {
     return `  ${label}\n      Lokales Git   : NEIN (kein .git -- nicht versioniert!)`;
   const mutter = worktreeVon(dir);
   if (mutter) {
-    const zweig = sh('git rev-parse --abbrev-ref HEAD', dir) || '?';
-    const kopf = sh('git rev-parse HEAD', dir) || '';
+    const zweig = git(['rev-parse', '--abbrev-ref', 'HEAD'], dir) || '?';
+    const kopf = git(['rev-parse', 'HEAD'], dir) || '';
     const u = ungesichertZaehlen(dir);
 
     // NICHT behaupten, ein Worktree brauche keine Sicherung -- das MESSEN.
@@ -98,9 +105,9 @@ function repoInfo(dir, label) {
     // Server steckt, ist die gefaehrlichste Stelle im ganzen Baum: die Arbeit
     // sieht vorhanden aus und haengt an nichts. Genau deshalb steht hier eine
     // Messung und kein beruhigender Satz.
-    const inFern = (sh(`git branch -r --contains ${kopf}`, mutter) || '')
+    const inFern = (git(['branch', '-r', '--contains', kopf], mutter) || '')
       .split('\n').map((s) => s.trim()).filter(Boolean);
-    const inNah = (sh(`git branch --contains ${kopf}`, mutter) || '')
+    const inNah = (git(['branch', '--contains', kopf], mutter) || '')
       .split('\n').map((s) => s.replace(/^\*\s*/, '').trim()).filter(Boolean);
 
     let lage;
@@ -116,9 +123,9 @@ function repoInfo(dir, label) {
       `      Ungesichert   : ${u.dateien} Datei(en) im Arbeitsbaum`,
     ].join('\n');
   }
-  const branch = sh('git rev-parse --abbrev-ref HEAD', dir) || '?';
-  const commits = sh('git rev-list --count HEAD', dir) || '0';
-  const remoteUrl = sh('git remote get-url origin', dir);
+  const branch = git(['rev-parse', '--abbrev-ref', 'HEAD'], dir) || '?';
+  const commits = git(['rev-list', '--count', 'HEAD'], dir) || '0';
+  const remoteUrl = git(['remote', 'get-url', 'origin'], dir);
   const ghRepo = remoteUrl
     ? remoteUrl.replace(/.*github\.com[:/]/, '').replace(/\.git$/, '')
     : null;
@@ -130,15 +137,15 @@ function repoInfo(dir, label) {
     // Git) sagt, ob seit dem letzten Abgleich etwas liegengeblieben ist. Ob
     // jemand ANDERES seither gepusht hat, weiss man ohne Abfrage nicht -- und
     // genau das steht dann auch da, statt "synchron" zu behaupten.
-    const localHash = sh('git rev-parse HEAD', dir);
-    const bekannteFerne = sh(`git rev-parse refs/remotes/origin/${branch}`, dir);
+    const localHash = git(['rev-parse', 'HEAD'], dir);
+    const bekannteFerne = git(['rev-parse', `refs/remotes/origin/${branch}`], dir);
     if (!bekannteFerne) sync = `Branch "${branch}" ohne bekannten Fernstand (nicht abgefragt)`;
     else if (bekannteFerne === localHash) sync = 'synchron zum zuletzt bekannten Fernstand (nicht abgefragt)';
     else sync = 'NICHT synchron -- lokale Commits noch nicht gepusht (Fernstand nicht abgefragt)';
   }
   else {
-    const localHash = sh('git rev-parse HEAD', dir);
-    const ls = sh(`git ls-remote origin refs/heads/${branch}`, dir);
+    const localHash = git(['rev-parse', 'HEAD'], dir);
+    const ls = git(['ls-remote', 'origin', `refs/heads/${branch}`], dir);
     const remoteHash = ls ? ls.split(/\s/)[0] : '';
     if (!remoteHash) sync = `Branch "${branch}" NICHT auf GitHub (noch nie gepusht)`;
     else if (remoteHash === localHash) sync = 'synchron -- alles gepusht';
@@ -223,7 +230,7 @@ function ordnerAufloesen(dir, eintrag) {
 }
 
 function ungesichertZaehlen(dir) {
-  const roh = sh('git status --porcelain', dir);
+  const roh = git(['status', '--porcelain'], dir);
   const zeilen = roh ? roh.split('\n').filter(Boolean) : [];
   let dateien = 0;
   const ordner = [];

@@ -1,10 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import os from 'node:os';
 import { spawn } from 'node:child_process';
 import { sidecarRoot, resolveVoiceRoot, discoverVoiceInstallation, isolatedVoiceEnvironment, loopbackAddress, voiceboxBinary, voiceboxDataDir } from './config.mjs';
 import { readProfile } from './system-profile.mjs';
 import { recommendSettings } from './system-recommendations.mjs';
+import { hasRoomFor } from '../harness-core/system/ram-floor.mjs';
 
 export { voiceboxDataDir, voiceboxModelsDir, voiceboxDatabase } from './config.mjs';
 
@@ -87,8 +87,9 @@ export function profileServiceEnvironment(env = process.env) {
 // created in the Voicebox app and the ones the dashboard creates are the same rows.
 // P34 (B244, P23-N17): every message says what is wrong and what to do, and the service is the Stimmendienst -- the
 // messages reach the owner through POST /api/accountability/voice/service ("Stimmendienst starten").
-// P34-R2: `memory` names the threshold the start checks (at least 3 GB free, os.freemem() below), not an amount
-// that is missing -- with 2.5 GB free, 0.5 GB are missing, not 3.
+// P34-R2: `memory` names the threshold the start checks, not an amount that is missing. P13 (C2): the threshold is no
+// longer a fixed 3 GB but the one free-RAM floor of the whole harness (harness-core/system/ram-floor.mjs, default 4 GB,
+// 2 to 4 GB in the system profile); the start needs that much free memory.
 // harness-dashboard-repair Plan-Schritt 28 (Gate V2), gemessen 28.09.2026: gleich nach einem Stopp brauchte
 // voicebox-server.exe (ein 513-MB-Einzelpaket, das sich beim Start entpackt) zweimal ueber 60 s, bevor es die erste
 // Logzeile schrieb (profile-process.json: peakCommitMiB 2,2 bzw. 16,4), ein kalter Start sonst 20-21 s. Der Start bei
@@ -97,7 +98,7 @@ export const START_DEADLINE_MS = 150000;
 export const PROFILE_SERVICE_MESSAGES = {
   occupied: 'Der Port des Stimmendienstes ist von einem anderen oder hängenden Programm belegt; es wurde nichts beendet. Beende es oder starte den Rechner neu, dann starte erneut.',
   platform: 'Der Stimmendienst startet nur unter Windows. Auf diesem Rechner spricht die Cloud-Stimme.',
-  memory: 'Zu wenig freier Arbeitsspeicher: Der Stimmendienst braucht zum Start mindestens 3 GB. Schließe andere Programme und starte ihn erneut.',
+  memory: 'Zu wenig freier Arbeitsspeicher: Der Stimmendienst startet nur, wenn mindestens der eingestellte freie Arbeitsspeicher übrig ist (Vorgabe 4 GB). Schließe andere Programme und starte ihn erneut.',
   notInstalled: 'Der Stimmendienst ist nicht installiert. Installiere ihn unter Einstellungen → Stimme → Voicebox → „Installieren“.',
   python: 'Für den Start des Stimmendienstes fehlt Python. Die Schritte stehen unter Einstellungen → Stimme → Voicebox → „Python einrichten“.',
   timeout: 'Der Stimmendienst wurde in 150 Sekunden nicht bereit und ist wieder beendet. Starte ihn erneut; Einzelheiten stehen in runtime/voice/profile-server.log.',
@@ -109,7 +110,7 @@ export async function startProfileService({ env = process.env, signal } = {}) {
   if (existing.available) return { base: existing.base, child: null, owned: false, stop: async () => {} };
   if (existing.occupied) throw new Error(PROFILE_SERVICE_MESSAGES.occupied);
   if (process.platform !== 'win32') throw new Error(PROFILE_SERVICE_MESSAGES.platform);
-  if (os.freemem() < 3 * 1024 ** 3) throw new Error(PROFILE_SERVICE_MESSAGES.memory);
+  if (!hasRoomFor(0, undefined, env)) throw new Error(PROFILE_SERVICE_MESSAGES.memory);
   const binary = voiceboxBinary(env);
   await fs.access(binary).catch(() => { throw new Error(PROFILE_SERVICE_MESSAGES.notInstalled); });
   const voiceRoot = resolveVoiceRoot(env);

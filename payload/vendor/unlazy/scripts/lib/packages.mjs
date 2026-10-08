@@ -158,7 +158,12 @@ export function listActiveScopes(repoRoot, options = {}) {
   return records;
 }
 
+// verifiedRoot: true says the caller already bound options.root as the real repository root in THIS run (the
+// package CLI resolves its --root once, the dashboard before it measures), so the two Git processes of
+// assertRepositoryRoot are skipped; the path is still canonicalised. It is a per-call flag, never remembered: the
+// next call asks Git again.
 function repositoryForOptions(options) {
+  if (options.verifiedRoot === true && typeof options.root === "string") return realpathSync(options.root);
   if (options.root !== undefined && options.root !== null) return assertRepositoryRoot(options.root);
   return resolveRepositoryRoot(options.cwd || process.cwd());
 }
@@ -273,12 +278,8 @@ export function resolvePackageTarget(options = {}) {
 // resolving each package separately repeated the Git call and the directory
 // listing per package (quadratic in the package count).
 export function resolveAllPackageTargets(options = {}) {
-  // verifiedRoot: the caller already bound this exact directory as the real
-  // repository root (the dashboard does so before it measures), so the Git
-  // process of assertRepositoryRoot is skipped; the path is still canonicalised.
-  const repoRoot = options.verifiedRoot === true && typeof options.root === "string"
-    ? realpathSync(options.root)
-    : repositoryForOptions(options);
+  // verifiedRoot: see repositoryForOptions.
+  const repoRoot = repositoryForOptions(options);
   const repoKey = validateRepoKey(options.repoKey || ".");
   const records = listActiveScopes(repoRoot, { assertRoot: false, includeInvalid: true });
   assertUniquePackageBindings(records);

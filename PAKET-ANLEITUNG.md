@@ -64,11 +64,11 @@ gegen den tatsächlichen Bestand und macht einen Trockenlauf des Installers gege
 Wegwerf-Repo. Gemessener Erfolg (Rückgabewert 0), letzte Zeile:
 
 ```
-SETUP_REPO_SUITE_OK payload=611 version=1.3.20
+SETUP_REPO_SUITE_OK payload=644 version=1.4.0
 ```
 
 Wer nur den Installer-Teil will: `node <PAKET>\checks\fresh-clone.mjs` endet bei
-gesundem Klon mit `SETUP_REPO_OK payload=611 version=1.3.20 dry-run=ok`.
+gesundem Klon mit `SETUP_REPO_OK payload=644 version=1.4.0 dry-run=ok`.
 
 `manifest.json` ist die Stückliste — jede Datei mit Herkunft, Größe und Prüfsumme;
 unter `excluded` steht, was **absichtlich** fehlt (unten als Tabelle).
@@ -106,7 +106,7 @@ node C:\w\keel-harness-standalone-setup\install.mjs --target C:\w\mein-harness -
 Gemessene Ausgabe an einem frischen Ziel (Rückgabewert 0, geschrieben wird nichts):
 
 ```
-keel harness distribution: command=install state=planned version=1.3.20 dry-run=true managed=615
+keel harness distribution: command=install state=planned version=1.4.0 dry-run=true managed=644
 ```
 
 `managed=` ist die Zahl der Dateien, die der Installer im Ziel verwalten würde —
@@ -123,7 +123,7 @@ node <PAKET>\install.mjs --target <HARNESS>
 Gemessener Erfolg:
 
 ```
-keel harness distribution: command=install state=installed version=1.3.20 promotions=595 managed=615 rollback=available
+keel harness distribution: command=install state=installed version=1.4.0 promotions=595 managed=644 rollback=available
 ```
 
 Der Lauf ist transaktional und wiederholbar — ein zweiter Aufruf schreibt nichts
@@ -141,9 +141,9 @@ dieselbe Wiederherstellung aus dem Journal.
 
 Der Harness ist **nicht** Claude-Code-only. Installiert werden immer beide Wege:
 
-- `CLAUDE.md` und `AGENTS.md` im Ziel sind **bytegleich**. Es gibt genau einen
-  Hostvertrag; Claude Code liest ihn als `CLAUDE.md`, Codex als `AGENTS.md`. Kein
-  zweiter Stand, der auseinanderlaufen könnte — ein Prüfer misst die Gleichheit.
+- `AGENTS.md` im Ziel ist der eine Hostvertrag; `CLAUDE.md` enthält nur den Import
+  `@AGENTS.md`. Codex liest `AGENTS.md` direkt, Claude Code über den Import. Kein
+  zweiter Stand, der auseinanderlaufen könnte — ein Prüfer misst den Import.
 - `.codex/` bringt die Codex-Seite der Wächter mit: `.codex/hooks.json` verdrahtet sie,
   `.codex/config.toml` trägt die Projekteinstellung, die Guards liegen als `.cjs` daneben.
   `.codex/hooks.json` wird beim Installieren **gemischt**, nicht überschrieben — eine
@@ -253,20 +253,20 @@ Die Tabelle ist aus `manifest.json` erzeugt; die Zahlen sind gezählt, nicht ges
 <!-- ERZEUGT:was-installiert-wird (node checks/anleitung-sync.mjs --nachziehen; nicht von Hand ändern) -->
 | Teil | Was es ist | Dateien |
 |---|---|---|
-| `.claude/` | Claude-Code-Ausstattung: Wächter-Hooks, Dauer-Regeln, Befehle, Skills | 54 |
+| `.claude/` | Claude-Code-Ausstattung: Wächter-Hooks, Dauer-Regeln, Befehle, Skills | 55 |
 | `.agents/` | Providerneutrale Regeln und Skills — dieselben Inhalte für Claude und Codex | 13 |
 | `.codex/` | Codex-Route: Hooks, Guards, `config.toml` | 5 |
-| `harness-core/` | Paket-Executor, Owner- und Paket-Bindungen, endliche Git-Schnittstelle | 41 |
-| `vendor/` | Eingebettete Unlazy-Fassung: Paket-Bundles, Skripte, Tests | 440 |
+| `harness-core/` | Paket-Executor, Owner- und Paket-Bindungen, endliche Git-Schnittstelle | 62 |
+| `vendor/` | Eingebettete Unlazy-Fassung: Paket-Bundles, Skripte, Tests | 449 |
 | `dashboard/` | React-Dashboard: Starter, geprüftes Laufzeit-Archiv, Runtime-Check | 5 |
-| `checks/` | Installierte Prüfungen der Auslieferung (`checks/run-all.mjs` und Einzelprüfer) | 6 |
+| `checks/` | Installierte Prüfungen der Auslieferung (`checks/run-all.mjs` und Einzelprüfer) | 8 |
 | `docs/` | Doku, Instanzdatei mit `[AUSFUELLEN]`-Marke, Paketvorlage | 12 |
 | `templates/` | Vorlagen für Paket-Bundles (OWNER, GATES) | 3 |
 | `roles/` | Fachrollen-Profile des Assistenten (Accountability, Coaching, Ernährung, Training, Wohlbefinden, Business, Projekt) | 8 |
 | `voice/` | Sprachlaufzeit als Sidecar: Piper (Sprachausgabe), Whisper (Mikrofon), Voicebox-Profildienst, Prüfskript `voice/check.mjs`; Starter `dashboard/serve.mjs --voice` | 13 |
 | `licenses/` | Lizenztexte übernommener Fremdteile | 6 |
 | (Wurzel) | Wurzeldateien: `.gitignore`, `.keel-harness.json`, `AGENTS.md`, `CLAUDE.md`, `package.json` | 5 |
-| **Summe** | | **611** |
+| **Summe** | | **644** |
 <!-- /ERZEUGT:was-installiert-wird -->
 
 ## Was bewusst fehlt
@@ -302,14 +302,14 @@ woraus die Payload in deinen Händen entstanden ist.
 <!-- ERZEUGT:stand-der-auslieferung (node checks/anleitung-sync.mjs --nachziehen; nicht von Hand ändern) -->
 | Feld | Wert |
 |---|---|
-| Produkt und Version | `keel-harness` 1.3.20 |
-| Payload-Posten | 611 |
-| Baum-Fingerabdruck | `220efd7736eba2b2...` |
+| Produkt und Version | `keel-harness` 1.4.0 |
+| Payload-Posten | 644 |
+| Baum-Fingerabdruck | `f754cd474c25cd7f...` |
 | Quelle | `harness-lab`, Unterbaum `test-harness/standalone` |
-| Quell-Commit | `8990bd66431f902157c9b703031d7698c34ae34a` |
-| Standalone frisch gebaut | ja |
+| Quell-Commit | `1a0f86dec76756d334dde5af479f99d4458f2ef4` |
+| Standalone frisch gebaut | nein |
 | Ungesicherte Dateien der Quelle beim Bau | Arbeitsbaum 0, `test-harness/standalone` 0 |
-| Erzeugt am | 2026-10-05T17:44:06.564Z |
+| Erzeugt am | 2026-10-08T12:39:21.108Z |
 <!-- /ERZEUGT:stand-der-auslieferung -->
 
 ---

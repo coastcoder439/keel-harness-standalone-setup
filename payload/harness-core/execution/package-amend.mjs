@@ -58,7 +58,7 @@ function text(command, result) {
   return "restored " + result.packageId + " from " + result.receipt;
 }
 
-function main() {
+async function main() {
   const argv = process.argv.slice(2);
   if (argv.includes("--help") || argv.includes("-h")) {
     process.stdout.write(USAGE);
@@ -66,7 +66,7 @@ function main() {
   }
   try {
     const options = parse(argv);
-    const result = amend[options.command](options);
+    const result = await amend[options.command](options);
     process.stdout.write((options.json ? JSON.stringify(result) : text(options.command, result)) + "\n");
   } catch (error) {
     const message = String(error.message || error).replace(/\r?\n/gu, " ");

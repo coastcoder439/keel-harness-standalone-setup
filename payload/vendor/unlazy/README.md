@@ -124,7 +124,7 @@ Parent re-verification should use the same declared shell and required toolchain
 
 ## Security boundary
 
-Approval records live under `~/.unlazy/approved` by default. `UNLAZY_APPROVAL_DIR` may select another owner-private real directory, but its canonical target must remain outside the checked repository. Symlinked stores and linked, replaced, or non-private records fail closed. Each record is specific to the absolute ledger and gate, exact `CHECK:` and `EXPECT:`, resolved `CWD:` and shell, timeout, output and regex limits, regex worker limits, platform, and full inherited `PATH`. Editing any bound input requires approval again.
+Approval records live under `~/.unlazy/approved` by default. `UNLAZY_APPROVAL_DIR` may select another owner-private real directory, but its canonical target must remain outside the checked repository. Symlinked stores and linked, replaced, or non-private records fail closed. Each record is specific to the absolute ledger and gate, exact `CHECK:` and `EXPECT:`, resolved `CWD:` and shell, regex limits (a time or output limit is not part of the key, and approvals made with one stay valid), regex worker limits, platform, and full inherited `PATH`. In a package run (`--package`) the ledger and `CWD:` are bound by their path inside the repository instead, so an approval also holds in another checkout of the same repository (for example the clean copy of `--at`); approvals recorded earlier with the absolute path stay valid. Editing any bound input requires approval again. `--at <commit>` checks a commit in a clean copy and reuses a stored green result for the same code state; see [references/gates.md](references/gates.md).
 
 Approval is consent, not a sandbox. Approval storage is a canonical, owner-private directory outside the repository; records are accepted only as single-link private regular files. Approval does not hash called scripts, fixtures, dependencies, or other transitive inputs, and `--status`/Stop do not revalidate old evidence. Reinspect changed dependencies and run `--reverify`; see [SECURITY.md](SECURITY.md) for the bounded digest pattern when user-designed dependency identity is needed. Checks run with ambient filesystem, environment, credential, and network access. Scopes and ownership leases coordinate cooperating processes but do not restrict what a process can read or write.
 
@@ -178,13 +178,13 @@ Close re-verifies runnable gates and refuses stale evidence, incomplete plan or
 contract coverage, open dispatch, handoff/owner decisions, and contradictory
 conclusion prose.
 
-## Legacy migration window
+## Legacy migration path
 
 Product discovery never reads flat `docs/packages/<id>.md`, repository-root
 ledgers, or fach state under `.unlazy/`. `package-migrate.mjs` is the only
 supported flat-package cutover path. Explicit `--legacy` diagnostics remain
-temporarily available for inspection only and are scheduled for removal on
-2026-10-31; they are never an automatic fallback.
+available for inspection only, with no removal date; they are never an
+automatic fallback.
 
 ## Optional Claude Code Stop hook
 

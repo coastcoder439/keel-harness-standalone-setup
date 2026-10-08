@@ -21,8 +21,9 @@ description: Sichert genau den verifizierten Stand des gebundenen Arbeitspakets 
 6. Eine Veroeffentlichung beginnt erst nach dem Package-Close. Der Owner sagt sein OK im
    Chat; danach laeuft genau ein Befehl:
    `package-executor.mjs publish --harness-root <HARNESS_ROOT> --root <REPO> --package <ID> --scope <SCOPE> --closure-receipt <CLOSURE_RECEIPT> --owner-ok "<WORTLAUT>" --json`.
-   Er plant den Push, zeigt Repo, Branch, HEAD und Remote und legt die Owner-OK-Zeile im
-   Publish-Beleg ab. Ohne `--owner-ok` bricht er ab; direkter `git-intent publish` ist
+   Er plant den Push, zeigt Repo, Branch, HEAD und Remote und legt den Owner-OK-Eintrag im
+   Publish-Beleg ab (das Zitat der Owner-Nachricht, nie eine Satzform; Mehrzeiliges über
+   `--owner-ok-file <DATEI>`). Ohne `--owner-ok` oder `--owner-ok-file` bricht er ab; direkter `git-intent publish` ist
    kein Bedienweg.
 7. Berichte Receipt, Commit und lokalen Reverify-Stand. Ein Commit oder Provider-Erfolg
    ersetzt weder Evidence noch Fulfillment des unveraenderlichen Owner-Auftrags.

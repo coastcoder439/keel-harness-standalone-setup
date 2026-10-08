@@ -5,7 +5,7 @@ import { linkSync, mkdtempSync, mkdirSync, readFileSync, rmSync, symlinkSync, wr
 import { execFile } from "node:child_process";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { emitTestCounts, SkippedTest, skipTest } from "./helpers/test-counts.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -281,6 +281,50 @@ test("recovery: a failed native launch can be abandoned without a fabricated han
   } finally { s.cleanup(); }
 });
 
+test("discard: a wave in which no leaf started is removed and its id is free again at once, without a handoff", async () => {
+  const s = sandbox();
+  try {
+    s.write(".unlazy/api/GATES.md", "# Gates\n\n- [x] G1: complete\n  EVIDENCE: checked by test\n");
+    await run([...base("open"), "--leaf", "leaf-a", "--leaf", "leaf-b"], { cwd: s.dir });
+    const discarded = await run([...base("discard"), "--reason", "no agent could start"], { cwd: s.dir });
+    assert(discarded.code === 0, discarded.out);
+    assertHas(discarded.out, "DISCARDED ready-1");
+    const state = JSON.parse(s.read(".unlazy/api/dispatch.json"));
+    assert(!state.waves["ready-1"], "the discarded wave stayed in the dispatch state: " + JSON.stringify(state));
+    assertHas(s.read(".unlazy/api/status.log"), "dispatch ready-1 discarded: no agent could start");
+    const status = await runScript(GATE_CHECK, ["--scope", "api", "--status"], { cwd: s.dir });
+    assert(!status.out.includes("dispatch:ready-1"), "a discarded wave still counts: " + status.out);
+    assert(!status.out.includes("HANDOFF REQUIRED"), "a discarded wave left a handoff: " + status.out);
+    const again = await run([...base("open"), "--leaf", "leaf-a"], { cwd: s.dir });
+    assert(again.code === 0, "the same wave id must be free after discard: " + again.out);
+    // An abandoned wave without any start (left by an older executor) can be discarded as well.
+    await run([...base("abandon"), "--reason", "older failed start"], { cwd: s.dir });
+    const old = await run([...base("discard"), "--reason", "clean up the older failed start"], { cwd: s.dir });
+    assert(old.code === 0, old.out);
+  } finally { s.cleanup(); }
+});
+
+test("discard: a wave in which a leaf started is refused and points to recover", async () => {
+  const s = sandbox();
+  try {
+    await run([...base("open"), "--leaf", "leaf-a", "--leaf", "leaf-b"], { cwd: s.dir });
+    await run([...base("start"), "--leaf", "leaf-a", "--handle", "codex:a"], { cwd: s.dir });
+    let refused = await run([...base("discard"), "--reason", "try to drop a started wave"], { cwd: s.dir });
+    assert(refused.code === 2, "discard of a started wave must be refused: " + refused.out);
+    assertHas(refused.out, "recover");
+    await run([...base("abandon"), "--reason", "host rejected the second launch"], { cwd: s.dir });
+    refused = await run([...base("discard"), "--reason", "try again after abandon"], { cwd: s.dir });
+    assert(refused.code === 2, "discard of an abandoned wave with a start must be refused: " + refused.out);
+    assertHas(refused.out, "recover");
+    const state = JSON.parse(s.read(".unlazy/api/dispatch.json"));
+    assert(state.waves["ready-1"].state === "abandoned", JSON.stringify(state));
+    const missing = await run([...base("discard"), "--leaf", "leaf-a", "--reason", "x"], { cwd: s.dir });
+    assert(missing.code === 2, missing.out);
+    const noReason = await run(base("discard"), { cwd: s.dir });
+    assert(noReason.code === 2 && noReason.out.includes("discard requires --reason"), noReason.out);
+  } finally { s.cleanup(); }
+});
+
 test("hook: an abandoned wave does not re-block a new session", async () => {
   const s = sandbox();
   try {
@@ -365,6 +409,55 @@ test("hook: loop-guard release retains mixed abandonment handoff ids", async () 
     assertHas(result.out, "dispatch:ready-1");
     assert(!result.out.includes("private reason"), result.out);
   } finally { s.cleanup(); }
+});
+
+test("hook: the six-block release is visible: open items in the message and a marker in the runtime folder (P4 F2)", async () => {
+  const s = sandbox();
+  try {
+    s.write(".unlazy/api/GATES.md", "# Gates\n\n- [ ] G1: unfinished\n  EVIDENCE: pending\n- [ ] G2: also open\n  EVIDENCE: pending\n");
+    const stdin = JSON.stringify({ cwd: s.dir, session_id: "visible-release" });
+    for (let index = 0; index < 6; index++) {
+      const blocked = await runScript(STOP_HOOK, ["--scope", "api"], { cwd: s.dir, stdin });
+      assertHas(blocked.out, '"decision":"block"');
+    }
+    let marker = null;
+    try { marker = s.read(".unlazy/api/stop-released.json"); } catch { /* none yet */ }
+    assert(marker === null, "no marker may exist while the hook still blocks");
+    const released = await runScript(STOP_HOOK, ["--scope", "api"], { cwd: s.dir, stdin });
+    assert(released.code === 0 && !released.out.includes('"decision":"block"'), released.out);
+    assertHas(released.out, "releasing after 6 blocks");
+    assertHas(released.out, "RELEASED WITH OPEN CHECKS");
+    assertHas(released.out, ":G1");
+    assertHas(released.out, ":G2");
+    assertHas(released.out, ".unlazy/api/stop-released.json");
+    const record = JSON.parse(s.read(".unlazy/api/stop-released.json"));
+    assert(record.schema === 1 && record.event === "stop-released-with-open-items", JSON.stringify(record));
+    assert(record.releases === 1 && record.openCount === 2 && record.open.length === 2, JSON.stringify(record));
+    assert(record.blocks === 7 && record.maxBlocks === 6 && record.scope === "api", JSON.stringify(record));
+    assert(/^[a-f0-9]{24}$/.test(record.session) && !JSON.stringify(record).includes("visible-release"), "the marker names the session by hash only");
+    const again = await runScript(STOP_HOOK, ["--scope", "api"], { cwd: s.dir, stdin });
+    assertHas(again.out, "RELEASED WITH OPEN CHECKS");
+    assert(JSON.parse(s.read(".unlazy/api/stop-released.json")).releases === 2, "the marker counts every release");
+  } finally { s.cleanup(); }
+});
+
+test("hook: loaded by an adapter (embedded marker) it starts nothing; runStopHook returns the decision without exiting", async () => {
+  const s = sandbox();
+  try {
+    s.write(".unlazy/api/GATES.md", "# Gates\n\n- [ ] G1: unfinished\n  EVIDENCE: pending\n");
+    globalThis[Symbol.for("keel.unlazy.stop-hook.embedded")] = true;
+    const hook = await import(pathToFileURL(STOP_HOOK).href);
+    assert(hook.MAX_BLOCKS === 6 && typeof hook.runStopHook === "function", "exports missing");
+    const blocked = await hook.runStopHook({ args: ["--legacy", "--scope", "api"], input: JSON.stringify({ cwd: s.dir, session_id: "embedded" }), cwd: s.dir });
+    assert(blocked.exitCode === 0 && JSON.parse(blocked.stdout).decision === "block", JSON.stringify(blocked));
+    const active = await hook.runStopHook({ args: ["--legacy", "--scope", "api"], input: JSON.stringify({ cwd: s.dir, session_id: "embedded", stop_hook_active: true }), cwd: s.dir });
+    assert(active.exitCode === 0 && active.stdout === "", JSON.stringify(active));
+    const garbage = await hook.runStopHook({ args: ["--legacy"], input: "{{", cwd: s.dir });
+    assert(garbage.exitCode === 0 && garbage.stdout === "", JSON.stringify(garbage));
+  } finally {
+    delete globalThis[Symbol.for("keel.unlazy.stop-hook.embedded")];
+    s.cleanup();
+  }
 });
 
 test("hook: malformed sibling session entries are discarded without fail-open", async () => {

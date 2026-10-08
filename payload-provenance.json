@@ -3,24 +3,24 @@
   "source": {
     "repository": "harness-lab",
     "standalonePath": "test-harness/standalone",
-    "commit": "8990bd66431f902157c9b703031d7698c34ae34a",
+    "commit": "1a0f86dec76756d334dde5af479f99d4458f2ef4",
     "workingTreeDirtyFiles": 0,
     "standaloneSubtreeDirtyFiles": 0,
-    "freshStandaloneBuild": true
+    "freshStandaloneBuild": false
   },
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.3.20",
+    "version": "1.4.0",
     "updateSource": {
       "repository": "https://github.com/coastcoder439/keel-harness-standalone-setup",
       "branch": "main"
     }
   },
   "payload": {
-    "fileCount": 611,
-    "treeSha256": "220efd7736eba2b28862a2194e882d81de55e2e99e0497770fdcbac14becf7c4"
+    "fileCount": 644,
+    "treeSha256": "f754cd474c25cd7ff6b141317455016230cfff3e4a85a5e73181af9fade5dfe4"
   },
-  "manifestSha256": "885f23c95a4c19a3c2146481d6f610ca9b2a2979858d01b2df4c2af30c48848f",
-  "builtAt": "2026-10-05T17:44:06.564Z"
+  "manifestSha256": "172e60c5e9fed11f993d8a92be248419c81720c38bd06be6a1153f5a9bf45fd1",
+  "builtAt": "2026-10-08T12:39:21.108Z"
 }
