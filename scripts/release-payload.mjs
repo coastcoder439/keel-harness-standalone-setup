@@ -74,9 +74,12 @@ const nurPlan = argv.includes("--dry-run");
 
 const schritte = [
   {
-    name: "1/3  Payload aus dem Quell-HEAD neu bauen (frisch, Quelle muss sauber sein)",
+    // Owner 08.10.2026: kein zweiter Bau mehr. Das Produkt-Release baut die Payload im Release-Klon frisch und
+    // prueft sie dort mit einer Frischinstallation; der Dashboard-Bau ist nicht bytegleich wiederholbar (Next
+    // erzeugt je Bau Zufallsschluessel). Uebernommen wird der eingecheckte, gepruefte Stand aus sauberer Quelle.
+    name: "1/3  Payload aus dem eingecheckten Quell-HEAD uebernehmen (Quelle muss sauber sein)",
     datei: "scripts/build-payload.mjs",
-    args: ["--source", quelle, "--build", "--require-clean"],
+    args: ["--source", quelle, "--require-clean"],
     timeoutMs: 40 * 60_000,
   },
   {

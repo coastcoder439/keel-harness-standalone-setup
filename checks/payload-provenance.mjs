@@ -158,8 +158,8 @@ pruefe("ausschluss-liste", excluded.length > 0 && excluded.every((e) => e?.sourc
 const commit = String(provenance.source?.commit ?? "");
 ausliefern("quell-commit", /^[0-9a-f]{40}$/u.test(commit),
   "Quell-Commit ist kein voller Git-Hash: " + commit);
-ausliefern("frisch-gebaut", provenance.source?.freshStandaloneBuild === true,
-  "freshStandaloneBuild=" + provenance.source?.freshStandaloneBuild + " -- die Payload stammt aus dem eingecheckten Stand, nicht aus einem frischen Bau (`--build`)");
+// Kein Zwang zum zweiten Bau mehr (Owner 08.10.2026): die Payload stammt aus dem eingecheckten Stand, den das
+// Produkt-Release frisch gebaut und per Frischinstallation geprueft hat. freshStandaloneBuild bleibt nur Angabe.
 ausliefern("quelle-sauber-standalone", provenance.source?.standaloneSubtreeDirtyFiles === 0,
   "test-harness/standalone hatte beim Bau " + provenance.source?.standaloneSubtreeDirtyFiles + " ungesicherte Datei(en)");
 ausliefern("quelle-sauber-arbeitsbaum", provenance.source?.workingTreeDirtyFiles === 0,
