@@ -94,7 +94,7 @@ Läuft von selbst. Der installierte SessionStart-Hook `.claude/onboarding-start.
 schickt beim Start einer Session in `<HARNESS>` den Befehl `/onboarding`, solange
 `docs/harness-instance.md` dort noch die Pflicht-Marke `[AUSFUELLEN]` enthält. Die
 Prozedur steht in `.claude/commands/onboarding.md`; der gemeinsame Hostvertrag
-(`CLAUDE.md`/`AGENTS.md`, bytegleich) bleibt unverändert — installationsspezifische
+(`AGENTS.md`, von `CLAUDE.md` per `@AGENTS.md` importiert) bleibt unverändert — installationsspezifische
 Werte besitzen genau diese eine Instanzdatei.
 
 ---
@@ -115,7 +115,7 @@ Fingerabdruck jedes Laufs stehen in `payload-provenance.json`.
   jeder Prüfer und jedes Skript dieses Repos bricht unter älterem Node mit
   `NODE_TOO_OLD` ab, bevor irgendetwas geschrieben wird.
 - Claude Code nur für den Agenten-Weg; von Hand geht es ohne. Die Codex-Route
-  (`AGENTS.md` bytegleich zu `CLAUDE.md`, `.codex/`-Hooks) wird immer mitinstalliert.
+  (`AGENTS.md`, von `CLAUDE.md` importiert, `.codex/`-Hooks) wird immer mitinstalliert.
 
 ## Prüfen
 
