@@ -88,12 +88,8 @@ const schritte = [
     args: ["--nachziehen"],
     timeoutMs: 5 * 60_000,
   },
-  {
-    name: "3/3  Alle Pruefer streng + Frischinstallation + installierte Pruefungen",
-    datei: "checks/run-all.mjs",
-    args: ["--release", "--installed-checks", "--target", wegwerf],
-    timeoutMs: 60 * 60_000,
-  },
+  // Owner 08.10.2026: keine dritte Pruefschicht im Setup-Repo. Das Produkt-Release hat den Stand mit dem vollen
+  // Nachweis und einer Frischinstallation im Release-Klon geprueft; `node checks/run-all.mjs` bleibt von Hand aufrufbar.
 ];
 
 process.stdout.write("release-payload -- Node " + gemessen.running + "\n");
