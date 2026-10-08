@@ -262,7 +262,7 @@ const AUSGABE = [
 const PFLICHT_WORTE = [
   { wort: "AGENTS.md", grund: "M13 -- die Codex-Route gehoert zum Produkt und muss in der Anleitung stehen" },
   { wort: ".codex/", grund: "M13 -- die installierten Codex-Hooks muessen benannt sein" },
-  { wort: "bytegleich", grund: "M13 -- CLAUDE.md und AGENTS.md sind bytegleich; die Zusage wird unten gemessen" },
+  { wort: "@AGENTS.md", grund: "M13/D3 -- AGENTS.md ist die eine Quelle, CLAUDE.md importiert sie; die Zusage wird unten gemessen" },
   { wort: "subst", grund: "L3 -- der MAX_PATH-Ausweg unter Windows muss dastehen" },
   { wort: "PowerShell", grund: "L3 -- die Windows-Form der Befehle muss dastehen" },
   { wort: "nicht verifiziert", grund: "L2 -- der macOS-Weg darf nicht als geprueft erscheinen" },
@@ -442,10 +442,10 @@ function claudeGleichAgents() {
   const claude = join(repoRoot, "payload", "CLAUDE.md");
   const agents = join(repoRoot, "payload", "AGENTS.md");
   if (!existsSync(claude) || !existsSync(agents)) return "payload/CLAUDE.md oder payload/AGENTS.md fehlt";
-  const a = readFileSync(claude);
-  const b = readFileSync(agents);
-  return a.equals(b) ? null : "payload/CLAUDE.md (" + a.length + " Bytes) und payload/AGENTS.md (" + b.length +
-    " Bytes) sind NICHT bytegleich -- die Anleitung sagt das Gegenteil";
+  // D3 (Harness 1.4.0): AGENTS.md ist die einzige Quelle, CLAUDE.md enthaelt nur den Import `@AGENTS.md`.
+  const a = readFileSync(claude, "utf8");
+  return /^@AGENTS\.md\s*$/mu.test(a) ? null :
+    "payload/CLAUDE.md importiert payload/AGENTS.md nicht (@AGENTS.md) -- die Anleitung sagt das Gegenteil";
 }
 
 // ---------------------------------------------------------------------------
