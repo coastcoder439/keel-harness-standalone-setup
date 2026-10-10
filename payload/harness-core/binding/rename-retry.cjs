@@ -3,7 +3,7 @@
 // The one rename-with-retry of the Harness tree (P15, E4d). A short-lived handle of another process (virus
 // scanner, indexer, file watcher) makes a Windows rename fail with EPERM/EBUSY/EACCES. Retry up to 6 attempts,
 // then rethrow the original error; other codes and platforms fail at once.
-// node:fs only, so the guard hooks that load runtime-scopes.cjs can use it without pulling in anything else.
+// node:fs only, so the hooks that load runtime-scopes.cjs can use it without pulling in anything else.
 // package-bootstrap.cjs re-exports it; there is no second copy in harness-core (the Unlazy tree keeps its own
 // in scripts/lib/package-lifecycle.mjs because the vendored tree must not depend on the Harness).
 

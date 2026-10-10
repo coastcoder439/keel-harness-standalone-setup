@@ -323,13 +323,26 @@ function textMentionsPlugin(text) {
   return REGISTRATION_NEEDLES.some((needle) => lower.includes(needle));
 }
 
+// Ein Eintrag in enabledPlugins mit dem Wert false ist ausdrücklich deaktiviert: das Plugin lädt dort nicht und gilt
+// nicht als registriert. Alles andere im Text zählt wie bisher.
+function withoutDisabledPlugins(text) {
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === "object" && parsed.enabledPlugins && typeof parsed.enabledPlugins === "object" && !Array.isArray(parsed.enabledPlugins)) {
+      const enabled = Object.fromEntries(Object.entries(parsed.enabledPlugins).filter(([, value]) => value !== false));
+      return JSON.stringify({ ...parsed, enabledPlugins: enabled });
+    }
+  } catch { /* kein JSON: der Text wird wie er ist geprüft */ }
+  return text;
+}
+
 function scanForRegistration(files) {
   const hits = [];
   for (const file of files) {
     if (!existsSync(file)) continue;
     let text;
     try { text = readFileSync(file, "utf8"); } catch { continue; }
-    if (textMentionsPlugin(text)) hits.push(file);
+    if (textMentionsPlugin(withoutDisabledPlugins(text))) hits.push(file);
   }
   return hits;
 }

@@ -116,7 +116,7 @@ export function orchestratorReason({ harnessRoot, sessionId, env = process.env, 
 }
 
 // The packages a session orchestrates (P4 D1): the session that planned or runs a package writes the evidence
-// and design notes of exactly that package directly (paket-gate, package-bootstrap.cjs
+// and design notes of exactly that package directly (package-bootstrap.cjs
 // authorizeOrchestratorWrite reads this list). Bounded; the oldest entries leave first.
 const MAX_PACKAGES = 64;
 

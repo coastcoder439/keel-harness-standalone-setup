@@ -24,7 +24,7 @@ const slash = (value) => String(value).replaceAll("\\", "/");
 
 /**
  * Where the copy of one step lives: inside the ignored runtime folder of the repository, named by a hash of the session.
- * Not under executor/: the write guard (A21 HARNESS_STATE_WRITE) blocks every write below .unlazy/<scope>/executor/, and the
+ * Not under executor/: below .unlazy/<scope>/executor/ lies the executor state, which is not for the agent, and the
  * agent has to write in its copy. The baseline of the step stays under executor/ (executor state, not for the agent).
  */
 export function stepCopyPath(repoRoot, scope, sessionId) {

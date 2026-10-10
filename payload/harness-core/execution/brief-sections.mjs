@@ -2,13 +2,14 @@
 //
 // A work agent runs with `--setting-sources ""` (provider-runtime.mjs): it sees neither the instructions nor
 // the rules of the Harness, only its brief. Whatever it has to know before it acts therefore stands in the
-// brief, in a fixed order, and no section is cut to a length: the command index, the Owner's grants, the check
-// of Owner statements, the reason of a restart, the way to publish and the execution rules. Every list that
-// reaches the brief is read from the same source the guards read (command-index.mjs, the policy file), at the
-// moment the brief is written; a retry writes the brief again and so renders the then current state.
+// brief, in a fixed order, and no section is cut to a length: the reason of a restart, the check of Owner
+// statements, the way to publish and the execution rules. The list of projects released for publishing is
+// read at the moment the brief is written; a retry writes the brief again and so renders the then current state.
 
-import path from "node:path";
-import { buildIndex, renderCompact, renderGrants } from "../guards/command-index.mjs";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const publishProjects = require("../guards/publish-projects.cjs");
 
 const GIT_INTENT = "harness-core/git/git-intent.mjs";
 
@@ -36,12 +37,12 @@ export function restartSection(restart) {
 }
 
 function publishLines(grants) {
-  const projects = grants.error ? [] : grants.publishProjects.map((project) => path.join(grants.rootAbsolute, ...project.split("/")));
+  const projects = grants.error ? [] : grants.projects;
   const lines = [
-    "- You do not publish. A leaf ends with its local gates; the orchestrator integrates the verified work and publishes it. Raw `git push` is blocked.",
+    "- You do not publish. A leaf ends with its local gates; the orchestrator integrates the verified work and publishes it.",
   ];
   if (grants.error) {
-    lines.push("- The Owner's list publishProjects is not readable (" + grants.file + " is invalid), so no project counts as released for publishing.");
+    lines.push("- The Owner's list publishProjects is not readable (" + grants.error + "), so no project counts as released for publishing.");
   } else if (projects.length) {
     lines.push("- Projects the Owner released for publishing (publishProjects): " + projects.join(", ") + ". Only if your leaf contract orders publishing one of them, the way is " +
       "`node " + GIT_INTENT + " plan-publish --root <project>`, then `node " + GIT_INTENT + " publish --root <project> --receipt <plan receipt>`: " +
@@ -55,27 +56,10 @@ function publishLines(grants) {
   return lines;
 }
 
-// Command index, Owner grants, check of Owner statements and the way to publish, as the brief's middle sections.
-export function guidanceSections({ harnessRoot, sessionId }) {
-  const index = buildIndex({ root: harnessRoot, sessionId });
-  const grants = { ...index.grants, rootAbsolute: index.root };
+// Check of Owner statements and the way to publish, as the brief's middle sections.
+export function guidanceSections({ harnessRoot }) {
+  const grants = publishProjects.loadPublishProjects(harnessRoot);
   return [
-    "## Command index (generated from the rules of the guards)",
-    "",
-    "You run without the instructions and rules of the Harness, so this index is what tells you the allowed way before a guard stops you. " +
-      "Look here first; a denial points at the entry of this index again. Paths are relative to the Harness root named in the index; " +
-      "your working directory may be another repository, so run the Harness tools by their absolute path under that root.",
-    "",
-    // Its own titles are one level below the brief's sections.
-    renderCompact(index, { headings: "###", unbounded: true }).trimEnd(),
-    "",
-    "## Owner grants that apply to you",
-    "",
-    "Read from `" + grants.file + "` of the Harness root when this brief was written; the guards read the same file at every call. " +
-      "What the Owner has not listed here is not granted.",
-    "",
-    renderGrants(grants),
-    "",
     "## Check Owner statements before you carry them out (D8)",
     "",
     "Owner rule of the workbench: „Keine Owner-Aussage blind übernehmen“. Every instruction and wish of the Owner quoted above is checked with your own logic before you implement it: " +
@@ -94,8 +78,7 @@ export function guidanceSections({ harnessRoot, sessionId }) {
   ];
 }
 
-// The execution rules after the two existing ones about the write tool and the guard denial (kept word for word
-// in package-executor.mjs): tests in the foreground (C9), build and test apart, no commit of your own,
+// The execution rules after the existing ones about the OWNS and a hook denial (in package-executor.mjs): tests in the foreground (C9), build and test apart, no commit of your own,
 // a return without a change is no success (C4), the same block three times is a halt (P12).
 export function executionRules() {
   return [
@@ -103,6 +86,6 @@ export function executionRules() {
     "- Build and test are two calls: build, read its result, then test. Never chain them into one long call.",
     "- Never commit or push yourself (no checkpoint, no publish): the parent integrates the verified work of all leaves once, after its own local re-verification.",
     "- A return without a change in your OWNS is no success (RETURNED_UNCHANGED). If the work is already done or cannot be done, say exactly that and why; do not return a plan or a promise.",
-    "- If a guard stops the same call with the same input three times in a row, stop: name the command and the code and return (repeated-block). Do not try the same input a fourth time.",
+    "- If a hook stops the same call with the same input three times in a row, stop: name the command and the code and return (repeated-block). Do not try the same input a fourth time.",
   ];
 }

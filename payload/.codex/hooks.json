@@ -49,54 +49,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node -e \"let p=require('path'),f=require('fs'),d=process.cwd();while(!f.existsSync(p.join(d,'.keel-harness.json'))){let n=p.dirname(d);if(n===d)throw Error('Keel Harness root not found');d=n}process.env.KEEL_HOOK_TARGET=process.argv[1];require(p.join(d,'.codex/hook-runner.cjs'))\" \".claude/git-intent-guard.js\"",
+            "command": "node -e \"let p=require('path'),f=require('fs'),d=process.cwd();while(!f.existsSync(p.join(d,'.keel-harness.json'))){let n=p.dirname(d);if(n===d)throw Error('Keel Harness root not found');d=n}process.env.KEEL_HOOK_TARGET=process.argv[1];require(p.join(d,'.codex/hook-runner.cjs'))\" \".claude/github-delete-guard.js\"",
             "timeout": 10,
-            "statusMessage": "Git-Intent statt Befehlsroulette"
-          },
-          {
-            "type": "command",
-            "command": "node -e \"let p=require('path'),f=require('fs'),d=process.cwd();while(!f.existsSync(p.join(d,'.keel-harness.json'))){let n=p.dirname(d);if(n===d)throw Error('Keel Harness root not found');d=n}process.env.KEEL_HOOK_TARGET=process.argv[1];require(p.join(d,'.codex/hook-runner.cjs'))\" \".claude/shell-mutation-guard.js\"",
-            "timeout": 10,
-            "statusMessage": "Endliche Shell-Mutationsgrenze"
-          },
-          {
-            "type": "command",
-            "command": "node -e \"let p=require('path'),f=require('fs'),d=process.cwd();while(!f.existsSync(p.join(d,'.keel-harness.json'))){let n=p.dirname(d);if(n===d)throw Error('Keel Harness root not found');d=n}process.env.KEEL_HOOK_TARGET=process.argv[1];require(p.join(d,'.codex/hook-runner.cjs'))\" \".claude/danger-guard.js\"",
-            "timeout": 10,
-            "statusMessage": "Nicht-Git-Zerstoerung pruefen"
-          }
-        ]
-      },
-      {
-        "matcher": "^apply_patch$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"let p=require('path'),f=require('fs'),d=process.cwd();while(!f.existsSync(p.join(d,'.keel-harness.json'))){let n=p.dirname(d);if(n===d)throw Error('Keel Harness root not found');d=n}process.env.KEEL_HOOK_TARGET=process.argv[1];require(p.join(d,'.codex/hook-runner.cjs'))\" \".codex/apply-patch-guard.cjs\"",
-            "timeout": 10,
-            "statusMessage": "Alle Patch-Ziele gegen Ablage und Leaf-OWNS pruefen"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__ccd_session_mgmt__(send_message|list_sessions)",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"let p=require('path'),f=require('fs'),d=process.cwd();while(!f.existsSync(p.join(d,'.keel-harness.json'))){let n=p.dirname(d);if(n===d)throw Error('Keel Harness root not found');d=n}process.env.KEEL_HOOK_TARGET=process.argv[1];require(p.join(d,'.codex/hook-runner.cjs'))\" \".claude/sessionpost-guard.js\"",
-            "timeout": 10,
-            "statusMessage": "Inter-Session-Nachricht pruefen"
-          }
-        ]
-      },
-      {
-        "matcher": "^mcp__",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node -e \"let p=require('path'),f=require('fs'),d=process.cwd();while(!f.existsSync(p.join(d,'.keel-harness.json'))){let n=p.dirname(d);if(n===d)throw Error('Keel Harness root not found');d=n}process.env.KEEL_HOOK_TARGET=process.argv[1];require(p.join(d,'.codex/hook-runner.cjs'))\" \".claude/mcp-write-guard.js\"",
-            "timeout": 10,
-            "statusMessage": "MCP-Schreibgrenze bei aktivem Paket"
+            "statusMessage": "GitHub-Löschschutz"
           }
         ]
       }

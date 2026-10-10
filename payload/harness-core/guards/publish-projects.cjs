@@ -1,14 +1,10 @@
 "use strict";
 
-// Owner list publishProjects of .claude/mutation-policy.json (package P3, E1): the project
-// repositories below the installation root whose current branch an agent may publish through
-// git-intent (plan-publish, then publish) without a closed package. An entry is the Owner's
-// general OK for that project (D16): no sentence per push, and never a force push, another
-// branch or another remote. Agents never write the policy file (write-guard W4).
-//
-// One reader for every consumer, so that the shell guard (which blocks every executable
-// classification while the policy is invalid) and git-intent (which publishes) judge the same
-// entry the same way. Invalid entries are fail-closed: the reader reports an error and no project.
+// Reads the optional list publishProjects from .claude/mutation-policy.json for the optional tool
+// harness-core/git/git-intent.mjs (plan-publish, then publish): the project repositories below the
+// installation root whose current branch may be published through that tool. The file does not exist
+// in the Harness any more; without it the list is empty. If someone creates it, an invalid entry is
+// reported as an error and yields no project.
 
 const fs = require("node:fs");
 const path = require("node:path");

@@ -8,7 +8,6 @@
 
 const fs = require("fs");
 const path = require("path");
-const { pathToFileURL } = require("url");
 
 const WURZEL = process.env.CLAUDE_PROJECT_DIR || path.resolve(__dirname, "..");
 const QUELLE = path.join(WURZEL, "docs", "08-sessions-rollen.md");
@@ -36,19 +35,6 @@ function eingabe() {
 
 function anlass(daten = eingabe()) {
   return typeof daten.source === "string" ? daten.source : "";
-}
-
-// Der Befehlsindex (Paket P6, D17): wo alles liegt, was erlaubt ist, wie der Weg heisst. Er wird bei JEDEM Anlass
-// geladen (nach einem Compact ist er aus dem Fenster und wird gebraucht) und aus den Regeln der Waechter erzeugt
-// (harness-core/guards/command-index.mjs), nie von Hand gepflegt. Gelingt das nicht, wird es gemeldet wie eine
-// unlesbare Rollen-Datei, nicht still uebergangen: eine Sitzung ohne Index laeuft sonst blind in Sperren.
-async function ladeBefehlsindex(sitzungsId) {
-  try {
-    const modul = await import(pathToFileURL(path.join(__dirname, "..", "harness-core", "guards", "command-index.mjs")).href);
-    return { text: modul.renderCompact(modul.buildIndex({ root: WURZEL, sessionId: sitzungsId })) };
-  } catch (fehler) {
-    return { warnung: "Befehlsindex nicht erzeugbar (harness-core/guards/command-index.mjs): " + ((fehler && fehler.message) || fehler) };
-  }
 }
 
 // Baut einen sprechenden Fehler fuer ein vorhandenes, aber nicht lesbares
@@ -139,7 +125,7 @@ function notizen() {
 
 // Baut die SessionStart-Ausgabe. Trennt drei Zustaende der Rollen-/Notiz-Dateien:
 // vorhanden (Inhalt), fehlend (still), unlesbar (gemeldet -> `warnungen`).
-function baueAusgabe(quelle, befehlsindex = {}, claudeFassung = null) {
+function baueAusgabe(quelle) {
   const ausgabe = { hookEventName: "SessionStart" };
   const warnungen = [];
 
@@ -197,52 +183,23 @@ function baueAusgabe(quelle, befehlsindex = {}, claudeFassung = null) {
   if (quelle === "startup") ausgabe.initialUserMessage = "/i-have-adhd";
 
   const kontext = [];
-  // P5: eine Claude-Code-Fassung, die das Hook-Feld args nicht kennt, startet die Waechter ohne Programm und laesst jeden
-  // Werkzeugaufruf durch. Das steht als ERSTES im Kontext und auf stderr, laut, nicht als Fussnote.
-  if (claudeFassung && claudeFassung.state === "old") {
-    kontext.push("ACHTUNG WAECHTER AUS -- " + claudeFassung.message + " Bis dahin keine Werkzeugaufrufe, die etwas veraendern; " +
-      "dem Owner sofort melden.");
-  }
-  if (befehlsindex.warnung) {
-    warnungen.push(befehlsindex.warnung);
-    kontext.push("BEFEHLSINDEX FEHLT -- " + befehlsindex.warnung + ". Ohne ihn findest du den erlaubten Weg erst ueber die Sperre.");
-  }
-  // Der Index steht vorn: der Host kappt zu langen Hook-Kontext am Ende, und die Rollen-Tabelle ist die wachsende Seite.
-  if (befehlsindex.text) kontext.push(befehlsindex.text.trimEnd());
-  if (warnungen.length && !(warnungen.length === 1 && befehlsindex.warnung)) {
+  if (warnungen.length) {
     // [Fund 419] Ein unlesbares Artefakt wird SICHTBAR gemacht (Kontext + stderr +
     // Exit-Code), nicht wie eine schlicht fehlende Datei still verschluckt.
     kontext.push(
       "SITZUNGS-ROLLEN/HANDOFF UNVOLLSTAENDIG -- eine erwartete Datei existiert, ist",
       "aber nicht lesbar (eine FEHLENDE Datei bliebe still, diese wird gemeldet):",
-      ...warnungen.filter((w) => w !== befehlsindex.warnung).map((w) => "- " + w));
+      ...warnungen.map((w) => "- " + w));
   }
   if (rollenText) kontext.push(rollenText);
   if (kontext.length) ausgabe.additionalContext = kontext.join("\n");
-  if (claudeFassung && claudeFassung.state === "old") warnungen.unshift(claudeFassung.message);
 
   return { ausgabe, warnungen };
 }
 
-// P5: die Fassung des laufenden Claude Code. Nur in einer Claude-Sitzung (Codex startet denselben Hook ueber seinen Runner):
-// AI_AGENT nennt sie (claude-code_2-1-288_agent), sonst einmal claude --version. Ein Fehler beim Lesen entscheidet nichts.
-function pruefeClaudeFassung(env = process.env, lesen) {
-  try {
-    if (env.CLAUDECODE !== "1" && !/^claude-code[_/]/u.test(String(env.AI_AGENT || ""))) return null;
-    const regel = require(path.join(__dirname, "..", "harness-core", "system", "claude-version.cjs"));
-    const ausUmgebung = regel.runningVersionFromEnv(env);
-    if (ausUmgebung && regel.parseClaudeVersion(ausUmgebung)) return regel.judgeClaudeVersion(ausUmgebung);
-    const gelesen = (lesen || regel.readClaudeVersion)({ env });
-    return gelesen.missing ? null : regel.judgeClaudeVersion(gelesen.text);
-  } catch {
-    return null;
-  }
-}
-
 async function main() {
   const daten = eingabe();
-  const sitzung = typeof daten.session_id === "string" ? daten.session_id : "";
-  const { ausgabe, warnungen } = baueAusgabe(anlass(daten), await ladeBefehlsindex(sitzung), pruefeClaudeFassung());
+  const { ausgabe, warnungen } = baueAusgabe(anlass(daten));
   const hatInhalt = Boolean(ausgabe.additionalContext) || Boolean(ausgabe.initialUserMessage);
 
   // Weder Rollen/Warnung noch startup (z.B. resume/compact ohne docs/08) -> still bleiben.
@@ -252,7 +209,7 @@ async function main() {
 
   // "melden": das unlesbare Artefakt steht im additionalContext (dort liest es das Modell) UND auf stderr. Der Exit-Code
   // bleibt 0 [P21, Fund der Pruefrunde P6]: Claude Code wertet das JSON auf stdout nur bei Rueckgabe 0 aus; bei 1 gingen
-  // die Zeile "BEFEHLSINDEX FEHLT", die Rollen-Tabelle und /i-have-adhd verloren, also genau das, was gemeldet werden soll.
+  // die Rollen-Tabelle und /i-have-adhd verloren, also genau das, was gemeldet werden soll.
   for (const warnung of warnungen) process.stderr.write("session-roles: " + warnung + "\n");
   if (!warnungen.length && !hatInhalt) process.exit(0);
 }
@@ -265,4 +222,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { zeilen, notizen, baueAusgabe, anlass, ladeBefehlsindex, pruefeClaudeFassung };
+module.exports = { zeilen, notizen, baueAusgabe, anlass };

@@ -8,7 +8,7 @@
 // The watcher is an ES module and the callers are both CommonJS (package-amend, package-bootstrap) and ES modules,
 // so it is imported lazily, per call, from the located Unlazy tree: an explicit/located Unlazy root first, then the
 // runtime that ships next to this Harness tree. A tree without the module is an installation error, never a reason
-// to fall back to a fixed time. Nothing is loaded by merely requiring this file (the guard hooks load neighbours of
+// to fall back to a fixed time. Nothing is loaded by merely requiring this file (the hooks load neighbours of
 // it and must stay light).
 //
 // The result has the shape of the former spawnSync call (status, signal, stdout, stderr, error) plus

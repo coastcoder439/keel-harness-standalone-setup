@@ -60,15 +60,15 @@ Derselbe eine Weg wie `/package-create`, in denselben fuenf Schritten:
    hat, ob das Paket aktiv ist oder nicht.
 2. Unter der Bindung verfeinern: Requirements, Abnahme, Depth Tree, Leaf-Ledger mit
    disjunkten OWNS, Gates mit CHECK, CWD und EXPECT oder manuell, optional eine Zeile
-   `MODEL: <provider> <model id> <effort>` (Codex: `MODEL: codex`). Erlaubt sind nur
-   `OWNER.md`, `PACKAGE.md`, `GATES.md` und unmittelbare `gates/*.md`.
+   `MODEL: <provider> <model id> <effort>` (Codex: `MODEL: codex`). In dieser Phase werden
+   nur `OWNER.md`, `PACKAGE.md`, `GATES.md` und unmittelbare `gates/*.md` geschrieben.
 3. `package-cli.mjs doctor --root <REPO> --package <ID>`.
 4. Vor `plan` die Zeile `Owner-Start: YYYY-MM-DD "<Owner-Wortlaut>"` in `## Status` der PACKAGE.md
    eintragen, sobald die Startnachricht des Owners vorliegt (nach `plan` ist die PACKAGE.md nicht mehr
    beschreibbar, `start` und `next` endeten in `OWNER_START_MISSING`); liegt sie noch nicht vor, bleibt die
    Bindung offen, bis sie da ist. Dann `package-bootstrap.mjs plan --harness-root <HARNESS_ROOT>
    --session <PLANER_SESSION> --json` legt das Paket als geplant ab und beendet die Bindung; danach das
-   Buendel sichern mit `git-intent.mjs checkpoint --root <REPO> --package <ID> --message "<TEXT>"`.
+   Buendel sichern mit einem normalen Commit (`git add docs/packages/<ID>`, `git commit`).
 5. Gestartet wird nur auf das Startsignal des Owners (Zeile `Owner-Start:` im Status oder
    `--run` mit der `Owner-Go:`-Zeile eines Lauf-Pakets), mit `package-executor.mjs start`. Du liest
    das Startsignal aus dem Gespraech und legst die Nachricht des Owners als woertliches Zitat ab;
@@ -76,7 +76,7 @@ Derselbe eine Weg wie `/package-create`, in denselben fuenf Schritten:
    steht als Block: die Zeile ohne Wortlaut, darunter jede Zitatzeile mit vier Leerzeichen und `>`.
    Belege und Berichte des Pakets (`docs/packages/<ID>/evidence/**` und `design/**`) schreibt die
    Planungs- oder Orchestrator-Sitzung auch nach dem Start direkt, ohne Arbeitsagent; Vertrag,
-   Gates und `OWNER.md` bleiben gesperrt.
+   Gates und `OWNER.md` aendert sie dabei nicht.
 
 ## Bestehendes Projekt uebernehmen
 

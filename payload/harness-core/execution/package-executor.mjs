@@ -99,7 +99,7 @@ const COMMANDS = new Set([
 // Provider run states in which the worker is gone for good; reaching one of them
 // frees the leaf lease and binding (runtime-state-recovery R2).
 const RELEASING_STATES = new Set(["aborted", "timed-out", "vanished", "provider-failed", "provider-start-failed"]);
-// Runs that ended without an answer and wait for the Orchestrator (P12): hung, at the cost frame, a guard refused
+// Runs that ended without an answer and wait for the Orchestrator (P12): hung, at the cost frame, a hook refused
 // the same input three times, or (P13, C4) returned without changing any file of its OWNS. Their lease and
 // binding stay, so resume can continue the native session; retry, reassign, restart and abort lead out of them
 // like out of provider-failed.
@@ -953,6 +953,8 @@ async function releaseLeaf(context, sessionId, reason) {
   if (busy) return false;
   childOk(await gateCheckLeaf(context, "--release", entry.leaf), "leaf release");
   restoreMainBinding(context, sessionId);
+  // P18: abort, abandon, timeout and a failed run release the lease; the working copy of the step goes with it.
+  if (entry.stepCopy) { try { await dropStepCopy(context, entry); } catch { /* a left-over copy is swept at the next start of a step */ } }
   packageBinding.removeBinding({ repoRoot: context.repoRoot, scope: context.scope, sessionId,
     controlRoot: context.harnessRoot });
   updateState(context, (state) => {
@@ -1059,10 +1061,10 @@ function packageModel(context, options, ledgerText, fallbackProvider, leafFile =
 }
 
 // The exact provider call of a leaf, as the dispatch will start it (field name kept for the
-// Dashboard). Both providers run under the Harness root's guards (guard-parity E6/E8): Claude
-// with the root's PreToolUse hooks as its only settings, Codex through `codex exec` with the
-// same guards handed over as hooks -- no longer through /codex:rescue, which runs no Harness
-// hooks in a nested project repository (measured 10.09.2026 and 01.10.2026).
+// Dashboard). Claude runs without settings sources and Codex through `codex exec`, no longer
+// through /codex:rescue, which runs no Harness hooks in a nested project repository (measured
+// 10.09.2026 and 01.10.2026). Only if the Harness root holds PreToolUse hooks (the GitHub delete
+// protection) they go along; the bracketed part is left out otherwise (provider-runtime.mjs).
 export function delegation(resolution, briefFile) {
   const prompt = `Read ${JSON.stringify(briefFile)} and execute exactly that bound leaf contract. Do not widen OWNS. ` +
     "Return a concise result; the parent will reverify locally.";
@@ -1076,7 +1078,7 @@ export function delegation(resolution, briefFile) {
       effort,
       modelChoice,
       pluginCommand: `codex exec --json --dangerously-bypass-hook-trust -s workspace-write -m ${model} ` +
-        `-c model_reasoning_effort='${effort}' -c hooks.PreToolUse=<Harness guards> ${JSON.stringify(prompt)}`,
+        `-c model_reasoning_effort='${effort}' [-c hooks.PreToolUse=<hooks of the Harness root>] ${JSON.stringify(prompt)}`,
     };
   }
   const model = resolution.cliModel ? workerModel(resolution.cliModel) : null;
@@ -1089,7 +1091,7 @@ export function delegation(resolution, briefFile) {
     effort,
     modelChoice,
     pluginCommand: `claude ${model ? `--model ${model} ` : ""}${effort ? `--effort ${effort} ` : ""}-p --output-format stream-json --verbose ` +
-      `--permission-mode bypassPermissions --setting-sources "" --settings <Harness guards> ${JSON.stringify(prompt)}`,
+      `--permission-mode bypassPermissions --setting-sources "" [--settings <hooks of the Harness root>] ${JSON.stringify(prompt)}`,
   };
 }
 
@@ -1136,17 +1138,13 @@ function writeBrief(context, state, entry, ledger) {
     "",
     ledger.text.trimEnd(),
     "",
-    // Command index, Owner grants, check of Owner statements and the way to publish (A18, D6, D8, C8, D17): the
-    // worker sees neither the instructions nor the rules of the Harness, so they are part of every brief.
-    ...guidanceSections({ harnessRoot: context.harnessRoot, sessionId: entry.sessionId }),
+    // Check of Owner statements and the way to publish (D6, D8, C8, D17): the worker sees neither the
+    // instructions nor the rules of the Harness, so they are part of every brief.
+    ...guidanceSections({ harnessRoot: context.harnessRoot }),
     "## Execution rules",
     "",
-    "- Write only inside the exact OWNS patterns above; hooks verify the session binding.",
-    `- Create and change files only with the provider's write tool (${entry.provider === "codex" ? "apply_patch" : "Write/Edit"}), ` +
-      "never by shell redirection (`>`, `>>`, `tee`, `Set-Content`, `Out-File`) and never with `node -e`.",
-    "- Run tests as `node --test <files>` (files directly in a test/ folder); the only switches are the ones the command index lists, never a loader, a reporter module or inline code.",
-    "- If the guard denies a call, do not work around it: name the command and the denial code in your return; the orchestrator re-verifies locally.",
-    "- Use the finite Git intent interface; do not search for alternate mutating Git commands.",
+    "- Write only inside the exact OWNS patterns above; the return compares the changed files with them and takes over only those.",
+    "- If a hook denies a call (the GitHub delete protection), do not work around it: name the command and the denial in your return; the orchestrator re-verifies locally.",
     "- Do not mark gates or package plan items complete yourself.",
     "- Return facts and the native provider handle. The parent locally reverifies the gate.",
     "- Provider success is not Evidence and does not satisfy the original Owner request.",
@@ -1527,9 +1525,8 @@ async function synchronizeSession(context, sessionId) {
 
 // Own provider programs (--claude-executable, --claude-prefix-arg, --codex-executable) are
 // test fixtures only. Outside the test mode they would let this declared Harness tool start
-// any program without the guards and without a permission prompt (guard-parity E7). The test
-// mode is an environment variable an agent cannot set through a guarded shell, because the
-// shell guard refuses environment overrides in Bash and PowerShell alike.
+// any program without a permission prompt (guard-parity E7). The test mode is an environment
+// variable that only the executor's own tests set.
 export function assertProviderOverrides(options, env = process.env) {
   const overrides = [options.claudeExecutable && "--claude-executable", options.claudePrefixArgs.length && "--claude-prefix-arg",
     options.codexExecutable && "--codex-executable"].filter(Boolean);
@@ -1873,14 +1870,14 @@ function newestAppClaude(directory, isFile) {
 // failState is where a failed start leaves the member: provider-start-failed (the member leaves its wave through
 // retry or restart) or, for a wave that goes on without it, start-failed (retry queues it again) (P13, C6).
 // --- A working copy of its own for a step (P18; step-copy.mjs) ---------------------------------------------------------
-// The copy gets its own binding (the guards find a binding from the repository of the written file, and the copy is a
+// The copy gets its own binding (a binding is found from the repository of the written file, and the copy is a
 // repository of its own), the package.ref of the scope, and a brief that names the copy as the repository.
 function stepCopyGit(context) {
   return (args) => gitResult(context.repoRoot, args);
 }
 
-// While a step works in its copy, its binding in the shared folder is set aside (renamed, no guard reads it): the agent can
-// write only where the copy's own binding allows it. It comes back when the agent is done (return) or the lease is released.
+// While a step works in its copy, its binding in the shared folder is set aside (renamed, nothing reads it): the binding
+// of the copy is the only one that is in force. It comes back when the agent is done (return) or the lease is released.
 function suspendedBindingFile(context, sessionId) {
   return packageBinding.bindingPath(context.repoRoot, context.scope, sessionId) + ".suspended";
 }
@@ -1907,6 +1904,7 @@ function stepCopyBaselineFile(context, sessionId) {
 async function prepareStepCopy(context, entry) {
   const sessionId = entry.sessionId;
   const copyPath = stepCopyPath(context.repoRoot, context.scope, sessionId);
+  try { await sweepStepCopies(context); } catch { /* a left-over copy of another step stays in the ignored runtime folder */ }
   // A copy left by an earlier start of this session is not reused: its baseline belongs to that start.
   if (fs.existsSync(copyPath)) await removeStepCopy({ repoRoot: context.repoRoot, copyPath, git: stepCopyGit(context) });
   const made = await createStepCopy({ repoRoot: context.repoRoot, copyPath, git: stepCopyGit(context) });
@@ -1948,6 +1946,33 @@ async function dropStepCopy(context, entry) {
   if (!entry.stepCopy) return;
   await removeStepCopy({ repoRoot: context.repoRoot, copyPath: path.resolve(context.repoRoot, entry.stepCopy.path), git: stepCopyGit(context) });
   fs.rmSync(stepCopyBaselineFile(context, entry.sessionId), { force: true });
+}
+
+// P18: copies that nobody works in any more are removed: of a session that was aborted, timed out, vanished, failed, settled or
+// moved to the history (restart, reassign, reopen). A copy whose session is not known (a start in flight, recorded only at its end)
+// or whose step still lives (also a red return that waits for its fix) stays.
+const stepCopyName = (sessionId) => crypto.createHash("sha256").update(String(sessionId)).digest("hex").slice(0, 16);
+
+async function sweepStepCopies(context) {
+  const base = path.dirname(stepCopyPath(context.repoRoot, context.scope, "x"));
+  let names;
+  try { names = fs.readdirSync(base); } catch { return []; }
+  const state = readState(context);
+  const dead = new Map();
+  for (const id of Object.keys(state.history?.sessions || {})) dead.set(stepCopyName(id), id);
+  for (const [id, entry] of Object.entries(state.sessions || {})) {
+    const name = stepCopyName(id);
+    if (RELEASING_STATES.has(entry.state) || SETTLED_STATES.has(entry.state)) dead.set(name, id);
+    else dead.delete(name);
+  }
+  const removed = [];
+  for (const name of names) {
+    if (!dead.has(name)) continue;
+    const copyPath = path.join(base, name);
+    if (await removeStepCopy({ repoRoot: context.repoRoot, copyPath, git: stepCopyGit(context) })) removed.push(name);
+    fs.rmSync(stepCopyBaselineFile(context, dead.get(name)), { force: true });
+  }
+  return removed;
 }
 
 async function launchMember(context, options, sessionId, wave, { failState = "provider-start-failed" } = {}) {
@@ -2084,7 +2109,7 @@ async function returnLeaf(context, options) {
   if (entry.stepCopy) restoreMainBinding(context, sessionId);
   const worktree = entry.stepCopy ? await judgeStepCopy(context, entry) : await judgeWorktree(context, readState(context), entry);
   if (entry.stepCopy && worktree.judged) {
-    // Nothing may have been written in the shared folder either (its guard binding was set aside): what changed there outside
+    // Nothing may have been written in the shared folder either (its binding was set aside): what changed there outside
     // the OWNS of every active step is reported like a stray file of a step without a copy.
     const shared = await judgeWorktree(context, readState(context), entry);
     if (shared.judged) worktree.outside = [...worktree.outside, ...shared.outside.map((relative) => relative + " (shared folder)")];
@@ -2889,7 +2914,7 @@ function canonical(value) {
 
 async function currentHead(repoRoot) {
   const result = await gitResult(repoRoot, ["rev-parse", "--verify", "HEAD"]);
-  if (result.error || result.status !== 0) fail("GIT_HEAD", "cannot resolve current Git HEAD");
+  if (result.error || result.status !== 0) fail("GIT_HEAD", "cannot resolve current Git HEAD (a repository needs its first commit before a step can return)");
   return String(result.stdout).trim();
 }
 
@@ -2966,9 +2991,8 @@ async function waiveDuty(context, options) {
 // review-manual --gate [id] --evidence [datei], nur der Orchestrator darf ihn aufrufen; er hakt nur Gates
 // ohne Pruefbefehl ab, verlangt eine Beleg-Datei im Paket und schreibt Datum und Sitzung mit; freie
 // Aenderungen an Gate-Dateien bleiben gesperrt." Anlass: im Paket owner-rules-from-memory konnte kein
-// Agent die drei manuellen Gates abhaken -- gate-check setzt [x] nur aus CHECK-Ergebnissen, und paket-gate
-// sperrt Gate-Dateien fuer jede Sitzung (OUTSIDE_LEAF_OWNS). Diese Grenzen bleiben: der Befehl ist der eine
-// Weg, ein Gate OHNE CHECK abzuhaken, und er schreibt nur die Haken- und EVIDENCE-Zeile genau dieses Gates.
+// Agent die drei manuellen Gates abhaken -- gate-check setzt [x] nur aus CHECK-Ergebnissen. Diese Grenzen
+// bleiben (der Rücklauf übernimmt nur Dateien des OWNS): der Befehl ist der eine Weg, ein Gate OHNE CHECK abzuhaken, und er schreibt nur die Haken- und EVIDENCE-Zeile genau dieses Gates.
 // Proven by test/manual-gate-review.test.js.
 const REVIEW_SESSION = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u;
 const WORKING_LEAF_STATES = new Set(["prepared", "starting", "running", "abort-requested", "timeout-requested"]);
@@ -3027,8 +3051,7 @@ function reviewEvidence(context, value) {
   return { relative, sha256: crypto.createHash("sha256").update(bytes).digest("hex") };
 }
 
-// --evidence-file: the orchestrator may not write under evidence/ of the package (paket-gate), so the executor
-// copies the Owner's file itself. The source is an absolute path outside the repository; the copy is named after
+// --evidence-file: the executor copies the Owner's file itself, so the orchestrator needs no write under evidence/ of the package. The source is an absolute path outside the repository; the copy is named after
 // the gate and bound by its checksum like any other evidence. Nothing is written here: the copy happens only
 // after the review is accepted (see writeStagedEvidence).
 function stageOwnerEvidence(context, gateId, value) {
@@ -4368,11 +4391,13 @@ agent ran since the start (starting, running, provider-returned, or a run overla
 queued or start-failed) blocks the return (OUTSIDE_OWNS_CHANGED with the file list); --accept-outside TEXT states
 that it came from another session and is kept in the state.
 
-dispatch starts every worker under the guards of the Harness root:
+dispatch starts every worker without a hook of its own:
   Claude  claude -p --permission-mode bypassPermissions --setting-sources ""
-          --settings <the root's PreToolUse guards with fixed paths>
+          [--settings <the root's PreToolUse hooks with fixed paths>]
   Codex   codex exec --json --dangerously-bypass-hook-trust -s workspace-write
-          -m <pin> -c model_reasoning_effort='<pin>' -c hooks.PreToolUse=<the same guards>
+          -m <pin> -c model_reasoning_effort='<pin>' [-c hooks.PreToolUse=<the same hooks>]
+The bracketed part is passed only if the Harness root holds PreToolUse hooks (the GitHub delete
+protection); otherwise the worker starts without a hook setting.
 A worker has no step limit, no time limit and no start time. --max-turns and
 --deadline-seconds exist only when the call names them (--max-turns goes to Claude only
 then; a run without --deadline-seconds has deadlineAt null and no deadline timer). A worker
@@ -4397,8 +4422,7 @@ in the sealed wave with a new frame instead of starting over; retry, reassign, r
 abort lead out of these states like out of provider-failed. A log that grows past 32 MiB is
 cut with a keel_log_truncated line and reported as logTruncated in the session and in status.
 Both run with KEEL_PACKAGE_SESSION (the leaf's package session) and
-KEEL_HARNESS_ROOT (the rule root). A root without its guards starts no worker
-(PROVIDER_GUARDS). --claude-executable, --claude-prefix-arg and
+KEEL_HARNESS_ROOT (the rule root). --claude-executable, --claude-prefix-arg and
 --codex-executable replace the provider program and exist for the executor's
 own tests only: without KEEL_EXECUTOR_TEST_MODE=1 they are refused
 (PROVIDER_OVERRIDE).`;

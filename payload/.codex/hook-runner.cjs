@@ -17,30 +17,20 @@ const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 
 const ALLOWED = new Set([
-  ".claude/danger-guard.js",
-  ".claude/git-intent-guard.js",
-  ".claude/mcp-write-guard.js",
-  ".claude/shell-mutation-guard.js",
+  ".claude/github-delete-guard.js",
   ".claude/onboarding-start.js",
   ".claude/pollution-warn.js",
   ".claude/project-context.js",
   ".claude/prompt-form.js",
   ".claude/session-roles.js",
-  ".claude/sessionpost-guard.js",
   ".claude/uncommitted-warn.js",
   ".claude/unlazy-stop.js",
-  ".codex/apply-patch-guard.cjs",
   ".codex/dod-guard.cjs",
 ]);
 
-// The guards of the list: loaded into this process (C12).
+// The guard of the list: loaded into this process (C12).
 const IN_PROCESS = new Set([
-  ".claude/danger-guard.js",
-  ".claude/git-intent-guard.js",
-  ".claude/mcp-write-guard.js",
-  ".claude/shell-mutation-guard.js",
-  ".claude/sessionpost-guard.js",
-  ".codex/apply-patch-guard.cjs",
+  ".claude/github-delete-guard.js",
 ]);
 
 const harnessRoot = path.resolve(__dirname, "..");

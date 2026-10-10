@@ -75,6 +75,8 @@ export const CLOUD_MODELS = Object.freeze([
     evidence: "claude.exe 2.1.284 Byte 203310195; https://platform.claude.com/docs/en/about-claude/models/overview.md Zeile „Claude API ID“ `claude-sonnet-5-5`" }),
   Object.freeze({ provider: "claude", model: "claude-sonnet-5", label: "Claude Sonnet 5", note: "schnell und günstig",
     evidence: "claude.exe 2.1.284 Byte 203309272; https://platform.claude.com/docs/en/about-claude/models/overview.md „Legacy models (still available): … Claude Sonnet 5“" }),
+  Object.freeze({ provider: "claude", model: "claude-haiku-5-5", label: "Claude Haiku 5.5", note: "schnellstes Modell, für Klassifikation, Extraktion und Routing",
+    evidence: "claude.exe 2.1.293 Byte 104832636; https://platform.claude.com/docs/en/about-claude/models/overview.md Zeile „Claude API ID“ `claude-haiku-5-5`" }),
   Object.freeze({ provider: "claude", model: "claude-haiku-4-5", label: "Claude Haiku 4.5", note: "kleinstes Modell",
     evidence: "claude.exe 2.1.284 Byte 203305558; https://platform.claude.com/docs/en/about-claude/models/overview.md Zeile „Claude API alias“ `claude-haiku-4-5`" }),
   Object.freeze({ provider: "codex", model: "", label: CODEX_MODEL, note: "Voreinstellung des Abos",

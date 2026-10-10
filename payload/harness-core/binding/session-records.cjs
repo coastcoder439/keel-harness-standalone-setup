@@ -2,7 +2,7 @@
 
 // Is this session bound at all? (P4 A16)
 //
-// The package hooks (paket-gate for every write, prompt-form for every message) used to run their whole
+// The package hooks (prompt-form for every message) used to run their whole
 // Git-based binding search for every session, up to 14 Git calls with a binding. A session that holds no
 // record of any kind cannot pass that search, so the answer needs no Git: this module only looks for the
 // files that make a session bound. Each is a regular file named by the SHA-256 of the session id:

@@ -484,8 +484,7 @@ function find(options, snapshotOf = repository.repositorySnapshot) {
 // The proof is therefore the FIRST complete line that carries a sessionId field: it names the conversation the
 // transcript continues, and no line with another id stands before it. A line further down proves nothing, even
 // with the right field: the transcript grows by appending, so whoever could append a line could forge one. The
-// host writes the transcript; the agent cannot, because write-guard refuses the transcript store and the
-// transcript_path of the session for Write/Edit, the shell and Codex patches (HOST_TRANSCRIPT_WRITE). Only that
+// host writes the transcript; the agent does not. Only that
 // field counts, never the text of a message: a session id in a tool result or a chat line (an error message
 // names the holder of a package) proves nothing. The proof alone decides; there is no time after which a
 // binding moves by itself (a holder silent for silenceMs moves only by hand, --takeover).

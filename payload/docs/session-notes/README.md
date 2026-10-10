@@ -19,4 +19,4 @@ Der Sitzungsstart meldet jeder Sitzung, welche Notiz-Dateien Eintraege haben
 bis jemand die Datei oeffnet. Gelesen und erledigt: Eintrag streichen, die Historie
 steht in git.
 
-Geschrieben wird ueber `/tell-session`; der `sessionpost-guard` blockt das Senden.
+Geschrieben wird ueber `/tell-session`; Senden an eine andere Sitzung gibt es nicht.

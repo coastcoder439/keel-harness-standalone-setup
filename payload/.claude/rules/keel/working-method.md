@@ -17,7 +17,8 @@ versionierte Projektgeschichte.
 3. **DoD/Contract:** Vor Fan-out müssen C→Gate-Mapping, vollständiger
    azyklischer Depth Tree, Leaf-/Node-Ledger, disjunkte OWNS sowie ausführbare
    CHECK/EXPECT- oder klar manuelle Gates bestehen.
-4. **Arbeiten:** Nur gebundene Sessions schreiben in ihr Leaf-OWNS. Claims,
+4. **Arbeiten:** Ein Arbeitsagent schreibt in das OWNS seines Leaf; der Rücklauf
+   übernimmt nur diese Dateien. Claims,
    Leases und Dispatch-Wellen laufen über Unlazy. Alle Mitglieder einer Welle
    werden gestartet und mit nativen Handles registriert, bevor gewartet wird.
 5. **Coverage:** Owner-Schema prüft R→C, Paket-Schema C→Gate und Tree/Gate-
@@ -34,10 +35,10 @@ Prompt-Form und dod-guard erinnern nur an lesbare Kommunikation. Sie erzwingen
 keinen dieser Schritte. Coverage und Fulfillment sind getrennte Messungen.
 Geprueft gegen: und Offen: sind Berichtsformat, niemals Ersatz für Evidence.
 
-Git-Mutationen laufen ausschließlich über harness-core/git/git-intent.mjs.
-Leaf-Sessions committen nicht in einer parallelen Welle (erzwungen: git-intent checkpoint, WAVE_IN_PROGRESS). Recoverable
-discard/recover, letzter eigener Checkpoint-Revert, Integration und
-Owner-freigegebener Publish haben je genau einen getesteten Intent.
+Leaf-Sessions committen nicht mitten in einer parallelen Welle; der Parent
+integriert alle verifizierten Leaves einmal (integrate). Git selbst ist lokal
+frei; harness-core/git/git-intent.mjs bleibt als optionales Werkzeug. Ein
+Publish braucht den Owner-OK-Wortlaut.
 
 UI-Verifikation braucht einen echten Browser-Screenshot gegen den vereinbarten
 Maßstab. DOM-Text allein erfüllt kein visuelles Gate. Das Gate nennt die Zustände
