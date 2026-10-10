@@ -545,7 +545,7 @@ export async function runArchitectureMapsJob({
     const runContext = buildRunContext({ firstRun: !graphMeta, changedFiles });
     const invocation = buildInvocation({ task, runContext, model: resolution.cliModel, effort: resolution.effort, settingsFile, env });
     const startedAt = new Date();
-    // Arbeitsordner als echte Langform (Gate A5): mit einem 8.3-Kurznamen wie C:\Users\LONSIN~1 vergleicht Claude Code
+    // Arbeitsordner als echte Langform (Gate A5): mit einem 8.3-Kurznamen wie C:\Users\BENUTZ~1 vergleicht Claude Code
     // die Pfadregel Edit(./.ua/**) gegen die andere Schreibweise und lehnt jedes Schreiben ab (gemessen 28.09.2026).
     const result = await cliRunner(invocation, { cwd: realProjectRoot(projectRoot) });
     const finishedAt = new Date();
