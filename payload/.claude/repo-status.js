@@ -18,9 +18,7 @@ const WORKSPACE = path.resolve(__dirname, '..');            // = installierte Ha
 // docs/harness-instance.md (Feld "Additional allowed write roots") -- NICHT fest
 // "user-projects" (CLAUDE.md: "keinen fest eingebauten ... Workspace-Namen"; eine
 // Fremdinstallation meldete sonst dauerhaft "(keine)" unter einem falschen Namen).
-// schreibwurzelnAusText ist rein und wortgleich zu write-guard.js gespiegelt (wie
-// erlaubteWurzeln zwischen danger-/write-guard); aendert sich das Muster, zieht die
-// andere Kopie mit. "none"/"keine"/leer/[AUSFUELLEN] => keine Wurzel definiert.
+// schreibwurzelnAusText ist rein. "none"/"keine"/leer/[AUSFUELLEN] => keine Wurzel definiert.
 function schreibwurzelnAusText(md) {
   const zeile = String(md).match(/^[ \t]*[-*][ \t]*Additional allowed write roots:[ \t]*(.*)$/im);
   if (!zeile) return [];

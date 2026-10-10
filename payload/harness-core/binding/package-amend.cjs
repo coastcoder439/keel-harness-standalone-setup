@@ -556,7 +556,7 @@ function undo(options) {
     restored: restore.map(([relative]) => relative), removed: remove, recordRemoved };
 }
 
-// The one answer, for the guard and the command alike, whether a write target is a
+// The one answer whether a write target is a
 // bundle file of an active package that only the amendment route may change: OWNER.md
 // is never one (owner:false). hints.repoRoot comes from a leaf or planning binding;
 // otherwise the target's own repository decides.

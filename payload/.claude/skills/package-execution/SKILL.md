@@ -1,13 +1,13 @@
 ---
 name: package-execution
-description: Fuehrt ein Unlazy-Arbeitspaket ueber exakte Leaf-Bindungen, Claude- oder Codex-Arbeitsagenten unter den Harness-Waechtern und lokale Reverify aus.
+description: Fuehrt ein Unlazy-Arbeitspaket ueber exakte Leaf-Bindungen, Claude- oder Codex-Arbeitsagenten und lokale Reverify aus.
 ---
 
 # Package execution
 
-Neue Pakete entstehen über `.claude/skills/package-standard/package-standard.mjs create`, das die Planungsbindung über `package-bootstrap begin` öffnet: exakt ein Repo, Paket, Scope und Planer-Session; erlaubt sind nur `OWNER.md`, `PACKAGE.md`, `GATES.md` und unmittelbare `gates/*.md`. Nach erfolgreichem Unlazy-Doctor und, sobald die Startnachricht des Owners vorliegt, nach der Zeile `Owner-Start:` im `## Status` der PACKAGE.md (nach `plan` ist sie nicht mehr beschreibbar, `next` endete sonst in `OWNER_START_MISSING`) legt `harness-core/execution/package-bootstrap.mjs plan --harness-root <HARNESS_ROOT> --session <PLANER_SESSION> --json` das Paket als geplant ab und beendet die Bindung; das Bündel sichert `harness-core/git/git-intent.mjs checkpoint --root <REPO> --package <ID> --message "<TEXT>"`. Gestartet wird erst auf den Startwunsch des Owners, den du aus dem Gespräch liest und als wörtliches Zitat ablegst, nie als erfragte Satzform (Zeile `Owner-Start: YYYY-MM-DD "<Owner-Wortlaut>"` im `## Status` des Pakets oder `--run <LAUF_PAKET>`, dessen `## Status` eine `Owner-Go:`-Zeile trägt und das Paket nennt; ein langes, mehrzeiliges oder Anführungszeichen enthaltendes Zitat steht als Block: die Zeile ohne Wortlaut, darunter jede Zitatzeile mit vier Leerzeichen und `>` davor), mit `start` ohne `--bootstrap-session`.
+Neue Pakete entstehen über `.claude/skills/package-standard/package-standard.mjs create`, das die Planungsbindung über `package-bootstrap begin` öffnet: exakt ein Repo, Paket, Scope und Planer-Session; in dieser Phase werden nur `OWNER.md`, `PACKAGE.md`, `GATES.md` und unmittelbare `gates/*.md` geschrieben. Nach erfolgreichem Unlazy-Doctor und, sobald die Startnachricht des Owners vorliegt, nach der Zeile `Owner-Start:` im `## Status` der PACKAGE.md (nach `plan` ist sie nicht mehr beschreibbar, `next` endete sonst in `OWNER_START_MISSING`) legt `harness-core/execution/package-bootstrap.mjs plan --harness-root <HARNESS_ROOT> --session <PLANER_SESSION> --json` das Paket als geplant ab und beendet die Bindung; das Bündel sicherst du mit einem normalen Commit (`git add docs/packages/<ID>`, `git commit`). Gestartet wird erst auf den Startwunsch des Owners, den du aus dem Gespräch liest und als wörtliches Zitat ablegst, nie als erfragte Satzform (Zeile `Owner-Start: YYYY-MM-DD "<Owner-Wortlaut>"` im `## Status` des Pakets oder `--run <LAUF_PAKET>`, dessen `## Status` eine `Owner-Go:`-Zeile trägt und das Paket nennt; ein langes, mehrzeiliges oder Anführungszeichen enthaltendes Zitat steht als Block: die Zeile ohne Wortlaut, darunter jede Zitatzeile mit vier Leerzeichen und `>` davor), mit `start` ohne `--bootstrap-session`.
 
-Zuschnitt: Arbeitsschritte (Leaves) werden nach zusammenhängenden Dateien geschnitten, nicht nach Bereichen: ein Leaf sind die Dateien, die zusammen geändert und geprüft werden (eine Komponente samt Test), nie „Frontend“ oder „Backend“. Vier Agenten je Bereich kosteten 11 Wellen, eine fehlende Kennung (`data-testid`) allein vier. Eine Kleinständerung (eine Kennung, ein Text) ist ein Schritt oder geht den leichten Weg: der Orchestrator schreibt `evidence/` und `design/` seines Pakets selbst, Prüfungen und Vertrag bleiben gesperrt. Ein Schritt mit einer Anforderung ist ein vollständiges Paket; der Titel (Paketname) kommt aus Wörtern des Owner-Auftrags oder ist ein vom Owner genannter Name, sonst warnt `package-standard.mjs create`.
+Zuschnitt: Arbeitsschritte (Leaves) werden nach zusammenhängenden Dateien geschnitten, nicht nach Bereichen: ein Leaf sind die Dateien, die zusammen geändert und geprüft werden (eine Komponente samt Test), nie „Frontend“ oder „Backend“. Vier Agenten je Bereich kosteten 11 Wellen, eine fehlende Kennung (`data-testid`) allein vier. Eine Kleinständerung (eine Kennung, ein Text) ist ein Schritt oder geht den leichten Weg: der Orchestrator schreibt `evidence/` und `design/` seines Pakets selbst und lässt Prüfungen und Vertrag unverändert. Ein Schritt mit einer Anforderung ist ein vollständiges Paket; der Titel (Paketname) kommt aus Wörtern des Owner-Auftrags oder ist ein vom Owner genannter Name, sonst warnt `package-standard.mjs create`.
 
 Nutze anschließend ausschließlich `harness-core/execution/package-executor.mjs`. Jeder
 Aufruf hat den gemeinsamen Präfix
@@ -32,23 +32,19 @@ Jeder Aufruf nennt `--harness-root <HARNESS_ROOT>` und `--root <ECHTES_GIT_REPO>
   und aus `turn.completed`, Vorgabe 2.000.000, `--token-budget`; endet der Prozess nach
   `turn.completed` von selbst mit 0, ist er `provider-returned` mit Hinweis in `hints`, nie
   `budget-reached`) und `repeated-block` (ein PreToolUse-Hook sperrte dieselbe Eingabe
-  dreimal hintereinander; nur die echte Hook-Antwort zählt, kein roter Test mit Wächtertext; bei Codex steht die Sperre nur in der Rollout-Datei, nicht in `codex exec --json`, und wird von dort mitgelesen). Lease und Bindung bleiben, der Orchestrator
+  dreimal hintereinander; nur die echte Hook-Antwort zählt, kein roter Test mit Hook-Text; bei Codex steht die Sperre nur in der Rollout-Datei, nicht in `codex exec --json`, und wird von dort mitgelesen). Lease und Bindung bleiben, der Orchestrator
   entscheidet: `resume --session <SESSION> [--cost-budget-usd <N>] [--message "<TEXT>"]`
   setzt die native Sitzung fort (`claude --resume`, `codex exec resume`), statt neu zu
   starten; `retry`, `reassign`, `restart` und `abort` führen wie bei `provider-failed`
   heraus. Ein Agentenlog über 32 MiB wird mit einer `keel_log_truncated`-Zeile abgeschnitten,
   `logTruncated` steht in `status` und `liveness`.
-- Jeder Arbeitsagent läuft unter den Wächtern der Harness-Wurzel: Claude als
-  `claude -p` mit genau diesen PreToolUse-Wächtern als einziger Einstellung, Codex
-  als `codex exec --dangerously-bypass-hook-trust` mit denselben Wächtern als Hooks,
-  `gpt-5.6-sol` und `max`. Beide sehen ihre Paketsitzung in `KEEL_PACKAGE_SESSION`.
+- Jeder Arbeitsagent läuft ohne Wächter-Hooks: Claude als `claude -p`, Codex als
+  `codex exec` mit `gpt-5.6-sol` und `max`. Der einzige Schutz ist der GitHub-Löschschutz
+  aus den Projekt-Einstellungen. Beide sehen ihre Paketsitzung in `KEEL_PACKAGE_SESSION`.
   `delegation.pluginCommand` nennt den exakten Aufruf, `dispatch` führt ihn aus.
   Claude- und Codex-Ausgabe bleibt Nicht-Evidence.
 - Der Auftrag jedes Arbeitsagenten hat feste Abschnitte, weil er weder Anleitung noch Regeln liest
-  (`--setting-sources ""`): den Befehlsindex (erlaubter Weg je Absicht und je Sperrcode, aus den Regeln
-  der Wächter erzeugt, `node harness-core/guards/command-index.mjs [--section "<Abschnitt>"|--full|--json]`),
-  die Freigaben des Owners aus `.claude/mutation-policy.json` (`mcpWriteTools.allow`, `productRoots`,
-  `publishProjects`, nie mehr und nie weniger als in der Datei), die Prüfung von Owner-Aussagen (D8:
+  (`--setting-sources ""`): die Prüfung von Owner-Aussagen (D8:
   Zustimmung, Widerspruch, Alternative), den Veröffentlichungsweg, die Ausführungsregeln (lange Tests im
   Vordergrund, Build und Test getrennt, nie selbst committen, ein Rücklauf ohne Änderung ist kein Erfolg,
   dieselbe Sperre dreimal heißt Halt) und bei `restart` und `reopen` die Begründung (`--reason`) in einem
@@ -151,10 +147,10 @@ Jeder Aufruf nennt `--harness-root <HARNESS_ROOT>` und `--root <ECHTES_GIT_REPO>
   `review-manual` erneuert sie (auch nach `integrate`). Eine ältere Bestätigung ohne
   Code-Stand gilt, bis sich ihr Bereich nach dem ersten `integrate` ändert. Ein Leaf-Gate nach
   dem Anbieter-Ruecklauf und vor `return`, Knoten- und Wurzel-Gates erst, wenn jedes
-  Leaf-Gate erfuellt ist, sonst nichts mehr nach `integrate`. Leaf-Arbeiter, Leaf-Sitzungen und Gates mit CHECK weist der Befehl ab; die
-  Gate-Dateien bleiben fuer eigene Schreibzugriffe jeder Sitzung gesperrt.
-- Git-Mutationen laufen ausschließlich über `harness-core/git/git-intent.mjs`.
-- Leaf-Agenten committen nicht mitten in einer parallelen Welle (der git-intent checkpoint verweigert WAVE_IN_PROGRESS, solange die Welle offen oder versiegelt ist). Sichere Rücknahme nutzt ausschließlich die Receipt-basierten Git-Intents.
+  Leaf-Gate erfuellt ist, sonst nichts mehr nach `integrate`. Leaf-Arbeiter, Leaf-Sitzungen und Gates mit CHECK weist der Befehl ab; Gate-Dateien ändert
+  ein Arbeitsagent nicht (der Rücklauf gleicht das Bündel ab).
+- Git ist lokal frei; `harness-core/git/git-intent.mjs` bleibt ein optionales Werkzeug, kein Pflichtweg.
+- Leaf-Agenten committen nicht mitten in einer parallelen Welle; der Parent integriert alle verifizierten Leaves einmal (`integrate`). Eigene Fehler nimmt man wiederherstellbar zurück (erst sichern, dann zurücknehmen).
 - Follow-up-Duties sind strukturiert: erst `duty-assess --gate <LEDGER:GATE>`;
   bekannte Arbeit mit `duty-add --duty <ID> --owner "<OWNER>" --trigger
   "<TRIGGER>" --due-state open|due --gate <LEDGER:GATE>` und später

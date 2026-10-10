@@ -494,12 +494,8 @@ function atomicJson(file, value) {
   finally { try { fs.unlinkSync(temporary); } catch { /* renamed or absent */ } }
 }
 
-// The read half of the finite Git surface. During an active package the guard
-// redirects EVERY raw Git command -- read-only status/log/diff/show included --
-// to this one intent (git-intent-guard.js), so the contract sentence "raw
-// MUTATING Git is locked" (CLAUDE.md) only holds if the read intent actually
-// serves those reads; without them a bound agent had no route to `git log/diff/
-// show` at all (audit 06.09.2026 line 380). Every operation stays strictly
+// The read half of the finite Git surface: a bound agent reads status, log, diff and
+// show through this one intent (audit 06.09.2026 line 380). Every operation stays strictly
 // read-only and is constrained to the bound leaf OWNS paths, so a read can never
 // widen past the session's own surface. An optional --rev is resolved to a
 // committed OID BEFORE use, so it can neither inject a Git option nor reach a path
@@ -798,8 +794,7 @@ function requestedPackageIds(options) {
 // directory reached Git only through the closure checkpoint, so a freshly
 // written package had no route at all. This mode saves exactly the bundle files
 // (bundle-files.cjs) of packages no scope has started, never design/, evidence/
-// or anything else, and needs no session: only sessions paket-gate admits could
-// write those files in the first place. Proven by "the checkpoint bundle mode
+// or anything else, and needs no session. Proven by "the checkpoint bundle mode
 // saves exactly the bundle files of a written, not started package" in
 // test/git-intent.test.js.
 function assertBundleDirectory(repoRoot, relative) {
@@ -2077,10 +2072,9 @@ function explain(options) {
 }
 
 // The rule root of this session: the Harness root whose rules apply (KEEL_HARNESS_ROOT, then
-// CLAUDE_PROJECT_DIR, as every guard reads it) and, without both, the Harness tree this file ships
-// in -- never the working directory, which for a worker is the very repository to be judged. An
-// agent cannot move it: KEEL_* and CLAUDE_* overrides are blocked in front of every command
-// (shell-mutation-guard ENVIRONMENT_OVERRIDE). options.ruleRoot exists for in-process callers.
+// CLAUDE_PROJECT_DIR, as the hooks read it) and, without both, the Harness tree this file ships
+// in -- never the working directory, which for a worker is the very repository to be judged.
+// options.ruleRoot exists for in-process callers.
 const harnessTree = path.resolve(here, "..", "..");
 
 function sessionRuleRoot(options = {}) {
@@ -2130,7 +2124,7 @@ function releaseStaleLock(options) {
 }
 
 // E1: the Owner's general OK for a project is one entry of publishProjects in
-// .claude/mutation-policy.json (agents never write that file, write-guard W4). Returns the entry as a
+// .claude/mutation-policy.json (the Owner maintains that file). Returns the entry as a
 // relative path when repoRoot is listed, else null; an invalid policy is fail-closed.
 function listedPublishProject(repoRoot, options) {
   const root = sessionRuleRoot(options);
@@ -2322,8 +2316,8 @@ async function publish(options) {
 
 // Review notes (package P7b): results of verified checks live as Git notes of ref keel-proof, written
 // only through these two intents. The honest limit (concept 3.1): agents run under the Owner's
-// Windows account, so someone who writes check code on purpose can forge a note; the shell guard
-// therefore does not additionally close proof-note-write, it only says that the Harness itself calls it.
+// Windows account, so someone who writes check code on purpose can forge a note; nothing therefore
+// additionally closes proof-note-write, it only says that the Harness itself calls it.
 const PROOF_NOTES_REF = "keel-proof";
 
 // The JSON of a note may come only from the Harness's own temp or run folders: a run folder

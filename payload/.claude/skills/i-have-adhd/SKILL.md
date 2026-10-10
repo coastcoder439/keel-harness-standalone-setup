@@ -123,17 +123,17 @@ thanks, no recaps, no code it can run itself.
 User asks for status after a build.
 DO NOT: "Damit ist die komplette Haertegrad-Liste abgearbeitet." (claimed
 done; the same message listed four open points — caught by the user)
-DO: "Gebaut und belegt: write-guard, Selbsttest 8/8.
+DO: "Gebaut und belegt: prompt-form, Selbsttest 8/8.
     Geprueft gegen:
     1. Tests 257/257
     2. Abnahme 14/14
     Offen:
-    1. rebuild-guide kennt write-guard nicht — ICH
+    1. rebuild-guide kennt prompt-form nicht — ICH
     2. Live-Beweis erst in einer neuen Session — ICH"
 
 User asks what is open (real case, 27.08.2026).
 DO NOT: "Geprueft gegen: ls docs/packages/, Offen-Zeilen aller elf Pakete,
-Selbsttests prompt-form 4/4 · dod-guard 10/10 · paket-gate 9/9" (four items
+Selbsttests prompt-form 4/4 · dod-guard 10/10 · session-roles 9/9" (four items
 strung into one line — the reader called it "komplett unuebersichtlich")
 DO: the same four items, one per line, numbered.
 

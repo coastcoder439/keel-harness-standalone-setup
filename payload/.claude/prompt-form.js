@@ -51,7 +51,7 @@ function shortForm(binding) {
     ? "Paketkontext: " + binding.repoKey + "::" + binding.packageId + " in " + binding.packageFile +
       "; Scope " + binding.scope + ", Leaf " + binding.leaf +
       ". Reihenfolge: OWNER.md und PackageStatus lesen, dann ausschliesslich den naechsten Package-Executor-Uebergang ausfuehren; Planhaken werden aus Evidence abgeleitet. "
-    : "Paketkontext: noch ungebunden. Vor der ersten fachlichen Schreibung muss paket-gate ein valides <repo>/docs/packages/<packageId>/PACKAGE.md erklaeren. ";
+    : "Paketkontext: noch ungebunden. ";
   return "Antwortform (jede Antwort): Antwort zuerst, dann Antwortart (Entscheidung/Bericht/Analyse). " +
     packageRule +
     "Der naechste Git-Root des Schreibziels besitzt das Bundle; es gibt keine zentrale Werkbank-Paketsuche. " +

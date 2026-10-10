@@ -4,8 +4,10 @@ Eine Owner-Korrektur wird zuerst in eigenen Worten gegen den unveränderlichen
 Auftrag gespiegelt. Danach werden echter Code, Paketstatus und Evidence gelesen;
 Vermutungen sind keine Grundlage für Änderungen.
 
-Eigene ungesicherte Änderungen werden nicht durch wechselnde Git-Syntax
-zurückgebaut. Der einzige Weg ist discard-working mit Recovery-Receipt; falls
-nötig folgt recover-discard. Der letzte exakte eigene Checkpoint wird nur über
-revert-checkpoint zurückgenommen. Breite History-Rewrites, fremde Änderungen
-oder nicht recoverable Löschungen brauchen eine Owner-Entscheidung.
+Eigene ungesicherte Änderungen werden nicht blind zurückgebaut: erst den Stand
+sichern (Commit oder Kopie), dann zurücknehmen, sodass der Rückbau selbst
+wiederherstellbar bleibt. Der letzte eigene Checkpoint wird mit git revert
+zurückgenommen, nicht durch Umschreiben der Historie. Breite History-Rewrites,
+fremde Änderungen oder nicht recoverable Löschungen entscheidet der Owner; sein
+ausdrücklicher Auftrag im Chat genügt. Auf GitHub gilt zusätzlich der
+GitHub-Löschschutz.

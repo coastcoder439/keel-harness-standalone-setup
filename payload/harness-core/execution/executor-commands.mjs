@@ -1,6 +1,5 @@
 // The command list of the package executor, in one place (package P6, D17). The executor builds its --help
-// from it and the command index (harness-core/guards/command-index.mjs) builds the entries "Paket und
-// Executor" from it, so the index can never name a command the executor does not have or leave one out.
+// from it, so the help can never name a command the executor does not have or leave one out.
 // Importing this module starts nothing: it holds data only.
 
 export const EXECUTOR_USAGE_HEAD = "usage: package-executor.mjs <command> --root DIR --harness-root DIR --package ID --scope ID [options]";

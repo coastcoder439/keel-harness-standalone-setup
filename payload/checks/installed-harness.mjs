@@ -16,38 +16,26 @@ const check = (condition, message) => {
   if (!condition) failures.push(message);
 };
 const read = (...parts) => readFileSync(join(root, ...parts), "utf8");
+// The hook programs of .claude: the GitHub delete protection is the only PreToolUse hook, the others start a session, answer a
+// prompt, check the result of the work at Stop or show the status.
 const guards = [
-  "danger-guard.js", "dashboard-ensure.js", "dod-guard.js", "git-intent-guard.js", "mcp-write-guard.js", "onboarding-start.js",
-  "package-context.js", "paket-gate.js", "pollution-warn.js", "pretool-guards.js", "project-context.js",
-  "prompt-form.js", "repo-status.js", "session-roles.js", "sessionpost-guard.js",
-  "shell-mutation-guard.js",
-  "statusline.js", "uncommitted-warn.js", "unlazy-stop.js", "write-guard.js",
+  "dashboard-ensure.js", "dod-guard.js", "github-delete-guard.js", "onboarding-start.js",
+  "package-context.js", "pollution-warn.js", "project-context.js",
+  "prompt-form.js", "repo-status.js", "session-roles.js",
+  "statusline.js", "uncommitted-warn.js", "unlazy-stop.js",
 ].sort();
-const selfTests = ["package-context.js", "danger-guard.js", "git-intent-guard.js", "mcp-write-guard.js",
-  "write-guard.js", "dod-guard.js", "paket-gate.js", "prompt-form.js",
-  "uncommitted-warn.js", "unlazy-stop.js", "shell-mutation-guard.js", "pretool-guards.js"];
+const selfTests = ["package-context.js", "github-delete-guard.js", "dod-guard.js", "prompt-form.js",
+  "uncommitted-warn.js", "unlazy-stop.js"];
 
 check(/^(?:#[^\n]*\n+)?@AGENTS\.md\s*$/u.test(read("CLAUDE.md").replace(/\r\n/gu, "\n")), "CLAUDE.md is not only the @AGENTS.md import (D3)");
 const actualGuards = readdirSync(join(root, ".claude"), { withFileTypes: true })
   .filter((entry) => entry.isFile() && entry.name.endsWith(".js")).map((entry) => entry.name).sort();
-check(JSON.stringify(actualGuards) === JSON.stringify(guards), "active guard inventory differs");
+check(JSON.stringify(actualGuards) === JSON.stringify(guards), "active hook inventory differs");
 check(!existsSync(join(root, ".claude", "git-guard.js")) &&
-  !existsSync(join(root, ".claude", "commit-pathspec-guard.js")), "superseded Git guards are present");
+  !existsSync(join(root, ".claude", "commit-pathspec-guard.js")), "superseded Git hooks are present");
 check(!existsSync(join(root, ".claude", "settings.local.json")), "machine-local Claude settings entered the payload");
-// Owner mutation policy (audit B7): present, one regular file, valid shape -- the guards read it.
-const policyFile = join(root, ".claude", "mutation-policy.json");
-check(existsSync(policyFile) && lstatSync(policyFile).isFile() && !lstatSync(policyFile).isSymbolicLink(), "Owner mutation policy file is missing");
-try {
-  const policy = JSON.parse(read(".claude", "mutation-policy.json"));
-  check(policy.schemaVersion === 1 && Array.isArray(policy.verifierPaths) && Array.isArray(policy.testPaths) &&
-    policy.mcpWriteTools && Array.isArray(policy.mcpWriteTools.allow) &&
-    (policy.publishProjects === undefined || Array.isArray(policy.publishProjects)), "Owner mutation policy has an invalid shape");
-} catch (error) {
-  check(false, "Owner mutation policy is not valid JSON: " + error.message);
-}
-
 for (const required of [
-  [".codex", "hook-runner.cjs"], [".codex", "apply-patch-guard.cjs"], [".codex", "dod-guard.cjs"],
+  [".codex", "hook-runner.cjs"], [".codex", "dod-guard.cjs"],
   ["harness-core", "binding", "package-bootstrap.cjs"],
   ["harness-core", "binding", "package-binding.cjs"],
   ["harness-core", "execution", "package-bootstrap.mjs"],
@@ -57,12 +45,10 @@ for (const required of [
   ["harness-core", "execution", "owner-ok.mjs"],
   ["harness-core", "execution", "execution-receipts.mjs"],
   ["harness-core", "git", "git-intent.mjs"],
-  // The guards load these at start and block every call without them (guard-parity E1, E9, E13).
-  ["harness-core", "guards", "command-model.cjs"], ["harness-core", "guards", "hook-context.cjs"],
-  ["harness-core", "guards", "owner-handoff.cjs"], ["harness-core", "guards", "publish-projects.cjs"],
-  // Every denial names its entry of the command index (guard-routes.cjs); the SessionStart hook and the agents' briefs
-  // build the index itself (command-index.mjs, brief-sections.mjs; package P6, D17).
-  ["harness-core", "guards", "guard-routes.cjs"], ["harness-core", "guards", "command-index.mjs"],
+  // The hook context (root and session of a hook) is shared by the hooks; publish-projects and session-scope are loaded by
+  // the executor and the Git tool.
+  ["harness-core", "guards", "hook-context.cjs"], ["harness-core", "guards", "publish-projects.cjs"],
+  ["harness-core", "guards", "session-scope.cjs"],
   // Both Stop hooks (dod-guard, unlazy-stop) and the Codex DoD adapter ask it whether an answer claims finished work.
   ["harness-core", "guards", "done-claim.cjs"],
   ["harness-core", "execution", "executor-commands.mjs"], ["harness-core", "execution", "brief-sections.mjs"],
@@ -90,8 +76,10 @@ for (const configPath of [[".claude", "settings.json"], [".codex", "hooks.json"]
 const codexHooks = JSON.parse(read(".codex", "hooks.json"));
 check(Array.isArray(codexHooks.hooks?.PostToolUse) && codexHooks.hooks.PostToolUse.length > 0,
   "Codex native PostToolUse state adapter is missing");
-check(JSON.stringify(codexHooks).includes("apply-patch-guard.cjs"),
-  "Codex apply_patch is not projected into write/package guards");
+check(JSON.stringify(codexHooks).includes("github-delete-guard.js") && JSON.stringify(codexHooks).includes("dod-guard.cjs"),
+  "Codex does not wire the GitHub delete protection and the DoD adapter");
+check(JSON.stringify(read(".claude", "settings.json")).includes("github-delete-guard.js"),
+  "Claude does not wire the GitHub delete protection");
 check(/\[features\]\s+hooks = true/mu.test(read(".codex", "config.toml")), "Codex hooks are not explicitly enabled");
 
 const claude = JSON.parse(read(".claude", "settings.json"));
@@ -199,5 +187,5 @@ if (failures.length) {
     pass: checksRun, fail: 0, skip: 0,
   }));
   console.log("installed harness: full Unlazy lifecycle, " + guards.length +
-    " shared hooks plus native Codex patch/DoD adapters, no live package copy");
+    " shared hooks plus the native Codex DoD adapter, no live package copy");
 }

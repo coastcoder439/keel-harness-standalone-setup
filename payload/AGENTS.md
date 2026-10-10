@@ -8,8 +8,12 @@
 - Dieses Harness gilt ausschließlich für das echte Git-Repository, in dessen
   Wurzel es installiert ist. Es enthält keinen fest eingebauten Projekt-,
   Workspace-, Sitzungs- oder Rollennamen.
-- Ohne den dafür vorgesehenen, paketgebundenen Git-Intent und die erforderliche
-  Owner-Freigabe erfolgt kein Commit oder Push.
+- Lokal arbeiten Agenten frei: Dateien schreiben und löschen, committen,
+  pushen, installieren und Skripte ausführen brauchen weder ein Paket noch eine
+  Bindung noch eine Freigabe. Der einzige Schutz ist der GitHub-Löschschutz:
+  Löschen und Überschreiben auf GitHub (zum Beispiel einen Branch oder ein
+  Release löschen, ein Force-Push auf main) geschieht nur mit ausdrücklicher Erlaubnis
+  des Owners im Chat; die Freigabe für den Befehl ist `KEEL_GITHUB_DELETE_OK=1`.
 - Projektsprache, Owner-Rolle, zusätzliche Schreibwurzeln und Publish-Regeln
   werden je Installation in `docs/harness-instance.md` festgelegt.
 - Zugangsdaten, lokale Freigaben und settings.local.json werden nie
@@ -19,11 +23,11 @@
 
 ## Arbeitsweise
 
-Produktdateien ändert nur, wer an einen Arbeitsschritt eines Pakets gebunden ist
-(Arbeitsagent oder der Orchestrator in seinem eigenen Paket, solange dort kein
-Agent läuft). Planen, Pakete anlegen, delegieren, prüfen, Git-Pflege,
-Projektwerkzeuge, MCP-Dienste und das Installationsprofil brauchen kein eigenes
-Paket.
+Geprüft wird das Ergebnis der Arbeit (Unlazy-Gates, Fertig-Format), nicht die
+einzelne Handlung. Ein Arbeitsagent eines Pakets ändert die Dateien seines
+Arbeitsschritts (OWNS); der Rücklauf übernimmt nur diese Dateien. Planen, Pakete
+anlegen, delegieren, prüfen, Git-Pflege, Projektwerkzeuge, MCP-Dienste und das
+Installationsprofil brauchen kein eigenes Paket.
 
 ## Repo, Paket und Originalauftrag
 
@@ -97,101 +101,41 @@ Geschlossen wird nur bei vollständiger Coverage und Fulfillment.
 Prompt-Erinnerungen und Schlussformulierungen sind Kommunikation, kein
 deterministischer Ersatz für diese Übergänge.
 
-## Endliche Git-Schnittstelle
+## Claude, Codex und der GitHub-Löschschutz
 
-Rohe mutierende Git-Befehle sind gesperrt. Für jede erlaubte Absicht existiert
-genau ein Aufruf über harness-core/git/git-intent.mjs:
+Der Package-Executor startet Claude-Arbeitsagenten mit der Claude CLI und
+Codex-Leaves mit codex exec, beide ohne Wächter-Hooks; delegierte Codex-Arbeit
+nutzt gpt-5.6-sol mit max. Beide sehen ihre Paketsitzung in
+KEEL_PACKAGE_SESSION. .claude/settings.json aktiviert weiter das offizielle
+projektbezogene codex@openai-codex-Plugin; seine Befehle laufen über ein
+Node-Skript außerhalb der Installation. Codex- oder Claude-Erfolg ersetzt nie
+lokale Evidence.
 
-- inspect, checkpoint, unstage
-- discard-working mit Recovery-Receipt und recover-discard
-- revert-checkpoint nur für den letzten exakten eigenen Checkpoint
-- integration-checkpoint einmal nach verifizierten parallelen Leaves
-- publish nur über den Package-Executor mit dem Owner-OK-Wortlaut
-  (`publish --closure-receipt <RECEIPT> --owner-ok "<Wortlaut>"`); Git bindet
-  dabei den Publish-Plan an den unveränderten HEAD und schreibt den Wortlaut in
-  den Publish-Beleg
-- publish für ein Projekt-Repo, das der Owner in `publishProjects` von
-  `.claude/mutation-policy.json` eingetragen hat (sein allgemeines OK je Projekt, die
-  Datei ändert nur er): `plan-publish --root <REPO>`, dann `publish --root <REPO>
-  --receipt <PLAN>` ohne Paketabschluss und ohne Owner-Satz. Gepusht wird immer nur der
-  aktuelle Branch nach origin, nur als Fast-Forward, nie mit Überschreiben; ein
-  Push, der kein Fast-Forward wäre, endet mit PUBLISH_NOT_FAST_FORWARD (erst holen
-  und zusammenführen). Für jedes andere Repo gilt der Weg über den Paketabschluss
-- release-stale-lock --root <REPO> entfernt eine verwaiste index.lock des eigenen
-  Repos, nur wenn sie 0 Byte groß und älter als 5 Minuten ist; die Sperrmeldung und
-  ein an index.lock gescheiterter Aufruf nennen diesen Weg
-- proof-note-write und proof-notes-sync schreiben und gleichen die Prüfnotizen
-  (Ref keel-proof) ab; sie ruft der Harness selbst auf (ehrliche Grenze: unter
-  demselben Windows-Konto kann ein Agent Prüfcode schreiben, der sie ebenfalls
-  aufruft, siehe docs/guard-scope.md)
-
-Breite Historienumschreibungen und nicht recoverable Löschungen bleiben
-Owner-Entscheidungen. Leaf-Agenten committen nicht mitten in einer parallelen
-Welle; der Parent integriert alle verifizierten disjunkten Pfade einmal — der
-git-intent checkpoint erzwingt das aus dem Dispatch-Zustand (WAVE_IN_PROGRESS).
-Einzige Ausnahme ist das Release des Produkts selbst: im Produkt-Quellbaum
-führt scripts/release-standalone.mjs alle Git-Schritte des Releases aus, nur
-als Fast-Forward, nur aus sauberen Bäumen und mit dem Owner-OK-Wortlaut in
-beiden Release-Commits.
-
-## Claude, Codex und aktive Schutzschichten
-
-Dieselben Wächter gelten für jeden Agenten des Harness und für Bash wie
-PowerShell: die eigene Claude-Sitzung, Arbeitsagenten der Claude CLI und Codex.
-Der Package-Executor startet Claude-Arbeitsagenten mit den PreToolUse-Wächtern
-der Harness-Wurzel als einziger Einstellung (--setting-sources "" --settings)
-und Codex-Leaves mit codex exec, denselben Wächtern als Hooks und
---dangerously-bypass-hook-trust; delegierte Codex-Arbeit nutzt gpt-5.6-sol mit
-max. Beide sehen ihre Paketsitzung in KEEL_PACKAGE_SESSION. .claude/settings.json
-aktiviert weiter das offizielle projektbezogene codex@openai-codex-Plugin; seine
-Befehle laufen über ein Node-Skript außerhalb der Installation und sind in
-bewachten Sitzungen gesperrt. Eine eigene Codex-Sitzung bekommt die Wächter über
-.codex/hooks.json, sobald der Owner sie dort einmal mit /hooks freigibt. Codex-
-oder Claude-Erfolg ersetzt nie lokale Evidence.
-
-Einen Befehl an den Owner gibt es nur für die Handlungen, die allein der Owner
-darf; die Liste steht in docs/guard-scope.md. Sperrt ein Wächter eine solche
-Handlung, die für das Ziel des Owners nötig ist, legt der Agent sie dem Owner
-vor: ein Satz, was passiert und warum, „Achtung, du musst diesen Befehl ausführen:“
-und genau der Befehl, den die Sperrmeldung selbst mitliefert, als einzeiliger
-bash-Block, den die App mit dem Ausführen-Knopf zeigt und in PowerShell
-ausführt. Arbeit, die ein Agent erledigen soll (Sichern, Aufräumen, Stilllegen,
-Abschließen), landet nie als Befehl beim Owner; die Sperrmeldung nennt dafür den
-erlaubten Agentenweg, etwa Sichern über harness-core/git/git-intent.mjs
-checkpoint (mit --session für ein gebundenes Leaf, mit --root und --package für
-ein geschriebenes, noch nicht gestartetes Paket) und Stilllegen oder
-Zusammenführen über harness-core/execution/package-resolve.mjs resolve. Gibt es
-keinen erlaubten Weg, meldet der Agent die Sperre unter Offen:. Vom Installer
-verwaltete Harness-Dateien (.keel-harness/state.json) ändert keine Sitzung
-direkt (write-guard W5); der Weg ist Release plus Harness-Update, das der Agent
-nach dem OK des Owners auslöst.
+Der GitHub-Löschschutz gilt für jeden Agenten gleich: die eigene Claude-Sitzung,
+Arbeitsagenten der Claude CLI und Codex, für Bash wie PowerShell. Er sperrt
+Löschen und Überschreiben auf GitHub, bis der Owner es im Chat ausdrücklich
+erlaubt hat; die Freigabe für den Befehl ist KEEL_GITHUB_DELETE_OK=1. Sonst
+sperrt er nichts. Eine eigene Codex-Sitzung bekommt ihn über .codex/hooks.json,
+sobald der Owner ihn dort einmal mit /hooks freigibt. Sagt der Owner einem
+Agenten, etwas auf GitHub zu löschen, ist das die Erlaubnis; der Agent setzt die
+Freigabe für genau diesen Befehl.
 
 Aktiv verdrahtet sind:
 
-- SessionStart: der Befehlsindex (wo liegt was, was ist erlaubt, wie heißt der Weg;
-  aus den Regeln der Wächter erzeugt, unter 6.000 Zeichen), installationsdefinierte
-  Rollen, Onboarding (schlägt `/onboarding` vor, solange das Installationsprofil
-  `[AUSFUELLEN]` trägt; ohne Paket), Projektkontext und Scope-Verschmutzung; das Produkt liefert
-  keine vorgegebenen Sessions aus.
+- SessionStart: installationsdefinierte Rollen, Onboarding (schlägt
+  `/onboarding` vor, solange das Installationsprofil `[AUSFUELLEN]` trägt; ohne
+  Paket), Projektkontext und Scope-Verschmutzung; das Produkt liefert keine
+  vorgegebenen Sessions aus.
   Läuft das Dashboard nicht, startet dashboard-ensure es (nur in Installationen
   mit Runtime-Archiv; KEEL_DASHBOARD_AUTOSTART=0 schaltet das ab).
 - UserPromptSubmit: knappe Antwortform und bereits gebundene Paketidentität.
-- PreToolUse: git-intent-guard, endliche shell-mutation-guard-Schnittstelle und
-  nicht-Git-danger-guard (diese drei für Bash und PowerShell), write-guard,
-  exakte Leaf-paket-gate-Bindung, Sessionpost-Regel und MCP-Schreibgrenze
-  (mcp-write-guard; Owner-Erweiterungen, Produkt-Wurzeln und MCP-Allowlist in
-  .claude/mutation-policy.json); Zuschnitt: docs/guard-scope.md. Alle Wächter
-  eines Werkzeugaufrufs laufen in einem Prozess (.claude/pretool-guards.js, ohne
-  Shell gestartet); Codex lädt sie im Hook-Runner.
+- PreToolUse: der GitHub-Löschschutz (github-delete-guard, für Bash und
+  PowerShell), sonst nichts.
 - Stop: dod-guard sperrt nur beim Fertig-Anspruch (Meldung ohne `Geprueft gegen:`
   und `Offen:`); den vollständigen Unlazy-Gate-/Dispatch-Schutz bekommt ein
   Arbeitsagent, sonst nur die Sitzung, die ihr Paket orchestriert, und nur bei
   Fertig-Anspruch mit offenen Gates; dazu lokaler Backup-Hinweis.
 - Statusline: tatsächliches Repo, Branch und Sicherungszustand.
-
-git-guard und commit-pathspec-guard sind keine zweite aktive oder dormante
-Route. Der vollständige Ein-/Ausschlussnachweis steht in
-docs/active-harness-inventory.md.
 
 ## Dashboard, Nachweis und Lieferung
 
@@ -209,10 +153,8 @@ ein ausdrücklich freigegebener Publish erfolgen.
 
 ## Bedienung
 
-- Befehlsindex: steht beim Sitzungsstart im Kontext jeder Sitzung (Claude und Codex) und fest im
-  Auftrag jedes Arbeitsagenten; ausführlich `node harness-core/guards/command-index.mjs --full`,
-  ein Abschnitt mit `--section "<Abschnitt>"`, maschinenlesbar mit `--json`. Jede Sperrmeldung
-  nennt den passenden Eintrag („Weg: siehe Befehlsindex, Abschnitt Git -> checkpoint“).
+- Git: normales git ist frei. harness-core/git/git-intent.mjs (inspect, checkpoint, unstage,
+  discard-working, revert-checkpoint u. a.) bleibt als Werkzeug, ist aber kein Pflichtweg.
 - Paketstatus: node harness-core/execution/package-executor.mjs status ...
 - Nächstes Leaf/Fan-out: next|start, dann dispatch (mit `--step-copy` arbeitet jeder Schritt in einer
   eigenen Arbeitskopie; der Rücklauf übernimmt nur die Dateien seines OWNS)
@@ -221,7 +163,7 @@ ein ausdrücklich freigegebener Publish erfolgen.
   --session <id> (nur Orchestrator; Beleg im Paket, Datum und Sitzung in EVIDENCE)
 - Abschluss: close
 - Dashboard-Betrieb: npm run dashboard (Mensch) oder node dashboard/serve.mjs [--port <n>]
-  (Agent; npm-Skripte nur ohne Bindung an einen Arbeitsschritt) — beide starten denselben einzigen
+  (Agent) — beide starten denselben einzigen
   Startweg; dashboard/serve.mjs
   startet die gebaute Runtime als einen Prozess lokal auf 127.0.0.1; Pruefung:
   npm run test:dashboard:runtime

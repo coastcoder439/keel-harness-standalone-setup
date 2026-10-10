@@ -90,43 +90,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/pretool-guards.js",
-              "shell"
-            ],
-            "timeout": 20,
-            "statusMessage": "Waechter: Git-Intent, Shell-Mutationsgrenze, danger-guard (ein Prozess)"
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit|NotebookEdit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/pretool-guards.js",
-              "write"
-            ],
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/github-delete-guard.js\"",
             "timeout": 10,
-            "statusMessage": "Waechter: write-guard und Paket-Leaf-Zuordnung (ein Prozess)"
-          }
-        ]
-      },
-      {
-        "matcher": "mcp__.*|EnterWorktree",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node",
-            "args": [
-              "${CLAUDE_PROJECT_DIR}/.claude/pretool-guards.js",
-              "mcp"
-            ],
-            "timeout": 10,
-            "statusMessage": "Waechter: MCP-Schreibgrenze und Sessionpost-Regel (ein Prozess)"
+            "statusMessage": "GitHub-Löschschutz"
           }
         ]
       }

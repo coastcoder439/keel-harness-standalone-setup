@@ -3,8 +3,7 @@
 // Hook activity of a planning session (P4 D15). A planning binding (.unlazy/.bootstrap/<sha256>.json)
 // may move to another session id by hand only when the holder has been silent for silenceMs. Nothing
 // else records that a session is alive, so every hook of the session touches its record at its entry
-// (noteHookInput: git-intent-guard, shell-mutation-guard and danger-guard for every Bash/PowerShell call,
-// write-guard, paket-gate, mcp-write-guard, prompt-form and the Stop hook unlazy-stop): the time of the
+// (noteHookInput: prompt-form and the Stop hook unlazy-stop): the time of the
 // last touch is the modification time of the record file. utimes never creates a file, so a hook of
 // an old session cannot bring a taken-over record back; an unreadable or missing record is no activity
 // and never an error. The module needs nothing but the standard library and hook-context.cjs, so the
