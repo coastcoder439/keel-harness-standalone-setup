@@ -114,7 +114,8 @@ ist der Kosmos vollständig, falls das Konto später eine Domain bekommt. Für e
 Der Agent öffnet die **Google Auth Platform** (`console.cloud.google.com/auth`) → **Erste
 Schritte** und füllt aus:
 
-- App-Name = voller Name der Organisation + „Google Admin-Vollzugriff" (z. B. „Beispiel-Organisation – Google Admin-Vollzugriff"; den sieht jeder Nutzer beim Anmelden), Support-Mail und
+- App-Name = voller Name der Organisation + „Google Admin-Vollzugriff" (z. B. „Beispiel-Organisation
+  – Google Admin-Vollzugriff"; den sieht jeder Nutzer beim Anmelden), Support-Mail und
   Kontakt = deine Konto-Mail.
 - **Nutzertyp: Extern** (ein `gmail.com`-Konto hat nur diese Wahl; ein Workspace-Konto
   könnte „Intern" nehmen).
