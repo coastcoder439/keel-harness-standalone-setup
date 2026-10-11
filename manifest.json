@@ -3,14 +3,14 @@
   "product": {
     "id": "keel-harness",
     "name": "Keel Harness",
-    "version": "1.5.1",
+    "version": "1.5.2",
     "updateSource": {
       "repository": "https://github.com/coastcoder439/keel-harness-standalone-setup",
       "branch": "main"
     }
   },
   "payload": {
-    "treeSha256": "0d73354181c704ed8df7627fbae1302757c22b559fe6695b4677bc6d0217f630"
+    "treeSha256": "b8ff84f3af3d6b66e804a632391eec0e908a0cd42ac7c5f38fe32b5203a3c328"
   },
   "provenance": {
     "unlazy": {
@@ -27,9 +27,9 @@
         "adapted": 31,
         "added": 41,
         "removed": 0,
-        "sha256": "a215ba65579f76bbaa0d90538c5afedab68ff63bdce717e0816732d80a0f9524"
+        "sha256": "881c5e6ea2c6789425cfdb156028fca07822e672d63bf1c8127d0128ec7caaff"
       },
-      "vendoredTreeSha256": "6661d13bc2489bf718332dc03704c673fee243be50c99e979a239d2f6e583c10",
+      "vendoredTreeSha256": "be09a32d1e9cc8d5ce853c5104b703a296e20f73f75cb8096013539036a965d7",
       "adaptation": "The exact upstream base is pinned by revision; the delivered adapted tree is pinned separately by its deterministic tree digest."
     },
     "understandAnything": {
@@ -802,19 +802,19 @@
       "mode": "copy",
       "generated": true,
       "sourceBytes": 334,
-      "sourceSha256": "3f01a7915d5c15f7be37daf8531c2c01f792863dc862a62e0de564e5331579a0",
+      "sourceSha256": "3ad731f5719d6788084627e1bc5850bc34b81c81986ca76239a06016cd2c521c",
       "bytes": 334,
-      "sha256": "3f01a7915d5c15f7be37daf8531c2c01f792863dc862a62e0de564e5331579a0"
+      "sha256": "3ad731f5719d6788084627e1bc5850bc34b81c81986ca76239a06016cd2c521c"
     },
     {
       "source": "generated/dashboard/runtime.keel.gz",
       "target": "dashboard/runtime.keel.gz",
       "mode": "copy",
       "generated": true,
-      "sourceBytes": 17734197,
-      "sourceSha256": "bf553352face7662a79ca26934fbc218632f26146ec44327071fd163114e2474",
-      "bytes": 17734197,
-      "sha256": "bf553352face7662a79ca26934fbc218632f26146ec44327071fd163114e2474"
+      "sourceBytes": 17737119,
+      "sourceSha256": "6d4e68a318743419ba9f53fc3c72841e815f79308922dccc8160ad7aeaea2159",
+      "bytes": 17737119,
+      "sha256": "6d4e68a318743419ba9f53fc3c72841e815f79308922dccc8160ad7aeaea2159"
     },
     {
       "source": "test-harness/standalone/templates/dashboard-serve.mjs",
@@ -1564,7 +1564,7 @@
       "sourceBytes": 532,
       "sourceSha256": "9f4848b1093b5afb96033eef037c8dd296203b9bd41ec5d9d78fee390f7a0087",
       "bytes": 571,
-      "sha256": "7ac777b19f33697cf68d8e1ebf01175aeea55b022b3c9b065a308f5b76557494"
+      "sha256": "734f8fa8ea60ebfdd852e8b3def6064a079f58d8a27b9f99783c6156effecfca"
     },
     {
       "source": "test-harness/roles/accountability.md",
@@ -5772,9 +5772,9 @@
       "mode": "copy",
       "generated": false,
       "sourceBytes": 7072,
-      "sourceSha256": "804e623995d9a56a92921c53030036176e8ac139d8095e839140cca0ecfffc8d",
+      "sourceSha256": "3847fa128f611c573f768161bc9916f4f84acb6acf838fd256ff7d5af6a55989",
       "bytes": 7072,
-      "sha256": "804e623995d9a56a92921c53030036176e8ac139d8095e839140cca0ecfffc8d"
+      "sha256": "3847fa128f611c573f768161bc9916f4f84acb6acf838fd256ff7d5af6a55989"
     },
     {
       "source": "vendor/unlazy/scripts/lib/silence-watch.mjs",
