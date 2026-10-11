@@ -40,7 +40,9 @@ Hooks of earlier releases are withdrawn on install and upgrade. `mergeHooks` rem
 PreToolUse hooks the product delivered before (`RETIRED_PRODUCT_HOOKS`: Claude entries in both the whole-command
 form and the exec form with args, and the Codex runner entries in `.codex/hooks.json`) from `.claude/settings.json`
 and `.codex/hooks.json`, recognised by their exact identity (command and args); `dod-guard`, `unlazy-stop` and
-every user hook stay. The only PreToolUse hook left is `github-delete-guard`. Files the product no longer
+every user hook stay. This includes `git-guard` and `commit-pathspec-guard`, which the workbench build wired
+as well (whole-command form, matcher `Bash`, with an `if` on git commands); before 1.5.3 they were missing from the
+list and survived every upgrade. The only PreToolUse hook left is `github-delete-guard`. Files the product no longer
 delivers (the scripts of the removed hooks) are removed from the installation by the upgrade because the
 installer created them; a managed file with local edits blocks the upgrade as drift.
 
