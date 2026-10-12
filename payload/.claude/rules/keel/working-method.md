@@ -48,6 +48,20 @@ nach dem Vorschau-Start (`preview_start` ist für Agenten frei, ebenso `node das
 nie mit einem eigenen Skript je Paket. Jedes Bild hängt am Code-Stand der Oberfläche; `--verify`
 lehnt Bilder eines älteren Stands ab, ein neuer Lauf fotografiert nur die genannten Zustände neu.
 
+**RAM messen, fremde Prozesse nie beenden** [Owner 15.09.2026: „stoppe du verbrauchst zuviel ram“]:
+Vor dem Start eines Servers, Browsers oder lokalen Modells misst der Agent den freien
+Arbeitsspeicher (`node harness-core/tools/measure.mjs ram`) und startet nicht, wenn weniger als
+die Untergrenze frei ist (Vorgabe 4 GB, einstellbar von 2 bis 4 GB über `overrides.freeRamFloorGb`
+in `runtime/voice/system-profile.json`). Ein Wert knapp unter der Grenze genügt nicht zum Abbruch:
+kurz warten, neu messen. Fremde Prozesse beendet der Agent nie.
+
+**Ordnung heißt Zugehörigkeit** [Owner 24.08.2026: „Jede Datei lebt im Repo ihres Projekts, dort bei ihrem Thema“]:
+Doku liegt bei Doku, Tests bei Tests, Code bei Code; neue Themen dürfen neue Ordner bilden.
+Prüfsatz: Zu jeder Datei lässt sich in einem Satz sagen, zu welchem Projekt und Thema sie gehört,
+sonst liegt sie falsch. Was keinem Projekt dient (Versuche, Wegwerf-Dateien), kommt ins
+Session-Scratchpad, nie in ein Repo. Ist die Projektsprache Deutsch, sind Coding-Namen (Dateien,
+Ordner, Felder, Identifier) englisch; Deutsch bleibt Erklär-Prosa und Anzeige-Texten vorbehalten.
+
 Portabilität wird beim Schreiben entschieden, nicht nachträglich: Windows ist
 die erste Zielplattform, deshalb setzt jeder neue Code Pfade über `path.join`
 statt über zusammengesetzte Strings zusammen, führt plattformabhängiges

@@ -16,3 +16,13 @@ Muss-Verhalten wird nie der Skill-Description ueberlassen, sondern per Hook, Reg
 Werkzeug-Kopplung erzwungen; und wenige Skills schlagen viele, weil das Skill-Verzeichnis
 nur 1 % des Kontextfensters bekommt und bei Ueberlauf die Descriptions der selten
 genutzten Skills verwirft — eine fremde Skill-Flut macht damit die eigenen unsichtbar.
+
+**Werkzeug des Owners zuerst gegen seinen Zweck pruefen** [Owner 25.09.2026: „stopp, Moment … warum ist das nur ein Vorbild?“]:
+Bringt der Owner ein Werkzeug, haelt der Agent zuerst dessen Zweck in einem Satz fest und prueft
+das Werkzeug gegen diesen Zweck. Erst danach vergleicht er es mit den eigenen Paketen; es wird nie
+vorab zum bloßen Vorbild herabgestuft.
+
+**Belegfragen neutral stellen** [gemessen 19.09.2026: WebFetch gab eine Kandidatenliste als Fund
+zurueck, die im Dokument nicht stand]: Belegfragen an WebFetch und Unteragenten nennen keine
+Kandidatennamen, fragen offen (zum Beispiel „welche Firmen werden genannt?“) und verlangen
+woertliche Zitate. „Belegt“ ist nur, was als Zitat aus der Quelle kommt.

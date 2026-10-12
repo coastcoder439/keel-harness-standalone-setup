@@ -21,9 +21,11 @@ through the journal, and restores the previously installed version if any
 step fails. Downgrade requires an explicit uninstall followed by installation
 of the chosen older artifact.
 
-Four targets are Owner data, not distribution content, and are exempt from the
+Five targets are Owner data, not distribution content, and are exempt from the
 clean-files rule: `.claude/launch.json` (dev servers), `docs/08-sessions-rollen.md`
-(running session roles), `docs/harness-instance.md` and `docs/tool-landscape.md`. A fresh
+(running session roles), `docs/harness-instance.md`, `docs/tool-landscape.md` and
+`.claude/rules/workbench/owner-rules.md` (the Owner's workspace rules, which Claude Code
+loads in every session; the template is an empty place, `/onboarding` asks for rules). A fresh
 installation lays the template down only where the file is absent; an existing file
 stays untouched, and every later edit is a local change that never blocks `status`,
 `doctor` or `--upgrade`. An upgrade never rewrites such a file and an uninstall keeps an

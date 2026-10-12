@@ -6,7 +6,8 @@ description: Fuehrt das einmalige Onboarding aus: die Sitzung fragt den Menschen
 # Onboarding
 
 Dieser Ablauf laeuft nur, solange `docs/harness-instance.md` noch `[AUSFUELLEN]` enthaelt. Er braucht kein Paket und
-keinen Arbeitsagenten: die Sitzung fragt den Menschen und schreibt nur das Profil `docs/harness-instance.md`. Der
+keinen Arbeitsagenten: die Sitzung fragt den Menschen und schreibt nur das Profil `docs/harness-instance.md` und, falls
+der Mensch dauerhafte Workspace-Regeln nennt, `.claude/rules/workbench/owner-rules.md` (Schritt 5). Der
 Installer legt kein Onboarding-Paket an; ein `harness-onboarding`-Paket einer aelteren Installation ist stillgelegt
 und wird nicht fortgesetzt.
 
@@ -18,13 +19,17 @@ und wird nicht fortgesetzt.
 4. Remote, erlaubte Schreibziele, Publish-Regel und Sitzungsrichtlinie entscheidet der Mensch: frage sie
    ausdruecklich ab. Andere Dateien schreibst du hier nicht (auch nicht `docs/tool-landscape.md`); Werkzeuge und
    Zugaenge nennst du am Ende als Vorschlag fuer spaetere Arbeit, nur Namen, nie Zugangswerte.
-5. Biete das Google-Onboarding als OPTIONALEN Schritt an: das Dashboard laeuft ohne ihn,
+5. Frage zusaetzlich, ob dauerhafte Regeln fuer diesen Workspace gelten (wie hier gearbeitet werden soll). Der Installer
+   hat dafuer `.claude/rules/workbench/owner-rules.md` angelegt; Claude Code laedt sie in jede Sitzung. Schreibe nur
+   Regeln hinein, die der Mensch bestaetigt hat, jede mit Datum und seinem woertlichen Zitat; allgemeine Regeln gehoeren
+   ins Setup, Projektregeln ins Projekt, nicht hierher. Nennt er keine, bleibt die Datei unveraendert.
+6. Biete das Google-Onboarding als OPTIONALEN Schritt an: das Dashboard laeuft ohne ihn,
    nur seine Google-Faehigkeiten (Kalender, Aufgaben, Gmail) brauchen ihn. Stimmt der
    Mensch zu, fuehre ihn Schritt fuer Schritt durch `docs/google-onboarding.md` (eigenes
    Google-Cloud-Projekt, OAuth-Client "Desktop app", client_secrets ablegen, im Dashboard
    verbinden). Lehnt er ab oder vertagt, blockiert das den Rest des Onboardings NICHT.
-6. Pruefe mit `node checks/onboarding-ready.mjs --root . --mode profile`; erwartet ist `PROFILE READY`.
-7. Berichte gesetzte Werte und Offenes. Publish bleibt ein separat freizugebender Save-work-Schritt.
+7. Pruefe mit `node checks/onboarding-ready.mjs --root . --mode profile`; erwartet ist `PROFILE READY`.
+8. Berichte gesetzte Werte, Regeln und Offenes. Publish bleibt ein separat freizugebender Save-work-Schritt.
 
 Bricht der Mensch ab, bleiben die offenen Marken stehen; der naechste Sitzungsstart schlaegt das Onboarding wieder
 vor, bis keine Marke mehr da ist, und erzwingt es nie.

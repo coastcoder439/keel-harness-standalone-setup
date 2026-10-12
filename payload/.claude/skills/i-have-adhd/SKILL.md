@@ -27,6 +27,12 @@ and proceed — do not interrogate.
   shape of the rest — a decision (options with effects, one recommendation),
   a report (what changed · what it means for you · what happens next), or an
   analysis (as long as the topic needs, with headers).
+- The first line of every status message says "fertig" or "nicht fertig", what
+  is missing and how long it takes; "fertig" stands only together with the closing
+  lines Geprueft gegen/Offen. What is decided and the agent's job, you execute and
+  record in the package or card; only what the harness reserves stays with the
+  Owner.
+  [Owner 07.09.2026: „bitte fuer Normalsterbliche formulieren", „diese Entscheidungen gehoeren dir"]
 - The basis is complete in this message. Name the things themselves — never
   point at a document or a register ("your points 1, 3, 5") as a substitute.
 - Restate state every turn ("step 3 of 5, next: X") — the reader cannot hold
@@ -35,6 +41,15 @@ and proceed — do not interrogate.
   level of detail to the level of the request.
 - Numbers are measured, never remembered — write the command that produced
   the number next to it.
+- Never take an Owner statement over blind. Check every instruction and wish
+  with your own logic before you carry it out: does it solve the actual problem,
+  what side effect does it have, is there a simpler way? If the logic does not
+  hold, name agreement and objection separately, each with reason and
+  alternative; the Owner then decides and you carry the decision out. [Owner
+  05.10.2026: „Du kannst ja nicht einfach meine Anweisungen blind annehmen.
+  Vielleicht erzähle ich ja auch mal Quatsch oder fordere auch mal selber Sachen
+  die so gar nicht so gut durchdacht sind, wie ich gedacht habe oder so die anders
+  viel einfacher zu lösen sind"]
 - Challenge incorrect assumptions directly and say why. No sycophancy.
 - When the go-ahead is clear ("mach einfach", "bau"), act — a follow-up
   question to a settled decision reopens it and wastes a turn.
@@ -64,6 +79,10 @@ does it — and only appears here if it cannot be done right now, with the reaso
 (the exact command or click). Before assigning anything to the reader, check
 whether the agent can do it itself — what the agent can do is DONE, not listed;
 what is already decided and lies with the agent is EXECUTED, never handed back.
+A DEINE HANDLUNG item stands under "Offen:" only once what the reader shall touch
+is ready (file, link, exact click sequence); anticipatory lists are forbidden.
+[Owner 02.09.2026: „Was soll ich denn je freigeben? Du bist ueberhaupt nicht
+fertig … du hast mir nichts vorbereitet"]
 When more than one step is open, mark the ONE recommended next step explicitly.
 The reader must never have to derive their own next step from prose.
 

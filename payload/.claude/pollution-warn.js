@@ -107,7 +107,8 @@ if (gedaechtnis.length) {
     "GEDAECHTNIS-WARNUNG: " + shown + ". Diese Eintraege legen fest, was der Harness regelt (Modell und Effort: " +
     "docs/harness-instance.md; Git: harness-core/git/git-intent.mjs; Ablauf: CLAUDE.md und " +
     ".claude/rules/keel/working-method.md). Bei Widerspruch gilt der Harness [Owner 30.09.2026: " +
-    "\"DER HARNESS REGELT DAS NICHT DU\"]. Dem Menschen melden.");
+    "\"DER HARNESS REGELT DAS NICHT DU\"]. Sagt der Owner, wie gearbeitet werden soll, gehoert die Regel mit " +
+    "woertlichem Zitat in .claude/rules/workbench/owner-rules.md, ins Gedaechtnis nur Wissen. Dem Menschen melden.");
 }
 
 if (warnungen.length) {

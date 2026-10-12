@@ -18,8 +18,14 @@
   werden je Installation in `docs/harness-instance.md` festgelegt.
 - Zugangsdaten, lokale Freigaben und settings.local.json werden nie
   versioniert oder ausgeliefert.
-- Installationsspezifische Owner-/Projektwerte leben ausschließlich in
-  `docs/harness-instance.md`; der gemeinsame Hostvertrag wird dafür nicht kopiert.
+- Installationsspezifische Owner-/Projektwerte leben in `docs/harness-instance.md`,
+  die Arbeitsregeln des Owners für diesen Workspace in
+  `.claude/rules/workbench/owner-rules.md`; der gemeinsame Hostvertrag wird dafür
+  nicht kopiert.
+- Sagt der Owner, wie gearbeitet werden soll, steht das mit wörtlichem Zitat in
+  `.claude/rules/workbench/owner-rules.md` [Owner 05.10.2026: „Eine Memory MD gehört doch nicht zu unserem Harness."]
+  (der Installer legt die Datei an, Claude Code lädt sie in jede Sitzung, `/onboarding`
+  fragt danach). Ins Gedächtnis gehört Wissen (Rezepte, Fakten, Verweise).
 
 ## Arbeitsweise
 

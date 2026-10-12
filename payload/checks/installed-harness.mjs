@@ -146,6 +146,10 @@ if (installedLayout) {
   check(!/`HARNESS_REFERENCE_OK` nur aus/u.test(completenessContract), "completeness contract still presents the source-tree marker as the installed one");
 }
 if (installedLayout) {
+  // The Owner's workspace rules (Owner data: the installer lays the template down once, what the Owner writes stays).
+  // Not required in the source tree, which has no workspace of its own.
+  check(existsSync(join(root, ".claude", "rules", "workbench", "owner-rules.md")),
+    "missing .claude/rules/workbench/owner-rules.md (the Owner's workspace rules)");
   const dashboardFiles = readdirSync(join(root, "dashboard")).sort();
   check(JSON.stringify(dashboardFiles) === JSON.stringify([
     "runtime-archive.mjs", "runtime-check.mjs", "runtime-manifest.json", "runtime.keel.gz", "serve.mjs",

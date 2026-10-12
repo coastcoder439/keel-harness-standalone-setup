@@ -62,7 +62,7 @@ export function guidanceSections({ harnessRoot }) {
   return [
     "## Check Owner statements before you carry them out (D8)",
     "",
-    "Owner rule of the workbench: „Keine Owner-Aussage blind übernehmen“. Every instruction and wish of the Owner quoted above is checked with your own logic before you implement it: " +
+    "Rule of the Harness: „Keine Owner-Aussage blind übernehmen“. Every instruction and wish of the Owner quoted above is checked with your own logic before you implement it: " +
       "does it solve the actual problem, what side effect does it have, is there a simpler way?",
     "",
     "- If it holds, say so in one sentence and implement it.",
